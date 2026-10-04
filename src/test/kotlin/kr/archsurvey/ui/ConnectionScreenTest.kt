@@ -74,7 +74,7 @@ class ConnectionScreenTest {
         rule.runOnUiThread { c.drawerOpen = true }
         rule.waitForIdle()
         shot("c0_drawer")
-        rule.onNodeWithText("수신기 연결 · VRS").assertExists().performClick()
+        rule.onNodeWithText("수신기 연결 · VRS").assertExists().performScrollTo().performClick()
         rule.waitForIdle()
         assertTrue(cc.open)
         rule.onNodeWithTag("connection_screen").assertExists()

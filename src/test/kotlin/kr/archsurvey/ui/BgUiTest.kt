@@ -69,7 +69,7 @@ class BgUiTest {
     private fun ui(block: () -> Unit) { rule.runOnUiThread(block); rule.waitForIdle() }
 
     @Test fun layerButtonOpensSheetsAndUploadFlowWorksFromScreens() {
-        start(); ui { c.homeOpen = false }
+        start()
         rule.onNodeWithTag("layer_btn").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("bg_sheet_opacity").assertExists()
         rule.onNodeWithTag("no_layers").assertExists()
@@ -98,7 +98,7 @@ class BgUiTest {
     }
 
     @Test fun warningSheetForFileWithoutCoordinatesOffersNoManualButExplains() {
-        start(); ui { c.homeOpen = false }
+        start()
         ui { bg.onPicked(listOf(FakeUploads.create(FakeSample.NO_COORD_TIF, workDir, bg.work.center))) }
         rule.onNodeWithTag("bg_sheet_warning").assertExists()
         rule.onNodeWithTag("warning_head").assertExists()
@@ -109,7 +109,7 @@ class BgUiTest {
     }
 
     @Test fun dxfCrsPickFlowFromScreens() {
-        start(); ui { c.homeOpen = false }
+        start()
         ui { bg.onPicked(listOf(FakeUploads.create(FakeSample.MAP_DXF, workDir, bg.work.center))) }
         rule.onNodeWithTag("btn_pick_crs").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("bg_sheet_crs").assertExists()
@@ -119,7 +119,7 @@ class BgUiTest {
     }
 
     @Test fun quickSheetHasBackgroundEntry() {
-        start(); ui { c.homeOpen = false; c.quickSheetOpen = true }
+        start(); ui { c.quickSheetOpen = true }
         rule.onNodeWithTag("quick_bg").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("bg_sheet_manage").assertExists()
     }

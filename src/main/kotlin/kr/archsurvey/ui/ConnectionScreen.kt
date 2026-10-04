@@ -42,7 +42,7 @@ fun ConnectionHost(c: SurveyController, cc: ConnectionController) {
 @Composable
 private fun AlertStrip(card: ErrorCard, onClick: () -> Unit) {
     val t = T
-    Box(Modifier.fillMaxWidth().padding(top = (SurveyDims.STATUS_BAND_DP + 6).dp, start = 72.dp, end = (SurveyDims.POLE_STRIP_DP + 8).dp)) {
+    Box(Modifier.fillMaxWidth().padding(top = (SurveyDims.STATUS_BAND_DP + 6).dp, start = 72.dp, end = (SurveyDims.MIN_TOUCH_DP + 8).dp)) {
         Column(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(t.bg.copy(alpha = 0.96f))
                 .border(1.dp, t.bad.copy(alpha = 0.6f), RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(10.dp).testTag("alert_strip"),

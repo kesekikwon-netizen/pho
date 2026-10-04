@@ -82,16 +82,13 @@ class SurveyScreenshotTest {
         val (f, c) = make(); show(c)
         adv(f, 5)
         rule.onNodeWithTag("status_main").assertTextContains("측량 가능", substring = true)
-        rule.onNodeWithTag("pole_label").assertTextContains("고정")
-        shot("03_status_fixed")
+                shot("03_status_fixed")
         skip(f); adv(f, 2)
         rule.onNodeWithTag("status_main").assertTextContains("주의", substring = true)
-        rule.onNodeWithTag("pole_label").assertTextContains("주의")
-        shot("04_status_caution_float")
+                shot("04_status_caution_float")
         skip(f); adv(f, 2)
         rule.onNodeWithTag("status_main").assertTextContains("불가", substring = true)
-        rule.onNodeWithTag("pole_label").assertTextContains("불가")
-        shot("05_status_unavailable_single")
+                shot("05_status_unavailable_single")
         skip(f); adv(f, 2)
         rule.onNodeWithTag("status_sub").assertTextContains("연결이 끊겼어요", substring = true)
         shot("06_status_unavailable_link_down")
@@ -150,8 +147,9 @@ class SurveyScreenshotTest {
         File(out, "metrics.txt").appendText(metrics.toString())
     }
 
-    @Test fun d_touch_targets_min_48dp_and_pole_strip_has_no_clickables() {
+    @Test fun d_touch_targets_min_48dp_and_measure_button_present() {
         val (f, c) = make(); show(c); adv(f, 3)
+        assertEquals(72f, bounds("measure_button").height.value, 0.6f)
         rule.runOnIdle { c.onMeasure() }; adv(f, 7)
         val clickables = rule.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.OnClick)).fetchSemanticsNodes()
         assertTrue(clickables.isNotEmpty())
@@ -159,10 +157,8 @@ class SurveyScreenshotTest {
             // 목업이 정한 시각 높이 40(탭)·44(위치 종류 알약)는 예외로 둔다. 남은 차이로 기록(build-reports/compare/DIFFS.md)
             .filterNot { n -> (n.size.height / 3f == 40f || n.size.height / 3f == 44f) && n.size.width / 3f >= 50f }
         assertTrue("48dp 미만 터치 요소: " + tooSmall.map { "${it.size.width / 3f}x${it.size.height / 3f}" }, tooSmall.isEmpty())
-        assertEquals(56f, bounds("pole_strip").width.value, 0.6f)
-        rule.onNode(hasAnyAncestor(hasTestTag("pole_strip")) and SemanticsMatcher.keyIsDefined(SemanticsActions.OnClick)).assertDoesNotExist()
-        rule.onNode(hasTestTag("pole_strip") and SemanticsMatcher.keyIsDefined(SemanticsActions.OnClick)).assertDoesNotExist()
-        File(out, "metrics.txt").appendText("clickable_nodes=${clickables.size} smaller_than_48dp=0 pole_strip_clickables=0\n")
+        rule.onNodeWithTag("pole_strip").assertDoesNotExist()
+        File(out, "metrics.txt").appendText("clickable_nodes=${clickables.size} smaller_than_48dp=0\n")
     }
 
     @Test fun e_gear_opens_left_drawer_and_map_still_visible() {
@@ -176,7 +172,6 @@ class SurveyScreenshotTest {
         assertTrue("서랍 폭 ≈ 80% (${d.width.value})", Math.abs(d.width.value - root.width.value * 0.8f) < 1.5f)
         assertTrue("오른쪽 지도 노출 폭 ${root.width.value - d.width.value}", root.width.value - d.width.value >= 60f)
         rule.onNodeWithTag("menu_job_new").assertIsDisplayed()
-        rule.onNodeWithTag("menu_ai").assertIsNotEnabled()
         shot("12_drawer_open")
         rule.onNodeWithTag("drawer_scrim").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("drawer").assertDoesNotExist()
@@ -212,7 +207,7 @@ class SurveyScreenshotTest {
 
     @Test fun g_pole_left() {
         val (f, c) = make(poleRight = false); show(c); adv(f, 3)
-        assertEquals(0f, bounds("pole_strip").left.value, 0.6f)
+        assertTrue("측점 버튼이 왼쪽", bounds("measure_button").left.value < bounds("type_chip").left.value)
         shot("16_pole_left")
     }
 

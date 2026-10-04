@@ -24,7 +24,7 @@ data class MenuSection(val title: String, val items: List<MenuItem>)
 
 /**
  * SmartTopo 2024 서랍(즐겨찾기 / 작업관리 / 일반측량)을 따른 구성. 우리 고유 기능(발굴·위치 종류·배경 레이어·장비)은
- * 같은 구조 안의 해당 그룹에 넣었다. 로그인·도로·정지·드론·토탈스테이션 등은 SmartTopo 항목이지만 범위 밖이라 없다.
+ * 같은 구조 안의 해당 그룹에 넣었다. SmartTopo에 있어도 이번 범위에 없는 항목(로그인, 다른 측량 방식 등)은 만들지 않았다.
  */
 object DrawerMenu {
     val sections: List<MenuSection> = listOf(
@@ -37,7 +37,7 @@ object DrawerMenu {
             MenuItem("job_new", "새 작업 만들기", MenuAction.OPEN_JOB_NEW),
             MenuItem("job_open", "작업 열기 · 삭제", MenuAction.OPEN_JOB_LIST),
             MenuItem("job_export", "작업 내보내기", MenuAction.OPEN_EXPORT),
-            MenuItem("job_info", "작업 정보 확인", MenuAction.OPEN_JOB_INFO),
+            MenuItem("job_info", "작업 정보", MenuAction.OPEN_JOB_INFO),
             MenuItem("job_points", "점 목록", MenuAction.OPEN_TOOL_POINTS),
             MenuItem("job_backup", "데이터 백업 · 복구", MenuAction.OPEN_BACKUP),
         )),
@@ -50,9 +50,9 @@ object DrawerMenu {
             MenuItem("bg", "배경 지도 · 레이어", MenuAction.OPEN_BG),
         )),
         MenuSection("환경 설정", listOf(
-            MenuItem("connection", "장비 연결 · VRS", MenuAction.OPEN_CONNECTION),
+            MenuItem("connection", "수신기 연결 · VRS", MenuAction.OPEN_CONNECTION),
             MenuItem("antenna", "안테나 높이", MenuAction.OPEN_ANTENNA),
-            MenuItem("settings", "설정 (좌표계 등)", MenuAction.OPEN_TOOL_SETTINGS),
+            MenuItem("settings", "설정", MenuAction.OPEN_TOOL_SETTINGS),
         )),
     )
     val allItems: List<MenuItem> get() = sections.flatMap { it.items }

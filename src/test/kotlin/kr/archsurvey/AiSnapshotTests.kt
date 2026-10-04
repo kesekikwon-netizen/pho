@@ -103,9 +103,7 @@ class AiSnapshotTests {
     @Test fun settingIsFixedOffAndMenuSlotIsDisabled() {
         assertFalse(AiLinkSetting.enabled)
         assertFalse(AiLinkSetting.TRANSMISSION_IMPLEMENTED)
-        val item = DrawerMenu.allItems.single { it.id == "ai_toggle" }
-        assertEquals(AiLinkSetting.LABEL, item.label); assertFalse(item.enabled)
-        assertTrue(item.note!!.contains("꺼짐"))
+        assertTrue("0.1.5부터 서랍에 AI 항목이 없다", DrawerMenu.allItems.none { it.id.startsWith("ai") })
     }
 
     /** ai 패키지 소스에 네트워크·파일 쓰기·설정 저장 코드가 없다 */

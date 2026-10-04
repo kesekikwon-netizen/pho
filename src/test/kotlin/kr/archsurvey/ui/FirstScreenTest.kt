@@ -93,32 +93,29 @@ class FirstScreenTest {
         return s to c
     }
 
-    @Test fun homeScreenShowsRealState() {
+    @Test fun startsDirectlyOnSurveyMap() {
         val (_, c) = streaming()
-        rule.runOnUiThread { c.homeOpen = true }
-        rule.waitForIdle()
-        rule.onNodeWithTag("home_screen").assertExists()
-        rule.onNodeWithTag("home_conn").assertTextContains("연결됨")
-        rule.onNodeWithTag("home_version").assertExists()
-        shot("c_home_streaming")
-        rule.onNodeWithTag("home_survey").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("home_screen").assertDoesNotExist()
         rule.onNodeWithTag("status_band").assertExists()
+        rule.onNodeWithTag("measure_button").assertExists()
+        rule.onNodeWithTag("tab_points").assertDoesNotExist()
+        rule.onNodeWithTag("pole_strip").assertDoesNotExist()
+        shot("c_start_streaming")
     }
 
-    @Test fun homeScreenWhenNotConnected() {
+    @Test fun startsOnMapWhenNotConnected() {
         val s = Stub()
         val c = SurveyController(s, db, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
         rule.setContent { SurveyTheme(dark = false) { SurveyMapScreen(c, batteryPct = 82) } }
-        rule.runOnUiThread { c.homeOpen = true }
         rule.waitForIdle()
-        rule.onNodeWithTag("home_conn").assertTextContains("연결 안 됨")
-        shot("c_home_not_connected")
+        rule.onNodeWithTag("not_connected_card").assertExists()
+        rule.onNodeWithTag("status_main").assertTextContains("수신기 연결 안 됨", substring = true)
+        shot("c_start_not_connected")
     }
 
     @Test fun quickSheetAndDrawerAndVersion() {
         val (_, c) = streaming()
-        rule.onNodeWithTag("type_more").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("type_chip").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("quick_sheet").assertExists()
         shot("c_quick_sheet")
         rule.onNodeWithTag("quick_type_1").performClick(); rule.waitForIdle()

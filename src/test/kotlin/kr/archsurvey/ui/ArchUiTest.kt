@@ -156,7 +156,7 @@ class ArchUiTest {
 
     @Test fun outlineModeBarAndQuickSheetEntries() {
         start()
-        rule.onNodeWithTag("type_more").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("type_chip").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("quick_areas").assertExists(); rule.onNodeWithTag("quick_types").assertExists()
         rule.onNodeWithTag("quick_outline").performClick(); rule.waitForIdle()
         assertTrue(c.arch.outlineMode)
@@ -174,7 +174,7 @@ class ArchUiTest {
     }
 
     @Test fun setupSheetFromLongPressAppliesMemoTypeAndLinkMode() {
-        start(); ui { c.homeOpen = false }
+        start()
         rule.onNodeWithTag("measure_button").performTouchInput { longClick() }; rule.waitForIdle()
         rule.onNodeWithTag("setup_sheet").assertExists()
         rule.onNodeWithTag("setup_name", useUnmergedTree = true).assertTextEquals(c.nextName)

@@ -21,15 +21,14 @@ private fun ctrl(f: FakeGnssSource, epochs: Int = 5) = SurveyController(f, DB2, 
 class LayoutMathTest {
     @Test fun constantsMatchPlan() {
         assertEquals(72, SurveyDims.MEASURE_BUTTON_DP); assertEquals(48, SurveyDims.MIN_TOUCH_DP)
-        assertEquals(56, SurveyDims.POLE_STRIP_DP); assertEquals(204, SurveyDims.CONTROL_AREA_DP)
-        assertEquals(52, SurveyDims.SECONDARY_ROW_DP)
+        assertEquals("측점 버튼 한 줄(위 10 + 72 + 아래 12)", 94, SurveyDims.CONTROL_AREA_DP)
     }
     @Test fun mapIsAtLeast60PercentInIdleAcquiringResultRecordingAt800dp() {
         for (p in listOf(Phase.IDLE, Phase.ACQUIRING, Phase.RESULT, Phase.RECORDING)) {
             val f = SurveyLayout.mapFraction(800, p)
             assertTrue("$p $f", f >= SurveyDims.MIN_MAP_FRACTION)
         }
-        assertEquals(596, SurveyLayout.mapHeightDp(800, Phase.IDLE))
+        assertEquals(706, SurveyLayout.mapHeightDp(800, Phase.IDLE))
         assertEquals("결과 패널이 컨트롤 영역을 대신한다", 566, SurveyLayout.mapHeightDp(800, Phase.RESULT))
     }
     @Test fun expandedSheetIsUnderHalfScreenAndMapStillVisible() {
@@ -47,13 +46,13 @@ class DrawerMenuTest {
     private val forbidden = listOf("성토", "절토", "시공", "준공", "검측", "측설", "노선", "도로")
     @Test fun requiredEntriesExist() {
         val labels = DrawerMenu.allItems.map { it.label }
-        for (l in listOf("새 작업 만들기", "작업 열기 · 삭제", "작업 내보내기", "작업 정보", "점 목록", "데이터 백업 · 복구", "점 찾아가기", "계산기", "설정", "AI 어시스턴트", "진단", "안테나 높이"))
+        for (l in listOf("새 작업 만들기", "작업 열기 · 삭제", "작업 내보내기", "작업 정보", "점 목록", "데이터 백업 · 복구", "점 찾아가기", "계산기", "설정", "안테나 높이", "수신기 연결 · VRS", "위치 종류", "발굴 구역 · 그리드", "배경 지도 · 레이어"))
             assertTrue(l, l in labels)
-        assertTrue(DrawerMenu.sections.map { it.title }.containsAll(listOf("즐겨찾기", "작업 관리", "측량", "AI · 점검")))
+        assertTrue(DrawerMenu.sections.map { it.title }.containsAll(listOf("즐겨찾기", "작업 관리", "일반 측량", "환경 설정")))
     }
-    @Test fun aiItemsAreDisabledPlaceholders() {
-        val ai = DrawerMenu.allItems.filter { it.id == "ai" || it.id == "diag" }
-        assertEquals(2, ai.size); assertTrue(ai.none { it.enabled })
+    @Test fun drawerHasNoPlaceholderOrAiItemsAndNoHome() {
+        assertTrue(DrawerMenu.allItems.none { it.id.startsWith("ai") || it.id == "diag" || it.id == "home" })
+        assertTrue(DrawerMenu.allItems.all { it.enabled })
     }
     @Test fun idsUniqueAndNoForbiddenTerms() {
         assertEquals(DrawerMenu.allItems.size, DrawerMenu.allItems.map { it.id }.toSet().size)
