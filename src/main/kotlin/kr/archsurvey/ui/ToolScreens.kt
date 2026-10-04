@@ -36,6 +36,9 @@ fun ToolHost(c: SurveyController) {
         ToolScreen.CALC -> CalcScreen(c)
         ToolScreen.SETTINGS -> SettingsScreen(c)
         ToolScreen.JOB_INFO, ToolScreen.JOB_OPEN, ToolScreen.JOB_NEW -> JobScreen(c)
+        ToolScreen.AREAS -> AreasScreen(c)
+        ToolScreen.GRID_WIZ -> GridWizardScreen(c)
+        ToolScreen.TYPES -> TypesScreen(c)
         null -> {}
     }
 }
@@ -104,6 +107,7 @@ fun PointDetailScreen(c: SurveyController) {
             Text("${if (p.status == SurveyStatus.FIXED) "고정" else "주의"}${p.sigmaHM?.let { " ±${f3(it)} m" } ?: ""} · 위성 ${p.satellites} · ${p.epochs}회 평균", style = Ty.small, color = t.inkSub)
             if (p.measuredAtMs > 0) Text(SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(p.measuredAtMs)), style = Ty.small, color = t.inkSub)
         }
+        PointHistoryCards(c, p)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.weight(1f)) { Btn("여기로 찾아가기", Modifier.fillMaxWidth().testTag("detail_goto")) { h.startGoto(p) } }
             Box(Modifier.weight(1f)) { Btn("지도에서 보기", Modifier.fillMaxWidth().testTag("detail_map")) { c.focusOn(p); h.closeAll() } }

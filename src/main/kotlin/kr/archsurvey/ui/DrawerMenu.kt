@@ -6,6 +6,8 @@ enum class MenuAction {
     GO_SURVEY,
     /** 홈 화면(작업·수신기 상태·바로가기)으로 */
     GO_HOME,
+    OPEN_AREAS,
+    OPEN_TYPES,
     OPEN_ANTENNA,
     /** 수신기 선택·블루투스·VRS 입력 화면 */
     OPEN_CONNECTION,
@@ -38,6 +40,10 @@ object DrawerMenu {
             MenuItem("job_info", "작업 정보", MenuAction.OPEN_JOB_INFO),
             MenuItem("job_points", "점 목록", MenuAction.OPEN_TOOL_POINTS),
             MenuItem("job_backup", "데이터 백업 · 복구", MenuAction.OPEN_BACKUP),
+        )),
+        MenuSection("발굴", listOf(
+            MenuItem("areas", "발굴 구역 · 그리드", MenuAction.OPEN_AREAS),
+            MenuItem("types", "위치 종류 편집", MenuAction.OPEN_TYPES),
         )),
         MenuSection("측량", listOf(
             MenuItem("home", "홈", MenuAction.GO_HOME),

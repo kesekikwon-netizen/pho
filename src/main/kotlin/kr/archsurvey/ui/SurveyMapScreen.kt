@@ -65,6 +65,7 @@ fun SurveyMapScreen(
         androidx.activity.compose.BackHandler(enabled = !c.homeOpen && c.hub.screen == null && !c.drawerOpen && !c.antennaSheetOpen && !c.quickSheetOpen) { c.homeOpen = true }
         DrawerOverlay(c)
         if (c.quickSheetOpen) QuickSheet(c)
+        if (c.dupPrompt != null) DupSheet(c)
         if (c.antennaSheetOpen) AntennaSheet(c)
         if (c.hub.screen != null) ToolHost(c)
         c.exporter?.let { if (it.open) ExportScreen(it) }
@@ -143,6 +144,7 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
         NotConnectedCard(c, Modifier.align(Alignment.Center))
         val h = c.antennaResult?.totalToApcM
         Column(Modifier.align(Alignment.BottomStart).padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            ArchOverlays(c)
             c.message?.let { msg ->
                 Text(msg, style = Ty.body, color = t.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.background(t.raised.copy(alpha = 0.95f), RoundedCornerShape(10.dp)).border(1.dp, t.accent, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 6.dp).testTag("message"))
@@ -366,6 +368,8 @@ fun DrawerOverlay(c: SurveyController) {
 
 private fun runMenu(c: SurveyController, item: MenuItem) {
     when (item.action) {
+            MenuAction.OPEN_AREAS -> { c.drawerOpen = false; c.hub.open(ToolScreen.AREAS) }
+            MenuAction.OPEN_TYPES -> { c.drawerOpen = false; c.hub.open(ToolScreen.TYPES) }
             MenuAction.GO_SURVEY -> { c.drawerOpen = false; c.homeOpen = false }
             MenuAction.GO_HOME -> { c.drawerOpen = false; c.homeOpen = true }
             MenuAction.OPEN_ANTENNA -> { c.drawerOpen = false; c.antennaSheetOpen = true }
@@ -394,6 +398,8 @@ private fun menuGlyph(id: String): Glyph? = when (id) {
     "job_info" -> Glyph.INFO
     "job_backup" -> Glyph.LAYERS
     "home" -> Glyph.HOME
+    "areas" -> Glyph.LAYERS
+    "types" -> Glyph.LIST
     "survey" -> Glyph.PIN
     "connection" -> Glyph.BT
     "antenna" -> Glyph.RULER

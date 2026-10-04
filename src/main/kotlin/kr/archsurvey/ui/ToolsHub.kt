@@ -8,7 +8,7 @@ import kr.archsurvey.core.Calc
 import kr.archsurvey.core.Guidance
 import kr.archsurvey.core.NE
 
-enum class ToolScreen { POINTS, POINT_DETAIL, GOTO, CALC, SETTINGS, JOB_INFO, JOB_OPEN, JOB_NEW }
+enum class ToolScreen { POINTS, POINT_DETAIL, GOTO, CALC, SETTINGS, JOB_INFO, JOB_OPEN, JOB_NEW, AREAS, GRID_WIZ, TYPES }
 enum class CalcMode(val label: String) { DISTANCE("거리·방위"), AREA("면적·둘레"), OFFSET("방위·거리로 좌표") }
 
 /** 찾아갈 목표: 저장된 점 또는 직접 입력한 좌표 */
@@ -30,7 +30,7 @@ class ToolsHub(private val c: SurveyController) {
         if (!(s == ToolScreen.GOTO && screen == ToolScreen.GOTO)) cameFrom = if (s == ToolScreen.POINT_DETAIL || s == ToolScreen.GOTO) screen else null
         screen = s
     }
-    fun back() { screen = when (screen) { ToolScreen.POINT_DETAIL -> ToolScreen.POINTS; ToolScreen.GOTO -> cameFrom?.takeIf { it == ToolScreen.POINT_DETAIL }; else -> null } }
+    fun back() { screen = when (screen) { ToolScreen.POINT_DETAIL -> ToolScreen.POINTS; ToolScreen.GOTO -> cameFrom?.takeIf { it == ToolScreen.POINT_DETAIL }; ToolScreen.GRID_WIZ -> ToolScreen.AREAS; else -> null } }
     fun closeAll() { screen = null }
 
     // ---------------- 점 목록 · 상세 · 편집 ----------------

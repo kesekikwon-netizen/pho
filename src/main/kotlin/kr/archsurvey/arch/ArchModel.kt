@@ -246,7 +246,7 @@ class ArchController(
     /** 외곽 끝내기. close=true 면 면(닫힘), false 면 선. 점이 모자라면 false */
     fun finishOutline(close: Boolean): Boolean {
         val st = store ?: return false
-        val o = activeOutline ?: return false
+        val o = activeOutline ?: run { error = "취득 중인 외곽이 없어요. ‘유구 경계점’을 먼저 측점하세요"; return false }
         val pts = activeOutlineVertices()
         if (pts.size < 2) { error = "꼭짓점이 2개 이상 있어야 해요"; return false }
         if (close && pts.size < 3) { error = "면으로 닫으려면 꼭짓점이 3개 이상 필요해요"; return false }

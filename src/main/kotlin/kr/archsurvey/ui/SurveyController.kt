@@ -543,6 +543,11 @@ class SurveyController(
     /** 지도를 이 점으로 옮긴다 (따라가기 해제) */
     fun focusOn(p: SavedPoint) { follow = false; panCenter = projection.toLocal(p.lat, p.lon) }
 
+    /** 외곽 이어서 취득 켜기/끄기. 켜면 위치 종류를 ‘유구 경계점’으로 맞춘다 */
+    fun toggleOutlineMode() {
+        arch.outlineMode = !arch.outlineMode
+        if (arch.outlineMode) { val i = types.indexOf(ArchTypes.OUTLINE_POINT); if (i >= 0) typeIndex = i else message = "위치 종류에 ‘유구 경계점’이 없어 외곽을 이을 수 없어요" }
+    }
     fun cycleType() { typeIndex = (typeIndex + 1) % types.size }
 
     // ---------------- 지도 ----------------
