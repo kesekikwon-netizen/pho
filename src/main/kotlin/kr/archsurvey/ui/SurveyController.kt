@@ -26,7 +26,7 @@ data class GnssView(
     val lon: Double? = null,
 )
 
-/** 메모리에만 있는 측점 (DB 저장은 WP-6). */
+/** 화면이 보는 측점. 저장소([PointStore])가 있으면 디스크에도 남는다. */
 data class SavedPoint(
     val name: String,
     val type: String,
@@ -42,7 +42,21 @@ data class SavedPoint(
     val cautionFlag: Boolean,
     val epochs: Int,
     val antenna: AntennaRecord,
+    val fixQuality: Int = 0,
+    val satellites: Int = 0,
+    val measuredAtMs: Long = 0L,
+    val rowId: Long = 0L,
+    val memo: String = "",
 )
+
+/** 측점 저장소. Android 의존 없음(시험용 가짜 구현 가능). 되돌리기는 숨김(소프트 삭제)이라 번호를 다시 쓰지 않는다. */
+interface PointStore {
+    suspend fun loadAll(): List<SavedPoint>
+    /** 지금까지 쓴 가장 큰 번호(숨긴 점 포함). 없으면 0 */
+    suspend fun maxSeq(): Int
+    suspend fun save(p: SavedPoint): Long
+    suspend fun hideLast()
+}
 
 /**
  * 측량 화면의 상태·동작. [GnssSource] 하나만 본다(가짜/실제 교체 가능).
@@ -55,6 +69,8 @@ class SurveyController(
     val projection: LocalProjection = LocalProjection(36.5, 127.0),
     private val zone: KoreanTmZone = KoreanTmZone.CENTRAL,
     private val epochsPerPoint: Int = 5,
+    private val store: PointStore? = null,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) {
     val types = listOf("유구 경계점", "유물 출토 위치", "기준점", "레벨점", "기타")
 
@@ -82,11 +98,21 @@ class SurveyController(
 
     val antennaModel: AntennaModel get() = antennaDb.getValue(antennaModelId)
     val antennaResult: AntennaResult? get() = AntennaMath.compute(antenna, antennaModel)
-    val nextName: String get() = "P-%04d".format(points.size + 1)
+    /** 점 번호 카운터. 되돌려도 줄이지 않는다(번호 재사용 금지). */
+    private var seq by mutableIntStateOf(0)
+    val nextName: String get() = "P-%04d".format(seq + 1)
     val typeName: String get() = types[typeIndex]
     val lastPoint: SavedPoint? get() = points.lastOrNull()
 
     init {
+        store?.let { st ->
+            scope.launch {
+                runCatching {
+                    seq = st.maxSeq()
+                    points.addAll(st.loadAll())
+                }.onFailure { message = "저장된 점을 불러오지 못했어요" }
+            }
+        }
         scope.launch {
             combine(source.gnss, source.link) { g, l -> g to l }.collect { (g, l) ->
                 val st = StatusJudge.judge(g, l.state, source.clockMs())
@@ -139,10 +165,18 @@ class SurveyController(
             if (p == null) { phase = Phase.IDLE; message = "위치를 얻지 못했어요"; return@launch }
             val tm = TmProjection.forward(p.lat, p.lon, zone)
             val ground = p.ellipsoidalHeight?.let { it - rec.apcHeightM }
-            points.add(SavedPoint(nameAtStart, typeAtStart, p.lat, p.lon, tm.northing, tm.easting, zone.epsg, ground, p.sigmaH,
-                worst, worst == SurveyStatus.CAUTION, p.epochs, rec))
+            val sp = SavedPoint(nameAtStart, typeAtStart, p.lat, p.lon, tm.northing, tm.easting, zone.epsg, ground, p.sigmaH,
+                worst, worst == SurveyStatus.CAUTION, p.epochs, rec, gv.quality.code, gv.satellites, clock())
+            points.add(sp); seq++
+            var saveError: String? = null
+            store?.let { st ->
+                val idx = points.lastIndex
+                // 저장은 즉시 디스크(Room 트랜잭션). 실패하면 화면에 알림
+                try { val id = st.save(sp); points[idx] = sp.copy(rowId = id) }
+                catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; saveError = "디스크 저장에 실패했어요 — 다시 시도하세요" }
+            }
             phase = Phase.RESULT
-            message = if (worst == SurveyStatus.CAUTION) "주의 상태에서 취득한 점이에요 (표시가 기록돼요)" else null
+            message = saveError ?: if (worst == SurveyStatus.CAUTION) "주의 상태에서 취득한 점이에요 (표시가 기록돼요)" else null
         }
     }
 
@@ -156,6 +190,7 @@ class SurveyController(
         stopVoice()
         if (points.isEmpty()) return
         val gone = points.removeAt(points.lastIndex)
+        store?.let { st -> scope.launch { runCatching { st.hideLast() }.onFailure { message = "디스크 반영에 실패했어요" } } }
         phase = Phase.IDLE
         message = "${gone.name} 되돌렸어요"
     }
