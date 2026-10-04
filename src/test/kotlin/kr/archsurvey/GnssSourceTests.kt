@@ -159,7 +159,7 @@ class StatusJudgeTest {
     @Test fun linkStatesOverrideEverything() {
         val good = snap(FixQuality.RTK_FIXED, 0.01)
         for (l in listOf(LinkState.IDLE, LinkState.CONNECTING, LinkState.CONNECTED_NO_DATA, LinkState.RECONNECTING, LinkState.NEEDS_USER)) {
-            val r = j(good, l); assertEquals(l.name, SurveyStatus.UNAVAILABLE, r.status); assertEquals(StatusReason.LINK_DOWN, r.reason)
+            val r = j(good, l); assertEquals(l.name, SurveyStatus.UNAVAILABLE, r.status); assertEquals(if (l == LinkState.IDLE) StatusReason.NOT_CONNECTED else StatusReason.LINK_DOWN, r.reason)
         }
         assertEquals(StatusReason.STALE, j(good, LinkState.STALE).reason)
     }

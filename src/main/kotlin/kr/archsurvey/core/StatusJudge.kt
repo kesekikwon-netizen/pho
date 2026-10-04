@@ -18,6 +18,7 @@ enum class StatusReason(val textKo: String) {
     NO_DATA("수신기 데이터가 없어요"),
     STALE("수신 데이터가 잠시 끊겼어요"),
     LINK_DOWN("수신기와 연결이 끊겼어요"),
+    NOT_CONNECTED("수신기 연결 안 됨"),
 }
 
 /** 임계값은 **제안값**(design.md §5C.15, MASTER-PLAN §10 #8). 현장 시험으로 조정한다 [현장검증]. */
@@ -39,6 +40,7 @@ object StatusJudge {
         val sigma = snap.gst?.sigmaHoriz
         when (link) {
             LinkState.STREAMING -> {}
+            LinkState.IDLE -> return StatusResult(SurveyStatus.UNAVAILABLE, StatusReason.NOT_CONNECTED, null)
             LinkState.STALE -> return StatusResult(SurveyStatus.UNAVAILABLE, StatusReason.STALE, sigma)
             else -> return StatusResult(SurveyStatus.UNAVAILABLE, StatusReason.LINK_DOWN, sigma)
         }

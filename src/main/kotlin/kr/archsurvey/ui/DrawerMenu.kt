@@ -15,8 +15,6 @@ enum class MenuAction {
     OPEN_TOOL_POINTS, OPEN_TOOL_GOTO, OPEN_TOOL_CALC, OPEN_TOOL_SETTINGS, OPEN_JOB_NEW, OPEN_JOB_LIST, OPEN_JOB_INFO,
     /** 아직 연결되지 않은 메뉴 — 다음 라운드 */
     NOT_YET,
-    /** 개발용: 가짜 GNSS 다음 구간으로 */
-    DEV_SKIP_SEGMENT,
     /** 폴 쪽 좌우 바꾸기 */
     TOGGLE_POLE_SIDE,
 }
@@ -45,6 +43,7 @@ object DrawerMenu {
             MenuItem("antenna", "안테나 높이", MenuAction.OPEN_ANTENNA),
             MenuItem("goto", "점 찾아가기", MenuAction.OPEN_TOOL_GOTO),
             MenuItem("calc", "계산기", MenuAction.OPEN_TOOL_CALC),
+            MenuItem("pole_side", "폴 쪽 좌우 바꾸기", MenuAction.TOGGLE_POLE_SIDE),
             MenuItem("settings", "설정", MenuAction.OPEN_TOOL_SETTINGS),
         )),
         MenuSection("AI · 점검", listOf(
@@ -52,10 +51,6 @@ object DrawerMenu {
             MenuItem("diag", "진단", MenuAction.NOT_YET, enabled = false, note = "준비 중"),
             // 설정의 "AI 연동" 스위치 자리 — 꺼짐 고정, 전송 코드 없음 (ai/StatusSnapshot.kt AiLinkSetting)
             MenuItem("ai_toggle", "AI 연동", MenuAction.NOT_YET, enabled = false, note = "꺼짐 · 준비 중"),
-        )),
-        MenuSection("개발용 · 가짜 GNSS", listOf(
-            MenuItem("dev_skip", "가짜 신호: 다음 구간으로", MenuAction.DEV_SKIP_SEGMENT),
-            MenuItem("dev_pole", "폴 쪽 좌우 바꾸기", MenuAction.TOGGLE_POLE_SIDE),
         )),
     )
     val allItems: List<MenuItem> get() = sections.flatMap { it.items }

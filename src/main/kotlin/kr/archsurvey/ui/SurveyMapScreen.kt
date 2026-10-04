@@ -36,7 +36,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kr.archsurvey.core.*
 import kr.archsurvey.map.MapSurface
-import kr.archsurvey.ui.bg.*
 
 private fun statusColors(t: Tokens, s: SurveyStatus): Pair<Color, Color> = when (s) {
     SurveyStatus.FIXED -> t.fixed to t.onFixed
@@ -50,7 +49,6 @@ private fun f3(x: Double) = String.format(java.util.Locale.US, "%.3f", x)
 @Composable
 fun SurveyMapScreen(
     c: SurveyController, batteryPct: Int?, map: MapSurface = rememberMapSurface(c),
-    bg: BackgroundController = rememberBackgroundController(c),
 ) {
     val t = T
     Box(Modifier.fillMaxSize().background(t.bg).windowInsetsPadding(WindowInsets.systemBars).testTag("screen")) {
@@ -58,7 +56,7 @@ fun SurveyMapScreen(
             if (!c.poleOnRight) PoleStrip(c, batteryPct)
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 StatusBand(c)
-                MapArea(c, map, Modifier.weight(1f), bg)
+                MapArea(c, map, Modifier.weight(1f))
                 InfoZone(c)
                 ControlArea(c)
             }
@@ -66,7 +64,6 @@ fun SurveyMapScreen(
         }
         DrawerOverlay(c)
         if (c.antennaSheetOpen) AntennaSheet(c)
-        BackgroundSheets(bg)
         if (c.hub.screen != null) ToolHost(c)
         c.exporter?.let { if (it.open) ExportScreen(it) }
         c.backup?.let { if (it.open) BackupScreen(it) }
@@ -75,6 +72,34 @@ fun SurveyMapScreen(
 }
 
 // ---------------- 상태 띠 ----------------
+
+private fun cm1(m: Double) = String.format(java.util.Locale.US, "%.1f", m * 100.0)
+
+/** 상태 띠 셋째 줄: Fix 종류 · 위성 수 · 수평/수직 정확도(cm). 값이 없으면 "—" */
+internal fun bandDetail(c: SurveyController): String {
+    val g = c.gv
+    return "${g.quality.labelKo} · 위성 ${g.satellites}" + (g.satsInView?.let { "/$it" } ?: "") + " · 수평 " + (g.status.sigmaHM?.let { "±${cm1(it)}cm" } ?: "—") + " · 수직 " + (g.sigmaVM?.let { "±${cm1(it)}cm" } ?: "—")
+}
+
+/** 수신기가 연결되지 않았을 때 지도 가운데에 뜨는 안내 카드 */
+@Composable
+fun NotConnectedCard(c: SurveyController, modifier: Modifier) {
+    if (c.gv.status.reason != StatusReason.NOT_CONNECTED) return
+    val t = T
+    Column(
+        modifier.padding(horizontal = 40.dp).clip(RoundedCornerShape(18.dp)).background(t.bg.copy(alpha = 0.96f))
+            .border(1.dp, t.bad.copy(alpha = 0.6f), RoundedCornerShape(18.dp)).padding(16.dp).testTag("not_connected_card"),
+        verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("수신기 연결 안 됨", style = Ty.title, color = t.ink)
+        Text("위치를 받으려면 블루투스로 수신기(R10 / SP60)를 연결하세요. 연결 전에는 위치를 표시하지 않고 측점도 할 수 없어요.", style = Ty.small, color = t.inkSub, textAlign = TextAlign.Center)
+        Box(
+            Modifier.fillMaxWidth().height(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp)).glossy(t.primary)
+                .clickable { c.connection?.openScreen() ?: run { c.message = "연결 화면을 열 수 없어요" } }.testTag("not_connected_open"),
+            contentAlignment = Alignment.Center,
+        ) { Text("수신기 연결하기", style = Ty.label, color = t.onPrimary) }
+    }
+}
 
 @Composable
 fun StatusBand(c: SurveyController) {
@@ -86,7 +111,10 @@ fun StatusBand(c: SurveyController) {
         SurveyStatus.CAUTION -> "주의 · 저장 시 표시 기록"
         SurveyStatus.UNAVAILABLE -> "불가 · 측점 막힘"
     }
-    val sub = st.reason.textKo + (st.sigmaHM?.let { " · ±${f3(it)} m" } ?: "") + (if (c.fakeMode) " · 가짜 신호" else "")
+    val notConnected = st.reason == StatusReason.NOT_CONNECTED
+    val mainText = if (notConnected) "불가 · 수신기 연결 안 됨" else main
+    val sub = if (notConnected) "블루투스로 R10 / SP60 을 연결하세요" else st.reason.textKo
+    val detail = if (notConnected) null else bandDetail(c)
     Row(
         Modifier.fillMaxWidth().height(SurveyDims.STATUS_BAND_DP.dp).background(bg).testTag("status_band"),
         verticalAlignment = Alignment.CenterVertically,
@@ -98,8 +126,9 @@ fun StatusBand(c: SurveyController) {
         ) { GearIcon(fg) }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(main, style = Ty.bandMain, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("status_main"))
+            Text(mainText, style = Ty.bandMain, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("status_main"))
             Text(sub, style = Ty.small, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("status_sub"))
+            if (detail != null) Text(detail, style = Ty.small.copy(fontSize = 11.sp), color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("status_detail"))
         }
         StatusIcon(st.status, fg, 30.dp)
         Spacer(Modifier.width(12.dp))
@@ -109,9 +138,9 @@ fun StatusBand(c: SurveyController) {
 // ---------------- 지도 영역 ----------------
 
 @Composable
-fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier, bg: BackgroundController? = null) {
+fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
     val t = T
-    val ms = c.mapState().let { if (bg == null) it else it.copy(backgrounds = bg.mapLayers()) }
+    val ms = c.mapState()
     Box(
         modifier.fillMaxWidth().testTag("map_area").pointerInput(Unit) {
             detectDragGestures { _, drag ->
@@ -141,18 +170,7 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier, bg: Backgr
                 Text(c.antenna.inputValueM.let { f3(it) } + " m", style = Ty.coord, color = t.ink, modifier = Modifier.testTag("antenna_input"))
             }
         }
-        if (bg != null) {
-            // 오른쪽 위, 안테나 높이 칩 아래: 배경 레이어
-            Box(Modifier.align(Alignment.TopEnd).padding(top = 64.dp, end = 8.dp)) { ToolButton(Glyph.LAYERS, "배경 레이어", "layer_btn", active = bg.screen != BgScreen.NONE) { if (bg.screen == BgScreen.NONE) bg.openOpacity() else bg.close() } }
-            bg.mapCaption()?.let {
-                Text(it, style = Ty.small.copy(fontSize = 10.sp), color = t.inkSub,
-                    modifier = Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = 30.dp).background(t.bg.copy(alpha = 0.7f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp).testTag("map_caption"))
-            }
-        }
-        Text(
-            ms.backdropLabel, style = Ty.small.copy(fontSize = 10.sp), color = t.inkSub,
-            modifier = Modifier.align(Alignment.BottomStart).padding(8.dp).background(t.bg.copy(alpha = 0.7f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
-        )
+        NotConnectedCard(c, Modifier.align(Alignment.Center))
         if (h != null) Text(
             "위상중심 ${f3(h)} m", style = Ty.small.copy(fontSize = 10.sp), color = t.inkSub,
             modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).background(t.bg.copy(alpha = 0.7f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp).testTag("apc_label"),
@@ -363,8 +381,13 @@ fun ControlArea(c: SurveyController) {
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(if (c.points.isEmpty()) "측점" else "다음 점", style = Ty.button, color = t.onPrimary)
-                Text(c.nextName + " · " + c.typeName, style = Ty.small, color = t.onPrimary)
+                if (c.gv.status.reason == StatusReason.NOT_CONNECTED) {
+                    Text("측점 불가", style = Ty.button, color = t.onPrimary)
+                    Text("수신기 연결 안 됨", style = Ty.small, color = t.onPrimary, modifier = Modifier.testTag("measure_disabled_reason"))
+                } else {
+                    Text(if (c.points.isEmpty()) "측점" else "다음 점", style = Ty.button, color = t.onPrimary)
+                    Text(c.nextName + " · " + c.typeName, style = Ty.small, color = t.onPrimary)
+                }
             }
         }
         Spacer(Modifier.height(SurveyDims.CTRL_GAP_DP.dp))
@@ -444,8 +467,8 @@ fun DrawerOverlay(c: SurveyController) {
                         contentDescription = "발굴 측량 로고", modifier = Modifier.size(44.dp).testTag("drawer_logo"),
                     )
                     Spacer(Modifier.height(8.dp))
-                    Text(if (c.fakeMode) "${c.projectName} (가짜 데이터)" else c.projectName, style = Ty.title, color = t.ink)
-                    Text((if (c.antennaModelId == "TRIMBLE_R10") "Trimble R10" else "Spectra SP60") + if (c.fakeMode) " (가짜 신호)" else " (실제 수신기)", style = Ty.body, color = t.inkSub)
+                    Text(c.projectName, style = Ty.title, color = t.ink)
+                    Text((if (c.antennaModelId == "TRIMBLE_R10") "Trimble R10" else "Spectra SP60") + if (st.reason == StatusReason.NOT_CONNECTED) " · 연결 안 됨" else "", style = Ty.body, color = t.inkSub, modifier = Modifier.testTag("drawer_device"))
                     Spacer(Modifier.height(8.dp))
                     Text(
                         "${st.status.labelKo}${st.sigmaHM?.let { " ±${f3(it)} m" } ?: ""}", style = Ty.small, color = fg,
@@ -484,7 +507,6 @@ private fun DrawerRow(c: SurveyController, item: MenuItem) {
                     MenuAction.OPEN_EXPORT -> { c.drawerOpen = false; c.exporter?.openScreen() ?: run { c.message = "내보내기는 이 빌드에 없어요" } }
                     MenuAction.OPEN_CONNECTION -> { c.drawerOpen = false; c.connection?.openScreen() ?: run { c.message = "연결 화면은 이 빌드에 없어요" } }
                     MenuAction.NOT_YET -> { c.drawerOpen = false; c.message = "‘${item.label}’은 다음 라운드에 연결돼요" }
-                    MenuAction.DEV_SKIP_SEGMENT -> c.fakeSource?.skipToNextSegment()
                     MenuAction.TOGGLE_POLE_SIDE -> c.poleOnRight = !c.poleOnRight
                 }
             }.padding(horizontal = 10.dp).testTag("menu_${item.id}"),
@@ -556,12 +578,6 @@ private fun StepBtn(label: String, tag: String, onClick: () -> Unit) {
         Modifier.size(width = 84.dp, height = SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp)).background(t.card).clickable(onClick = onClick).testTag(tag),
         contentAlignment = Alignment.Center,
     ) { Text(label, style = Ty.label, color = t.ink) }
-}
-
-@Composable
-fun rememberBackgroundController(c: SurveyController): BackgroundController {
-    val dir = java.io.File(androidx.compose.ui.platform.LocalContext.current.cacheDir, "fake_uploads")
-    return remember(c) { BackgroundController(c.projection, dir) }
 }
 
 /** 기본은 자체 Canvas 지도. `-PwithMapLibre` 로 빌드해 클래스가 있을 때만 MapLibre 지도를 쓴다(실기기 확인 전이라 기본값 아님). */

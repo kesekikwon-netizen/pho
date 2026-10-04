@@ -297,7 +297,7 @@ class SurveyEngine(private val app: Context, private val settingsStrategy: (Stri
                 } catch (e: Exception) {
                     if (!ntripLostAnnounced && ntrip.value.lastRtcmAtMs != 0L) { events.tryEmit(FeedbackEvent.NTRIP_LOST); ntripLostAnnounced = true }
                     val d = minOf(15_000L, 1_000L shl (attempt - 1).coerceIn(0, 4))
-                    ntrip.value = NtripStatus(NtripState.RECONNECTING, "보정 연결이 끊겼어요. ${d / 1000}초 후 다시 접속 (${e.message ?: e.javaClass.simpleName})", bytes, ntrip.value.lastRtcmAtMs, attempt)
+                    ntrip.value = NtripStatus(NtripState.RECONNECTING, "보정 연결이 끊겼어요. ${d / 1000}초 후 다시 접속 [${e.javaClass.simpleName}] ${e.message ?: ""}", bytes, ntrip.value.lastRtcmAtMs, attempt)
                     withTimeoutOrNull(d) { ntripWake.receive() }
                 }
             }

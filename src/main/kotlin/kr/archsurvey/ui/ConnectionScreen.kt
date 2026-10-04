@@ -33,7 +33,7 @@ import kr.archsurvey.ntrip.NtripState
 fun ConnectionHost(c: SurveyController, cc: ConnectionController) {
     val link by cc.link.collectAsState()
     val ntrip by cc.ntrip.collectAsState()
-    val cards = if (cc.fakeSignal) emptyList() else ErrorCards.from(link, ntrip, cc.form.enabled)
+    val cards = ErrorCards.from(link, ntrip, cc.form.enabled)
     if (!cc.open && cards.isNotEmpty()) AlertStrip(cards.first(), onClick = { cc.openScreen() })
     if (cc.open) ConnectionScreen(cc)
 }
@@ -57,7 +57,7 @@ fun ConnectionScreen(cc: ConnectionController) {
     val t = T
     val link by cc.link.collectAsState()
     val ntrip by cc.ntrip.collectAsState()
-    val cards = if (cc.fakeSignal) emptyList() else ErrorCards.from(link, ntrip, cc.form.enabled)
+    val cards = ErrorCards.from(link, ntrip, cc.form.enabled)
     val p = cc.profile
     Column(Modifier.fillMaxSize().background(t.bg).testTag("connection_screen")) {
         Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -65,17 +65,7 @@ fun ConnectionScreen(cc: ConnectionController) {
             Text("수신기 연결 · VRS", style = Ty.title, color = t.ink, modifier = Modifier.padding(start = 4.dp))
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            // 1. 모드
-            Card {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("가짜 신호 모드", style = Ty.label, color = t.ink)
-                        Text(if (cc.fakeSignal) "화면 시험용 가짜 위치예요. 저장되는 점도 가짜예요." else "실제 수신기에서 위치를 받아요.", style = Ty.small, color = t.inkSub)
-                    }
-                    Switch(cc.fakeSignal, { cc.changeFakeSignal(it) }, modifier = Modifier.testTag("conn_fake_switch"))
-                }
-            }
-            if (!cc.fakeSignal) {
+            run {
                 // 2. 수신기 모델
                 Card {
                     Text("수신기 모델", style = Ty.label, color = t.ink)
@@ -132,7 +122,7 @@ fun ConnectionScreen(cc: ConnectionController) {
             }
             // 6. 상태·오류
             cc.notice?.let { ErrorCardView(it, "conn_notice") }
-            if (!cc.fakeSignal) {
+            run {
                 Card {
                     Text("연결 상태", style = Ty.label, color = t.ink)
                     Text(linkText(link.state) + (if (link.attempt > 0) " · 시도 ${link.attempt}회" else ""), style = Ty.body, color = t.ink, modifier = Modifier.testTag("conn_link_state"))
@@ -143,7 +133,7 @@ fun ConnectionScreen(cc: ConnectionController) {
             }
             Spacer(Modifier.height(8.dp))
         }
-        if (!cc.fakeSignal) {
+        run {
             Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val running = cc.connectRequested && link.state != LinkState.IDLE
                 if (running) Btn("연결 종료", Modifier.weight(1f).height(56.dp).testTag("conn_disconnect")) { cc.disconnect() }

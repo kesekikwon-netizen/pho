@@ -116,13 +116,18 @@ class SettingsStore(private val ctx: Context) {
     var keepScreenOn: Boolean
         get() = sp.getBoolean("keep_screen", true)
         set(v) = sp.edit().putBoolean("keep_screen", v).apply()
-    /** true = 가짜 신호(화면 시험). 기본 켬: 수신기를 연결하기 전까지는 가짜임을 화면에 표시한다 */
-    var fakeSignal: Boolean
-        get() = sp.getBoolean("fake_signal", true)
-        set(v) = sp.edit().putBoolean("fake_signal", v).apply()
     var ntripEnabled: Boolean
         get() = sp.getBoolean("ntrip_enabled", true)
         set(v) = sp.edit().putBoolean("ntrip_enabled", v).apply()
+    /** 위치 종류 목록(줄바꿈으로 구분). 비어 있으면 기본 목록 */
+    var positionTypes: List<String>
+        get() = kr.archsurvey.arch.ArchTypes.decode(sp.getString("position_types", null))
+        set(v) = sp.edit().putString("position_types", kr.archsurvey.arch.ArchTypes.encode(v)).apply()
+    /** 작업별로 마지막에 쓰던 발굴 구역·그리드 (없으면 null) */
+    fun activeArch(project: String): Pair<Long?, Long?> =
+        sp.getLong("area_$project", -1L).takeIf { it >= 0 } to sp.getLong("grid_$project", -1L).takeIf { it >= 0 }
+    fun setActiveArch(project: String, area: Long?, grid: Long?) =
+        sp.edit().putLong("area_$project", area ?: -1L).putLong("grid_$project", grid ?: -1L).apply()
     var code: String
         get() = sp.getString("code", "") ?: ""
         set(v) = sp.edit().putString("code", v).apply()

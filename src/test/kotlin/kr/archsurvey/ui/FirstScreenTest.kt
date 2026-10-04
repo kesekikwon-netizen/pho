@@ -1,0 +1,82 @@
+package kr.archsurvey.ui
+
+import android.graphics.Bitmap
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kr.archsurvey.core.*
+import kr.archsurvey.data.AntennaDb
+import kr.archsurvey.device.*
+import org.junit.Assert.*
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import java.io.File
+import java.io.FileOutputStream
+
+/** 첫 화면(수신기 없음)과 수신 중 화면을 Robolectric 으로 그려 본다. 실기기 아님. 스크린샷: build-reports/real/ */
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [34], qualifiers = "w360dp-h800dp-notnight-xxhdpi")
+class FirstScreenTest {
+    @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
+    private val out = File("../build-reports/real").apply { mkdirs() }
+    private val db = AntennaDb.parse(File("src/main/assets/antenna_db.json").readText())
+
+    private class Stub : GnssSource {
+        override val link = MutableStateFlow(LinkStatus())
+        override val gnss = MutableStateFlow(GnssSnapshot())
+        override fun clockMs() = 10_000L
+        override fun stop() {}
+    }
+
+    private fun shot(name: String) {
+        rule.waitForIdle()
+        val view = rule.activity.window.decorView
+        val bmp = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        rule.runOnUiThread { view.draw(android.graphics.Canvas(bmp)) }
+        FileOutputStream(File(out, "$name.png")).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    @Test fun firstScreenSaysReceiverNotConnected() {
+        val s = Stub()
+        val c = SurveyController(s, db, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        rule.setContent { SurveyTheme(dark = false) { SurveyMapScreen(c, batteryPct = 82) } }
+        rule.waitForIdle()
+        rule.onNodeWithText("불가 · 수신기 연결 안 됨").assertExists()
+        rule.onNodeWithTag("not_connected_card").assertExists()
+        rule.onNodeWithText("측점 불가").assertExists()
+        rule.onNodeWithTag("measure_disabled_reason", useUnmergedTree = true).assertExists()
+        shot("r1_not_connected")
+        rule.onNodeWithTag("measure_button").performClick()
+        rule.waitForIdle()
+        assertEquals(0, c.points.size)
+        shot("r2_measure_refused")
+    }
+
+    @Test fun streamingScreenShowsFixSatellitesAndCentimeterAccuracy() {
+        val s = Stub()
+        val c = SurveyController(s, db, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        rule.setContent { SurveyTheme(dark = false) { SurveyMapScreen(c, batteryPct = 82) } }
+        val gga = GgaMessage("", "000000", 37.0, 127.0, FixQuality.RTK_FIXED, 21, 0.8, 50.0, 25.0, 1.0, "0001")
+        rule.runOnUiThread {
+            s.link.value = LinkStatus(state = LinkState.STREAMING)
+            s.gnss.value = GnssSnapshot(gga, GstMessage("", 0.01, 0.006, 0.006, 0.012), lastGgaAtMs = 10_000L)
+        }
+        rule.waitForIdle()
+        rule.onNodeWithTag("not_connected_card").assertDoesNotExist()
+        rule.onNodeWithText("고정 · 측량 가능").assertExists()
+        rule.onNodeWithTag("status_detail").assertTextContains("위성 21", substring = true)
+        rule.onNodeWithTag("status_detail").assertTextContains("수평 ±0.8cm", substring = true)
+        rule.onNodeWithTag("status_detail").assertTextContains("수직 ±1.2cm", substring = true)
+        rule.onNodeWithTag("status_detail").assertTextContains("RTK 고정", substring = true)
+        shot("r3_streaming")
+    }
+}

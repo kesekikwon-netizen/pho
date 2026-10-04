@@ -12,7 +12,11 @@ data class GnssSnapshot(
     val sentencesTotal: Long = 0,
     val checksumErrors: Long = 0,
     val seenTypes: Set<String> = emptySet(),
+    /** 위성군별 보이는 위성 수(GSV) */
+    val inViewByTalker: Map<String, Int> = emptyMap(),
 ) {
+    /** 보이는 위성 수 합계. GSV 를 받지 못했으면 null */
+    val satsInView: Int? get() = if (inViewByTalker.isEmpty()) null else inViewByTalker.values.sum()
     val quality: FixQuality get() = gga?.quality ?: FixQuality.NONE
 }
 
@@ -42,6 +46,7 @@ class NmeaDriver(val profile: DeviceProfile) {
                 is GgaMessage -> s.copy(gga = m, lastGgaAtMs = nowMs)
                 is GstMessage -> s.copy(gst = m)
                 is GsaMessage -> s.copy(gsa = m)
+                is GsvMessage -> s.copy(inViewByTalker = s.inViewByTalker + (m.talker to (m.satsInView ?: 0)))
                 is ZdaMessage -> s
             }
             s = s.copy(seenTypes = s.seenTypes + typeOf(m))
@@ -74,6 +79,6 @@ class NmeaDriver(val profile: DeviceProfile) {
     fun missingRequired(): Set<String> = profile.requiredSentences - snapshot.seenTypes
 
     private fun typeOf(m: NmeaMessage) = when (m) {
-        is GgaMessage -> "GGA"; is GstMessage -> "GST"; is GsaMessage -> "GSA"; is ZdaMessage -> "ZDA"
+        is GgaMessage -> "GGA"; is GstMessage -> "GST"; is GsaMessage -> "GSA"; is GsvMessage -> "GSV"; is ZdaMessage -> "ZDA"
     }
 }

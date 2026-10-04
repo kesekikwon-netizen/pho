@@ -21,8 +21,8 @@ android {
         applicationId = "kr.archsurvey.field"
         minSdk = 21
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.1.1"
+        versionCode = 3
+        versionName = "0.1.2"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         buildConfigField("boolean", "USE_MAPLIBRE", project.hasProperty("withMapLibre").toString()) // 옵트인 MapLibre 지도(기본 false)
     }
@@ -34,7 +34,7 @@ android {
                 storePassword = ksProps["storePassword"] as String
                 keyAlias = ksProps["keyAlias"] as String
                 keyPassword = ksProps["keyPassword"] as String
-                enableV1Signing = true
+                enableV1Signing = true; enableV2Signing = true; enableV3Signing = true
             }
         }
     }

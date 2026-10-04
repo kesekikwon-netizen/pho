@@ -146,7 +146,6 @@ fun GotoScreen(c: SurveyController) {
                         Text(g.northText, style = Ty.body, color = t.ink, modifier = Modifier.testTag("goto_north"))
                         Text(g.eastText, style = Ty.body, color = t.ink, modifier = Modifier.testTag("goto_east"))
                     }
-                    if (c.fakeMode) Text("지금은 가짜 신호라 위치가 가짜예요.", style = Ty.small, color = t.bad)
                 }
                 Text("방위는 지도의 북쪽이 기준이에요(수신기 방향 센서는 쓰지 않아요). 거리가 줄어드는 쪽으로 걸으세요.", style = Ty.small, color = t.inkSub)
             }
@@ -292,7 +291,7 @@ fun SettingsScreen(c: SurveyController) {
         }
         Card {
             Text("수신기", style = Ty.label, color = t.ink)
-            Text(if (c.fakeMode) "지금은 가짜 신호예요." else "실제 수신기를 쓰고 있어요.", style = Ty.body, color = t.ink, modifier = Modifier.testTag("set_fake_state"))
+            Text(if (c.gv.status.reason == kr.archsurvey.core.StatusReason.NOT_CONNECTED) "수신기 연결 안 됨" else "수신기 연결됨 · ${c.gv.quality.labelKo}", style = Ty.body, color = t.ink, modifier = Modifier.testTag("set_fake_state"))
             Btn("수신기 연결 · VRS 열기", Modifier.fillMaxWidth().testTag("set_open_connection")) { h.closeAll(); c.connection?.openScreen() }
         }
         Card {
@@ -337,7 +336,7 @@ fun JobScreen(c: SurveyController) {
                 for ((i, j) in jc.list.withIndex()) {
                     Card {
                         Text(j.name + if (j.name == jc.current) "  (열려 있음)" else "", style = Ty.label, color = t.ink, modifier = Modifier.testTag("job_item_$i"))
-                        Text("점 ${j.points} · 사진 ${j.photos} · 음성 ${j.voices}" + if (j.fakePoints > 0) " · 가짜 신호 점 ${j.fakePoints}" else "", style = Ty.small, color = t.inkSub)
+                        Text("점 ${j.points} · 사진 ${j.photos} · 음성 ${j.voices}" + if (j.fakePoints > 0) " · 이전 시험 버전 점 ${j.fakePoints}" else "", style = Ty.small, color = t.inkSub)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Box(Modifier.weight(1f)) { Btn("열기", Modifier.fillMaxWidth().testTag("job_open_$i")) { jc.open(j.name) } }
                             Box(Modifier.weight(1f)) { Btn("삭제", Modifier.fillMaxWidth().testTag("job_delete_$i")) { jc.askDelete(j) } }
@@ -355,7 +354,7 @@ fun JobScreen(c: SurveyController) {
                         Text("점 ${i.points}개 · 사진 ${i.photos}장 · 음성 ${i.voices}개", style = Ty.body, color = t.ink, modifier = Modifier.testTag("job_info_counts"))
                         i.firstAtMs?.let { Text("첫 측점 " + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA).format(Date(it)), style = Ty.small, color = t.inkSub) }
                         i.lastAtMs?.let { Text("마지막 측점 " + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA).format(Date(it)), style = Ty.small, color = t.inkSub) }
-                        if (i.fakePoints > 0) Text("가짜 신호로 만든 점이 ${i.fakePoints}개 있어요.", style = Ty.small, color = t.bad)
+                        if (i.fakePoints > 0) Text("이전 시험 버전(0.1.1)에서 수신기 없이 만든 점이 ${i.fakePoints}개 있어요. 실측 데이터가 아니에요.", style = Ty.small, color = t.bad)
                     }
                     Text("좌표계 EPSG:${c.zone.epsg} (새 점 기준)", style = Ty.small, color = t.inkSub)
                 }

@@ -52,11 +52,28 @@ object ErrorCards {
                 add(ErrorCard(e.code, e.title, e.action, !e.needsUserAction))
         }
         if (link.repairHint && link.error == null) add(ErrorCard("BT-124", BtError.ALL_FAILED.title, BtError.ALL_FAILED.action, false))
-        if (ntripEnabled && ntrip != null) when (ntrip.state) {
-            NtripState.AUTH_FAILED -> add(ErrorCard("NT-401", "VRS 아이디/비밀번호가 맞지 않아요", "아이디와 비밀번호를 다시 확인하세요. 같은 계정으로 다른 곳에서 동시에 접속 중이면 끊고 다시 시도하세요. 자동 재시도는 하지 않아요.", false))
-            NtripState.ERROR -> add(ErrorCard("NT-500", "VRS 서버에 연결하지 못했어요", ntrip.message.ifBlank { "서버 주소·포트·마운트 포인트와 폰의 인터넷 연결을 확인하세요." }, true))
-            NtripState.RECONNECTING -> add(ErrorCard("NT-300", "VRS 다시 연결 중이에요", "폰 인터넷이 끊겼다 돌아오면 자동으로 이어져요.", true))
-            else -> {}
+        if (ntripEnabled && ntrip != null) ntripCard(ntrip)?.let { add(it) }
+    }
+
+    /** VRS(NTRIP) 오류를 원인별 문구로. 서버가 준 문구([NtripStatus.message])와 예외 종류로 가른다 */
+    fun ntripCard(ntrip: NtripStatus): ErrorCard? {
+        val m = ntrip.message
+        return when (ntrip.state) {
+            NtripState.AUTH_FAILED ->
+                if ("403" in m) ErrorCard("NT-403", "VRS 접속이 거부됐어요 (403)", "같은 아이디가 다른 폰·컨트롤러에서 접속 중일 수 있어요. 그쪽을 끊고 다시 시도하세요. 계약(사용 기간·권한)도 확인하세요. 자동 재시도는 하지 않아요.", false)
+                else ErrorCard("NT-401", "VRS 아이디/비밀번호가 맞지 않아요 (401)", "아이디와 비밀번호를 다시 입력하세요(대소문자 구분). 자동 재시도는 하지 않아요.", false)
+            NtripState.ERROR ->
+                if ("마운트" in m || "404" in m) ErrorCard("NT-404", "마운트 포인트를 찾을 수 없어요", "마운트 포인트 이름이 맞는지 확인하세요(서비스 안내문의 이름, 예: VRS-RTCM31). 서버는 응답했으니 주소·포트·계정은 맞아요.", false)
+                else ErrorCard("NT-500", "VRS 서버에 연결하지 못했어요", m.ifBlank { "서버 주소·포트·마운트 포인트와 폰의 인터넷 연결을 확인하세요." }, true)
+            NtripState.RECONNECTING -> when {
+                "UnknownHost" in m -> ErrorCard("NT-301", "VRS 서버 주소를 찾지 못했어요", "서버 주소 철자를 확인하세요. 주소가 맞다면 폰의 인터넷(데이터/와이파이)이 꺼져 있어요. 자동으로 다시 시도해요.", true)
+                "ConnectException" in m || "refused" in m.lowercase() -> ErrorCard("NT-302", "VRS 서버가 접속을 받지 않아요", "포트 번호를 확인하세요(보통 2101). 서버 점검 중일 수도 있어요. 자동으로 다시 시도해요.", true)
+                "Timeout" in m || "timed out" in m.lowercase() -> ErrorCard("NT-303", "VRS 서버 응답이 없어요 (네트워크)", "폰의 인터넷 신호가 약해요. 신호가 좋은 곳으로 옮기세요. 자동으로 다시 시도해요.", true)
+                "동안 오지 않아요" in m -> ErrorCard("NT-310", "보정 데이터가 오지 않아요", "접속은 됐지만 데이터가 없어요. ① 수신기 NMEA에 GGA가 켜져 있는지(VRS는 내 위치가 필요해요) ② 수신기가 위치를 잡았는지 ③ 마운트 포인트가 맞는지 확인하세요. 자동으로 다시 시도해요.", true)
+                "서버가 연결을 닫았어요" in m || "응답 없이" in m -> ErrorCard("NT-311", "VRS 서버가 연결을 끊었어요", "계정이 동시 접속으로 끊겼거나 서버가 내 위치(GGA)를 받지 못했을 수 있어요. 자동으로 다시 시도해요.", true)
+                else -> ErrorCard("NT-300", "VRS 다시 연결 중이에요", "폰 인터넷이 끊겼다 돌아오면 자동으로 이어져요.", true)
+            }
+            else -> null
         }
     }
 }
@@ -77,18 +94,16 @@ interface ConnectionPlatform {
     fun save(s: SavedConnection)
 }
 
-data class SavedConnection(val fakeSignal: Boolean, val deviceId: String?, val address: String?, val ntrip: NtripForm)
+data class SavedConnection(val deviceId: String?, val address: String?, val ntrip: NtripForm)
 
 /**
  * 연결 화면 상태·동작. Android 의존 없음.
- * 흐름: 모드(가짜/실제) → 수신기 모델 → 폰에 등록된 기기 선택 → 사전 확인 → VRS 입력 → 연결.
+ * 흐름: 수신기 모델 → 폰에 등록된 기기 선택 → 사전 확인 → VRS 입력 → 연결.
  */
 class ConnectionController(
     private val platform: ConnectionPlatform,
-    private val onModeChange: (fake: Boolean) -> Unit,
 ) {
     var open by mutableStateOf(false)
-    var fakeSignal by mutableStateOf(true); private set
     var profile by mutableStateOf<DeviceProfile>(DeviceProfiles.R10); private set
     var address by mutableStateOf<String?>(null); private set
     var form by mutableStateOf(NtripForm()); private set
@@ -102,7 +117,6 @@ class ConnectionController(
 
     init {
         val s = platform.loadSaved()
-        fakeSignal = s.fakeSignal
         DeviceProfiles.byId(s.deviceId)?.let { profile = it }
         address = s.address
         form = s.ntrip
@@ -127,21 +141,11 @@ class ConnectionController(
     fun updateForm(f: NtripForm) { form = f }
     fun setCheck(i: Int, v: Boolean) { if (i in checks.indices) checks[i] = v }
 
-    fun changeFakeSignal(v: Boolean) {
-        if (v == fakeSignal) return
-        fakeSignal = v
-        if (v) { platform.stopReal(); connectRequested = false }
-        notice = null
-        persist()
-        onModeChange(v)
-    }
-
-    private fun persist() = platform.save(SavedConnection(fakeSignal, profile.id, address, form))
+    private fun persist() = platform.save(SavedConnection(profile.id, address, form))
 
     /** 사전 점검 순서: 권한 → 블루투스 켜짐 → 기기 선택 → 사전 확인 → VRS 입력. 막히면 notice 에 오류 카드 */
     fun connect() {
         notice = null
-        if (fakeSignal) { notice = ErrorCard("-", "지금은 ‘가짜 신호’예요", "위의 스위치를 끄면 실제 수신기로 연결할 수 있어요.", false); return }
         if (!platform.hasBluetoothPermission()) {
             platform.requestBluetoothPermission { granted ->
                 if (granted) connect() else notice = card(BtError.PERMISSION_NEARBY_PERMANENT)
@@ -158,7 +162,6 @@ class ConnectionController(
         persist()
         platform.startReal(profile, addr, form.toConfig(), form.enabled)
         connectRequested = true
-        onModeChange(false)
     }
 
     fun openBluetoothSettings() = platform.openBluetoothSettings()
@@ -167,7 +170,7 @@ class ConnectionController(
     fun disconnect() { platform.stopReal(); connectRequested = false }
 
     /** 현재 연결 상태에서 보여 줄 오류 카드 */
-    fun cards(): List<ErrorCard> = ErrorCards.from(link.value, ntrip.value, form.enabled && !fakeSignal)
+    fun cards(): List<ErrorCard> = ErrorCards.from(link.value, ntrip.value, form.enabled)
 
     private fun card(e: BtError) = ErrorCard(e.code, e.title, e.action, !e.needsUserAction)
 }

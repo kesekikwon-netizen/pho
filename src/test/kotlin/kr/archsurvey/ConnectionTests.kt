@@ -34,7 +34,7 @@ private class FakePlatform : ConnectionPlatform {
     var ntripEnabledSeen: Boolean? = null
     var stopped = 0
     var saved: SavedConnection? = null
-    var initial = SavedConnection(true, null, null, NtripForm(user = "", password = ""))
+    var initial = SavedConnection(null, null, NtripForm(user = "", password = ""))
     override fun bondedDevices() = devices
     override fun hasBluetoothPermission() = perm
     override fun requestBluetoothPermission(onResult: (Boolean) -> Unit) { if (permGrant) perm = true; onResult(permGrant) }
@@ -96,9 +96,7 @@ class ConnectionTests {
     }
 
     private fun real(p: FakePlatform = FakePlatform()): Pair<ConnectionController, FakePlatform> {
-        p.initial = p.initial.copy(fakeSignal = false)
-        val modes = mutableListOf<Boolean>()
-        val c = ConnectionController(p) { modes.add(it) }
+        val c = ConnectionController(p)
         return c to p
     }
 
@@ -127,23 +125,6 @@ class ConnectionTests {
         assertEquals("AA:BB", p.started!!.second)
         assertEquals("u", p.started!!.third.username)
         assertTrue(c.connectRequested)
-    }
-
-    @Test fun fakeModeNeverStartsReal() {
-        val p = FakePlatform()
-        val c = ConnectionController(p) {}
-        assertTrue(c.fakeSignal)
-        c.connect()
-        assertNull(p.started)
-        assertNotNull(c.notice)
-    }
-
-    @Test fun toggleFakeStopsRealAndPersists() {
-        val (c, p) = real()
-        c.changeFakeSignal(true)
-        assertTrue(c.fakeSignal); assertEquals(1, p.stopped); assertTrue(p.saved!!.fakeSignal)
-        c.changeFakeSignal(false)
-        assertFalse(p.saved!!.fakeSignal)
     }
 
     @Test fun vrsDisabledSkipsVrsValidation() {

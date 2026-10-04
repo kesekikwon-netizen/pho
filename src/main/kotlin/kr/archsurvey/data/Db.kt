@@ -54,6 +54,12 @@ data class PointEntity(
     val groundMsl: Double? = null,
     val device: String,
     val measuredAtUtcMs: Long,
+    /** 고고학(Phase 2): 발굴 구역·그리드·칸 이름과 칸 안 위치(m). 그리드를 쓰지 않은 점은 비어 있음 */
+    val areaId: Long? = null,
+    val gridId: Long? = null,
+    @ColumnInfo(defaultValue = "''") val cellName: String = "",
+    val cellU: Double? = null,
+    val cellV: Double? = null,
     /** null = 살아 있는 점. 값이 있으면 되돌리기로 숨겨진 점 */
     val deletedAtUtcMs: Long? = null,
 )
@@ -97,6 +103,9 @@ data class PointWithCount(
 
 @Dao
 abstract class SurveyDao {
+    @Query("SELECT * FROM points WHERE project = :project AND deletedAtUtcMs IS NULL AND (:areaId IS NULL OR areaId = :areaId) ORDER BY measuredAtUtcMs ASC")
+    abstract suspend fun pointsOfArea(project: String, areaId: Long?): List<PointEntity>
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     abstract suspend fun insertPointRaw(p: PointEntity): Long
 
@@ -212,11 +221,16 @@ object PhotoLimit { const val MAX = 4 }
 object VoiceLimit { const val MAX = 3 }
 
 @Database(
-    entities = [PointEntity::class, PhotoEntity::class, VoiceEntity::class], version = 2, exportSchema = true,
-    autoMigrations = [androidx.room.AutoMigration(from = 1, to = 2)],
+    entities = [
+        PointEntity::class, PhotoEntity::class, VoiceEntity::class,
+        AreaEntity::class, GridEntity::class, OutlineEntity::class, OutlinePointEntity::class, PointRevisionEntity::class,
+    ],
+    version = 3, exportSchema = true,
+    autoMigrations = [androidx.room.AutoMigration(from = 1, to = 2), androidx.room.AutoMigration(from = 2, to = 3)],
 )
 abstract class SurveyDb : RoomDatabase() {
     abstract fun dao(): SurveyDao
+    abstract fun arch(): ArchDao
 
     companion object {
         @Volatile private var inst: SurveyDb? = null

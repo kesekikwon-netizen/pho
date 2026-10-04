@@ -41,6 +41,7 @@ class AndroidJobPlatform(private val ctx: Context, private val settings: Setting
     override suspend fun delete(name: String): String {
         val backup = BackupService(ctx).create("before_delete", versionName)
         dao.deleteProject(name)
+        SurveyDb.get(ctx).arch().let { it.deleteOutlinesOf(name); it.deleteGridsOf(name); it.deleteAreasOf(name) }
         File(ctx.getExternalFilesDir("Pictures") ?: File(ctx.filesDir, "Pictures"), safe(name)).deleteRecursively()
         File(ctx.getExternalFilesDir("Recordings") ?: File(ctx.filesDir, "Recordings"), safe(name)).deleteRecursively()
         settings.extraProjects = settings.extraProjects - name

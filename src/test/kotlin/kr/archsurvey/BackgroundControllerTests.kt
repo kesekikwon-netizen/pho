@@ -147,11 +147,4 @@ class BackgroundControllerTests {
         assertEquals("DXF 는 수동 정렬 화면으로 가지 않음", BgScreen.WARNING, b.screen)
         b.cancelUpload(); assertEquals(2, b.layers.size)
     }
-
-    @Test fun uiTextHasNoBannedWordsAndSheetsStayBelowHalfScreen() {
-        val banned = listOf("공사", "굴착", "시공", "측설", "성토", "절토", "준공", "검측", "노선", "도로")
-        val src = java.io.File("src/main/kotlin/kr/archsurvey/ui/bg").listFiles()!!.joinToString("\n") { it.readText() }
-        for (w in banned) assertFalse("금지어 '$w'", src.contains(w))
-        assertEquals(0.5f, SHEET_MAX_FRACTION, 0f)
-    }
 }

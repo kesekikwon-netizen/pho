@@ -60,6 +60,9 @@ data class GsaMessage(
     val vdop: Double?,
 ) : NmeaMessage
 
+/** 보이는 위성 수(GSV). [talker] 는 위성군(GP=GPS, GL=GLONASS, GA=Galileo, GB/BD=BeiDou, GQ=QZSS) */
+data class GsvMessage(override val raw: String, val talker: String, val satsInView: Int?) : NmeaMessage
+
 data class ZdaMessage(override val raw: String, val utcTime: String, val day: Int?, val month: Int?, val year: Int?) : NmeaMessage
 
 data class ParserStats(
@@ -137,6 +140,7 @@ class NmeaParser(private val maxLine: Int = 4096) {
                 type == "GGA" -> parseGga(s, f)
                 type == "GST" -> parseGst(s, f)
                 type == "GSA" -> parseGsa(s, f)
+                type == "GSV" -> parseGsv(s, f, id.dropLast(3))
                 type == "ZDA" -> parseZda(s, f)
                 else -> null
             }
@@ -200,6 +204,11 @@ class NmeaParser(private val maxLine: Int = 4096) {
         private fun parseGsa(raw: String, f: List<String>): GsaMessage? {
             if (f.size < 18) return null
             return GsaMessage(raw.trim(), n(f, 2), d(f, 15), d(f, 16), d(f, 17))
+        }
+
+        private fun parseGsv(raw: String, f: List<String>, talker: String): GsvMessage? {
+            if (f.size < 4) return null
+            return GsvMessage(raw.trim(), talker, n(f, 3))
         }
 
         private fun parseZda(raw: String, f: List<String>): ZdaMessage? {

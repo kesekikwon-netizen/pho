@@ -46,7 +46,7 @@ class ConnectionScreenTest {
         override fun openAppSettings() {}
         override fun startReal(profile: DeviceProfile, address: String, ntrip: NtripConfig, ntripEnabled: Boolean) { started++ }
         override fun stopReal() {}
-        override fun loadSaved() = SavedConnection(true, null, null, NtripForm())
+        override fun loadSaved() = SavedConnection(null, null, NtripForm())
         override fun save(s: SavedConnection) { saved = s }
     }
 
@@ -62,7 +62,7 @@ class ConnectionScreenTest {
         val p = P()
         val f = FakeGnssSource(FakeScenarios.fieldWalk())
         val c = SurveyController(f, db, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined), epochsPerPoint = 5)
-        val cc = ConnectionController(p) { c.fakeMode = it }
+        val cc = ConnectionController(p)
         c.connection = cc
         rule.setContent { SurveyTheme(dark = false) { SurveyMapScreen(c, batteryPct = 82) } }
         rule.waitForIdle()
@@ -78,18 +78,14 @@ class ConnectionScreenTest {
         rule.waitForIdle()
         assertTrue(cc.open)
         rule.onNodeWithTag("connection_screen").assertExists()
-        shot("c1_fake_mode")
-        // 가짜 모드에서는 연결 버튼이 없다
-        rule.onNodeWithTag("conn_connect").assertDoesNotExist()
+        shot("c1_connection_top")
+        rule.onNodeWithTag("conn_model_trimble_r10").assertExists()
     }
 
     @Test fun realModeFlowToConnect() {
         val (c, cc, p) = setup()
         rule.runOnUiThread { cc.openScreen() }
         rule.waitForIdle()
-        rule.onNodeWithTag("conn_fake_switch").performClick()
-        rule.waitForIdle()
-        assertFalse(cc.fakeSignal); assertFalse(c.fakeMode)
         rule.onNodeWithTag("conn_model_spectra_sp60").performClick()
         rule.onNodeWithTag("conn_model_trimble_r10").performClick()
         rule.waitForIdle()
@@ -114,7 +110,6 @@ class ConnectionScreenTest {
 
     @Test fun errorCardsAndAlertStrip() {
         val (c, cc, p) = setup()
-        rule.runOnUiThread { cc.changeFakeSignal(false) }
         p.link.value = LinkStatus(state = LinkState.NEEDS_USER, error = BtError.BT_OFF)
         p.ntrip.value = NtripStatus(state = NtripState.AUTH_FAILED)
         rule.waitForIdle()
@@ -126,10 +121,10 @@ class ConnectionScreenTest {
         rule.onNodeWithTag("conn_card_BT-101").performScrollTo().assertExists()
         rule.onNodeWithTag("conn_card_NT-401").performScrollTo().assertExists()
         shot("c6_error_cards")
-        // 가짜 모드로 돌아가면 오류 카드/알림 줄이 사라진다
-        rule.runOnUiThread { cc.changeFakeSignal(true); cc.close() }
+        // 오류가 풀리면 카드/알림 줄이 사라진다
+        p.link.value = LinkStatus(state = LinkState.STREAMING); p.ntrip.value = NtripStatus(state = NtripState.RECEIVING)
+        rule.runOnUiThread { cc.close() }
         rule.waitForIdle()
         rule.onNodeWithTag("alert_strip").assertDoesNotExist()
-        assertTrue(c.fakeMode)
     }
 }

@@ -21,7 +21,7 @@ fun ExportScreen(ec: ExportController) {
             else {
                 Text("작업 ${s.project} · 점 ${s.points}개 · 사진 ${s.photos}장 · 음성 ${s.voices}개", style = Ty.body, color = t.ink, modifier = Modifier.testTag("export_summary"))
                 if (s.fakePoints > 0) {
-                    Text("가짜 신호로 만든 점이 ${s.fakePoints}개 들어 있어요. 현장 데이터와 섞이지 않게 확인하세요.", style = Ty.small, color = t.bad, modifier = Modifier.testTag("export_fake_warning"))
+                    Text("이전 시험 버전에서 수신기 없이 만든 점이 ${s.fakePoints}개 들어 있어요. 실측 데이터와 섞이지 않게 확인하세요.", style = Ty.small, color = t.bad, modifier = Modifier.testTag("export_fake_warning"))
                 }
             }
             CheckRow("사진 포함 (photos/)", ec.includePhotos, "export_photos") { ec.includePhotos = it }
