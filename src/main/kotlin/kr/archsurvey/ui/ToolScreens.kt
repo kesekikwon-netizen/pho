@@ -86,24 +86,39 @@ fun PointDetailScreen(c: SurveyController) {
     ToolScaffold(p.name, "point_detail", onBack = { h.back() }, bottom = {
         PrimaryBar(if (h.saved && !h.dirty) "저장했어요" else "수정 저장", "point_save", enabled = h.dirty) { h.saveEdit() }
     }) {
-        Card {
-            Text("위치 종류", style = Ty.label, color = t.ink)
+        ReadRow("점 이름") { Text(p.name, style = Ty.coord.copy(fontSize = 17.6.sp), color = t.ink, modifier = Modifier.testTag("detail_name")) }
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("위치 종류", style = Ty.small.copy(fontSize = 12.3.sp), color = t.inkSub)
             for (row in c.types.chunked(2)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     for (ty in row) Choice(ty, ty == h.editType.trim(), Modifier.weight(1f).testTag("edit_type_$ty")) { h.editType = ty }
                     if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
-            OutlinedTextField(h.memo(), { h.editMemo = it }, label = { Text("메모 (한 줄)") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("edit_memo"))
-            Text("좌표·높이는 바꿀 수 없어요. 잘못 측점했다면 다시 측점하세요.", style = Ty.small, color = t.inkSub)
         }
+        Field("비고", h.memo(), "edit_memo") { h.editMemo = it }
+        ReadRow("안테나 위상중심") {
+            Text(f3(p.antenna.apcHeightM), style = Ty.coord.copy(fontSize = 17.6.sp), color = t.ink)
+            Text(" m · ${p.antenna.refPointLabel}", style = Ty.small, color = t.inkSub, maxLines = 1)
+        }
+        // N / E / H 카드 (목업 s31)
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(t.raised).border(1.dp, t.line, RoundedCornerShape(18.dp)).testTag("detail_neh")) {
+            val rows = listOf("N" to p.northing, "E" to p.easting, "H" to p.groundHeightM)
+            rows.forEachIndexed { i, (k, v) ->
+                Row(Modifier.fillMaxWidth().height(34.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(k, style = Ty.label.copy(fontSize = 17.6.sp), color = t.ink, modifier = Modifier.width(22.dp))
+                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.Bottom) {
+                        Text(v?.let { grp3(it) } ?: "—", style = Ty.coord.copy(fontSize = 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Light), color = t.ink, maxLines = 1, modifier = Modifier.testTag("detail_$k"))
+                        Text(" m", style = Ty.small.copy(fontSize = 12.3.sp), color = t.inkSub, modifier = Modifier.padding(bottom = 3.dp))
+                    }
+                }
+                if (i < rows.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(t.line))
+            }
+        }
+        Text("좌표·높이는 바꿀 수 없어요. 잘못 측점했다면 다시 측점하세요. (H = 지면 높이, 타원체고)", style = Ty.small, color = t.inkSub)
         Card {
-            Text("측정값", style = Ty.label, color = t.ink)
-            Text("N ${f3(p.northing)}", style = Ty.coord, color = t.ink)
-            Text("E ${f3(p.easting)}", style = Ty.coord, color = t.ink)
-            Text("좌표계 EPSG:${p.crsEpsg}", style = Ty.small, color = t.inkSub)
-            Text("지면 높이(타원체고) ${p.groundHeightM?.let { f3(it) } ?: "—"} m · 표고 ${p.groundMslM?.let { f3(it) } ?: "—"} m", style = Ty.small, color = t.inkSub)
-            Text("안테나 위상중심 ${f3(p.antenna.apcHeightM)} m · ${p.antenna.refPointLabel}", style = Ty.small, color = t.inkSub)
+            Text("측정 정보", style = Ty.label, color = t.ink)
+            Text("좌표계 EPSG:${p.crsEpsg} · 표고 ${p.groundMslM?.let { f3(it) } ?: "—"} m", style = Ty.small, color = t.inkSub)
             Text("${if (p.status == SurveyStatus.FIXED) "고정" else "주의"}${p.sigmaHM?.let { " ±${f3(it)} m" } ?: ""} · 위성 ${p.satellites} · ${p.epochs}회 평균", style = Ty.small, color = t.inkSub)
             if (p.measuredAtMs > 0) Text(SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(p.measuredAtMs)), style = Ty.small, color = t.inkSub)
         }
@@ -116,6 +131,20 @@ fun PointDetailScreen(c: SurveyController) {
 }
 
 private fun ToolsHub.memo() = editMemo
+
+/** 목업의 읽기 전용 줄: 왼쪽 작은 이름 + 오른쪽 값 */
+@Composable
+private fun ReadRow(label: String, content: @Composable RowScope.() -> Unit) {
+    val t = T
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        Modifier.fillMaxWidth().height(48.dp).clip(shape).background(t.raised).border(1.5.dp, t.outline, shape).padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(label, style = Ty.small.copy(fontSize = 12.3.sp), color = t.inkSub, modifier = Modifier.widthIn(min = 72.dp))
+        content()
+    }
+}
 
 // ---------------- 점 찾아가기 ----------------
 

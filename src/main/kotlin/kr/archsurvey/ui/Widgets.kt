@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -21,10 +22,10 @@ fun ToolScaffold(title: String, tag: String, onBack: () -> Unit, bottom: (@Compo
     val t = T
     Column(Modifier.fillMaxSize().background(t.bg).testTag(tag)) {
         Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).clickable(onClick = onBack).testTag("tool_back"), contentAlignment = Alignment.Center) { Text("‹", fontSize = 28.sp, color = t.ink) }
-            Text(title, style = Ty.title, color = t.ink, modifier = Modifier.padding(start = 4.dp))
+            MBtn(Modifier.size(48.dp).testTag("tool_back"), MKind.PLAIN, 20.dp, onClick = onBack) { Box(Modifier.rotate(-90f)) { GlyphIcon(Glyph.CHEVRON_UP, t.accent, 20.dp) } }
+            Text(title, style = Ty.title.copy(fontSize = 21.sp), color = t.ink, modifier = Modifier.padding(start = 8.dp))
         }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(14.dp), content = content)
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
         bottom?.invoke()
     }
 }
@@ -35,7 +36,7 @@ fun PrimaryBar(label: String, tag: String, enabled: Boolean = true, onClick: () 
     val t = T
     Box(Modifier.fillMaxWidth().padding(16.dp)) {
         Box(
-            Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(16.dp)).glossy(if (enabled) t.primary else t.line, enabled)
+            Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(18.dp)).glossy(if (enabled) t.primary else t.line, enabled)
                 .clickable(enabled = enabled, onClick = onClick).testTag(tag),
             contentAlignment = Alignment.Center,
         ) { Text(label, style = Ty.button.copy(fontSize = 18.sp), color = if (enabled) t.onPrimary else t.inkSub) }

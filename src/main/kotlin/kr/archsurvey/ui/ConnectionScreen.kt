@@ -166,38 +166,51 @@ private fun ntripText(s: NtripState) = when (s) {
     NtripState.ERROR -> "오류"
 }
 
+/** 목업 s31/s8 카드: 밝은 면 + 얇은 선 + 둥근 모서리 18dp */
 @Composable
 internal fun Card(content: @Composable ColumnScope.() -> Unit) {
     val t = T
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(t.card).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
+    val shape = RoundedCornerShape(18.dp)
+    Column(Modifier.fillMaxWidth().clip(shape).background(t.raised).border(1.dp, t.line, shape).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
 }
 
+/** 목업의 알약 선택 버튼: 고르면 연한 테라코타 면 + 굵은 테두리 + 체크 */
 @Composable
 internal fun Choice(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val t = T
-    Box(
-        modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp))
-            .background(if (selected) t.primary.copy(alpha = 0.22f) else t.bg)
-            .border(1.dp, if (selected) t.accent else t.line, RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp),
-        contentAlignment = Alignment.CenterStart,
-    ) { Text((if (selected) "✓ " else "") + label, style = Ty.body, color = t.ink) }
+    MBtn(modifier.heightIn(min = 48.dp), if (selected) MKind.SELECTED else MKind.PLAIN, 16.dp, onClick = onClick) {
+        Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            if (selected) GlyphIcon(Glyph.CHECK, t.accentText, 14.dp)
+            Text(label, style = Ty.label, color = t.ink)
+        }
+    }
 }
 
 @Composable
 internal fun Btn(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val t = T
-    Box(modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp)).background(t.bg).border(1.dp, t.outline, RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
-        Text(label, style = Ty.label, color = t.ink)
+    MBtn(modifier.heightIn(min = 48.dp), MKind.PLAIN, 16.dp, onClick = onClick) {
+        Text(label, style = Ty.label, color = t.ink, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
     }
 }
 
+/** 목업의 입력 줄: 48dp, 왼쪽 작은 이름 + 오른쪽 값 */
 @Composable
 internal fun Field(label: String, value: String, tag: String, kb: KeyboardType = KeyboardType.Text, hide: Boolean = false, onChange: (String) -> Unit) {
-    OutlinedTextField(
-        value, onChange, label = { Text(label) }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag(tag),
-        keyboardOptions = KeyboardOptions(keyboardType = kb),
-        visualTransformation = if (hide) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-    )
+    val t = T
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(shape).background(t.raised).border(1.5.dp, t.outline, shape).padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(label, style = Ty.small.copy(fontSize = 12.3.sp), color = t.inkSub, modifier = Modifier.widthIn(min = 72.dp, max = 110.dp))
+        androidx.compose.foundation.text.BasicTextField(
+            value, onChange, singleLine = true, modifier = Modifier.weight(1f).padding(vertical = 12.dp).testTag(tag),
+            textStyle = Ty.body.copy(color = t.ink), cursorBrush = androidx.compose.ui.graphics.SolidColor(t.accent),
+            keyboardOptions = KeyboardOptions(keyboardType = kb),
+            visualTransformation = if (hide) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+        )
+    }
 }
 
 @Composable
