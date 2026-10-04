@@ -160,6 +160,8 @@ class SurveyController(
     var exporter: ExportController? = null
     /** 백업·복구 화면 상태 */
     var backup: BackupController? = null
+    /** 배경(도면) 레이어. 앱에서는 SurveyViewModel 이 연결한다 */
+    var bg: kr.archsurvey.ui.bg.BackgroundController? = null
     /** 점 목록·찾아가기·계산기·설정·작업 관리 화면 */
     val hub = ToolsHub(this)
     /** 측점 결과 알림(진동·소리). true=저장됨, false=실패 */
@@ -578,6 +580,7 @@ class SurveyController(
             gridLabels = if (g != null && g.cols * g.rows <= 1200 && g.spacingM * dpPerM >= 26) GridMath.cellCenters(g).map { MapText(it.first, loc(it.second)) } else emptyList(),
             cellHighlight = if (g != null && cellNow != null && cellNow.col >= 0) g.cellCorners(cellNow.col, cellNow.row).map { loc(it) } else emptyList(),
             gridColorIdx = arch.activeArea?.colorIdx ?: 0,
+            backgrounds = bg?.mapLayers().orEmpty(),
             outlines = arch.outlineViews().map { MapOutline(it.outline.label, it.vertices.map { v -> loc(v) }, it.outline.closed, !it.outline.finished, arch.areas.firstOrNull { a -> a.id == it.outline.areaId }?.colorIdx ?: 0) },
         )
     }

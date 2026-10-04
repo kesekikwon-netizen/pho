@@ -66,6 +66,10 @@ fun SurveyMapScreen(
         DrawerOverlay(c)
         if (c.quickSheetOpen) QuickSheet(c)
         if (c.dupPrompt != null) DupSheet(c)
+        c.bg?.let { b ->
+            androidx.activity.compose.BackHandler(enabled = b.screen != kr.archsurvey.ui.bg.BgScreen.NONE) { b.close() }
+            kr.archsurvey.ui.bg.BackgroundSheets(b)
+        }
         if (c.antennaSheetOpen) AntennaSheet(c)
         if (c.hub.screen != null) ToolHost(c)
         c.exporter?.let { if (it.open) ExportScreen(it) }
@@ -136,10 +140,14 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
         // 오른쪽: 점 목록 · 안테나 높이
         Column(Modifier.align(Alignment.TopEnd).padding(end = 10.dp, top = 128.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             ToolBtn(Glyph.LIST, "점 목록", "tool_points") { c.hub.open(ToolScreen.POINTS) }
+            c.bg?.let { b -> ToolBtn(Glyph.LAYERS, "배경 레이어", "layer_btn", if (b.screen != kr.archsurvey.ui.bg.BgScreen.NONE) MKind.PRIMARY else MKind.PLAIN) { b.toggle() } }
             MBtn(Modifier.size(48.dp).testTag("antenna_chip"), MKind.PLAIN, 16.dp, onClick = { c.antennaSheetOpen = true }) {
                 GlyphIcon(Glyph.RULER, t.accent, 18.dp)
                 Text(f3(c.antenna.inputValueM), style = Ty.coord.copy(fontSize = 11.4.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("antenna_input"))
             }
+        }
+        c.bg?.mapCaption()?.let {
+            Text(it, style = Ty.small, color = t.ink, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 6.dp).background(t.raised.copy(alpha = 0.85f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp).testTag("map_caption"))
         }
         NotConnectedCard(c, Modifier.align(Alignment.Center))
         val h = c.antennaResult?.totalToApcM

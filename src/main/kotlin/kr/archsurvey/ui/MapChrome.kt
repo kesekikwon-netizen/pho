@@ -259,6 +259,7 @@ internal fun QuickSheet(c: SurveyController) {
                 Triple<String, String, () -> Unit>("계산기", "quick_calc", { c.hub.open(ToolScreen.CALC) }),
                 Triple<String, String, () -> Unit>("안테나 높이", "quick_antenna", { c.antennaSheetOpen = true }),
                 Triple<String, String, () -> Unit>("내보내기", "quick_export", { c.exporter?.openScreen() ?: run { c.message = "내보내기는 이 빌드에 없어요" } }),
+                Triple<String, String, () -> Unit>("배경 레이어 (도면 올리기)", "quick_bg", { c.quickSheetOpen = false; c.bg?.openManage() ?: run { c.message = "배경 레이어는 이 빌드에 없어요" } }),
                 Triple<String, String, () -> Unit>("발굴 구역 · 그리드", "quick_areas", { c.hub.open(ToolScreen.AREAS) }),
                 Triple<String, String, () -> Unit>(if (c.arch.outlineMode) "외곽 취득 끄기" else "외곽 취득 켜기", "quick_outline", { c.toggleOutlineMode() }),
                 Triple<String, String, () -> Unit>("위치 종류 편집", "quick_types", { c.hub.open(ToolScreen.TYPES) }),

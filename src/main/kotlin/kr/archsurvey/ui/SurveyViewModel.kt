@@ -47,6 +47,14 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
             onActiveChanged = { a, g -> application.settings.setActiveArch(application.settings.project, a, g) },
         )
         controller.arch.reload()
+        val bgFiles = kr.archsurvey.engine.AndroidBgFiles(app, docs, viewModelScope)
+        controller.bg = kr.archsurvey.ui.bg.BackgroundController(
+            projection = { controller.projection },
+            store = kr.archsurvey.georef.JsonFileBgLayerStore(bgFiles.layerDir),
+            pickFiles = { cb -> bgFiles.pick(cb) },
+            deleteFiles = { bgFiles.deleteCopy(it) },
+            cornersDir = bgFiles.layerDir,
+        )
         controller.media = media
         controller.exporter = ExportController(exportPlatform, viewModelScope)
         controller.backup = BackupController(backupPlatform, viewModelScope)

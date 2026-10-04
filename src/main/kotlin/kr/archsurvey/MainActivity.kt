@@ -26,6 +26,8 @@ class MainActivity : ComponentActivity() {
     private val docCreate = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/zip")) { uri -> vm.docs.deliverCreate(uri) }
     private val docOpen = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri -> vm.docs.deliverOpen(uri) }
 
+    private val docOpenMany = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments()) { uris -> vm.docs.deliverOpenMany(uris) }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         vm.platform.permissionRequester = { perms, cb ->
@@ -39,6 +41,7 @@ class MainActivity : ComponentActivity() {
         vm.docs.launcher = object : kr.archsurvey.engine.DocBridge.Launcher {
             override fun create(suggestedName: String) = docCreate.launch(suggestedName)
             override fun open() = docOpen.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
+            override fun openMany() = docOpenMany.launch(arrayOf("*/*"))
         }
         applyKeepScreen((application as App).settings.keepScreenOn)
         vm.onKeepScreen = { applyKeepScreen(it) }
