@@ -29,16 +29,17 @@ class LayoutMathTest {
             assertTrue("$p $f", f >= SurveyDims.MIN_MAP_FRACTION)
         }
         assertEquals(706, SurveyLayout.mapHeightDp(800, Phase.IDLE))
-        assertEquals("결과 패널이 컨트롤 영역을 대신한다", 566, SurveyLayout.mapHeightDp(800, Phase.RESULT))
+        assertEquals("결과 띠는 측점 영역 위에 얹힌다(56+94)", 650, SurveyLayout.mapHeightDp(800, Phase.RESULT))
     }
     @Test fun expandedSheetIsUnderHalfScreenAndMapStillVisible() {
         assertTrue(SurveyLayout.fixedHeightDp(Phase.RESULT_EXPANDED) < 800 / 2)
         assertEquals(416, SurveyLayout.mapHeightDp(800, Phase.RESULT_EXPANDED))
         assertTrue("펼침 중엔 60% 미만(의도된 예외)", SurveyLayout.mapFraction(800, Phase.RESULT_EXPANDED) < 0.6)
     }
-    @Test fun minimumScreenHeightFor60PercentIs600dpForResultPanel() {
-        assertTrue(SurveyLayout.mapFraction(600, Phase.RESULT) >= 0.6)
-        assertTrue(SurveyLayout.mapFraction(560, Phase.RESULT) < 0.6)
+    @Test fun minimumScreenHeightFor60PercentIs380dpForResultStrip() {
+        // 결과 띠(56)+측점 영역(94)=150dp → 380dp 높이부터 지도 60% 이상
+        assertTrue(SurveyLayout.mapFraction(380, Phase.RESULT) >= 0.6)
+        assertTrue(SurveyLayout.mapFraction(360, Phase.RESULT) < 0.6)
     }
 }
 

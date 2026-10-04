@@ -25,12 +25,12 @@ object SurveyLayout {
     fun infoHeightDp(phase: Phase): Int = when (phase) {
         Phase.IDLE -> 0
         Phase.ACQUIRING, Phase.RECORDING -> SurveyDims.INFO_STRIP_DP
-        Phase.RESULT, Phase.RESULT_EXPANDED -> 0
+        Phase.RESULT -> SurveyDims.INFO_STRIP_DP   // 결과 띠(잠깐). 측점 버튼은 그대로 아래에 있다
+        Phase.RESULT_EXPANDED -> 0
     }
-    /** 결과 패널이 컨트롤 영역을 대신하는 단계 */
-    fun isResult(phase: Phase) = phase == Phase.RESULT || phase == Phase.RESULT_EXPANDED
+    /** 펼친 결과 패널이 컨트롤 영역을 대신하는 단계(사진·음성·메모를 볼 때만) */
+    fun isResult(phase: Phase) = phase == Phase.RESULT_EXPANDED
     fun fixedHeightDp(phase: Phase): Int = when (phase) {
-        Phase.RESULT -> SurveyDims.RESULT_PANEL_DP
         Phase.RESULT_EXPANDED -> SurveyDims.RESULT_PANEL_DP + SurveyDims.EXPANDED_EXTRA_DP
         else -> infoHeightDp(phase) + SurveyDims.CONTROL_AREA_DP
     }

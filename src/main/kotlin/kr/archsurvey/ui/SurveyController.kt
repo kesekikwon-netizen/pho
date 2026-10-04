@@ -265,8 +265,19 @@ class SurveyController(
 
     // ---------------- 측점 ----------------
 
+    /** 결과 띠를 보이는 시간(ms). 띠가 사라져도 측점 버튼은 막히지 않고, 사진·음성·되돌리기는 계속 쓸 수 있다 */
+    var resultStripMs: Long = 4000L
+    var resultStripShown by mutableStateOf(false)
+        private set
+    /** 새 결과마다 올라가는 번호. 화면(LaunchedEffect)이 이 번호로 숨김 시간을 다시 잰다 — 화면과 함께 사라지는 타이머라 따로 도는 스레드가 없다 */
+    var resultStripSeq by mutableIntStateOf(0)
+        private set
+    private fun showResultStrip() { resultStripShown = true; resultStripSeq++ }
+    fun hideResultStrip() { resultStripShown = false }
+
     fun onMeasure() {
         if (phase == Phase.ACQUIRING || phase == Phase.RECORDING) return
+        resultStripShown = false
         val st = gv.status
         if (StatusJudge.savePolicy(st.status) == SavePolicy.BLOCK) {
             message = "지금은 측점할 수 없어요 — ${st.reason.textKo}"
@@ -344,7 +355,7 @@ class SurveyController(
             try { val id = st.save(named); points[idx] = named.copy(rowId = id); if (arch.outlineMode && named.type == ArchTypes.OUTLINE_POINT) arch.attachVertex(id) }
             catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; saveError = "디스크 저장에 실패했어요 — 다시 시도하세요" }
         }
-        phase = Phase.RESULT
+        phase = Phase.RESULT; showResultStrip()
         photos.clear(); voices.clear()
         feedback?.invoke(saveError == null)
         message = saveError ?: if (worst == SurveyStatus.CAUTION) "주의 상태에서 취득한 점이에요 (표시가 기록돼요)" else null
@@ -363,7 +374,7 @@ class SurveyController(
         arch.bumpRevision(old.rowId)
         resultName = upd.name; resurveyUndo = old
         dupPrompt = null
-        phase = Phase.RESULT
+        phase = Phase.RESULT; showResultStrip()
         refreshMedia()
         feedback?.invoke(true)
         val moved = Calc.distance(pointNE(old), pointNE(upd))
@@ -422,10 +433,11 @@ class SurveyController(
     }
 
     /** 결과 패널의 [다음 점]: 결과 화면을 닫고 측점 준비 화면으로 */
-    fun nextPoint() { if (phase == Phase.RESULT || phase == Phase.RESULT_EXPANDED) phase = Phase.IDLE }
+    fun nextPoint() { if (phase == Phase.RESULT || phase == Phase.RESULT_EXPANDED) { phase = Phase.IDLE; onMeasure() } }
 
     fun toggleExpand() {
         phase = when (phase) { Phase.RESULT -> Phase.RESULT_EXPANDED; Phase.RESULT_EXPANDED -> Phase.RESULT; else -> phase }
+        if (phase == Phase.RESULT) showResultStrip() else hideResultStrip()
     }
 
     // ---------------- 사진 · 음성 메모 (마지막 점에 붙는다) ----------------

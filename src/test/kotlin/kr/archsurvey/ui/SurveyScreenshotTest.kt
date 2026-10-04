@@ -95,13 +95,13 @@ class SurveyScreenshotTest {
     }
 
     @Test fun c_measure_flow_map_never_covered() {
-        val (f, c) = make(); show(c); adv(f, 3)
+        val (f, c) = make(); c.resultStripMs = Long.MAX_VALUE; show(c); adv(f, 3)
         assertEquals(72f, bounds("measure_button").height.value, 0.6f)
         val idleMap = bounds("map_area")
         val metrics = StringBuilder()
         fun check(label: String, expectMin: Double = 0.6) {
             val m = bounds("map_area")
-            val resultPanel = c.phase == Phase.RESULT || c.phase == Phase.RESULT_EXPANDED
+            val resultPanel = c.phase == Phase.RESULT_EXPANDED
             if (resultPanel) {
                 // 결과 패널(목업 s6b)이 정보 영역+컨트롤 영역을 대신한다
                 val info = bounds("info_zone")
@@ -128,19 +128,21 @@ class SurveyScreenshotTest {
         check("acquiring"); shot("07_acquiring")
         adv(f, 5)
         assertEquals(Phase.RESULT, c.phase)
-        rule.onNodeWithTag("result_chip").assertIsDisplayed()
+        rule.onNodeWithTag("result_chip", useUnmergedTree = true).assertExists()
+        rule.onNodeWithTag("result_strip").assertIsDisplayed()
+        rule.onNodeWithTag("measure_button").assertIsDisplayed()
         check("result_strip"); shot("08_result_strip_min")
-        rule.onNodeWithTag("expand_btn").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("result_strip").performClick(); rule.waitForIdle()
         assertEquals(Phase.RESULT_EXPANDED, c.phase)
         check("result_expanded", 0.4); shot("09_result_expanded_photos_voice")
-        rule.onNodeWithTag("expand_btn").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("voice_btn").performClick(); rule.waitForIdle()
         assertEquals(Phase.RECORDING, c.phase)
         check("recording"); shot("10_recording_mock")
         rule.onNodeWithTag("record_stop").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("result_strip").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("next_point").performClick(); rule.waitForIdle()
-        assertEquals(Phase.IDLE, c.phase)
-        rule.onNodeWithTag("measure_button").performClick(); adv(f, 6)
+        assertEquals("다음 점 한 번 탭 = 바로 취득 시작", Phase.ACQUIRING, c.phase)
+        adv(f, 6)
         assertEquals(2, c.points.size)
         shot("11_second_point_next")
         assertEquals(idleMap.width.value, bounds("map_area").width.value, 0.6f)

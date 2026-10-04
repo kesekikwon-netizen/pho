@@ -166,12 +166,16 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
 @Composable
 fun InfoZone(c: SurveyController) {
     val t = T
-    val h = SurveyLayout.infoHeightDp(c.phase)
+    if (c.phase == Phase.RESULT && c.resultStripShown) {
+        androidx.compose.runtime.LaunchedEffect(c.resultStripSeq) { kotlinx.coroutines.delay(c.resultStripMs); c.hideResultStrip() }
+    }
+    val h = if (c.phase == Phase.RESULT && !c.resultStripShown) 0 else SurveyLayout.infoHeightDp(c.phase)
     Box(Modifier.fillMaxWidth().height(h.dp).background(t.card).testTag("info_zone")) {
         when (c.phase) {
             Phase.IDLE -> Unit
             Phase.ACQUIRING -> AcquireStrip(c)
-            Phase.RESULT, Phase.RESULT_EXPANDED -> Unit
+            Phase.RESULT -> if (c.resultStripShown) ResultStrip(c)
+            Phase.RESULT_EXPANDED -> Unit
             Phase.RECORDING -> RecordStrip(c)
         }
     }
@@ -192,7 +196,30 @@ private fun AcquireStrip(c: SurveyController) {
     }
 }
 
-/** 측점 결과 패널 (목업 s6b): 점 이름·종류·상태, N/E/H·±, 사진·음성·펼치기, 다음 점 · 되돌리기 */
+/** 측점 직후 잠깐 보이는 한 줄 결과 띠. 측점 버튼을 막지 않는다. 누르면 사진·음성이 있는 패널로 펼쳐진다 */
+@Composable
+private fun ResultStrip(c: SurveyController) {
+    val t = T
+    val p = c.lastPoint ?: return
+    val (bg, fg) = statusColors(t, p.status)
+    Row(
+        Modifier.fillMaxSize().clickable { c.toggleExpand() }.padding(horizontal = 12.dp).testTag("result_strip"),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(p.name, style = Ty.coord.copy(fontSize = 19.4.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_name"))
+        Text("${p.type} · 저장됨 ±${p.sigmaHM?.let { f3(it) } ?: "—"} m", style = Ty.small, color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("result_h"))
+        Row(
+            Modifier.height(28.dp).clip(RoundedCornerShape(14.dp)).glossy(bg).padding(start = 6.dp, end = 9.dp).testTag("result_chip"),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            StatusIcon(p.status, fg, 14.dp)
+            Text(if (p.status == SurveyStatus.FIXED) "FIXED 고정" else "주의", style = Ty.label.copy(fontSize = 12.3.sp), color = fg, maxLines = 1)
+        }
+        GlyphIcon(Glyph.CHEVRON_UP, t.accent, 20.dp)
+    }
+}
+
+/** 펼친 결과 패널 (목업 s6b): 점 이름·종류·상태, N/E/H·±, 사진·음성·펼치기, 다음 점 · 되돌리기 */
 @Composable
 private fun ResultPanel(c: SurveyController) {
     val t = T

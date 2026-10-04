@@ -189,7 +189,6 @@ class ArchUiTest {
         assertEquals("북동 모서리", c.points.last().memo)
         assertEquals("비고는 한 번만 붙는다", "", c.pendingMemo)
         // 취소는 아무것도 바꾸지 않음
-        rule.onNodeWithTag("next_point").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("measure_button").performTouchInput { longClick() }; rule.waitForIdle()
         rule.onNodeWithTag("setup_link_point").performClick(); rule.onNodeWithTag("setup_cancel").performClick(); rule.waitForIdle()
         assertTrue(c.arch.outlineMode)
