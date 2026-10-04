@@ -1,0 +1,10 @@
+<resources>
+    <!-- Android 12+ 스플래시: 아이보리 바탕 + 테라코타 마크 (WP-11). 실제 기기 표시는 확인 못 함 -->
+    <style name="Theme.Survey" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowSplashScreenBackground">#FAF9F5</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_logo_mark_terracotta</item>
+    </style>
+</resources>

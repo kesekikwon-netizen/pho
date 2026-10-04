@@ -374,6 +374,12 @@ fun DrawerOverlay(c: SurveyController) {
                 val st = c.gv.status
                 val (bg, fg) = statusColors(t, st.status)
                 Column(Modifier.padding(16.dp)) {
+                    // WP-11: 서랍 상단 로고 마크 (B안, 벡터)
+                    androidx.compose.foundation.Image(
+                        androidx.compose.ui.res.painterResource(kr.archsurvey.R.drawable.ic_logo_mark_terracotta),
+                        contentDescription = "발굴 측량 로고", modifier = Modifier.size(44.dp).testTag("drawer_logo"),
+                    )
+                    Spacer(Modifier.height(8.dp))
                     Text("샘플 작업 (가짜 데이터)", style = Ty.title, color = t.ink)
                     Text(if (c.antennaModelId == "TRIMBLE_R10") "Trimble R10 (가짜 신호)" else "Spectra SP60 (가짜 신호)", style = Ty.body, color = t.inkSub)
                     Spacer(Modifier.height(8.dp))

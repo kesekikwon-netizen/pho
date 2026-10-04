@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 자동 생성: tools/icon/gen_icon_resources.py (원본 design-system/mockups/v2/icon/final) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp"
+    android:viewportWidth="520" android:viewportHeight="520">
+    <group android:translateX="-232.5" android:translateY="-277.5">
+        <path
+            android:pathData="M256.5,635.1L252.3,636.1L249.7,637.5L246.4,640.5L244.1,644.3L243.1,648.5L243.3,652.9L244.1,655.7L246.4,659.5L248.5,661.6L250.9,663.2L253.6,664.4L256.5,664.9L296.3,665.0L298.1,672.7L300.0,678.6L305.0,690.1L311.7,700.6L319.9,710.1L329.4,718.3L339.9,725.0L351.4,730.0L357.3,731.9L365.0,733.7L365.0,772.0L365.6,776.4L367.5,780.3L370.5,783.6L374.3,785.9L378.5,786.9L382.9,786.7L385.7,785.9L388.3,784.5L390.6,782.6L392.5,780.3L394.4,776.4L395.0,772.0L395.0,733.7L402.7,731.9L408.6,730.0L420.1,725.0L430.6,718.3L440.1,710.1L448.3,700.6L455.0,690.1L460.0,678.6L461.9,672.7L463.7,665.0L502.0,665.0L506.4,664.4L510.3,662.5L513.6,659.5L515.9,655.7L516.9,651.5L516.7,647.1L515.5,643.5L502.1,650.0L494.0,653.5L476.8,660.0L453.1,667.0L430.3,672.3L427.2,678.3L424.2,682.8L420.8,686.9L415.9,691.6L410.6,695.7L405.9,698.5L401.0,700.8L395.0,702.9L395.0,678.3L383.9,679.7L378.1,679.9L372.4,679.0L369.7,678.2L365.0,676.0L365.0,702.9L357.7,700.3L351.7,697.2L346.2,693.4L341.1,688.9L336.6,683.8L332.8,678.3L329.7,672.3L327.1,665.0L354.0,665.0L351.8,660.3L351.0,657.6L350.1,651.9L350.3,646.1L351.7,635.0L327.1,635.0L329.2,629.0L331.5,624.1L335.0,618.3L338.4,614.1L343.1,609.2L347.2,605.8L351.7,602.8L357.7,599.7L363.0,576.9L370.0,553.2L376.5,536.0L380.0,527.9L386.5,514.5L381.5,513.1L377.1,513.3L374.3,514.1L371.7,515.5L369.4,517.4L367.5,519.7L365.6,523.6L365.0,528.0L365.0,566.3L357.3,568.1L351.4,570.0L339.9,575.0L329.4,581.7L319.9,589.9L311.7,599.4L305.0,609.9L300.0,621.4L298.1,627.3L296.3,635.0Z"
+            android:fillColor="#141413" />
+        <group android:translateX="380.0" android:translateY="650.0" android:pivotX="0" android:pivotY="0" android:rotation="45">
+        <path
+            android:pathData="M0,0C34,-44 72,-100 72,-168Q72,-198 46,-200H-46Q-72,-198 -72,-168C-72,-100 -34,-44 0,0Z"
+            android:strokeColor="#141413"
+            android:strokeWidth="30"
+            android:strokeLineCap="round" android:strokeLineJoin="round" />
+        <path
+            android:pathData="M-14,-200V-254M14,-200V-254"
+            android:strokeColor="#141413"
+            android:strokeWidth="30"
+            android:strokeLineCap="round" android:strokeLineJoin="round" />
+        <path
+            android:pathData="M-26,-254H26V-436Q26,-462 0,-462Q-26,-462 -26,-436Z"
+            android:strokeColor="#141413"
+            android:strokeWidth="30"
+            android:strokeLineCap="round" android:strokeLineJoin="round" />
+        </group>
+    </group>
+</vector>
