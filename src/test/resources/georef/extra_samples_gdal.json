@@ -1,4 +1,60 @@
 {
+ "sample_5186.tif": {
+  "epsg": 5186,
+  "affine": [
+   0.1,
+   0.0,
+   200000.0,
+   0.0,
+   -0.1,
+   500000.0
+  ],
+  "area_or_point": "Area",
+  "width": 200,
+  "height": 200
+ },
+ "sample_5179.tif": {
+  "epsg": 5179,
+  "affine": [
+   0.1,
+   0.0,
+   955569.5564451847,
+   0.0,
+   -0.1,
+   1900156.939549656
+  ],
+  "area_or_point": "Area",
+  "width": 200,
+  "height": 200
+ },
+ "sample_5185.tif": {
+  "epsg": 5185,
+  "affine": [
+   0.1,
+   0.0,
+   377802.19680371275,
+   0.0,
+   -0.1,
+   501872.2878924999
+  ],
+  "area_or_point": "Area",
+  "width": 200,
+  "height": 200
+ },
+ "sample_nocrs_with_tfw.tif": {
+  "epsg": null,
+  "affine": [
+   0.1,
+   0.0,
+   200000.0,
+   0.0,
+   -0.1,
+   500000.0
+  ],
+  "area_or_point": null,
+  "width": 200,
+  "height": 200
+ },
  "rot5deg_5186.tif": {
   "epsg": 5186,
   "affine": [
