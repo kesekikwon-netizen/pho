@@ -24,7 +24,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private fun f3(v: Double) = String.format(Locale.US, "%.3f", v)
 
 /** 도구 화면 하나를 그린다. 지도 화면 위에 덮인다. */
 @Composable
@@ -296,6 +295,7 @@ fun SettingsScreen(c: SurveyController) {
         }
         Card {
             Text("앱 정보", style = Ty.label, color = t.ink)
+            Text(rememberAppVersionLabel(), style = Ty.body, color = t.ink, modifier = Modifier.testTag("app_version"))
             Text("발굴 측량 · 실기기 시험 전 버전", style = Ty.small, color = t.inkSub)
         }
     }

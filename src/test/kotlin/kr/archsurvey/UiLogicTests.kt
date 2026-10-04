@@ -21,26 +21,26 @@ private fun ctrl(f: FakeGnssSource, epochs: Int = 5) = SurveyController(f, DB2, 
 class LayoutMathTest {
     @Test fun constantsMatchPlan() {
         assertEquals(72, SurveyDims.MEASURE_BUTTON_DP); assertEquals(48, SurveyDims.MIN_TOUCH_DP)
-        assertEquals(56, SurveyDims.POLE_STRIP_DP); assertEquals(152, SurveyDims.CONTROL_AREA_DP)
-        assertEquals(48, SurveyDims.SECONDARY_ROW_DP)
+        assertEquals(56, SurveyDims.POLE_STRIP_DP); assertEquals(204, SurveyDims.CONTROL_AREA_DP)
+        assertEquals(52, SurveyDims.SECONDARY_ROW_DP)
     }
     @Test fun mapIsAtLeast60PercentInIdleAcquiringResultRecordingAt800dp() {
         for (p in listOf(Phase.IDLE, Phase.ACQUIRING, Phase.RESULT, Phase.RECORDING)) {
             val f = SurveyLayout.mapFraction(800, p)
             assertTrue("$p $f", f >= SurveyDims.MIN_MAP_FRACTION)
         }
-        assertEquals(548, SurveyLayout.mapHeightDp(800, Phase.IDLE))
-        assertEquals(528, SurveyLayout.mapHeightDp(800, Phase.RESULT))
+        assertEquals(596, SurveyLayout.mapHeightDp(800, Phase.IDLE))
+        assertEquals(540, SurveyLayout.mapHeightDp(800, Phase.RESULT))
     }
     @Test fun expandedSheetIsUnderHalfScreenAndMapStillVisible() {
         val info = SurveyLayout.infoHeightDp(Phase.RESULT_EXPANDED)
         assertTrue(info < 800 / 2)
-        assertEquals(378, SurveyLayout.mapHeightDp(800, Phase.RESULT_EXPANDED))
+        assertEquals(390, SurveyLayout.mapHeightDp(800, Phase.RESULT_EXPANDED))
         assertTrue("펼침 중엔 60% 미만(의도된 예외)", SurveyLayout.mapFraction(800, Phase.RESULT_EXPANDED) < 0.6)
     }
     @Test fun minimumScreenHeightFor60PercentIs680dp() {
         assertTrue(SurveyLayout.mapFraction(680, Phase.RESULT) >= 0.6)
-        assertTrue(SurveyLayout.mapFraction(660, Phase.RESULT) < 0.6)
+        assertTrue(SurveyLayout.mapFraction(640, Phase.RESULT) < 0.6)
     }
 }
 

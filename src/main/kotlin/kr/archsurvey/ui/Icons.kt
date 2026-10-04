@@ -55,7 +55,7 @@ fun GearIcon(color: Color, size: Dp = 26.dp) {
     }
 }
 
-enum class Glyph { PLUS, MINUS, LOCATE, UNDO, CHEVRON_UP, CHEVRON_DOWN, MIC, CLOSE, CAMERA, RULER, LAYERS }
+enum class Glyph { PLUS, MINUS, LOCATE, UNDO, CHEVRON_UP, CHEVRON_DOWN, MIC, CLOSE, CAMERA, RULER, LAYERS, LIST, CHECK, EXTENT, BT, PIN, SAT, BATT }
 
 @Composable
 fun GlyphIcon(g: Glyph, color: Color, size: Dp = 22.dp) {
@@ -93,6 +93,18 @@ fun GlyphIcon(g: Glyph, color: Color, size: Dp = 22.dp) {
                 drawPath(Path().apply { moveTo(w * .14f, w * .52f); lineTo(w * .5f, w * .72f); lineTo(w * .86f, w * .52f) }, color, style = Stroke(sw, cap = cap))
                 drawPath(Path().apply { moveTo(w * .14f, w * .7f); lineTo(w * .5f, w * .9f); lineTo(w * .86f, w * .7f) }, color, style = Stroke(sw, cap = cap))
             }
+            Glyph.LIST -> { for (i in 0..2) { val y = w * (.26f + .24f * i); drawCircle(color, sw * .6f, Offset(w * .2f, y)); drawLine(color, Offset(w * .36f, y), Offset(w * .86f, y), sw, cap) } }
+            Glyph.CHECK -> drawPath(Path().apply { moveTo(w * .2f, w * .52f); lineTo(w * .42f, w * .74f); lineTo(w * .8f, w * .28f) }, color, style = Stroke(sw, cap = cap))
+            Glyph.EXTENT -> {
+                for ((cx, cy) in listOf(.18f to .18f, .82f to .18f, .18f to .82f, .82f to .82f)) {
+                    val dx = if (cx < .5f) 1f else -1f; val dy = if (cy < .5f) 1f else -1f
+                    drawLine(color, Offset(w * cx, w * cy), Offset(w * (cx + .22f * dx), w * cy), sw, cap); drawLine(color, Offset(w * cx, w * cy), Offset(w * cx, w * (cy + .22f * dy)), sw, cap)
+                }
+            }
+            Glyph.BT -> drawPath(Path().apply { moveTo(w * .28f, w * .32f); lineTo(w * .72f, w * .68f); lineTo(w * .5f, w * .88f); lineTo(w * .5f, w * .12f); lineTo(w * .72f, w * .32f); lineTo(w * .28f, w * .68f) }, color, style = Stroke(sw, cap = cap))
+            Glyph.PIN -> { drawPath(Path().apply { moveTo(w * .5f, w * .9f); cubicTo(w * .15f, w * .55f, w * .2f, w * .1f, w * .5f, w * .1f); cubicTo(w * .8f, w * .1f, w * .85f, w * .55f, w * .5f, w * .9f) }, color, style = Stroke(sw, cap = cap)); drawCircle(color, w * .1f, Offset(w * .5f, w * .4f), style = Stroke(sw)) }
+            Glyph.SAT -> { drawLine(color, Offset(w * .3f, w * .7f), Offset(w * .7f, w * .3f), sw * 2.2f, cap); drawLine(color, Offset(w * .12f, w * .88f), Offset(w * .3f, w * .7f), sw, cap); drawLine(color, Offset(w * .6f, w * .9f), Offset(w * .9f, w * .6f), sw, cap) }
+            Glyph.BATT -> { drawRoundRect(color, Offset(w * .3f, w * .16f), androidx.compose.ui.geometry.Size(w * .4f, w * .72f), androidx.compose.ui.geometry.CornerRadius(w * .06f), style = Stroke(sw)); drawLine(color, Offset(w * .42f, w * .08f), Offset(w * .58f, w * .08f), sw, cap) }
             Glyph.RULER -> { drawLine(color, Offset(w * .5f, w * .1f), Offset(w * .5f, w * .9f), sw, cap); drawLine(color, Offset(w * .3f, w * .1f), Offset(w * .7f, w * .1f), sw, cap); drawLine(color, Offset(w * .3f, w * .9f), Offset(w * .7f, w * .9f), sw, cap) }
         }
     }

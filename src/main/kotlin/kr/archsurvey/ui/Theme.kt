@@ -29,6 +29,7 @@ data class Tokens(
     val caution: Color, val onCaution: Color,
     val bad: Color, val onBad: Color,
     val scrim: Color,
+    val raised: Color = Color(0xFFFDFCF9), val primaryCont: Color = Color(0xFFF7E4DB),
 )
 
 private fun c(h: Long) = Color(0xFF000000 or h)
@@ -50,7 +51,7 @@ val DarkTokens = Tokens(
     fixed = c(0x6DB6F5), onFixed = c(0x141413),
     caution = c(0xF2C14B), onCaution = c(0x141413),
     bad = c(0xFF7D96), onBad = c(0x141413),
-    scrim = Color(0x99000000),
+    scrim = Color(0x99000000), raised = c(0x33322E), primaryCont = c(0x4A2E24),
 )
 
 val LocalTokens = staticCompositionLocalOf { LightTokens }
@@ -80,10 +81,14 @@ object Fonts {
     )
 }
 
-/** 은은한 글로시: 위쪽이 살짝 밝고 아래쪽이 살짝 어두운 세로 그라데이션 + 윗변 얇은 하이라이트. 평평한 색과 구분되되 눈에 띄지 않게. */
-fun Modifier.glossy(base: Color, enabled: Boolean = true): Modifier = if (!enabled) this.background(base) else
-    this.background(Brush.verticalGradient(listOf(lerp(base, Color.White, 0.14f), base, lerp(base, Color.Black, 0.06f))))
-        .drawBehind { drawLine(Color.White.copy(alpha = 0.35f), Offset(size.height * 0.3f, 1f), Offset(size.width - size.height * 0.3f, 1f), strokeWidth = 1.5f) }
+/** 목업 gloss(): 위쪽 46%에 흰 하이라이트(0.30→0.075), 안쪽 윗변 하이라이트 선, 안쪽 아랫변 어두운 선. */
+fun Modifier.glossy(base: Color, enabled: Boolean = true, strength: Float = 0.30f): Modifier = if (!enabled) this.background(base) else
+    this.background(base).drawBehind {
+        val h = size.height
+        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = strength), Color.White.copy(alpha = strength / 4f)), startY = 0f, endY = h * 0.46f), size = androidx.compose.ui.geometry.Size(size.width, h * 0.46f))
+        drawLine(Color.White.copy(alpha = 0.55f), Offset(h * 0.25f, 1f), Offset(size.width - h * 0.25f, 1f), strokeWidth = 2f)
+        drawLine(Color(0xFF141413).copy(alpha = 0.10f), Offset(h * 0.25f, h - 1f), Offset(size.width - h * 0.25f, h - 1f), strokeWidth = 3f)
+    }
 
 /** 글꼴: 번들 Noto Sans KR / JetBrains Mono */
 object Ty {

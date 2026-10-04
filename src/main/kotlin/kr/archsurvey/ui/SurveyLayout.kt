@@ -12,11 +12,12 @@ object SurveyDims {
     const val COORD_LINE_DP = 36
     const val INFO_STRIP_DP = 56
     const val EXPANDED_EXTRA_DP = 150
-    const val CTRL_PAD_TOP_DP = 12
+    const val CTRL_PAD_TOP_DP = 10
     const val CTRL_GAP_DP = 8
     const val CTRL_PAD_BOTTOM_DP = 12
-    const val SECONDARY_ROW_DP = MIN_TOUCH_DP
-    const val CONTROL_AREA_DP = CTRL_PAD_TOP_DP + MEASURE_BUTTON_DP + CTRL_GAP_DP + SECONDARY_ROW_DP + CTRL_PAD_BOTTOM_DP
+    const val TYPE_ROW_DP = 44
+    const val SECONDARY_ROW_DP = 52
+    const val CONTROL_AREA_DP = CTRL_PAD_TOP_DP + TYPE_ROW_DP + 6 + MEASURE_BUTTON_DP + CTRL_GAP_DP + SECONDARY_ROW_DP + CTRL_PAD_BOTTOM_DP
     const val MIN_MAP_FRACTION = 0.60
     const val MAP_TOOL_GAP_DP = 8
 }
@@ -24,11 +25,11 @@ object SurveyDims {
 /** 세 영역(상태 띠 / 지도 / 컨트롤)이 겹치지 않는 고정 높이 합산. 지도는 남는 높이 전부. */
 object SurveyLayout {
     fun infoHeightDp(phase: Phase): Int = when (phase) {
-        Phase.IDLE -> SurveyDims.COORD_LINE_DP
+        Phase.IDLE -> 0
         Phase.ACQUIRING, Phase.RESULT, Phase.RECORDING -> SurveyDims.INFO_STRIP_DP
         Phase.RESULT_EXPANDED -> SurveyDims.INFO_STRIP_DP + SurveyDims.EXPANDED_EXTRA_DP
     }
-    fun fixedHeightDp(phase: Phase): Int = SurveyDims.STATUS_BAND_DP + infoHeightDp(phase) + SurveyDims.CONTROL_AREA_DP
+    fun fixedHeightDp(phase: Phase): Int = infoHeightDp(phase) + SurveyDims.CONTROL_AREA_DP
     fun mapHeightDp(screenHeightDp: Int, phase: Phase): Int = screenHeightDp - fixedHeightDp(phase)
     fun mapFraction(screenHeightDp: Int, phase: Phase): Double = mapHeightDp(screenHeightDp, phase).toDouble() / screenHeightDp
 }

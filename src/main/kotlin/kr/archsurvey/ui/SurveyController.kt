@@ -34,6 +34,8 @@ data class GnssView(
     val hdop: Double? = null,
     /** 보이는 위성 수(GSV). 없으면 null */
     val satsInView: Int? = null,
+    /** GGA 안테나 고도(MSL, m). 없으면 null */
+    val altM: Double? = null,
 )
 
 /** 화면이 보는 측점. 저장소([PointStore])가 있으면 디스크에도 남는다. */
@@ -204,6 +206,7 @@ class SurveyController(
     var poleOnRight by mutableStateOf(true)
     var drawerOpen by mutableStateOf(false)
     var antennaSheetOpen by mutableStateOf(false)
+    var quickSheetOpen by mutableStateOf(false)
     var voiceSeconds by mutableIntStateOf(0)
     var dpPerM by mutableStateOf(12.0)
     var follow by mutableStateOf(true)
@@ -243,7 +246,7 @@ class SurveyController(
                 // 연결이 없으면 마지막 위치도 지도에 남기지 않는다
                 val shown = st.reason != StatusReason.NOT_CONNECTED && st.reason != StatusReason.LINK_DOWN
                 gv = GnssView(st, g.quality, if (shown) gga?.satellites ?: 0 else 0, if (shown) gga?.lat else null, if (shown) gga?.lon else null,
-                    if (shown) g.gst?.sigmaAlt else null, if (shown) gga?.hdop else null, if (shown) g.satsInView else null)
+                    if (shown) g.gst?.sigmaAlt else null, if (shown) gga?.hdop else null, if (shown) g.satsInView else null, if (shown) gga?.altitudeMsl else null)
                 if (shown && gga != null && gga.hasPosition && g.lastGgaAtMs != lastGgaStamp) {
                     lastGgaStamp = g.lastGgaAtMs
                     if (anchorOnFirstFix && !anchored) anchorTo(gga.lat!!, gga.lon!!)

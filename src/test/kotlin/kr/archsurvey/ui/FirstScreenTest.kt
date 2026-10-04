@@ -72,7 +72,7 @@ class FirstScreenTest {
         }
         rule.waitForIdle()
         rule.onNodeWithTag("not_connected_card").assertDoesNotExist()
-        rule.onNodeWithText("고정 · 측량 가능").assertExists()
+        rule.onNodeWithTag("status_main").assertTextContains("측량 가능", substring = true); rule.onNodeWithTag("status_band").assertExists()
         rule.onNodeWithTag("status_detail").assertTextContains("위성 21", substring = true)
         rule.onNodeWithTag("status_detail").assertTextContains("수평 ±0.8cm", substring = true)
         rule.onNodeWithTag("status_detail").assertTextContains("수직 ±1.2cm", substring = true)
