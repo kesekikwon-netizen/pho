@@ -103,13 +103,23 @@ class SurveyScreenshotTest {
         val idleMap = bounds("map_area")
         val metrics = StringBuilder()
         fun check(label: String, expectMin: Double = 0.6) {
-            val m = bounds("map_area"); val ctl = bounds("control_area")
-            if (rule.onAllNodesWithTag("info_zone").fetchSemanticsNodes().any { it.size.height > 0 }) {
+            val m = bounds("map_area")
+            val resultPanel = c.phase == Phase.RESULT || c.phase == Phase.RESULT_EXPANDED
+            if (resultPanel) {
+                // 결과 패널(목업 s6b)이 정보 영역+컨트롤 영역을 대신한다
                 val info = bounds("info_zone")
-                assertTrue("$label: 지도와 정보 영역이 겹치지 않음", m.bottom.value <= info.top.value + 0.6f)
-                assertTrue("$label: 정보와 컨트롤이 겹치지 않음", info.bottom.value <= ctl.top.value + 0.6f)
-            } else assertTrue("$label: 지도와 컨트롤이 겹치지 않음", m.bottom.value <= ctl.top.value + 0.6f)
-            assertTrue("$label: 측점 버튼은 컨트롤 영역 안", bounds("measure_button").top.value >= ctl.top.value - 0.6f)
+                assertTrue("$label: 지도와 결과 패널이 겹치지 않음", m.bottom.value <= info.top.value + 0.6f)
+                rule.onNodeWithTag("next_point").assertIsDisplayed()
+                rule.onAllNodesWithTag("control_area").assertCountEquals(0)
+            } else {
+                val ctl = bounds("control_area")
+                if (rule.onAllNodesWithTag("info_zone").fetchSemanticsNodes().any { it.size.height > 0 }) {
+                    val info = bounds("info_zone")
+                    assertTrue("$label: 지도와 정보 영역이 겹치지 않음", m.bottom.value <= info.top.value + 0.6f)
+                    assertTrue("$label: 정보와 컨트롤이 겹치지 않음", info.bottom.value <= ctl.top.value + 0.6f)
+                } else assertTrue("$label: 지도와 컨트롤이 겹치지 않음", m.bottom.value <= ctl.top.value + 0.6f)
+                assertTrue("$label: 측점 버튼은 컨트롤 영역 안", bounds("measure_button").top.value >= ctl.top.value - 0.6f)
+            }
             val fr = mapFraction()
             assertTrue("$label: 지도 비율 $fr", fr >= expectMin)
             metrics.append("$label map_fraction=${"%.3f".format(fr)} map_h_dp=${"%.1f".format(m.height.value)}\n")
@@ -131,6 +141,8 @@ class SurveyScreenshotTest {
         assertEquals(Phase.RECORDING, c.phase)
         check("recording"); shot("10_recording_mock")
         rule.onNodeWithTag("record_stop").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("next_point").performClick(); rule.waitForIdle()
+        assertEquals(Phase.IDLE, c.phase)
         rule.onNodeWithTag("measure_button").performClick(); adv(f, 6)
         assertEquals(2, c.points.size)
         shot("11_second_point_next")

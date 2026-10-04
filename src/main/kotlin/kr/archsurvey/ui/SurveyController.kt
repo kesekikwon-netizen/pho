@@ -423,6 +423,9 @@ class SurveyController(
         message = "${gone.name} 되돌렸어요"
     }
 
+    /** 결과 패널의 [다음 점]: 결과 화면을 닫고 측점 준비 화면으로 */
+    fun nextPoint() { if (phase == Phase.RESULT || phase == Phase.RESULT_EXPANDED) phase = Phase.IDLE }
+
     fun toggleExpand() {
         phase = when (phase) { Phase.RESULT -> Phase.RESULT_EXPANDED; Phase.RESULT_EXPANDED -> Phase.RESULT; else -> phase }
     }
