@@ -7,7 +7,14 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.foundation.background
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -57,16 +64,46 @@ fun SurveyTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -
         primary = t.primary, onPrimary = t.onPrimary, background = t.bg, onBackground = t.ink,
         surface = t.bg, onSurface = t.ink, surfaceVariant = t.card, onSurfaceVariant = t.inkSub, outline = t.outline,
     )
-    CompositionLocalProvider(LocalTokens provides t) { MaterialTheme(colorScheme = scheme, content = content) }
+    CompositionLocalProvider(LocalTokens provides t) { MaterialTheme(colorScheme = scheme, typography = bundledTypography(), content = content) }
 }
 
-/** 글꼴: 시스템 기본(한글은 기기 기본 고딕). Noto Sans KR / JetBrains Mono 번들은 APK 용량 영향 때문에 다음 라운드. */
+/** 번들 글꼴(OFL): Noto Sans KR 300/400, JetBrains Mono 300/400. 한글은 KS X 1001 2,350자 + 기호만 담았다(그 밖의 글자는 기기 글꼴로 대체). */
+object Fonts {
+    val sans = FontFamily(
+        Font(kr.archsurvey.R.font.noto_sans_kr_light, FontWeight.Light),
+        Font(kr.archsurvey.R.font.noto_sans_kr_regular, FontWeight.Normal),
+        Font(kr.archsurvey.R.font.noto_sans_kr_regular, FontWeight.Medium),
+    )
+    val mono = FontFamily(
+        Font(kr.archsurvey.R.font.jetbrains_mono_light, FontWeight.Light),
+        Font(kr.archsurvey.R.font.jetbrains_mono_regular, FontWeight.Normal),
+    )
+}
+
+/** 은은한 글로시: 위쪽이 살짝 밝고 아래쪽이 살짝 어두운 세로 그라데이션 + 윗변 얇은 하이라이트. 평평한 색과 구분되되 눈에 띄지 않게. */
+fun Modifier.glossy(base: Color, enabled: Boolean = true): Modifier = if (!enabled) this.background(base) else
+    this.background(Brush.verticalGradient(listOf(lerp(base, Color.White, 0.14f), base, lerp(base, Color.Black, 0.06f))))
+        .drawBehind { drawLine(Color.White.copy(alpha = 0.35f), Offset(size.height * 0.3f, 1f), Offset(size.width - size.height * 0.3f, 1f), strokeWidth = 1.5f) }
+
+/** 글꼴: 번들 Noto Sans KR / JetBrains Mono */
 object Ty {
-    val label = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Normal)
-    val body = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Light)
-    val small = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Light)
-    val title = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Normal)
-    val bandMain = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Normal)
-    val button = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Normal)
-    val coord = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Light, fontFamily = FontFamily.Monospace)
+    val label = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
+    val body = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.sans)
+    val small = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.sans)
+    val title = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
+    val bandMain = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
+    val button = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
+    val coord = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.mono)
+}
+
+private fun bundledTypography(): androidx.compose.material3.Typography {
+    val d = androidx.compose.material3.Typography()
+    fun f(s: TextStyle) = s.copy(fontFamily = Fonts.sans, fontWeight = if ((s.fontWeight?.weight ?: 400) > 400) FontWeight.Normal else FontWeight.Light)
+    return d.copy(
+        displayLarge = f(d.displayLarge), displayMedium = f(d.displayMedium), displaySmall = f(d.displaySmall),
+        headlineLarge = f(d.headlineLarge), headlineMedium = f(d.headlineMedium), headlineSmall = f(d.headlineSmall),
+        titleLarge = f(d.titleLarge), titleMedium = f(d.titleMedium), titleSmall = f(d.titleSmall),
+        bodyLarge = f(d.bodyLarge), bodyMedium = f(d.bodyMedium), bodySmall = f(d.bodySmall),
+        labelLarge = f(d.labelLarge), labelMedium = f(d.labelMedium), labelSmall = f(d.labelSmall),
+    )
 }

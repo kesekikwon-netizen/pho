@@ -272,7 +272,7 @@ private fun ExpandedExtra(c: SurveyController) {
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(
-                Modifier.height(52.dp).clip(RoundedCornerShape(16.dp)).background(t.primary).clickable { c.toggleVoice() }.padding(horizontal = 16.dp).testTag("voice_big"),
+                Modifier.height(52.dp).clip(RoundedCornerShape(16.dp)).glossy(t.primary).clickable { c.toggleVoice() }.padding(horizontal = 16.dp).testTag("voice_big"),
                 contentAlignment = Alignment.Center,
             ) { Row(verticalAlignment = Alignment.CenterVertically) { GlyphIcon(Glyph.MIC, t.onPrimary, 20.dp); Spacer(Modifier.width(8.dp)); Text("음성 남기기", style = Ty.label, color = t.onPrimary) } }
             for (v in c.voices) {
@@ -358,7 +358,7 @@ fun ControlArea(c: SurveyController) {
     ) {
         Box(
             Modifier.fillMaxWidth().height(SurveyDims.MEASURE_BUTTON_DP.dp).clip(RoundedCornerShape(22.dp))
-                .background(t.primary).alpha(if (busy || blocked) 0.5f else 1f)
+                .glossy(t.primary).alpha(if (busy || blocked) 0.5f else 1f)
                 .clickable(onClickLabel = "측점") { c.onMeasure() }.testTag("measure_button"),
             contentAlignment = Alignment.Center,
         ) {
@@ -542,7 +542,7 @@ fun AntennaSheet(c: SurveyController) {
             AntennaMath.mismatchWarning(c.antenna, c.antennaModel)?.let { Text(it, style = Ty.small, color = t.bad) }
             Text("실기기 실측 전 값 — 현장에서 확인하세요", style = Ty.small, color = t.inkSub)
             Box(
-                Modifier.fillMaxWidth().height(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp)).background(t.primary).clickable { c.antennaSheetOpen = false }.testTag("sheet_close"),
+                Modifier.fillMaxWidth().height(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp)).glossy(t.primary).clickable { c.antennaSheetOpen = false }.testTag("sheet_close"),
                 contentAlignment = Alignment.Center,
             ) { Text("닫기", style = Ty.label, color = t.onPrimary) }
         }

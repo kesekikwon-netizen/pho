@@ -148,7 +148,7 @@ fun ConnectionScreen(cc: ConnectionController) {
                 val running = cc.connectRequested && link.state != LinkState.IDLE
                 if (running) Btn("연결 종료", Modifier.weight(1f).height(56.dp).testTag("conn_disconnect")) { cc.disconnect() }
                 Box(
-                    Modifier.weight(2f).height(56.dp).clip(RoundedCornerShape(16.dp)).background(t.primary).clickable { cc.connect() }.testTag("conn_connect"),
+                    Modifier.weight(2f).height(56.dp).clip(RoundedCornerShape(16.dp)).glossy(t.primary).clickable { cc.connect() }.testTag("conn_connect"),
                     contentAlignment = Alignment.Center,
                 ) { Text(if (running) "다시 연결" else "연결", style = Ty.button.copy(fontSize = 18.sp), color = t.onPrimary) }
             }
