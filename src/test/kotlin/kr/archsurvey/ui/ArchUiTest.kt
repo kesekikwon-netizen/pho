@@ -172,4 +172,25 @@ class ArchUiTest {
         val txt = listOf("ArchScreens.kt", "MapChrome.kt", "ToolScreens.kt").joinToString("\n") { File("src/main/kotlin/kr/archsurvey/ui/$it").readText() }
         for (w in listOf("수량", "재질", "크기", "시대", "개수")) assertFalse("화면 문구에 $w", txt.contains("\"$w") || txt.contains("$w:"))
     }
+
+    @Test fun setupSheetFromLongPressAppliesMemoTypeAndLinkMode() {
+        start(); ui { c.homeOpen = false }
+        rule.onNodeWithTag("measure_button").performTouchInput { longClick() }; rule.waitForIdle()
+        rule.onNodeWithTag("setup_sheet").assertExists()
+        rule.onNodeWithTag("setup_name", useUnmergedTree = true).assertTextEquals(c.nextName)
+        rule.onNodeWithTag("setup_memo").performTextInput("북동 모서리")
+        rule.onNodeWithTag("setup_link_area").performClick(); rule.waitForIdle()
+        shot("a8_setup_sheet")
+        rule.onNodeWithTag("setup_apply").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("setup_sheet").assertDoesNotExist()
+        assertTrue(c.arch.outlineMode); assertTrue(c.arch.preferClosed)
+        assertEquals("북동 모서리", c.pendingMemo)
+        rule.runOnUiThread { c.onMeasure(); repeat(7) { f.emitNext() } }; rule.waitForIdle()
+        assertEquals("북동 모서리", c.points.last().memo)
+        assertEquals("비고는 한 번만 붙는다", "", c.pendingMemo)
+        // 취소는 아무것도 바꾸지 않음
+        rule.onNodeWithTag("measure_button").performTouchInput { longClick() }; rule.waitForIdle()
+        rule.onNodeWithTag("setup_link_point").performClick(); rule.onNodeWithTag("setup_cancel").performClick(); rule.waitForIdle()
+        assertTrue(c.arch.outlineMode)
+    }
 }

@@ -70,6 +70,7 @@ fun SurveyMapScreen(
             androidx.activity.compose.BackHandler(enabled = b.screen != kr.archsurvey.ui.bg.BgScreen.NONE) { b.close() }
             kr.archsurvey.ui.bg.BackgroundSheets(b)
         }
+        if (c.setupOpen) SetupSheet(c)
         if (c.antennaSheetOpen) AntennaSheet(c)
         if (c.hub.screen != null) ToolHost(c)
         c.exporter?.let { if (it.open) ExportScreen(it) }

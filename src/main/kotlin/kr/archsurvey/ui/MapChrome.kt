@@ -3,6 +3,7 @@ package kr.archsurvey.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -33,8 +34,10 @@ import kr.archsurvey.core.*
 internal enum class MKind { PLAIN, SELECTED, PRIMARY }
 
 @Composable
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 internal fun MBtn(
     modifier: Modifier, kind: MKind = MKind.PLAIN, radius: Dp = 16.dp, alpha: Float = 1f,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit, content: @Composable ColumnScope.() -> Unit,
 ) {
     val t = T; val shape = RoundedCornerShape(radius)
@@ -45,7 +48,7 @@ internal fun MBtn(
         else -> Modifier.border(1.5.dp, t.outline, shape)
     }
     Column(
-        modifier.alpha(alpha).shadow(3.dp, shape).clip(shape).glossy(bgc).then(bm).clickable(onClick = onClick),
+        modifier.alpha(alpha).shadow(3.dp, shape).clip(shape).glossy(bgc).then(bm).combinedClickable(onClick = onClick, onLongClick = onLongClick),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, content = content,
     )
 }
@@ -162,7 +165,7 @@ internal fun ControlArea(c: SurveyController) {
         val measure: @Composable RowScope.() -> Unit = {
             MBtn(
                 Modifier.weight(1f, fill = false).widthIn(max = 224.dp).fillMaxWidth().height(SurveyDims.MEASURE_BUTTON_DP.dp).testTag("measure_button"),
-                MKind.PRIMARY, 22.dp, alpha = if (busy || blocked) 0.5f else 1f, onClick = { c.onMeasure() },
+                MKind.PRIMARY, 22.dp, alpha = if (busy || blocked) 0.5f else 1f, onLongClick = { if (!busy) c.setupOpen = true }, onClick = { c.onMeasure() },
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     GlyphIcon(Glyph.PIN, t.ink, 28.dp)

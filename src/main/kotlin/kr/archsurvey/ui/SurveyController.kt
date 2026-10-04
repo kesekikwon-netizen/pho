@@ -208,6 +208,10 @@ class SurveyController(
     var poleOnRight by mutableStateOf(true)
     var drawerOpen by mutableStateOf(false)
     var antennaSheetOpen by mutableStateOf(false)
+    /** 측량 설정(s15) 시트: 측점 버튼을 길게 누르면 열린다 */
+    var setupOpen by mutableStateOf(false)
+    /** 다음 측점에 붙일 비고(한 번 쓰면 비움) */
+    var pendingMemo by mutableStateOf("")
     var quickSheetOpen by mutableStateOf(false)
     /** 앱을 처음 열었을 때 보이는 홈 화면 (목업 s2). 시험은 기본 false 로 지도부터 본다. */
     var homeOpen by mutableStateOf(false)
@@ -332,7 +336,8 @@ class SurveyController(
     /** 새 점으로 저장 (디스크 + 화면). 외곽 모드면 꼭짓점으로 이어 붙인다 */
     private suspend fun commitNew(sp: SavedPoint, worst: SurveyStatus) {
         resultName = null; resurveyUndo = null
-        val named = if (sp.name == nextName) sp else sp.copy(name = nextName)
+        val named = (if (sp.name == nextName) sp else sp.copy(name = nextName)).let { if (pendingMemo.isNotBlank()) it.copy(memo = pendingMemo.trim()) else it }
+        pendingMemo = ""
         points.add(named); seq++
         var saveError: String? = null
         store?.let { st ->

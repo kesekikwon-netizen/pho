@@ -91,6 +91,8 @@ class ArchController(
 
     /** 외곽 이어서 취득 켜짐 */
     var outlineMode by mutableStateOf(false)
+    /** 설정 시트에서 고른 연결 방식: false=선(열린 선), true=면(닫기). 외곽 막대에서 해당 버튼을 강조한다 */
+    var preferClosed by mutableStateOf(false)
     var activeOutlineId by mutableStateOf<Long?>(null); private set
     /** 방금 끝낸 외곽의 요약(화면에 한 줄로 보여줌) */
     var lastSummary by mutableStateOf<String?>(null)

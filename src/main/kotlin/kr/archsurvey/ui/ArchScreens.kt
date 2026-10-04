@@ -224,8 +224,8 @@ fun ArchOverlays(c: SurveyController) {
         Column(pill.padding(horizontal = 10.dp, vertical = 4.dp).testTag("outline_bar")) {
             Text("외곽 ${o?.label ?: "(새로 시작)"} · 꼭짓점 ${n}개", style = Ty.small.copy(fontSize = 12.sp), color = t.ink, modifier = Modifier.testTag("outline_count"))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Btn("선으로 끝내기", Modifier.testTag("outline_finish_line")) { a.finishOutline(false) }
-                Btn("면으로 닫기", Modifier.testTag("outline_finish_area")) { a.finishOutline(true) }
+                Btn(if (a.preferClosed) "선으로 끝내기" else "✓ 선으로 끝내기", Modifier.testTag("outline_finish_line")) { a.finishOutline(false) }
+                Btn(if (a.preferClosed) "✓ 면으로 닫기" else "면으로 닫기", Modifier.testTag("outline_finish_area")) { a.finishOutline(true) }
                 Btn("끄기", Modifier.testTag("outline_off")) { c.toggleOutlineMode() }
             }
         }
