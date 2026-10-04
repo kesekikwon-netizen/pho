@@ -92,6 +92,8 @@ class SurveyController(
     var fakeMode by mutableStateOf(true)
     /** 수신기 연결 화면 상태 (없으면 연결 UI 숨김) */
     var connection: ConnectionController? = null
+    /** 내보내기 화면 상태 */
+    var exporter: ExportController? = null
 
     /** 사진·음성 메모 (없으면 화면 시안 동작) */
     var media: MediaPlatform? = null

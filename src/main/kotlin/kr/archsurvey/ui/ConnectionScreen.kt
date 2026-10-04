@@ -177,13 +177,13 @@ private fun ntripText(s: NtripState) = when (s) {
 }
 
 @Composable
-private fun Card(content: @Composable ColumnScope.() -> Unit) {
+internal fun Card(content: @Composable ColumnScope.() -> Unit) {
     val t = T
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(t.card).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
 }
 
 @Composable
-private fun Choice(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+internal fun Choice(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val t = T
     Box(
         modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp))
@@ -194,7 +194,7 @@ private fun Choice(label: String, selected: Boolean, modifier: Modifier, onClick
 }
 
 @Composable
-private fun Btn(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun Btn(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val t = T
     Box(modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp)).background(t.bg).border(1.dp, t.outline, RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
         Text(label, style = Ty.label, color = t.ink)
@@ -202,7 +202,7 @@ private fun Btn(label: String, modifier: Modifier = Modifier, onClick: () -> Uni
 }
 
 @Composable
-private fun Field(label: String, value: String, tag: String, kb: KeyboardType = KeyboardType.Text, hide: Boolean = false, onChange: (String) -> Unit) {
+internal fun Field(label: String, value: String, tag: String, kb: KeyboardType = KeyboardType.Text, hide: Boolean = false, onChange: (String) -> Unit) {
     OutlinedTextField(
         value, onChange, label = { Text(label) }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag(tag),
         keyboardOptions = KeyboardOptions(keyboardType = kb),

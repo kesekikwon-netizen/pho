@@ -10,6 +10,8 @@ import java.util.TimeZone
 object Formats {
     private fun f(v: Double?, d: Int): String = if (v == null) "" else String.format(Locale.US, "%.${d}f", v)
 
+    fun utcOf(ms: Long): String = utc(ms)
+
     private fun utc(ms: Long): String =
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(ms))
 

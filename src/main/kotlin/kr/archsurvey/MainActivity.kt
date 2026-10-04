@@ -23,6 +23,8 @@ class MainActivity : ComponentActivity() {
     private val pickerLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia(4)) { uris -> vm.media.deliverPicker(uris) }
     private val micLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok -> vm.media.deliverMic(ok) }
 
+    private val saveLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/zip")) { uri -> vm.exportPlatform.deliverSave(uri) }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         vm.platform.permissionRequester = { perms, cb ->
@@ -32,6 +34,9 @@ class MainActivity : ComponentActivity() {
             override fun launchCamera(uri: android.net.Uri) = cameraLauncher.launch(uri)
             override fun launchPicker() = pickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
             override fun requestMic() = micLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+        }
+        vm.exportPlatform.launcher = object : kr.archsurvey.engine.AndroidExportPlatform.Launcher {
+            override fun createDocument(suggestedName: String) = saveLauncher.launch(suggestedName)
         }
         setContent {
             SurveyTheme { SurveyMapScreen(vm.controller, batteryPercent()) }

@@ -7,6 +7,8 @@ enum class MenuAction {
     OPEN_ANTENNA,
     /** 수신기 선택·블루투스·VRS 입력 화면 */
     OPEN_CONNECTION,
+    /** 작업 내보내기(ZIP) 화면 */
+    OPEN_EXPORT,
     /** 아직 연결되지 않은 메뉴 — 다음 라운드 */
     NOT_YET,
     /** 개발용: 가짜 GNSS 다음 구간으로 */
@@ -28,7 +30,7 @@ object DrawerMenu {
         MenuSection("작업 관리", listOf(
             MenuItem("job_new", "새 작업 만들기", MenuAction.NOT_YET),
             MenuItem("job_open", "작업 열기 · 삭제", MenuAction.NOT_YET),
-            MenuItem("job_export", "작업 내보내기", MenuAction.NOT_YET),
+            MenuItem("job_export", "작업 내보내기", MenuAction.OPEN_EXPORT),
             MenuItem("job_info", "작업 정보", MenuAction.NOT_YET),
             MenuItem("job_points", "점 목록", MenuAction.NOT_YET),
             MenuItem("job_backup", "데이터 백업 · 복구", MenuAction.NOT_YET),

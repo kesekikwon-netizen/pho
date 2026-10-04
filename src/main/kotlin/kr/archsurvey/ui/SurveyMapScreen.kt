@@ -67,6 +67,7 @@ fun SurveyMapScreen(
         DrawerOverlay(c)
         if (c.antennaSheetOpen) AntennaSheet(c)
         BackgroundSheets(bg)
+        c.exporter?.let { if (it.open) ExportScreen(it) }
         c.connection?.let { ConnectionHost(c, it) }
     }
 }
@@ -470,6 +471,7 @@ private fun DrawerRow(c: SurveyController, item: MenuItem) {
                 when (item.action) {
                     MenuAction.GO_SURVEY -> c.drawerOpen = false
                     MenuAction.OPEN_ANTENNA -> { c.drawerOpen = false; c.antennaSheetOpen = true }
+                    MenuAction.OPEN_EXPORT -> { c.drawerOpen = false; c.exporter?.openScreen() ?: run { c.message = "내보내기는 이 빌드에 없어요" } }
                     MenuAction.OPEN_CONNECTION -> { c.drawerOpen = false; c.connection?.openScreen() ?: run { c.message = "연결 화면은 이 빌드에 없어요" } }
                     MenuAction.NOT_YET -> { c.drawerOpen = false; c.message = "‘${item.label}’은 다음 라운드에 연결돼요" }
                     MenuAction.DEV_SKIP_SEGMENT -> c.fakeSource?.skipToNextSegment()

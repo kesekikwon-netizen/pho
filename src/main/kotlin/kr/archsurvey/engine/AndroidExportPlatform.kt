@@ -1,0 +1,62 @@
+package kr.archsurvey.engine
+
+import android.content.Context
+import android.net.Uri
+import kr.archsurvey.data.SurveyDb
+import kr.archsurvey.export.ExportResult
+import kr.archsurvey.export.ExportService
+import kr.archsurvey.ui.ExportOutput
+import kr.archsurvey.ui.ExportPlatform
+import kr.archsurvey.ui.ExportSummary
+import kr.archsurvey.voice.VoiceStore
+import kr.archsurvey.photo.PhotoStore
+import java.io.File
+
+/** [ExportPlatform] 의 Android 구현. ZIP 은 앱 전용 폴더에 만들고, 공유(FileProvider)·저장(문서 선택기)으로 내보낸다. */
+class AndroidExportPlatform(
+    private val ctx: Context,
+    private val project: String,
+    private val photoStore: PhotoStore,
+    private val voiceStore: VoiceStore,
+) : ExportPlatform {
+    private val dao = SurveyDb.get(ctx).dao()
+    private val svc = ExportService(ctx, dao, photoStore, voiceStore)
+    private var lastZip: File? = null
+
+    interface Launcher { fun createDocument(suggestedName: String) }
+    var launcher: Launcher? = null
+    private var saveCb: ((Boolean) -> Unit)? = null
+    private var savePending: File? = null
+
+    override suspend fun summary(): ExportSummary {
+        val pts = dao.pointsOf(project)
+        var ph = 0; var vo = 0
+        for (p in pts) { ph += dao.photoCount(p.rowId); vo += dao.voiceCount(p.rowId) }
+        return ExportSummary(project, pts.size, ph, vo, pts.count { "가짜" in it.device })
+    }
+
+    override suspend fun export(includePhotos: Boolean, includeVoices: Boolean): ExportOutput {
+        val r: ExportResult = svc.export(project, includePhotos, includeVoices)
+        lastZip = r.zip
+        return ExportOutput(r.zip.name, r.zip.length(), r.zip.path, r.pointCount, r.photoCount, r.voiceCount)
+    }
+
+    override fun share(out: ExportOutput) {
+        ctx.startActivity(svc.shareIntent(File(out.path)))
+    }
+
+    override fun saveAs(out: ExportOutput, onDone: (Boolean) -> Unit) {
+        val l = launcher ?: return onDone(false)
+        saveCb = onDone; savePending = File(out.path)
+        l.createDocument(out.fileName)
+    }
+
+    /** Activity 의 CreateDocument 결과 */
+    fun deliverSave(uri: Uri?) {
+        val cb = saveCb; val f = savePending
+        saveCb = null; savePending = null
+        if (uri == null || f == null) { cb?.invoke(false); return }
+        val ok = runCatching { ctx.contentResolver.openOutputStream(uri)?.use { o -> f.inputStream().use { it.copyTo(o) } } != null }.getOrDefault(false)
+        cb?.invoke(ok)
+    }
+}

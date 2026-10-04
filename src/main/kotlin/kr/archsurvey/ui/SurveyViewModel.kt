@@ -31,6 +31,7 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
     })
     val controller: SurveyController = SurveyController(switchable, db, viewModelScope, store = store)
     val media = AndroidMediaPlatform(application, viewModelScope, "작업1")
+    val exportPlatform = kr.archsurvey.engine.AndroidExportPlatform(application, "작업1", media.photoStore, media.voiceStore)
 
     init {
         fake.start(viewModelScope, realDelayMs = 700L)
@@ -38,6 +39,7 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
         connection = cc
         controller.connection = cc
         controller.media = media
+        controller.exporter = ExportController(exportPlatform, viewModelScope)
         media.recoverPending()
         applyMode(cc.fakeSignal)
     }

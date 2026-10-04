@@ -1,0 +1,60 @@
+package kr.archsurvey.ui
+
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+
+data class ExportSummary(val project: String, val points: Int, val photos: Int, val voices: Int, val fakePoints: Int)
+data class ExportOutput(val fileName: String, val sizeBytes: Long, val path: String, val points: Int, val photos: Int, val voices: Int)
+
+/** 내보내기에 필요한 Android 기능. 시험에서는 가짜로 바꾼다. */
+interface ExportPlatform {
+    suspend fun summary(): ExportSummary
+    suspend fun export(includePhotos: Boolean, includeVoices: Boolean): ExportOutput
+    /** 공유 시트(카카오톡·메일·드라이브 등) 열기 */
+    fun share(out: ExportOutput)
+    /** 파일 저장 위치 고르기(시스템 문서 선택기). 끝나면 onDone(성공 여부) */
+    fun saveAs(out: ExportOutput, onDone: (Boolean) -> Unit)
+}
+
+/** 3-G 내보내기 화면 상태. 만들기 → 결과 카드(공유/파일로 저장). */
+class ExportController(private val platform: ExportPlatform, private val scope: CoroutineScope) {
+    var open by mutableStateOf(false)
+    var summary by mutableStateOf<ExportSummary?>(null); private set
+    var includePhotos by mutableStateOf(true)
+    var includeVoices by mutableStateOf(true)
+    var running by mutableStateOf(false); private set
+    var output by mutableStateOf<ExportOutput?>(null); private set
+    var error by mutableStateOf<String?>(null); private set
+    var notice by mutableStateOf<String?>(null); private set
+
+    fun openScreen() { open = true; output = null; error = null; notice = null; refresh() }
+    fun close() { open = false }
+
+    fun refresh() { scope.launch { summary = runCatching { platform.summary() }.getOrNull() } }
+
+    fun run() {
+        if (running) return
+        val s = summary
+        if (s != null && s.points == 0) { error = "내보낼 점이 없어요. 먼저 측점을 하세요."; return }
+        running = true; error = null; notice = null; output = null
+        scope.launch {
+            try { output = platform.export(includePhotos && (s?.photos ?: 1) > 0, includeVoices && (s?.voices ?: 1) > 0) }
+            catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; error = "내보내기에 실패했어요 (${e.javaClass.simpleName}). 저장 공간을 확인하고 다시 시도하세요." }
+            finally { running = false }
+        }
+    }
+
+    fun share() { output?.let { platform.share(it) } }
+    fun saveAs() { output?.let { o -> platform.saveAs(o) { ok -> notice = if (ok) "파일로 저장했어요" else "저장을 취소했거나 실패했어요" } } }
+
+    companion object {
+        fun sizeText(bytes: Long): String = when {
+            bytes < 1024 -> "$bytes B"
+            bytes < 1024 * 1024 -> "%.1f KB".format(java.util.Locale.US, bytes / 1024.0)
+            else -> "%.1f MB".format(java.util.Locale.US, bytes / 1048576.0)
+        }
+    }
+}
