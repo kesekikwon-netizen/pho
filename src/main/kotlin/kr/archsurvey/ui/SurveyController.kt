@@ -94,6 +94,8 @@ class SurveyController(
     var connection: ConnectionController? = null
     /** 내보내기 화면 상태 */
     var exporter: ExportController? = null
+    /** 백업·복구 화면 상태 */
+    var backup: BackupController? = null
 
     /** 사진·음성 메모 (없으면 화면 시안 동작) */
     var media: MediaPlatform? = null

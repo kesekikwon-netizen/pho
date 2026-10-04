@@ -1,7 +1,6 @@
 package kr.archsurvey.engine
 
 import android.content.Context
-import android.net.Uri
 import kr.archsurvey.data.SurveyDb
 import kr.archsurvey.export.ExportResult
 import kr.archsurvey.export.ExportService
@@ -18,15 +17,11 @@ class AndroidExportPlatform(
     private val project: String,
     private val photoStore: PhotoStore,
     private val voiceStore: VoiceStore,
+    private val docs: DocBridge,
 ) : ExportPlatform {
     private val dao = SurveyDb.get(ctx).dao()
     private val svc = ExportService(ctx, dao, photoStore, voiceStore)
     private var lastZip: File? = null
-
-    interface Launcher { fun createDocument(suggestedName: String) }
-    var launcher: Launcher? = null
-    private var saveCb: ((Boolean) -> Unit)? = null
-    private var savePending: File? = null
 
     override suspend fun summary(): ExportSummary {
         val pts = dao.pointsOf(project)
@@ -46,17 +41,10 @@ class AndroidExportPlatform(
     }
 
     override fun saveAs(out: ExportOutput, onDone: (Boolean) -> Unit) {
-        val l = launcher ?: return onDone(false)
-        saveCb = onDone; savePending = File(out.path)
-        l.createDocument(out.fileName)
-    }
-
-    /** Activity 의 CreateDocument 결과 */
-    fun deliverSave(uri: Uri?) {
-        val cb = saveCb; val f = savePending
-        saveCb = null; savePending = null
-        if (uri == null || f == null) { cb?.invoke(false); return }
-        val ok = runCatching { ctx.contentResolver.openOutputStream(uri)?.use { o -> f.inputStream().use { it.copyTo(o) } } != null }.getOrDefault(false)
-        cb?.invoke(ok)
+        val f = File(out.path)
+        docs.create(out.fileName) { uri ->
+            if (uri == null) onDone(false)
+            else onDone(runCatching { ctx.contentResolver.openOutputStream(uri)?.use { o -> f.inputStream().use { it.copyTo(o) } } != null }.getOrDefault(false))
+        }
     }
 }

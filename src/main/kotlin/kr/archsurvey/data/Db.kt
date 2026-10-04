@@ -198,6 +198,9 @@ abstract class SurveyDb : RoomDatabase() {
 
     companion object {
         @Volatile private var inst: SurveyDb? = null
+        /** 복구 직전 등: 열린 DB 를 닫고 다음 get() 이 새로 열게 한다 */
+        fun closeInstance() = synchronized(this) { inst?.close(); inst = null }
+
         fun get(ctx: Context): SurveyDb = inst ?: synchronized(this) {
             inst ?: Room.databaseBuilder(ctx.applicationContext, SurveyDb::class.java, "survey.db")
                 // 저장 즉시 디스크 반영: WAL + 트랜잭션 커밋 (프로세스 사망 대비)

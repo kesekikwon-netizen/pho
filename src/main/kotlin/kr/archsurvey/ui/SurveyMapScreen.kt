@@ -68,6 +68,7 @@ fun SurveyMapScreen(
         if (c.antennaSheetOpen) AntennaSheet(c)
         BackgroundSheets(bg)
         c.exporter?.let { if (it.open) ExportScreen(it) }
+        c.backup?.let { if (it.open) BackupScreen(it) }
         c.connection?.let { ConnectionHost(c, it) }
     }
 }
@@ -303,7 +304,7 @@ private fun PhotoThumb(c: SurveyController, ph: PhotoItem) {
 }
 
 @Composable
-private fun ConfirmDialog(title: String, body: String, okLabel: String, onOk: () -> Unit, onCancel: () -> Unit) {
+internal fun ConfirmDialog(title: String, body: String, okLabel: String, onOk: () -> Unit, onCancel: () -> Unit) {
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onCancel,
         title = { Text(title) }, text = { Text(body) },
@@ -471,6 +472,7 @@ private fun DrawerRow(c: SurveyController, item: MenuItem) {
                 when (item.action) {
                     MenuAction.GO_SURVEY -> c.drawerOpen = false
                     MenuAction.OPEN_ANTENNA -> { c.drawerOpen = false; c.antennaSheetOpen = true }
+                    MenuAction.OPEN_BACKUP -> { c.drawerOpen = false; c.backup?.openScreen() ?: run { c.message = "백업은 이 빌드에 없어요" } }
                     MenuAction.OPEN_EXPORT -> { c.drawerOpen = false; c.exporter?.openScreen() ?: run { c.message = "내보내기는 이 빌드에 없어요" } }
                     MenuAction.OPEN_CONNECTION -> { c.drawerOpen = false; c.connection?.openScreen() ?: run { c.message = "연결 화면은 이 빌드에 없어요" } }
                     MenuAction.NOT_YET -> { c.drawerOpen = false; c.message = "‘${item.label}’은 다음 라운드에 연결돼요" }

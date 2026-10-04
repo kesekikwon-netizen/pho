@@ -9,6 +9,8 @@ enum class MenuAction {
     OPEN_CONNECTION,
     /** 작업 내보내기(ZIP) 화면 */
     OPEN_EXPORT,
+    /** 데이터 백업·복구 화면 */
+    OPEN_BACKUP,
     /** 아직 연결되지 않은 메뉴 — 다음 라운드 */
     NOT_YET,
     /** 개발용: 가짜 GNSS 다음 구간으로 */
@@ -33,7 +35,7 @@ object DrawerMenu {
             MenuItem("job_export", "작업 내보내기", MenuAction.OPEN_EXPORT),
             MenuItem("job_info", "작업 정보", MenuAction.NOT_YET),
             MenuItem("job_points", "점 목록", MenuAction.NOT_YET),
-            MenuItem("job_backup", "데이터 백업 · 복구", MenuAction.NOT_YET),
+            MenuItem("job_backup", "데이터 백업 · 복구", MenuAction.OPEN_BACKUP),
         )),
         MenuSection("측량", listOf(
             MenuItem("survey", "측량 · 지도 화면", MenuAction.GO_SURVEY),

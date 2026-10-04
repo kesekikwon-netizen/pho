@@ -23,7 +23,8 @@ class MainActivity : ComponentActivity() {
     private val pickerLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia(4)) { uris -> vm.media.deliverPicker(uris) }
     private val micLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok -> vm.media.deliverMic(ok) }
 
-    private val saveLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/zip")) { uri -> vm.exportPlatform.deliverSave(uri) }
+    private val docCreate = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/zip")) { uri -> vm.docs.deliverCreate(uri) }
+    private val docOpen = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri -> vm.docs.deliverOpen(uri) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,8 +36,9 @@ class MainActivity : ComponentActivity() {
             override fun launchPicker() = pickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
             override fun requestMic() = micLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
         }
-        vm.exportPlatform.launcher = object : kr.archsurvey.engine.AndroidExportPlatform.Launcher {
-            override fun createDocument(suggestedName: String) = saveLauncher.launch(suggestedName)
+        vm.docs.launcher = object : kr.archsurvey.engine.DocBridge.Launcher {
+            override fun create(suggestedName: String) = docCreate.launch(suggestedName)
+            override fun open() = docOpen.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
         }
         setContent {
             SurveyTheme { SurveyMapScreen(vm.controller, batteryPercent()) }
