@@ -1,34 +1,29 @@
-# BUILD_STATUS (2026-10-04 16:22 KST) — 개발 중단 시점 스냅샷
+# BUILD_STATUS (2026-10-04 18:40 KST, 1차 라운드: WP-0~5 일부)
 
-## 빌드 상태: 정상
-- `gradle testDebugUnitTest lintDebug assembleDebug assembleRelease` 모두 성공. 단위 테스트 64개 통과(0 실패). lint(NewApi/InlinedApi=error) 통과.
-- APK: build/outputs/apk/debug/ExcavationSurvey-debug.apk (12MB), build/outputs/apk/release/ExcavationSurvey-release.apk (8.4MB, keystore.properties 없어 debug 키 서명 — 배포 금지)
-- minSdk 21 / targetSdk 35 / compileSdk 35 (aapt 확인).
+## 빌드·시험 결과 (박스에서 실제 실행)
+- `gradle testDebugUnitTest lintDebug assembleDebug`: **성공**. 단위 테스트 **119개 통과 / 0 실패 / 0 건너뜀** (기존 64개 유지·갱신 + 신규).
+- 화면 렌더링 시험(Robolectric 4.14.1, JVM, 360x800dp·xxhdpi 가정) 8개 포함. 스크린샷 17장: `/workspace/survey-app/build-reports/`.
+- APK(디버그 서명, 시험용): `app/build/outputs/apk/debug/ExcavationSurvey-debug.apk` (11.9 MB), 사본 `build-reports/ExcavationSurvey-debug-round1.apk`. 패키지 `kr.archsurvey.field.debug`, minSdk 21 / targetSdk 35.
+- 환경: JDK 21, Gradle 8.9 (/workspace/tools/gradle-8.9), SDK 35 (/workspace/tools/sdk). 온라인 필요.
 
-## 환경
-- JDK 21, Gradle 8.9 (/workspace/tools/gradle-8.9), Android SDK /workspace/tools/sdk (platform 35, build-tools 35.0.0). local.properties sdk.dir 설정됨.
-- 빌드: `JAVA_HOME=<jdk> /workspace/tools/gradle-8.9/bin/gradle assembleDebug` (온라인 필요; --offline 은 osmdroid 미캐시로 실패).
+## 하지 못한 것 (미실행)
+- **에뮬레이터 실행 불가**: `/dev/kvm` 은 있으나 box 사용자에게 접근 권한이 없고(root:103 crw-rw----), SDK 에 emulator·system-images 도 없음. 하드웨어 가속 없이 소프트웨어 에뮬레이션은 하지 않았다.
+- **실기기(폰)·R10·SP60·NGII VRS 시험 전무.** Robolectric 은 실제 폰이 아니다: 터치 지연, 폰별 해상도·시스템 막대(insets), 글꼴, 성능, 블루투스, 직사광선·장갑은 확인 못 함.
 
-## 구현됨 (코드 존재, 실기기 미검증)
-- NMEA 파서(GGA/GST/GSA/ZDA, 체크섬, 라인 상한), NmeaDriver 건강도, 평균 측량, TM 투영(5185~5188)
-- DeviceProfile(R10/SP60), 모델 선택/저장, 모델별 안내·재연결 정책
-- BT RFCOMM 4단계 폴백, BtError(BT-1xx), 포그라운드 서비스, 재연결
-- NTRIP 클라이언트(기본 RTS1.ngii.go.kr:2101 / VRS-RTCM31), GGA 중계, 소스테이블
-- 안테나 높이: DB(assets/antenna_db.json, §5+§10 adapters), 기준점별 PCO 계산, 출처 표시, 모델 변경 안내, 불일치 경고(값 변경 안 함), 베이스 연장봉 0.15, 기타 부품 높이(숨김, 기본 0), 결과 한 줄 요약. 어댑터 heightM 은 표시용(이중 가산 없음). 필수 3종 테스트(2.000 QR→2.1991, 2.050 마운트→2.1991, SP60 2.000→2.0687) 통과
-- Room(points/photos), 사진 촬영/갤러리/썸네일, CSV/GeoJSON/ZIP 내보내기(안테나·보정고 포함)
-- 피드백(진동/소리/시각)
-- UI: 모델선택, 연결, NTRIP, 측량(안테나 바·다이얼로그·기준점 그림), 결과/사진, 목록/상세, 지도(osmdroid V-World 위성·지적도, 타일 디스크 저장 안 함), 설정, 하단 탭 루트
+## 구현됨 (이번 라운드)
+- WP-0: 이전 UI 9개 파일 `legacy/`로 `git mv`(컴파일 제외), osmdroid 의존성 제거, `ARCHITECTURE.md`, design.md §0A "작업" 용어 정정
+- WP-1: `device/GnssSource`(link·gnss·clockMs), `FakeGnssSource`(진짜 NMEA 문장 생성→실제 NmeaDriver 통과, 시드 재현, 시나리오 fieldWalk/allFixed), `SurveyEngine : GnssSource`
+- WP-2: `core/StatusJudge` 고정/주의/불가 + 이유 + 저장 정책(허용/경고 후 허용/차단). 임계값 σh≤2 cm·5 s 는 제안값 [현장검증]
+- WP-4: `antenna_db.json` R10 기본 = 퀵릴리즈 하단 +0.1991(마운트 하단 +0.1491 보조), SP60 ARP +0.0687, `AntennaRecord`, 최소 안테나 시트(모델·기준점·±1cm)
+- WP-3: 자체 Canvas 지도(가짜 필지 배경·조사 구역 점선·이동 꼬리·현재 위치 마커+정확도 원+방향·점 라벨), 상태 띠/지도/정보/컨트롤 4영역 분리, 측점 72dp·보조줄 48dp, 폴 쪽 56dp 표시 전용 띠(좌우 반전), 측점→취득 중→결과 띠→펼침→(음성 시안), 다음 점, 되돌리기
+- WP-5 일부: 상태 띠 3상태 + 기어 → 왼쪽 서랍(폭 80%, 오른쪽 지도 노출), 메뉴 구성(DrawerMenu), AI 항목은 비활성 자리
 
-## 미구현 / 모의
-- Spectra 토탈스테이션 프로토콜 없음(SP60 는 GNSS 로 처리). 수신기 보고 안테나 높이는 NMEA 에 없어 사실상 항상 '기본값/직접 입력'
-- 지도: 오프라인 캐시 없음(약관 확인 전 금지), 실제 V-World 키로 타일 로딩 미검증
-- UI 스크린샷/에뮬레이터 실행 미수행(Compose 화면 런타임 동작 미확인)
-- 릴리스 서명 키 없음, R8/minify 꺼짐, 앱 아이콘 기본
+## 가짜/시안 (실제 아님)
+- GNSS 전부 가짜 시나리오. 측점은 메모리에만 저장(DB 저장은 WP-6). 음성 메모는 **화면 시안만**(마이크 사용 안 함). 사진 슬롯은 눌러도 안내만.
+- 서랍 메뉴 대부분은 "다음 라운드에 연결" 안내만. 빠른 시트(s14)·핸들 끌기 미구현.
+- 글꼴: 시스템 기본(Light/Normal). Noto Sans KR·JetBrains Mono 번들은 미적용. 글로시 마감 미적용. 아이콘은 Canvas 자체 제작.
 
 ## 알려진 문제 / 위험
-- 실기기(R10/SP60/NGII VRS) 테스트 전무. 안테나 PCO 상수는 문서 기준 [현장확인]
-- security-crypto 1.1.0-alpha06 가 API 21~22 에서 런타임 동작하는지 미확인(매니페스트 병합은 통과). 
-- 사선 높이 공식 현장 검증 필요; 2.6m 텔레스코픽 폴 135mm 방향 등 §10.7 [미확인] 항목
-- 불일치 경고는 2.05/2.00 ±1.5cm 휴리스틱
-- R10 기본 기준점: **퀵릴리즈 하단으로 확정(사용자 지시 2026-10-04)**. 현재 코드/asset(앱 정책 = 마운트 하단)은 아직 이 확정을 반영하지 않음 → 플랜 승인 후 개발 단계 1에서 변경(`plan/phase1-antenna-reference.md`). 이번 턴은 문서만 수정
-- RFCOMM read()==-1 처리 점검 필요(BtTransport/Engine)
+- 지도 비율: 800dp 가정에서 대기 68.5%, 취득/결과/녹음 66.0%, 펼침 47.3%(의도된 예외). 최소 680dp 높이 필요. 실제 폰은 상태·내비 막대가 빠져 더 작아진다 [현장검증].
+- 기존: security-crypto alpha 의 API 21~22 동작 미확인, RFCOMM read()==-1 처리 점검, 안테나 PCO 상수는 문서 기준.
+- `AntennaMath` 일부 문구(legacy 용)가 남아 있음; R10↔SP60 "약 13cm" 문구는 기본 기준점 기준.
