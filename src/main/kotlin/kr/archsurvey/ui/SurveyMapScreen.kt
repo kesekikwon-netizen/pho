@@ -134,7 +134,7 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
         }
         // 오른쪽: 점 목록 · 안테나 높이
         Column(Modifier.align(Alignment.TopEnd).padding(end = 10.dp, top = 84.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            ToolBtn(Glyph.LAYERS, "퀵 메뉴", "tool_quick") { c.quickSheetOpen = true }
+            ToolBtn(Glyph.CHEVRON_UP, "퀵 메뉴", "tool_quick") { c.quickSheetOpen = true }
             ToolBtn(Glyph.LIST, "점 목록", "tool_points") { c.hub.open(ToolScreen.POINTS) }
             c.bg?.let { b -> ToolBtn(Glyph.LAYERS, "배경 레이어", "layer_btn", if (b.screen != kr.archsurvey.ui.bg.BgScreen.NONE) MKind.PRIMARY else MKind.PLAIN) { b.toggle() } }
             MBtn(Modifier.size(48.dp).testTag("antenna_chip"), MKind.PLAIN, 16.dp, onClick = { c.antennaSheetOpen = true }) {
