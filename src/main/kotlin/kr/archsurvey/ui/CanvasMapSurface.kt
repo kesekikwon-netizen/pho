@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -24,7 +25,7 @@ import kr.archsurvey.map.*
 import kotlin.math.floor
 
 /** 자체 Canvas 지도 (WP-3). 배경은 가짜 필지 격자 — 실제 지도가 아니다. */
-class CanvasMapSurface : MapSurface {
+class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
     @Composable
     override fun Draw(state: MapViewState, modifier: Modifier) {
         val t = T
@@ -37,11 +38,28 @@ class CanvasMapSurface : MapSurface {
             val cx = size.width / 2f; val cy = size.height / 2f
             fun sx(x: Double) = cx + ((x - state.center.x) * ppm).toFloat()
             fun sy(y: Double) = cy - ((y - state.center.y) * ppm).toFloat()
-            drawRect(if (dark) Color(0xFF26251F) else Color(0xFFF4F1E6), size = size)
-            for (p in FakeBackdrop.plots) {
+            if (showBackdrop) drawRect(if (dark) Color(0xFF26251F) else Color(0xFFF4F1E6), size = size)
+            for (p in if (showBackdrop) FakeBackdrop.plots else emptyList()) {
                 val tl = Offset(sx(p.x0), sy(p.y1)); val br = Offset(sx(p.x1), sy(p.y0))
                 drawRect((if (dark) toneDark else tone)[p.tone % 3], tl, Size(br.x - tl.x, br.y - tl.y))
                 drawRect(t.line, tl, Size(br.x - tl.x, br.y - tl.y), style = Stroke(1f * density))
+            }
+            // 업로드 배경(도면): 투명도는 레이어 슬라이더 값. 윤곽 + 옅은 면 + 격자 느낌의 대각선
+            for (bgl in state.backgrounds) {
+                if (bgl.polygon.size < 3) continue
+                val path = Path()
+                bgl.polygon.forEachIndexed { i, q -> if (i == 0) path.moveTo(sx(q.x), sy(q.y)) else path.lineTo(sx(q.x), sy(q.y)) }
+                path.close()
+                val a = bgl.opacity.toFloat().coerceIn(0f, 1f)
+                drawPath(path, t.accent.copy(alpha = 0.35f * a))
+                clipPath(path) {
+                    val xs = bgl.polygon.map { sx(it.x) }; val ys = bgl.polygon.map { sy(it.y) }
+                    var gx = xs.min() - (ys.max() - ys.min())
+                    while (gx < xs.max()) { drawLine(t.accent.copy(alpha = 0.5f * a), Offset(gx, ys.max()), Offset(gx + (ys.max() - ys.min()), ys.min()), 1f * density); gx += 14f * density }
+                }
+                drawPath(path, (if (bgl.preview) t.ink else t.accent).copy(alpha = (0.35f + 0.65f * a).coerceAtMost(1f)),
+                    style = Stroke(if (bgl.preview) 2f * density else 1.5f * density,
+                        pathEffect = if (bgl.preview) PathEffect.dashPathEffect(floatArrayOf(8f * density, 5f * density)) else null))
             }
             drawGrid(state, ppm, ::sx, ::sy, t.outline.copy(alpha = 0.25f))
             // 조사 구역 경계

@@ -24,6 +24,7 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+        buildConfigField("boolean", "USE_MAPLIBRE", project.hasProperty("withMapLibre").toString()) // 옵트인 MapLibre 지도(기본 false)
     }
 
     signingConfigs {
@@ -107,4 +108,11 @@ dependencies {
 
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+// WP-9 후속(옵트인): -PwithMapLibre 로 빌드하면 MapLibre 지도 구현(src/maplibre)을 포함한다. 기본 빌드는 영향 없음(자체 Canvas 지도).
+// 11.13.5 = minSdk 21·Kotlin 2.0 호환 마지막 계열(12 이상은 minSdk 23). 근거와 미검증 목록: spikes/maplibre/RESULT.md
+if (project.hasProperty("withMapLibre")) {
+    android.sourceSets.getByName("main").java.srcDir("src/maplibre/kotlin")
+    dependencies { add("implementation", "org.maplibre.gl:android-sdk:11.13.5") }
 }

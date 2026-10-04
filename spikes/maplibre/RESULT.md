@@ -48,3 +48,12 @@ Kotlin 코드가 다음을 호출해 **컴파일됨**: `MapLibre.getInstance`, `
 ## 3. 판단 (사실과 구분되는 의견)
 - **구성 수준에서 "가능"**: 11.13.5(minSdk 21, Kotlin 2.0.21 호환, 위치 권한은 `tools:node=remove` 로 제거 가능, OpenGL, 약 +10MB)는 본 앱 설정을 바꾸지 않고 의존성만 추가하면 컴파일 가능함을 스파이크로 확인. 13.6.1 은 minSdk 23 + Kotlin 2.2 + 약 +21MB 이므로 별도 결정(최저 Android 버전 상향, 컴파일러 업그레이드)이 필요.
 - 렌더링·캐시 비활성은 확인하지 못했으므로 **기본 지도는 계속 Canvas** 로 두고, MapLibre 는 옵트인 빌드(`-PwithMapLibre`)로만 시도하는 것을 권장. 실기기 확인 항목은 `FIELD_CHECKLIST.md` 에 넣음.
+
+## 4. 본 앱에 붙여 본 결과 (옵트인 빌드, 2026-10-04) — 컴파일·패키징만, 실행 안 함
+`gradle -PwithMapLibre assembleDebug` (기본 빌드는 변하지 않음. 켜는 방법·코드: `build.gradle.kts` 끝부분, `src/maplibre/kotlin/kr/archsurvey/ui/MapLibreMapSurface.kt`).
+- 사용한 버전: **android-sdk 11.13.5** (minSdk 21 유지, Kotlin 2.0.21 로 컴파일됨, 앱의 Compose/Room/KSP 와 함께 **빌드 성공**).
+- 디버그 APK: 기본 11,643,215 B(clean 빌드) → 옵트인 24,231,208 B (**+약 12.6 MB**, 디버그·서명 debug 키; 증가분은 libmaplibre.so arm64 13.1MB + v7a 9.5MB(비압축 저장) 등). 릴리스 크기는 본 앱에서 재지 않음.
+- 병합 매니페스트: 위치·와이파이 권한은 `tools:node="remove"` 로 제거되어 **APK 권한 목록에 없음**(aapt2 확인). minSdk 21 유지.
+- `MapLibreMapSurface`(`MapSurface` 구현)는 MapLibre `MapView` 를 `AndroidView` 로 깔고 그 위에 기존 Canvas 가 점·꼬리·현재 위치·업로드 도면을 그린다. 카메라는 앱 상태(center, dpPerM)에서 줌 = log2(78271.517·cos(위도)·dpPerM) 로 계산. 현재 스타일은 빈 배경(타일 소스 없음).
+- **미검증(전부)**: 실제로 화면에 그려지는지, `AndroidView` 위에서 지도 끌기 제스처가 부모(Compose)로 전달되는지, 줌 공식이 맞는지(Canvas 와 축척 일치), 수명주기(회전·백그라운드), 메모리, MBTiles/PMTiles 표시, 캐시 0 설정의 효과.
+- 결정: **기본 지도는 Canvas 유지**. MapLibre 는 옵트인 빌드로만 존재한다. 실기기에서 위 항목을 확인한 뒤 기본값을 바꿀지 정한다.
