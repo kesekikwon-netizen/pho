@@ -20,6 +20,9 @@ data class MapMarker(val name: String, val at: LocalXY, val flagged: Boolean = f
 
 data class CurrentMarker(val at: LocalXY, val accuracyM: Double, val status: SurveyStatus, val headingDeg: Double?)
 
+/** 지도에 얹는 업로드 배경(도면) 한 장의 윤곽. 정합이 끝난 것만 넘긴다. [preview] 는 수동 정렬 중 미리보기. */
+data class MapBgLayer(val id: String, val label: String, val polygon: List<LocalXY>, val opacity: Double, val preview: Boolean = false)
+
 data class MapViewState(
     val center: LocalXY,
     /** 화면 1 m 당 dp */
@@ -28,6 +31,8 @@ data class MapViewState(
     val current: CurrentMarker?,
     val trail: List<LocalXY>,
     val backdropLabel: String = "가상 지도 · 디자인용 예시",
+    /** 업로드 배경(아래→위 순서). 기본은 없음 */
+    val backgrounds: List<MapBgLayer> = emptyList(),
 )
 
 /** 지도 그리기 구현을 갈아끼우기 위한 경계. WP-3 은 자체 Canvas, 이후 MapLibre(WP-9 스파이크 결과에 따라). */

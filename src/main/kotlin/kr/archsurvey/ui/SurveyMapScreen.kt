@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kr.archsurvey.core.*
 import kr.archsurvey.map.MapSurface
+import kr.archsurvey.ui.bg.*
 
 private fun statusColors(t: Tokens, s: SurveyStatus): Pair<Color, Color> = when (s) {
     SurveyStatus.FIXED -> t.fixed to t.onFixed
@@ -42,14 +43,17 @@ private fun f3(x: Double) = String.format(java.util.Locale.US, "%.3f", x)
 
 /** 측량 + 지도 상시 화면. 상태 띠 / 지도 / 정보 / 컨트롤 네 영역이 겹치지 않는다. */
 @Composable
-fun SurveyMapScreen(c: SurveyController, batteryPct: Int?, map: MapSurface = remember { CanvasMapSurface() }) {
+fun SurveyMapScreen(
+    c: SurveyController, batteryPct: Int?, map: MapSurface = remember { CanvasMapSurface() },
+    bg: BackgroundController = rememberBackgroundController(c),
+) {
     val t = T
     Box(Modifier.fillMaxSize().background(t.bg).windowInsetsPadding(WindowInsets.systemBars).testTag("screen")) {
         Row(Modifier.fillMaxSize()) {
             if (!c.poleOnRight) PoleStrip(c, batteryPct)
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 StatusBand(c)
-                MapArea(c, map, Modifier.weight(1f))
+                MapArea(c, map, Modifier.weight(1f), bg)
                 InfoZone(c)
                 ControlArea(c)
             }
@@ -57,6 +61,7 @@ fun SurveyMapScreen(c: SurveyController, batteryPct: Int?, map: MapSurface = rem
         }
         DrawerOverlay(c)
         if (c.antennaSheetOpen) AntennaSheet(c)
+        BackgroundSheets(bg)
     }
 }
 
@@ -95,9 +100,9 @@ fun StatusBand(c: SurveyController) {
 // ---------------- 지도 영역 ----------------
 
 @Composable
-fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
+fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier, bg: BackgroundController? = null) {
     val t = T
-    val ms = c.mapState()
+    val ms = c.mapState().let { if (bg == null) it else it.copy(backgrounds = bg.mapLayers()) }
     Box(
         modifier.fillMaxWidth().testTag("map_area").pointerInput(Unit) {
             detectDragGestures { _, drag ->
@@ -125,6 +130,14 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
             Column {
                 Text("안테나 높이", style = Ty.small.copy(fontSize = 10.sp), color = t.inkSub)
                 Text(c.antenna.inputValueM.let { f3(it) } + " m", style = Ty.coord, color = t.ink, modifier = Modifier.testTag("antenna_input"))
+            }
+        }
+        if (bg != null) {
+            // 오른쪽 위, 안테나 높이 칩 아래: 배경 레이어
+            Box(Modifier.align(Alignment.TopEnd).padding(top = 64.dp, end = 8.dp)) { ToolButton(Glyph.LAYERS, "배경 레이어", "layer_btn", active = bg.screen != BgScreen.NONE) { if (bg.screen == BgScreen.NONE) bg.openOpacity() else bg.close() } }
+            bg.mapCaption()?.let {
+                Text(it, style = Ty.small.copy(fontSize = 10.sp), color = t.inkSub,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = 30.dp).background(t.bg.copy(alpha = 0.7f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp).testTag("map_caption"))
             }
         }
         Text(
@@ -482,4 +495,10 @@ private fun StepBtn(label: String, tag: String, onClick: () -> Unit) {
         Modifier.size(width = 84.dp, height = SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp)).background(t.card).clickable(onClick = onClick).testTag(tag),
         contentAlignment = Alignment.Center,
     ) { Text(label, style = Ty.label, color = t.ink) }
+}
+
+@Composable
+fun rememberBackgroundController(c: SurveyController): BackgroundController {
+    val dir = java.io.File(androidx.compose.ui.platform.LocalContext.current.cacheDir, "fake_uploads")
+    return remember(c) { BackgroundController(c.projection, dir) }
 }

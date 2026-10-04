@@ -55,7 +55,7 @@ fun GearIcon(color: Color, size: Dp = 26.dp) {
     }
 }
 
-enum class Glyph { PLUS, MINUS, LOCATE, UNDO, CHEVRON_UP, CHEVRON_DOWN, MIC, CLOSE, CAMERA, RULER }
+enum class Glyph { PLUS, MINUS, LOCATE, UNDO, CHEVRON_UP, CHEVRON_DOWN, MIC, CLOSE, CAMERA, RULER, LAYERS }
 
 @Composable
 fun GlyphIcon(g: Glyph, color: Color, size: Dp = 22.dp) {
@@ -86,6 +86,12 @@ fun GlyphIcon(g: Glyph, color: Color, size: Dp = 22.dp) {
             Glyph.CAMERA -> {
                 drawRoundRect(color, Offset(w * .1f, w * .28f), androidx.compose.ui.geometry.Size(w * .8f, w * .55f), androidx.compose.ui.geometry.CornerRadius(w * .08f), style = Stroke(sw))
                 drawCircle(color, w * .15f, Offset(w * .5f, w * .56f), style = Stroke(sw))
+            }
+            Glyph.LAYERS -> {
+                val d = Path().apply { moveTo(w * .5f, w * .14f); lineTo(w * .86f, w * .34f); lineTo(w * .5f, w * .54f); lineTo(w * .14f, w * .34f); close() }
+                drawPath(d, color, style = Stroke(sw, cap = cap))
+                drawPath(Path().apply { moveTo(w * .14f, w * .52f); lineTo(w * .5f, w * .72f); lineTo(w * .86f, w * .52f) }, color, style = Stroke(sw, cap = cap))
+                drawPath(Path().apply { moveTo(w * .14f, w * .7f); lineTo(w * .5f, w * .9f); lineTo(w * .86f, w * .7f) }, color, style = Stroke(sw, cap = cap))
             }
             Glyph.RULER -> { drawLine(color, Offset(w * .5f, w * .1f), Offset(w * .5f, w * .9f), sw, cap); drawLine(color, Offset(w * .3f, w * .1f), Offset(w * .7f, w * .1f), sw, cap); drawLine(color, Offset(w * .3f, w * .9f), Offset(w * .7f, w * .9f), sw, cap) }
         }
