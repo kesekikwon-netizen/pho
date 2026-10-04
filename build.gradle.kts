@@ -89,7 +89,6 @@ dependencies {
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
-    implementation("org.osmdroid:osmdroid-android:6.1.20")
 
     val room = "2.6.1"
     implementation("androidx.room:room-runtime:$room")
