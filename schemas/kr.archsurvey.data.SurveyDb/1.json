@@ -1,0 +1,357 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "18843cfc600845a4d64afd9634936f0c",
+    "entities": [
+      {
+        "tableName": "points",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`rowId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `project` TEXT NOT NULL, `pointId` TEXT NOT NULL, `positionType` TEXT NOT NULL, `memo` TEXT NOT NULL, `lat` REAL NOT NULL, `lon` REAL NOT NULL, `ellipsoidalHeight` REAL, `altitudeMsl` REAL, `geoidSeparation` REAL, `northing` REAL NOT NULL, `easting` REAL NOT NULL, `crsEpsg` INTEGER NOT NULL, `fixQuality` INTEGER NOT NULL, `allEpochsFixed` INTEGER NOT NULL, `satellites` INTEGER NOT NULL, `hdop` REAL, `sigmaE` REAL, `sigmaN` REAL, `sigmaH` REAL, `sigmaU` REAL, `correctionAgeSec` REAL, `baseStationId` TEXT, `epochs` INTEGER NOT NULL, `antennaHeight` REAL NOT NULL, `antennaModel` TEXT NOT NULL, `antennaRefPoint` TEXT NOT NULL, `antennaInputMode` TEXT NOT NULL, `antennaInputValue` REAL NOT NULL, `antennaPcoV` REAL NOT NULL, `antennaPcoH` REAL NOT NULL, `antennaExtraPartsM` REAL NOT NULL, `antennaBaseExtM` REAL NOT NULL, `antennaReceiverApplied` INTEGER NOT NULL, `groundEllipsoidalHeight` REAL, `groundMsl` REAL, `device` TEXT NOT NULL, `measuredAtUtcMs` INTEGER NOT NULL, `deletedAtUtcMs` INTEGER)",
+        "fields": [
+          {
+            "fieldPath": "rowId",
+            "columnName": "rowId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "project",
+            "columnName": "project",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pointId",
+            "columnName": "pointId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "positionType",
+            "columnName": "positionType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "memo",
+            "columnName": "memo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lat",
+            "columnName": "lat",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lon",
+            "columnName": "lon",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ellipsoidalHeight",
+            "columnName": "ellipsoidalHeight",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "altitudeMsl",
+            "columnName": "altitudeMsl",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "geoidSeparation",
+            "columnName": "geoidSeparation",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "northing",
+            "columnName": "northing",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "easting",
+            "columnName": "easting",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "crsEpsg",
+            "columnName": "crsEpsg",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fixQuality",
+            "columnName": "fixQuality",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "allEpochsFixed",
+            "columnName": "allEpochsFixed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "satellites",
+            "columnName": "satellites",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hdop",
+            "columnName": "hdop",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "sigmaE",
+            "columnName": "sigmaE",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "sigmaN",
+            "columnName": "sigmaN",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "sigmaH",
+            "columnName": "sigmaH",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "sigmaU",
+            "columnName": "sigmaU",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "correctionAgeSec",
+            "columnName": "correctionAgeSec",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "baseStationId",
+            "columnName": "baseStationId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "epochs",
+            "columnName": "epochs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "antennaHeight",
+            "columnName": "antennaHeight",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "antennaModel",
+            "columnName": "antennaModel",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "antennaRefPoint",
+            "columnName": "antennaRefPoint",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "antennaInputMode",
+            "columnName": "antennaInputMode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "antennaInputValue",
+            "columnName": "antennaInputValue",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "antennaPcoV",
+            "columnName": "antennaPcoV",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "antennaPcoH",
+            "columnName": "antennaPcoH",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "antennaExtraPartsM",
+            "columnName": "antennaExtraPartsM",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "antennaBaseExtM",
+            "columnName": "antennaBaseExtM",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "antennaReceiverApplied",
+            "columnName": "antennaReceiverApplied",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "groundEllipsoidalHeight",
+            "columnName": "groundEllipsoidalHeight",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "groundMsl",
+            "columnName": "groundMsl",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "device",
+            "columnName": "device",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "measuredAtUtcMs",
+            "columnName": "measuredAtUtcMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deletedAtUtcMs",
+            "columnName": "deletedAtUtcMs",
+            "affinity": "INTEGER",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "rowId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_points_project_pointId",
+            "unique": true,
+            "columnNames": [
+              "project",
+              "pointId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_points_project_pointId` ON `${TABLE_NAME}` (`project`, `pointId`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "photos",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `pointRowId` INTEGER NOT NULL, `relPath` TEXT NOT NULL, `thumbRelPath` TEXT, `source` TEXT NOT NULL, `addedAtUtcMs` INTEGER NOT NULL, `width` INTEGER NOT NULL, `height` INTEGER NOT NULL, FOREIGN KEY(`pointRowId`) REFERENCES `points`(`rowId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pointRowId",
+            "columnName": "pointRowId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "relPath",
+            "columnName": "relPath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "thumbRelPath",
+            "columnName": "thumbRelPath",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "addedAtUtcMs",
+            "columnName": "addedAtUtcMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "width",
+            "columnName": "width",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "height",
+            "columnName": "height",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_photos_pointRowId",
+            "unique": false,
+            "columnNames": [
+              "pointRowId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_photos_pointRowId` ON `${TABLE_NAME}` (`pointRowId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "points",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "pointRowId"
+            ],
+            "referencedColumns": [
+              "rowId"
+            ]
+          }
+        ]
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '18843cfc600845a4d64afd9634936f0c')"
+    ]
+  }
+}

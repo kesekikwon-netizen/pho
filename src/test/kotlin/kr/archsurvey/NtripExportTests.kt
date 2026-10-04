@@ -139,7 +139,7 @@ class BtErrorTest {
 
 class FormatsTest {
     private fun pt(memo: String = "a,b \"q\"", id: String = "P-0001") = PointEntity(
-        rowId = 1, project = "발굴-1", pointId = id, code = "유구", memo = memo,
+        rowId = 1, project = "발굴-1", pointId = id, positionType = "유구", memo = memo,
         lat = 37.5665, lon = 126.978, ellipsoidalHeight = 100.0, altitudeMsl = 75.0, geoidSeparation = 25.0,
         northing = 551885.0306, easting = 198056.3667, crsEpsg = 5186, fixQuality = 4, allEpochsFixed = true,
         satellites = 20, hdop = 0.8, sigmaE = 0.01, sigmaN = 0.012, sigmaH = 0.0156, sigmaU = 0.02,

@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kr.archsurvey.data.AntennaDb
+import kr.archsurvey.data.RoomPointStore
+import kr.archsurvey.data.SurveyDb
 import kr.archsurvey.device.FakeGnssSource
 import kr.archsurvey.device.FakeScenarios
 
@@ -11,7 +13,8 @@ import kr.archsurvey.device.FakeScenarios
 class SurveyViewModel(app: Application) : AndroidViewModel(app) {
     val fake = FakeGnssSource(FakeScenarios.fieldWalk(), loop = true)
     val db = AntennaDb.parse(app.assets.open("antenna_db.json").bufferedReader().use { it.readText() })
-    val controller = SurveyController(fake, db, viewModelScope)
+    val store = RoomPointStore(SurveyDb.get(app), project = "작업1", device = "Trimble R10 (가짜 신호)")
+    val controller = SurveyController(fake, db, viewModelScope, store = store)
 
     init { fake.start(viewModelScope, realDelayMs = 700L) }
 

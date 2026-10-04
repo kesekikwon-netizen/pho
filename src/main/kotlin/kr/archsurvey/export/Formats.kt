@@ -24,7 +24,7 @@ object Formats {
     }
 
     val POINT_HEADER = listOf(
-        "point_id", "code", "memo", "northing_N", "easting_E", "crs_epsg",
+        "point_id", "position_type", "memo", "northing_N", "easting_E", "crs_epsg",
         "height_apc_ellipsoidal", "height_ground_ellipsoidal", "height_apc_msl", "height_ground_msl",
         "antenna_height_m", "antenna_model", "antenna_ref_point", "antenna_input_mode", "antenna_input_m", "pco_v_m", "pco_h_m", "extra_parts_m", "base_ext_m", "antenna_receiver_applied",
         "lat", "lon", "fix", "all_epochs_fixed", "sats", "hdop", "sigma_e", "sigma_n", "sigma_h", "sigma_u",
@@ -40,7 +40,7 @@ object Formats {
         for (p in points) {
             val photos = photosByPoint[p.rowId].orEmpty()
             val row = listOf(
-                csvEscape(p.pointId), csvEscape(p.code), csvEscape(p.memo),
+                csvEscape(p.pointId), csvEscape(p.positionType), csvEscape(p.memo),
                 f(p.northing, 3), f(p.easting, 3), p.crsEpsg.toString(),
                 f(p.ellipsoidalHeight, 3), f(p.groundEllipsoidalHeight, 3), f(p.altitudeMsl, 3), f(p.groundMsl, 3),
                 f(p.antennaHeight, 3), csvEscape(p.antennaModel), csvEscape(p.antennaRefPoint), p.antennaInputMode, f(p.antennaInputValue, 3), f(p.antennaPcoV, 4), f(p.antennaPcoH, 4), f(p.antennaExtraPartsM, 3), f(p.antennaBaseExtM, 3), p.antennaReceiverApplied.toString(),
@@ -85,7 +85,7 @@ object Formats {
             p.ellipsoidalHeight?.let { sb.append(',').append(jnum(it, 3)) }
             sb.append("]},\"properties\":{")
             sb.append("\"point_id\":").append(jsonStr(p.pointId))
-            sb.append(",\"code\":").append(jsonStr(p.code))
+            sb.append(",\"position_type\":").append(jsonStr(p.positionType))
             sb.append(",\"memo\":").append(jsonStr(p.memo))
             sb.append(",\"northing_N\":").append(jnum(p.northing, 3)).append(",\"easting_E\":").append(jnum(p.easting, 3))
             sb.append(",\"crs_epsg\":").append(p.crsEpsg)

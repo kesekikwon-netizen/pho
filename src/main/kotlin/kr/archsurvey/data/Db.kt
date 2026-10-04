@@ -4,13 +4,17 @@ import android.content.Context
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 
-/** 측량 포인트. 부가 속성(수량·재질 등)은 두지 않는다: 순수 측량 필드 + 간단 메모 + 라벨(code). */
+/**
+ * 측량 점. 부가 속성(수량·재질·크기·시대 등)은 두지 않는다: 측량 필드 + 위치 종류(positionType) + 메모 1칸.
+ * 되돌리기는 삭제가 아니라 deletedAtUtcMs 표시(소프트 삭제)로 하고, 점 번호는 삭제된 점 것도 다시 쓰지 않는다.
+ */
 @Entity(tableName = "points", indices = [Index(value = ["project", "pointId"], unique = true)])
 data class PointEntity(
     @PrimaryKey(autoGenerate = true) val rowId: Long = 0,
     val project: String,
     val pointId: String,
-    val code: String = "",
+    /** 위치 종류(예: 경계점, 모서리, 기준점). 자유 입력 한 칸 */
+    val positionType: String = "",
     val memo: String = "",
     val lat: Double,
     val lon: Double,
@@ -50,6 +54,8 @@ data class PointEntity(
     val groundMsl: Double? = null,
     val device: String,
     val measuredAtUtcMs: Long,
+    /** null = 살아 있는 점. 값이 있으면 되돌리기로 숨겨진 점 */
+    val deletedAtUtcMs: Long? = null,
 )
 
 @Entity(
@@ -75,53 +81,77 @@ data class PointWithCount(
 )
 
 @Dao
-interface SurveyDao {
+abstract class SurveyDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
-    suspend fun insertPointRaw(p: PointEntity): Long
+    abstract suspend fun insertPointRaw(p: PointEntity): Long
 
     @Query("SELECT COUNT(*) FROM points WHERE project = :project AND pointId = :pointId")
-    suspend fun countId(project: String, pointId: String): Int
+    abstract suspend fun countId(project: String, pointId: String): Int
 
-    @Update suspend fun updatePoint(p: PointEntity)
+    @Update abstract suspend fun updatePoint(p: PointEntity)
 
-    @Query("UPDATE points SET memo = :memo, code = :code WHERE rowId = :rowId")
-    suspend fun updateMemoCode(rowId: Long, memo: String, code: String)
+    @Query("UPDATE points SET memo = :memo, positionType = :positionType WHERE rowId = :rowId")
+    abstract suspend fun updateMemoType(rowId: Long, memo: String, positionType: String)
 
-    @Query("SELECT p.*, (SELECT COUNT(*) FROM photos WHERE pointRowId = p.rowId) AS photoCount FROM points p WHERE project = :project ORDER BY measuredAtUtcMs DESC")
-    fun observePoints(project: String): Flow<List<PointWithCount>>
+    @Query("SELECT p.*, (SELECT COUNT(*) FROM photos WHERE pointRowId = p.rowId) AS photoCount FROM points p WHERE project = :project AND deletedAtUtcMs IS NULL ORDER BY measuredAtUtcMs DESC")
+    abstract fun observePoints(project: String): Flow<List<PointWithCount>>
 
-    @Query("SELECT * FROM points WHERE project = :project ORDER BY measuredAtUtcMs ASC")
-    suspend fun pointsOf(project: String): List<PointEntity>
-
-    @Query("SELECT * FROM points WHERE rowId = :rowId")
-    fun observePoint(rowId: Long): Flow<PointEntity?>
+    @Query("SELECT * FROM points WHERE project = :project AND deletedAtUtcMs IS NULL ORDER BY measuredAtUtcMs ASC")
+    abstract suspend fun pointsOf(project: String): List<PointEntity>
 
     @Query("SELECT * FROM points WHERE rowId = :rowId")
-    suspend fun getPoint(rowId: Long): PointEntity?
+    abstract fun observePoint(rowId: Long): Flow<PointEntity?>
+
+    @Query("SELECT * FROM points WHERE rowId = :rowId")
+    abstract suspend fun getPoint(rowId: Long): PointEntity?
 
     @Query("SELECT DISTINCT project FROM points ORDER BY project")
-    suspend fun projects(): List<String>
+    abstract suspend fun projects(): List<String>
 
-    @Query("SELECT pointId FROM points WHERE project = :project ORDER BY rowId DESC LIMIT 1")
-    suspend fun lastPointId(project: String): String?
+    @Query("SELECT pointId FROM points WHERE project = :project ORDER BY rowId DESC LIMIT 1" /* 삭제된 점 포함: 번호 재사용 금지 */)
+    abstract suspend fun lastPointId(project: String): String?
 
-    @Delete suspend fun deletePoint(p: PointEntity)
+    @Delete abstract suspend fun deletePoint(p: PointEntity)
 
-    @Insert suspend fun insertPhoto(p: PhotoEntity): Long
+    @Query("SELECT * FROM points WHERE project = :project AND deletedAtUtcMs IS NULL ORDER BY rowId DESC LIMIT 1")
+    abstract suspend fun latestLive(project: String): PointEntity?
+
+    @Query("SELECT * FROM points WHERE project = :project AND deletedAtUtcMs IS NOT NULL ORDER BY deletedAtUtcMs DESC, rowId DESC LIMIT 1")
+    abstract suspend fun latestHidden(project: String): PointEntity?
+
+    @Query("UPDATE points SET deletedAtUtcMs = :at WHERE rowId = :rowId")
+    abstract suspend fun hidePoint(rowId: Long, at: Long)
+
+    @Query("UPDATE points SET deletedAtUtcMs = NULL WHERE rowId = :rowId")
+    abstract suspend fun unhidePoint(rowId: Long)
+
+    @Query("SELECT COUNT(*) FROM photos WHERE pointRowId = :rowId")
+    abstract suspend fun photoCount(rowId: Long): Int
+
+    @Insert abstract suspend fun insertPhoto(p: PhotoEntity): Long
 
     @Query("SELECT * FROM photos WHERE pointRowId = :rowId ORDER BY id ASC")
-    fun observePhotos(rowId: Long): Flow<List<PhotoEntity>>
+    abstract fun observePhotos(rowId: Long): Flow<List<PhotoEntity>>
 
     @Query("SELECT * FROM photos WHERE pointRowId = :rowId ORDER BY id ASC")
-    suspend fun photosOf(rowId: Long): List<PhotoEntity>
+    abstract suspend fun photosOf(rowId: Long): List<PhotoEntity>
 
     @Query("SELECT COUNT(*) FROM photos WHERE relPath = :rel")
-    suspend fun countPhotoPath(rel: String): Int
+    abstract suspend fun countPhotoPath(rel: String): Int
 
-    @Delete suspend fun deletePhoto(p: PhotoEntity)
+    @Delete abstract suspend fun deletePhoto(p: PhotoEntity)
+
+    /** 점당 사진 최대 장수. 5번째는 거부한다(동시 호출에도 4장을 넘지 않도록 한 트랜잭션에서 확인) */
+    @androidx.room.Transaction
+    open suspend fun insertPhotoLimited(p: PhotoEntity, max: Int = PhotoLimit.MAX): Long {
+        if (photoCount(p.pointRowId) >= max) return -1L
+        return insertPhoto(p)
+    }
 }
 
-@Database(entities = [PointEntity::class, PhotoEntity::class], version = 1, exportSchema = false)
+object PhotoLimit { const val MAX = 4 }
+
+@Database(entities = [PointEntity::class, PhotoEntity::class], version = 1, exportSchema = true)
 abstract class SurveyDb : RoomDatabase() {
     abstract fun dao(): SurveyDao
 

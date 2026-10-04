@@ -153,12 +153,12 @@ class SurveyControllerTest {
         repeat(3) { f.emitNext() }; c.onMeasure(); repeat(4) { f.emitNext() }
         assertEquals(Phase.IDLE, c.phase); assertTrue(c.points.isEmpty()); assertTrue(c.message!!.contains("저장하지 않았어요"))
     }
-    @Test fun undoRemovesLastAndReusesName() {
+    @Test fun undoRemovesLastAndNeverReusesNumber() {
         val f = FakeGnssSource(FakeScenarios.allFixed()); val c = ctrl(f)
         repeat(2) { f.emitNext() }
         c.onMeasure(); repeat(6) { f.emitNext() }; c.onMeasure(); repeat(6) { f.emitNext() }
         assertEquals(listOf("P-0001", "P-0002"), c.points.map { it.name })
-        c.undo(); assertEquals(listOf("P-0001"), c.points.map { it.name }); assertEquals("P-0002", c.nextName)
+        c.undo(); assertEquals(listOf("P-0001"), c.points.map { it.name }); assertEquals("P-0003", c.nextName) // 되돌려도 번호는 다시 쓰지 않음
     }
     @Test fun expandAndVoiceMockStates() {
         val f = FakeGnssSource(FakeScenarios.allFixed()); val c = ctrl(f)
