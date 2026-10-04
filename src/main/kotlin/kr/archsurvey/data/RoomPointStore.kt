@@ -27,15 +27,15 @@ class RoomPointStore(
         return PointEntity(
             project = project, pointId = p.name, positionType = p.type, memo = p.memo,
             lat = p.lat, lon = p.lon,
-            ellipsoidalHeight = p.groundHeightM?.plus(apc), altitudeMsl = null, geoidSeparation = null,
+            ellipsoidalHeight = p.apcEllipsoidalM ?: p.groundHeightM?.plus(apc), altitudeMsl = p.apcMslM, geoidSeparation = p.geoidSepM,
             northing = p.northing, easting = p.easting, crsEpsg = p.crsEpsg,
             fixQuality = p.fixQuality, allEpochsFixed = p.status == SurveyStatus.FIXED, satellites = p.satellites,
-            hdop = null, sigmaE = null, sigmaN = null, sigmaH = p.sigmaHM, sigmaU = null,
-            correctionAgeSec = null, baseStationId = null, epochs = p.epochs,
+            hdop = p.hdop, sigmaE = p.sigmaE, sigmaN = p.sigmaN, sigmaH = p.sigmaHM, sigmaU = p.sigmaU,
+            correctionAgeSec = p.correctionAgeSec, baseStationId = p.baseStationId, epochs = p.epochs,
             antennaHeight = apc, antennaModel = p.antenna.modelId, antennaRefPoint = p.antenna.refPointId,
             antennaInputMode = p.antenna.method, antennaInputValue = p.antenna.inputM,
             antennaPcoV = p.antenna.pcoV, antennaPcoH = p.antenna.pcoH,
-            groundEllipsoidalHeight = p.groundHeightM,
+            groundEllipsoidalHeight = p.groundHeightM, groundMsl = p.groundMslM,
             device = device, measuredAtUtcMs = p.measuredAtMs,
         )
     }
@@ -51,6 +51,8 @@ class RoomPointStore(
             groundHeightM = e.groundEllipsoidalHeight, sigmaHM = e.sigmaH,
             status = if (caution) SurveyStatus.CAUTION else SurveyStatus.FIXED, cautionFlag = caution, epochs = e.epochs, antenna = rec,
             fixQuality = e.fixQuality, satellites = e.satellites, measuredAtMs = e.measuredAtUtcMs, rowId = e.rowId, memo = e.memo,
+            apcEllipsoidalM = e.ellipsoidalHeight, apcMslM = e.altitudeMsl, geoidSepM = e.geoidSeparation, groundMslM = e.groundMsl,
+            hdop = e.hdop, sigmaE = e.sigmaE, sigmaN = e.sigmaN, sigmaU = e.sigmaU, correctionAgeSec = e.correctionAgeSec, baseStationId = e.baseStationId,
         )
     }
 }
