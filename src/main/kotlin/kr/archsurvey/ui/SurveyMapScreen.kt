@@ -53,16 +53,10 @@ fun SurveyMapScreen(
 ) {
     val t = T
     Box(Modifier.fillMaxSize().background(t.bg).windowInsetsPadding(WindowInsets.systemBars).testTag("screen")) {
-        Row(Modifier.fillMaxSize()) {
-            if (!c.poleOnRight) PoleStrip(c, batteryPct)
-            Column(Modifier.weight(1f).fillMaxHeight()) {
-                MapArea(c, map, Modifier.weight(1f))
-                if (SurveyLayout.isResult(c.phase)) ResultPanel(c) else { InfoZone(c); ControlArea(c) }
-            }
-            if (c.poleOnRight) PoleStrip(c, batteryPct)
+        Column(Modifier.fillMaxSize()) {
+            MapArea(c, map, Modifier.weight(1f))
+            if (SurveyLayout.isResult(c.phase)) ResultPanel(c) else { InfoZone(c); ControlArea(c) }
         }
-        if (c.homeOpen) HomeScreen(c, batteryPct)
-        androidx.activity.compose.BackHandler(enabled = !c.homeOpen && c.hub.screen == null && !c.drawerOpen && !c.antennaSheetOpen && !c.quickSheetOpen) { c.homeOpen = true }
         DrawerOverlay(c)
         if (c.quickSheetOpen) QuickSheet(c)
         if (c.dupPrompt != null) DupSheet(c)
@@ -127,19 +121,20 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
         // 위: 상태 카드 + 탭 (목업 s1)
         Column(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             StatusBand(c)
-            if (!SurveyLayout.isResult(c.phase)) TabsRow(c)
         }
         // 왼쪽: 현재 좌표 + 지도 도구
-        Column(Modifier.align(Alignment.TopStart).padding(start = 10.dp, top = 128.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.align(Alignment.TopStart).padding(start = 10.dp, top = 84.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!SurveyLayout.isResult(c.phase)) CoordBox(c)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                ToolBtn(Glyph.LOCATE, "내 위치", "tool_locate", if (c.follow) MKind.PRIMARY else MKind.PLAIN) { c.recenter() }
+                ToolBtn(Glyph.LOCATE, "내 위치 고정/해제", "tool_locate", if (c.follow) MKind.PRIMARY else MKind.PLAIN) { if (c.follow) c.follow = false else c.recenter() }
+                ToolBtn(Glyph.EXTENT, "전체 보기", "tool_fit") { c.fitAll() }
                 ToolBtn(Glyph.PLUS, "확대", "tool_zoom_in") { c.zoomIn() }
                 ToolBtn(Glyph.MINUS, "축소", "tool_zoom_out") { c.zoomOut() }
             }
         }
         // 오른쪽: 점 목록 · 안테나 높이
-        Column(Modifier.align(Alignment.TopEnd).padding(end = 10.dp, top = 128.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.align(Alignment.TopEnd).padding(end = 10.dp, top = 84.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            ToolBtn(Glyph.LAYERS, "퀵 메뉴", "tool_quick") { c.quickSheetOpen = true }
             ToolBtn(Glyph.LIST, "점 목록", "tool_points") { c.hub.open(ToolScreen.POINTS) }
             c.bg?.let { b -> ToolBtn(Glyph.LAYERS, "배경 레이어", "layer_btn", if (b.screen != kr.archsurvey.ui.bg.BgScreen.NONE) MKind.PRIMARY else MKind.PLAIN) { b.toggle() } }
             MBtn(Modifier.size(48.dp).testTag("antenna_chip"), MKind.PLAIN, 16.dp, onClick = { c.antennaSheetOpen = true }) {
@@ -419,8 +414,8 @@ private fun runMenu(c: SurveyController, item: MenuItem) {
     when (item.action) {
             MenuAction.OPEN_AREAS -> { c.drawerOpen = false; c.hub.open(ToolScreen.AREAS) }
             MenuAction.OPEN_TYPES -> { c.drawerOpen = false; c.hub.open(ToolScreen.TYPES) }
-            MenuAction.GO_SURVEY -> { c.drawerOpen = false; c.homeOpen = false }
-            MenuAction.GO_HOME -> { c.drawerOpen = false; c.homeOpen = true }
+            MenuAction.GO_SURVEY -> { c.drawerOpen = false; c.hub.closeAll() }
+            MenuAction.OPEN_BG -> { c.drawerOpen = false; c.bg?.openManage() ?: run { c.message = "배경 레이어는 이 빌드에 없어요" } }
             MenuAction.OPEN_ANTENNA -> { c.drawerOpen = false; c.antennaSheetOpen = true }
             MenuAction.OPEN_TOOL_POINTS -> { c.drawerOpen = false; c.hub.open(ToolScreen.POINTS) }
             MenuAction.OPEN_TOOL_GOTO -> { c.drawerOpen = false; c.hub.open(ToolScreen.GOTO) }
@@ -432,8 +427,6 @@ private fun runMenu(c: SurveyController, item: MenuItem) {
             MenuAction.OPEN_BACKUP -> { c.drawerOpen = false; c.backup?.openScreen() ?: run { c.message = "백업은 이 빌드에 없어요" } }
             MenuAction.OPEN_EXPORT -> { c.drawerOpen = false; c.exporter?.openScreen() ?: run { c.message = "내보내기는 이 빌드에 없어요" } }
             MenuAction.OPEN_CONNECTION -> { c.drawerOpen = false; c.connection?.openScreen() ?: run { c.message = "연결 화면은 이 빌드에 없어요" } }
-            MenuAction.NOT_YET -> { c.drawerOpen = false; c.message = "‘${item.label}’은 다음 라운드에 연결돼요" }
-            MenuAction.TOGGLE_POLE_SIDE -> c.poleOnRight = !c.poleOnRight
         }
 }
 
@@ -446,7 +439,8 @@ private fun menuGlyph(id: String): Glyph? = when (id) {
     "job_export" -> Glyph.SHARE
     "job_info" -> Glyph.INFO
     "job_backup" -> Glyph.LAYERS
-    "home" -> Glyph.HOME
+    "bg" -> Glyph.LAYERS
+    "settings" -> Glyph.INFO
     "areas" -> Glyph.LAYERS
     "types" -> Glyph.LIST
     "survey" -> Glyph.PIN
@@ -459,7 +453,7 @@ private fun menuGlyph(id: String): Glyph? = when (id) {
 @Composable
 private fun DrawerRow(c: SurveyController, item: MenuItem) {
     val t = T
-    val selected = item.action == MenuAction.GO_SURVEY && !c.homeOpen || item.action == MenuAction.GO_HOME && c.homeOpen
+    val selected = item.action == MenuAction.GO_SURVEY && c.hub.screen == null
     val shape = RoundedCornerShape(14.dp)
     Row(
         Modifier.fillMaxWidth().height(SurveyDims.MIN_TOUCH_DP.dp).clip(shape)

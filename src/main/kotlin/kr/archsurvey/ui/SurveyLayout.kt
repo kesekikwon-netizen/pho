@@ -17,7 +17,7 @@ object SurveyDims {
     const val CTRL_PAD_BOTTOM_DP = 12
     const val TYPE_ROW_DP = 44
     const val SECONDARY_ROW_DP = 52
-    const val CONTROL_AREA_DP = CTRL_PAD_TOP_DP + TYPE_ROW_DP + 6 + MEASURE_BUTTON_DP + CTRL_GAP_DP + SECONDARY_ROW_DP + CTRL_PAD_BOTTOM_DP
+    const val CONTROL_AREA_DP = CTRL_PAD_TOP_DP + MEASURE_BUTTON_DP + CTRL_PAD_BOTTOM_DP
     /** 측점 결과 패널(목업 s6b): 컨트롤 영역 자리를 대신한다 */
     const val RESULT_PANEL_DP = 234
     const val MIN_MAP_FRACTION = 0.60

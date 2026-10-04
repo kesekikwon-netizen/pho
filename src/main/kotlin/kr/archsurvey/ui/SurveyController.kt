@@ -213,8 +213,6 @@ class SurveyController(
     /** 다음 측점에 붙일 비고(한 번 쓰면 비움) */
     var pendingMemo by mutableStateOf("")
     var quickSheetOpen by mutableStateOf(false)
-    /** 앱을 처음 열었을 때 보이는 홈 화면 (목업 s2). 시험은 기본 false 로 지도부터 본다. */
-    var homeOpen by mutableStateOf(false)
     var voiceSeconds by mutableIntStateOf(0)
     var dpPerM by mutableStateOf(12.0)
     var follow by mutableStateOf(true)
@@ -565,6 +563,17 @@ class SurveyController(
     fun zoomIn() { dpPerM = (dpPerM * 1.5).coerceAtMost(80.0) }
     fun zoomOut() { dpPerM = (dpPerM / 1.5).coerceAtLeast(2.0) }
     fun recenter() { follow = true }
+
+    /** 전체 보기: 저장한 점이 모두 보이도록 가운데와 배율을 맞춘다(점이 없으면 현재 위치로) */
+    fun fitAll() {
+        val ps = points.map { projection.toLocal(it.lat, it.lon) }
+        if (ps.isEmpty()) { recenter(); return }
+        val w = ps.maxOf { it.x } - ps.minOf { it.x }; val h = ps.maxOf { it.y } - ps.minOf { it.y }
+        follow = false
+        panCenter = LocalXY((ps.maxOf { it.x } + ps.minOf { it.x }) / 2, (ps.maxOf { it.y } + ps.minOf { it.y }) / 2)
+        val span = maxOf(w, h, 5.0)
+        dpPerM = (260.0 / span).coerceIn(0.5, 80.0)
+    }
     fun panBy(dxM: Double, dyM: Double, currentCenter: LocalXY) { follow = false; panCenter = LocalXY(currentCenter.x + dxM, currentCenter.y + dyM) }
 
     fun mapState(): MapViewState {

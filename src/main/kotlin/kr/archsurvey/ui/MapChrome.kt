@@ -99,14 +99,6 @@ internal fun StatusBand(c: SurveyController, modifier: Modifier = Modifier) {
 }
 
 @Composable
-internal fun TabsRow(c: SurveyController) {
-    Row(Modifier.fillMaxWidth().height(40.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        MBtn(Modifier.weight(1.3f).fillMaxHeight().testTag("tab_survey"), MKind.SELECTED, 20.dp, onClick = {}) { Text("측량+지도", style = Ty.label, color = T.ink) }
-        MBtn(Modifier.weight(1f).fillMaxHeight().testTag("tab_points"), MKind.PLAIN, 20.dp, onClick = { c.hub.open(ToolScreen.POINTS) }) { Text("점 목록", style = Ty.label, color = T.ink) }
-    }
-}
-
-@Composable
 internal fun CoordBox(c: SurveyController, modifier: Modifier = Modifier) {
     val t = T
     val lat = c.gv.lat; val lon = c.gv.lon
@@ -132,6 +124,7 @@ internal fun ToolBtn(g: Glyph, desc: String, tag: String, kind: MKind = MKind.PL
     MBtn(Modifier.size(48.dp).testTag(tag), kind, 16.dp, onClick = onClick) { GlyphIcon(g, if (kind == MKind.PRIMARY) T.ink else T.accent, 22.dp) }
 }
 
+/** 하단 측점 영역(SmartTopo 구조): 위치 종류 버튼 하나 + 큰 측점 버튼. 나머지 도구는 더보기·서랍으로 접었다. */
 @Composable
 internal fun ControlArea(c: SurveyController) {
     val t = T
@@ -139,32 +132,25 @@ internal fun ControlArea(c: SurveyController) {
     val blocked = c.gv.status.status == SurveyStatus.UNAVAILABLE
     val notConn = c.gv.status.reason == StatusReason.NOT_CONNECTED
     val shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
-    Column(
+    val sel = c.typeIndex.coerceIn(0, (c.types.size - 1).coerceAtLeast(0))
+    Row(
         Modifier.fillMaxWidth().height(SurveyDims.CONTROL_AREA_DP.dp).shadow(6.dp, shape).clip(shape).glossy(t.card, strength = 0.30f)
             .border(1.5.dp, t.outline.copy(alpha = 0.9f), shape).padding(start = 12.dp, end = 12.dp, top = SurveyDims.CTRL_PAD_TOP_DP.dp, bottom = SurveyDims.CTRL_PAD_BOTTOM_DP.dp)
             .testTag("control_area"),
+        horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
     ) {
-        // 위치 종류 알약 두 개 + 더보기
-        val sel = c.typeIndex.coerceIn(0, (c.types.size - 1).coerceAtLeast(0))
-        val base = listOf(0, 1).filter { it < c.types.size }
-        val shown = if (sel in base || base.isEmpty()) base else listOf(base.first(), sel)
-        Row(Modifier.fillMaxWidth().height(44.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            shown.forEachIndexed { k, i ->
-                val on = i == sel
-                MBtn(Modifier.weight(if (k == 0) 1.45f else 1.5f).fillMaxHeight().testTag(if (on) "type_chip" else "type_chip_$i"), if (on) MKind.SELECTED else MKind.PLAIN, 16.dp, onClick = { c.typeIndex = i }) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        if (on) GlyphIcon(Glyph.CHECK, t.accentText, 14.dp)
-                        Text(c.types[i], style = Ty.label, color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
+        val typeBtn: @Composable RowScope.() -> Unit = {
+            MBtn(Modifier.weight(1f).fillMaxHeight().testTag("type_chip"), MKind.SELECTED, 18.dp, onClick = { c.quickSheetOpen = true }) {
+                Text("위치 종류", style = Ty.small.copy(fontSize = 11.sp), color = t.inkSub)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(c.types.getOrElse(sel) { "—" }, style = Ty.label.copy(fontSize = 16.sp), color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).padding(start = 8.dp))
+                    GlyphIcon(Glyph.CHEVRON_UP, t.accent, 16.dp)
                 }
             }
-            MBtn(Modifier.weight(0.8f).fillMaxHeight().testTag("type_more"), MKind.PLAIN, 16.dp, onClick = { c.quickSheetOpen = true }) { Text("더보기", style = Ty.label, color = t.ink, maxLines = 1) }
         }
-        Spacer(Modifier.height(6.dp))
-        // 측점 72dp + 사진
         val measure: @Composable RowScope.() -> Unit = {
             MBtn(
-                Modifier.weight(1f, fill = false).widthIn(max = 224.dp).fillMaxWidth().height(SurveyDims.MEASURE_BUTTON_DP.dp).testTag("measure_button"),
+                Modifier.weight(1.2f).fillMaxHeight().testTag("measure_button"),
                 MKind.PRIMARY, 22.dp, alpha = if (busy || blocked) 0.5f else 1f, onLongClick = { if (!busy) c.setupOpen = true }, onClick = { c.onMeasure() },
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -181,55 +167,7 @@ internal fun ControlArea(c: SurveyController) {
                 }
             }
         }
-        val photo: @Composable RowScope.() -> Unit = {
-            MBtn(Modifier.width(52.dp).height(72.dp).testTag("photo_button"), MKind.SELECTED, 18.dp, alpha = if (c.lastPoint == null) 0.5f else 1f, onClick = { c.addPhotoCamera() }) {
-                GlyphIcon(Glyph.CAMERA, t.accentText, 22.dp); Spacer(Modifier.height(3.dp)); Text("사진", style = Ty.label, color = t.ink)
-            }
-        }
-        Row(Modifier.fillMaxWidth().height(72.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (c.poleOnRight) { measure(); photo() } else { photo(); measure() }
-        }
-        Spacer(Modifier.height(8.dp))
-        val small: @Composable (Glyph, String, String, Float, () -> Unit) -> Unit = { g, label, tag, a, f ->
-            MBtn(Modifier.width(90.dp).height(52.dp).testTag(tag), MKind.PLAIN, 16.dp, alpha = a, onClick = f) {
-                GlyphIcon(g, t.accent, 20.dp); Spacer(Modifier.height(2.dp)); Text(label, style = Ty.label, color = t.ink, maxLines = 1)
-            }
-        }
-        val voice = @Composable { small(Glyph.MIC, "음성", "voice_button", if (c.lastPoint == null) 0.5f else 1f) { c.toggleVoice() } }
-        val link = @Composable { small(Glyph.BT, "수신기", "receiver_button", 1f) { c.connection?.openScreen() ?: run { c.message = "연결 화면을 열 수 없어요" } } }
-        val undo = @Composable { small(Glyph.UNDO, "되돌리기", "undo_button", if (c.points.isEmpty() && !busy) 0.45f else 1f) { c.undo() } }
-        Row(Modifier.fillMaxWidth().height(52.dp), horizontalArrangement = if (c.poleOnRight) Arrangement.spacedBy(6.dp) else Arrangement.spacedBy(6.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
-            if (c.poleOnRight) { voice(); link(); undo() } else { undo(); link(); voice() }
-        }
-    }
-}
-
-/** 오른쪽(또는 왼쪽) 56dp 표시 전용 띠. 터치 요소 0. */
-@Composable
-internal fun PoleStrip(c: SurveyController, batteryPct: Int?) {
-    val t = T
-    val st = c.gv.status.status
-    val (bg, fg) = statusColors(t, st)
-    Column(
-        Modifier.width(SurveyDims.POLE_STRIP_DP.dp).fillMaxHeight().background(bg).drawBehind {
-            drawRect(Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.28f), Color.Transparent), endX = size.width * 0.34f), size = Size(size.width * 0.34f, size.height))
-        }.padding(top = 14.dp, bottom = 22.dp).testTag("pole_strip"),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        StatusIcon(st, fg, 26.dp)
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Column(
-                Modifier.testTag("pole_label").clearAndSetSemantics { text = AnnotatedString(st.labelKo) },
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) { st.labelKo.forEach { ch -> Text(ch.toString(), style = Ty.label.copy(fontSize = 19.sp, lineHeight = 26.sp), color = fg) } }
-        }
-        GlyphIcon(Glyph.SAT, fg, 16.dp)
-        Text("${c.gv.satellites}", style = MonoLight.copy(fontSize = 14.sp, fontWeight = FontWeight.Normal), color = fg, modifier = Modifier.testTag("pole_sats"))
-        Spacer(Modifier.height(10.dp))
-        GlyphIcon(Glyph.BATT, fg, 16.dp)
-        Text(batteryPct?.let { "$it%" } ?: "—", style = MonoLight.copy(fontSize = 12.sp, fontWeight = FontWeight.Normal), color = fg)
-        Spacer(Modifier.height(10.dp))
-        Column(horizontalAlignment = Alignment.CenterHorizontally) { "표시전용".forEach { ch -> Text(ch.toString(), style = Ty.small.copy(fontSize = 12.sp, lineHeight = 14.sp), color = fg) } }
+        if (c.poleOnRight) { typeBtn(); measure() } else { measure(); typeBtn() }
     }
 }
 
@@ -257,6 +195,10 @@ internal fun QuickSheet(c: SurveyController) {
                 }
             }
             val rows = listOf(
+                Triple<String, String, () -> Unit>("되돌리기", "quick_undo", { c.undo() }),
+                Triple<String, String, () -> Unit>("수신기 연결", "quick_receiver", { c.connection?.openScreen() ?: run { c.message = "연결 화면을 열 수 없어요" } }),
+                Triple<String, String, () -> Unit>("사진 (마지막 점)", "quick_photo", { c.addPhotoCamera() }),
+                Triple<String, String, () -> Unit>(if (c.voiceSeconds > 0) "음성 녹음 끝내기" else "음성 (마지막 점)", "quick_voice", { c.toggleVoice() }),
                 Triple<String, String, () -> Unit>("점 목록", "quick_points", { c.hub.open(ToolScreen.POINTS) }),
                 Triple<String, String, () -> Unit>("점 찾아가기", "quick_goto", { c.hub.open(ToolScreen.GOTO) }),
                 Triple<String, String, () -> Unit>("계산기", "quick_calc", { c.hub.open(ToolScreen.CALC) }),
