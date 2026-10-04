@@ -72,7 +72,7 @@ class BackgroundControllerTests {
         assertFalse("좌표 없는 파일은 좌표계 지정이 의미 없음", b.canPickCrs); assertTrue(b.canManual)
         b.importPending()                     // 정합 안 된 것은 불러올 수 없다
         assertTrue(b.uploads.isEmpty()); assertTrue(b.mapLayers().isEmpty())
-        b.cancelUpload(); assertNull(b.pending); assertEquals(BgScreen.NONE, b.screen)
+        b.cancelUpload(); assertNull(b.pending); assertEquals(BgScreen.MANAGE, b.screen)
     }
 
     @Test fun wrongPlace100kmIsMismatchAndOffersCrsAndManual() {

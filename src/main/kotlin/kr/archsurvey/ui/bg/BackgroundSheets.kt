@@ -3,7 +3,9 @@ package kr.archsurvey.ui.bg
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -18,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -54,7 +58,7 @@ private fun SheetFrame(tag: String, scrim: Boolean, onDismiss: () -> Unit, fixed
         if (scrim) Box(Modifier.fillMaxSize().background(t.scrim.copy(alpha = 0.2f)).clickable(onClick = onDismiss).testTag("${tag}_scrim"))
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = maxHeight * SHEET_MAX_FRACTION)
-                .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)).background(t.bg).clickable(enabled = false) {}.testTag(tag),
+                .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)).background(t.bg).pointerInput(Unit) { detectTapGestures { } }.testTag(tag),
         ) {
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = if (fixedBottom == null) 14.dp else 4.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
@@ -87,6 +91,21 @@ private fun HeaderRow(title: String, tag: String, right: @Composable RowScope.()
     Row(Modifier.fillMaxWidth().heightIn(min = SurveyDims.MIN_TOUCH_DP.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, style = Ty.title, color = t.ink, modifier = Modifier.weight(1f).testTag("${tag}_title"))
         right()
+    }
+}
+
+/** 켬/끔 스위치. 누르는 칸은 가로 64 x 세로 48dp 이상. */
+@Composable
+private fun Toggle(checked: Boolean, tag: String, onChange: (Boolean) -> Unit) {
+    val t = T
+    Box(
+        Modifier.size(width = 64.dp, height = SurveyDims.MIN_TOUCH_DP.dp).toggleable(value = checked, role = Role.Switch, onValueChange = onChange).testTag(tag),
+        contentAlignment = Alignment.Center,
+    ) {
+        Switch(
+            checked = checked, onCheckedChange = null,
+            colors = SwitchDefaults.colors(checkedTrackColor = t.primary, checkedThumbColor = t.bg, uncheckedTrackColor = t.card, uncheckedThumbColor = t.outline, uncheckedBorderColor = t.outline),
+        )
     }
 }
 
@@ -141,12 +160,9 @@ private fun LayerSliderRow(bg: BackgroundController, r: LayerRow) {
                 Text(r.name, style = Ty.label.copy(fontSize = 15.sp), color = t.ink)
                 r.badge?.let { Text(it, style = Ty.small.copy(fontSize = 11.sp), color = t.inkSub, modifier = Modifier.testTag("badge_${r.id}")) }
             }
-            Text("${(r.opacity * 100).toInt()}%", style = Ty.coord, color = t.ink, textAlign = TextAlign.End, modifier = Modifier.width(48.dp).testTag("pct_${r.id}"))
+            Text("${Math.round(r.opacity * 100).toInt()}%", style = Ty.coord, color = t.ink, textAlign = TextAlign.End, modifier = Modifier.width(48.dp).testTag("pct_${r.id}"))
             Spacer(Modifier.width(8.dp))
-            Switch(
-                checked = r.enabled, onCheckedChange = { bg.setEnabled(r.id, it) }, modifier = Modifier.testTag("toggle_${r.id}"),
-                colors = SwitchDefaults.colors(checkedTrackColor = t.primary, checkedThumbColor = t.bg, uncheckedTrackColor = t.card, uncheckedThumbColor = t.outline, uncheckedBorderColor = t.outline),
-            )
+            Toggle(r.enabled, "toggle_${r.id}") { bg.setEnabled(r.id, it) }
         }
         Slider(
             value = r.opacity.toFloat(), onValueChange = { bg.setOpacity(r.id, it.toDouble()) }, valueRange = 0f..1f, enabled = r.enabled,
@@ -187,10 +203,7 @@ private fun ManageSheet(bg: BackgroundController) {
                         contentAlignment = Alignment.Center,
                     ) { Text(if (armed) "정말 지울까요?" else "삭제", style = Ty.label, color = t.bad) }
                 }
-                Switch(
-                    checked = r.enabled, onCheckedChange = { bg.setEnabled(r.id, it) }, modifier = Modifier.testTag("manage_toggle_${r.id}"),
-                    colors = SwitchDefaults.colors(checkedTrackColor = t.primary, checkedThumbColor = t.bg, uncheckedTrackColor = t.card, uncheckedThumbColor = t.outline, uncheckedBorderColor = t.outline),
-                )
+                Toggle(r.enabled, "manage_toggle_${r.id}") { bg.setEnabled(r.id, it) }
                 Spacer(Modifier.width(8.dp))
             }
         }

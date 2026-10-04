@@ -113,7 +113,7 @@ class BackgroundController(
     /** 수동 정렬은 래스터(화소 위치로 기준점을 짝짓는 방식)만 연결했다. DXF 수동 정렬은 다음 라운드 */
     val canManual: Boolean get() = pending?.sample?.kind == BgKind.GEOTIFF
 
-    fun cancelUpload() { pending = null; manual = ManualState(); screen = if (layers.any { it.kind == LayerKind.UPLOAD }) BgScreen.MANAGE else BgScreen.NONE }
+    fun cancelUpload() { pending = null; manual = ManualState(); screen = BgScreen.MANAGE }
 
     /** s34c [불러오기] — 정합된 파일만 레이어가 된다 */
     fun importPending() {
@@ -206,7 +206,7 @@ class BackgroundController(
     fun mapCaption(): String? {
         val on = layers.filter { it.enabled && (it.bg?.shouldDraw ?: false) }
         if (on.isEmpty()) return null
-        return on.mapIndexed { i, r -> (if (on.size > 1) "업로드${i + 1}" else "업로드") + " ${(r.opacity * 100).toInt()}%" }.joinToString(" + ")
+        return on.mapIndexed { i, r -> (if (on.size > 1) "업로드${i + 1}" else "업로드") + " ${Math.round(r.opacity * 100).toInt()}%" }.joinToString(" + ")
     }
 }
 
