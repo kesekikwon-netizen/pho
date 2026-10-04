@@ -41,6 +41,8 @@ object DrawerMenu {
         MenuSection("AI · 점검", listOf(
             MenuItem("ai", "AI 어시스턴트", MenuAction.NOT_YET, enabled = false, note = "준비 중"),
             MenuItem("diag", "진단", MenuAction.NOT_YET, enabled = false, note = "준비 중"),
+            // 설정의 "AI 연동" 스위치 자리 — 꺼짐 고정, 전송 코드 없음 (ai/StatusSnapshot.kt AiLinkSetting)
+            MenuItem("ai_toggle", "AI 연동", MenuAction.NOT_YET, enabled = false, note = "꺼짐 · 준비 중"),
         )),
         MenuSection("개발용 · 가짜 GNSS", listOf(
             MenuItem("dev_skip", "가짜 신호: 다음 구간으로", MenuAction.DEV_SKIP_SEGMENT),
