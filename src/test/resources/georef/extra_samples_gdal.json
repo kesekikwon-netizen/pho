@@ -1,0 +1,107 @@
+{
+ "rot5deg_5186.tif": {
+  "epsg": 5186,
+  "affine": [
+   0.4980973490458728,
+   0.04357787137382908,
+   200000.0,
+   0.04357787137382908,
+   -0.4980973490458728,
+   500000.0
+  ],
+  "area_or_point": "Area",
+  "width": 32,
+  "height": 32,
+  "crs_wkt_is_local": false
+ },
+ "pixelpoint_5186.tif": {
+  "epsg": 5186,
+  "affine": [
+   0.25,
+   0.0,
+   200000.0,
+   0.0,
+   -0.25,
+   500000.0
+  ],
+  "area_or_point": "Point",
+  "width": 32,
+  "height": 32,
+  "crs_wkt_is_local": false
+ },
+ "userdef_tm127p25.tif": {
+  "epsg": null,
+  "affine": [
+   0.5,
+   0.0,
+   200000.0,
+   0.0,
+   -0.5,
+   500000.0
+  ],
+  "area_or_point": "Area",
+  "width": 32,
+  "height": 32,
+  "crs_wkt_is_local": true
+ },
+ "geographic_4326.tif": {
+  "epsg": 4326,
+  "affine": [
+   1e-05,
+   0.0,
+   127.0,
+   0.0,
+   -1e-05,
+   37.5
+  ],
+  "area_or_point": "Area",
+  "width": 32,
+  "height": 32,
+  "crs_wkt_is_local": false
+ },
+ "central_5181_old.tif": {
+  "epsg": 5181,
+  "affine": [
+   0.5,
+   0.0,
+   200000.0,
+   0.0,
+   -0.5,
+   500000.0
+  ],
+  "area_or_point": "Area",
+  "width": 32,
+  "height": 32,
+  "crs_wkt_is_local": false
+ },
+ "utm52n_inside_korea.tif": {
+  "epsg": 32652,
+  "affine": [
+   1.0,
+   0.0,
+   500000.0,
+   0.0,
+   -1.0,
+   4000000.0
+  ],
+  "area_or_point": "Area",
+  "width": 32,
+  "height": 32,
+  "crs_wkt_is_local": false
+ },
+ "far_west_5186.tif": {
+  "epsg": 5186,
+  "affine": [
+   1.0,
+   0.0,
+   -3000000.0,
+   0.0,
+   -1.0,
+   500000.0
+  ],
+  "area_or_point": "Area",
+  "width": 32,
+  "height": 32,
+  "crs_wkt_is_local": false
+ }
+}

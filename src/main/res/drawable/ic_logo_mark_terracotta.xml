@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 자동 생성: tools/icon/gen_icon_resources.py (원본 design-system/mockups/v2/icon/final) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp" android:height="96dp"
+    android:viewportWidth="600" android:viewportHeight="600">
+    <group android:translateX="-212" android:translateY="-212">
+        <path
+            android:pathData="M257.3,643.0L254.7,643.8L253.1,645.1L251.5,647.3L251.0,649.3L251.1,651.4L252.2,653.9L253.6,655.4L256.0,656.7L258.0,657.0L303.3,657.0L304.1,663.2L305.8,670.5L307.5,675.9L310.4,682.9L313.0,688.0L317.0,694.3L321.7,700.3L325.6,704.4L329.7,708.3L335.7,713.0L342.0,717.0L347.1,719.6L354.1,722.5L359.5,724.2L366.8,725.9L373.0,726.7L373.0,772.7L373.8,775.3L375.1,776.9L377.3,778.5L380.0,779.0L382.7,778.5L384.9,776.9L386.2,775.3L387.0,772.7L387.0,726.7L393.2,725.9L400.5,724.2L405.9,722.5L412.9,719.6L419.6,716.0L424.3,713.0L428.8,709.5L434.4,704.4L439.5,698.8L443.0,694.3L446.0,689.6L449.6,682.9L452.5,675.9L454.2,670.5L455.9,663.2L456.7,657.0L502.7,657.0L505.3,656.2L506.9,654.9L508.5,652.7L509.0,650.0L508.5,647.3L507.4,645.6L505.9,644.2L503.4,643.1L476.8,643.0L464.1,647.3L448.9,651.6L425.2,657.0L442.6,657.0L441.5,663.8L439.8,669.8L437.6,675.5L434.8,681.1L431.5,686.3L427.7,691.1L423.4,695.6L418.8,699.7L413.7,703.2L408.3,706.3L401.2,709.3L395.3,711.1L387.0,712.6L387.0,663.2L379.1,664.0L376.5,663.5L373.0,662.1L373.0,712.6L363.2,710.7L353.1,707.0L343.7,701.5L335.5,694.5L328.5,686.3L323.0,676.9L319.3,666.8L317.4,657.0L367.9,657.0L366.5,653.5L366.0,650.9L366.8,643.0L317.4,643.0L318.9,634.7L320.7,628.8L323.0,623.1L326.0,617.6L329.4,612.5L333.3,607.7L337.7,603.3L343.7,598.5L348.9,595.2L354.5,592.4L360.2,590.2L366.2,588.5L373.0,587.4L373.0,604.8L378.4,581.1L382.7,565.9L387.0,553.2L386.9,526.6L385.8,524.1L384.4,522.6L382.0,521.3L380.0,521.0L377.3,521.5L375.1,523.1L373.8,524.7L373.0,527.3L373.0,573.3L366.8,574.1L359.5,575.8L354.1,577.5L347.1,580.4L340.4,584.0L335.7,587.0L331.2,590.5L325.6,595.6L321.7,599.7L317.0,605.7L314.0,610.4L310.4,617.1L308.2,622.3L305.8,629.5L304.1,636.8L303.3,643.0Z"
+            android:fillColor="#C6613F" />
+        <group android:translateX="380.0" android:translateY="650.0" android:pivotX="0" android:pivotY="0" android:rotation="45">
+        <path
+            android:pathData="M0,0C34,-44 72,-100 72,-168Q72,-198 46,-200H-46Q-72,-198 -72,-168C-72,-100 -34,-44 0,0Z"
+            android:strokeColor="#C6613F"
+            android:strokeWidth="14"
+            android:strokeLineCap="round" android:strokeLineJoin="round" />
+        <path
+            android:pathData="M-14,-200V-254M14,-200V-254"
+            android:strokeColor="#C6613F"
+            android:strokeWidth="14"
+            android:strokeLineCap="round" android:strokeLineJoin="round" />
+        <path
+            android:pathData="M-26,-254H26V-436Q26,-462 0,-462Q-26,-462 -26,-436Z"
+            android:strokeColor="#C6613F"
+            android:strokeWidth="14"
+            android:strokeLineCap="round" android:strokeLineJoin="round" />
+        </group>
+    </group>
+</vector>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 자동 생성: tools/icon/gen_icon_resources.py (원본 design-system/mockups/v2/icon/final) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="1024" android:viewportHeight="1024">
+    <path android:pathData="M0,0H1024V1024H0Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="0" android:startY="0" android:endX="0" android:endY="1024">
+                <item android:offset="0" android:color="#FFFDFCF9" />
+                <item android:offset="1" android:color="#FFEFEDE4" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:pathData="M0,0V1024M0,0H1024M128,0V1024M0,128H1024M256,0V1024M0,256H1024M384,0V1024M0,384H1024M512,0V1024M0,512H1024M640,0V1024M0,640H1024M768,0V1024M0,768H1024M896,0V1024M0,896H1024M1024,0V1024M0,1024H1024"
+        android:strokeColor="#E8E6DC"
+        android:strokeWidth="3"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:strokeAlpha="0.7" />
+    <path android:pathData="M-220,140a620,420 0 1,0 1240,0a620,420 0 1,0 -1240,0Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="0" android:startY="-280" android:endX="0" android:endY="560">
+                <item android:offset="0" android:color="#8CFFFFFF" />
+                <item android:offset="1" android:color="#00FFFFFF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>
