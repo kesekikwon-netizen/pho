@@ -44,7 +44,7 @@ private fun f3(x: Double) = String.format(java.util.Locale.US, "%.3f", x)
 /** 측량 + 지도 상시 화면. 상태 띠 / 지도 / 정보 / 컨트롤 네 영역이 겹치지 않는다. */
 @Composable
 fun SurveyMapScreen(
-    c: SurveyController, batteryPct: Int?, map: MapSurface = remember { CanvasMapSurface() },
+    c: SurveyController, batteryPct: Int?, map: MapSurface = rememberMapSurface(c),
     bg: BackgroundController = rememberBackgroundController(c),
 ) {
     val t = T
@@ -501,4 +501,13 @@ private fun StepBtn(label: String, tag: String, onClick: () -> Unit) {
 fun rememberBackgroundController(c: SurveyController): BackgroundController {
     val dir = java.io.File(androidx.compose.ui.platform.LocalContext.current.cacheDir, "fake_uploads")
     return remember(c) { BackgroundController(c.projection, dir) }
+}
+
+/** 기본은 자체 Canvas 지도. `-PwithMapLibre` 로 빌드해 클래스가 있을 때만 MapLibre 지도를 쓴다(실기기 확인 전이라 기본값 아님). */
+@Composable
+fun rememberMapSurface(c: SurveyController): MapSurface = remember(c) {
+    if (kr.archsurvey.BuildConfig.USE_MAPLIBRE) {
+        runCatching { Class.forName("kr.archsurvey.ui.MapLibreMapSurface").getConstructor(kr.archsurvey.map.LocalProjection::class.java).newInstance(c.projection) as MapSurface }
+            .getOrElse { CanvasMapSurface() }
+    } else CanvasMapSurface()
 }

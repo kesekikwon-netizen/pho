@@ -25,7 +25,7 @@ import kr.archsurvey.map.*
 import kotlin.math.floor
 
 /** 자체 Canvas 지도 (WP-3). 배경은 가짜 필지 격자 — 실제 지도가 아니다. */
-class CanvasMapSurface : MapSurface {
+class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
     @Composable
     override fun Draw(state: MapViewState, modifier: Modifier) {
         val t = T
@@ -38,8 +38,8 @@ class CanvasMapSurface : MapSurface {
             val cx = size.width / 2f; val cy = size.height / 2f
             fun sx(x: Double) = cx + ((x - state.center.x) * ppm).toFloat()
             fun sy(y: Double) = cy - ((y - state.center.y) * ppm).toFloat()
-            drawRect(if (dark) Color(0xFF26251F) else Color(0xFFF4F1E6), size = size)
-            for (p in FakeBackdrop.plots) {
+            if (showBackdrop) drawRect(if (dark) Color(0xFF26251F) else Color(0xFFF4F1E6), size = size)
+            for (p in if (showBackdrop) FakeBackdrop.plots else emptyList()) {
                 val tl = Offset(sx(p.x0), sy(p.y1)); val br = Offset(sx(p.x1), sy(p.y0))
                 drawRect((if (dark) toneDark else tone)[p.tone % 3], tl, Size(br.x - tl.x, br.y - tl.y))
                 drawRect(t.line, tl, Size(br.x - tl.x, br.y - tl.y), style = Stroke(1f * density))
