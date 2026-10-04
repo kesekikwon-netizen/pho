@@ -27,3 +27,9 @@
 - 지도 비율: 800dp 가정에서 대기 68.5%, 취득/결과/녹음 66.0%, 펼침 47.3%(의도된 예외). 최소 680dp 높이 필요. 실제 폰은 상태·내비 막대가 빠져 더 작아진다 [현장검증].
 - 기존: security-crypto alpha 의 API 21~22 동작 미확인, RFCOMM read()==-1 처리 점검, 안테나 PCO 상수는 문서 기준.
 - `AntennaMath` 일부 문구(legacy 용)가 남아 있음; R10↔SP60 "약 13cm" 문구는 기본 기준점 기준.
+
+## 라운드 2 (진행 기록)
+- 에뮬레이터 확인: 이 박스는 /dev/kvm 이 있으나 vCPU 생성 시 커널 BUG(kvm_spurious_fault) → KVM 불가. 소프트웨어 에뮬(-accel off)로 부팅해 확인(느림). 상세: build-reports/emulator/README.md
+- 에뮬레이터에서 발견·수정: 지도 Canvas 가 영역 밖(상태 띠)까지 칠함 → clipToBounds (커밋 d823bf8)
+- WP-6: Room 점 저장(positionType, 소프트삭제), 사진 4장 제한(트랜잭션), 되돌리기/다시실행, 번호 재사용 금지. 화면(SurveyController)과의 연결은 3-E 에서.
+- WP-7: DxfWriter(R2000/CP949/INSUNITS=6), ezdxf strict·audit 0·GDAL 판독 통과(tools/validate_dxf.py). 실제 CAD 열람 미실시.

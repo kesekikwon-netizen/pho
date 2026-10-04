@@ -45,8 +45,9 @@ class PhotoStore(private val ctx: Context, private val dao: SurveyDao) {
         if (dao.countPhotoPath(rel) > 0) return true
         val (w, h) = bounds(f)
         val thumb = makeThumb(rel)
-        dao.insertPhoto(PhotoEntity(pointRowId = pointRowId, relPath = rel, thumbRelPath = thumb, source = "CAMERA",
+        val id = dao.insertPhotoLimited(PhotoEntity(pointRowId = pointRowId, relPath = rel, thumbRelPath = thumb, source = "CAMERA",
             addedAtUtcMs = System.currentTimeMillis(), width = w, height = h))
+        if (id < 0) { f.delete(); thumbFile(rel).delete(); return false } // 4장 제한
         return true
     }
 
@@ -60,8 +61,9 @@ class PhotoStore(private val ctx: Context, private val dao: SurveyDao) {
                 if (!copyScaled(u, out)) { out.delete(); continue }
                 val (w, h) = bounds(out)
                 val thumb = makeThumb(rel)
-                dao.insertPhoto(PhotoEntity(pointRowId = pointRowId, relPath = rel, thumbRelPath = thumb, source = "GALLERY",
+                val id = dao.insertPhotoLimited(PhotoEntity(pointRowId = pointRowId, relPath = rel, thumbRelPath = thumb, source = "GALLERY",
                     addedAtUtcMs = System.currentTimeMillis(), width = w, height = h))
+                if (id < 0) { out.delete(); thumbFile(rel).delete(); break } // 4장 제한: 남은 사진은 받지 않음
                 ok++
             } catch (_: Exception) { }
         }
