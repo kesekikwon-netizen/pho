@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
@@ -61,10 +62,10 @@ fun ConnectionScreen(cc: ConnectionController) {
     val p = cc.profile
     Column(Modifier.fillMaxSize().background(t.bg).testTag("connection_screen")) {
         Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).clickable { cc.close() }.testTag("conn_back"), contentAlignment = Alignment.Center) { Text("‹", fontSize = 28.sp, color = t.ink) }
-            Text("수신기 연결 · VRS", style = Ty.title, color = t.ink, modifier = Modifier.padding(start = 4.dp))
+            MBtn(Modifier.size(48.dp).testTag("conn_back"), MKind.PLAIN, 20.dp, onClick = { cc.close() }) { Box(Modifier.rotate(-90f)) { GlyphIcon(Glyph.CHEVRON_UP, t.accent, 20.dp) } }
+            Text("수신기 연결 · VRS", style = Ty.title.copy(fontSize = 21.sp), color = t.ink, modifier = Modifier.padding(start = 8.dp))
         }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             run {
                 // 2. 수신기 모델
                 Card {
@@ -81,7 +82,23 @@ fun ConnectionScreen(cc: ConnectionController) {
                         Text("등록된 기기가 없어요. 먼저 폰의 블루투스 설정에서 수신기를 등록하세요.", style = Ty.small, color = t.inkSub)
                         for ((i, s) in p.pairingSteps.withIndex()) Text("${i + 1}. $s", style = Ty.small, color = t.inkSub)
                     }
-                    for ((name, addr) in cc.bonded) Choice("$name  ($addr)", addr == cc.address, Modifier.fillMaxWidth().testTag("conn_bonded_$addr")) { cc.selectAddress(addr) }
+                    for ((name, addr) in cc.bonded) {
+                        val on = addr == cc.address
+                        val live = on && (link.state == LinkState.STREAMING || link.state == LinkState.CONNECTED_NO_DATA)
+                        MBtn(Modifier.fillMaxWidth().heightIn(min = 76.dp).testTag("conn_bonded_$addr"), if (on) MKind.SELECTED else MKind.PLAIN, 20.dp, onClick = { cc.selectAddress(addr) }) {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(name, style = Ty.coord.copy(fontSize = 16.7.sp), color = t.ink, maxLines = 1)
+                                    Text(addr, style = Ty.small.copy(fontSize = 12.3.sp), color = t.inkSub, maxLines = 1)
+                                }
+                                if (live) Row(
+                                    Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).background(t.fixed.copy(alpha = 0.14f)).border(1.5.dp, t.fixed, RoundedCornerShape(16.dp)).padding(start = 7.dp, end = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                ) { GlyphIcon(Glyph.CHECK, t.fixed, 14.dp); Text("연결됨", style = Ty.label.copy(fontSize = 12.3.sp), color = t.ink) }
+                                else Text(if (on) "선택됨" else "선택", style = Ty.label.copy(fontSize = 13.2.sp), color = t.accentText)
+                            }
+                        }
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Btn("목록 새로고침", Modifier.weight(1f).testTag("conn_refresh")) { cc.refresh() }
                         Btn("블루투스 설정 열기", Modifier.weight(1f).testTag("conn_bt_settings")) { cc.openBluetoothSettings() }
