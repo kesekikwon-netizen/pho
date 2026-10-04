@@ -47,6 +47,17 @@ data class SavedPoint(
     val measuredAtMs: Long = 0L,
     val rowId: Long = 0L,
     val memo: String = "",
+    /** 3-D 좌표·표고: 안테나 위상중심(APC) 기준 값과 지오이드. 지면값은 APC 값 − 안테나 높이 */
+    val apcEllipsoidalM: Double? = null,
+    val apcMslM: Double? = null,
+    val geoidSepM: Double? = null,
+    val groundMslM: Double? = null,
+    val hdop: Double? = null,
+    val sigmaE: Double? = null,
+    val sigmaN: Double? = null,
+    val sigmaU: Double? = null,
+    val correctionAgeSec: Double? = null,
+    val baseStationId: String? = null,
 )
 
 /** 측점 저장소. Android 의존 없음(시험용 가짜 구현 가능). 되돌리기는 숨김(소프트 삭제)이라 번호를 다시 쓰지 않는다. */
@@ -67,11 +78,14 @@ class SurveyController(
     val antennaDb: Map<String, AntennaModel>,
     private val scope: CoroutineScope,
     val projection: LocalProjection = LocalProjection(36.5, 127.0),
-    private val zone: KoreanTmZone = KoreanTmZone.CENTRAL,
+    zone: KoreanTmZone = KoreanTmZone.CENTRAL,
     private val epochsPerPoint: Int = 5,
     private val store: PointStore? = null,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
+    /** 투영 원점(EPSG:5185~5188). 이미 저장한 점은 저장 당시 값을 유지한다 */
+    var zone by mutableStateOf(zone)
+
     val types = listOf("유구 경계점", "유물 출토 위치", "기준점", "레벨점", "기타")
 
     var gv by mutableStateOf(GnssView())
@@ -165,8 +179,11 @@ class SurveyController(
             if (p == null) { phase = Phase.IDLE; message = "위치를 얻지 못했어요"; return@launch }
             val tm = TmProjection.forward(p.lat, p.lon, zone)
             val ground = p.ellipsoidalHeight?.let { it - rec.apcHeightM }
+            val groundMsl = p.altitudeMsl?.let { it - rec.apcHeightM }
             val sp = SavedPoint(nameAtStart, typeAtStart, p.lat, p.lon, tm.northing, tm.easting, zone.epsg, ground, p.sigmaH,
-                worst, worst == SurveyStatus.CAUTION, p.epochs, rec, gv.quality.code, gv.satellites, clock())
+                worst, worst == SurveyStatus.CAUTION, p.epochs, rec, gv.quality.code, gv.satellites, clock(),
+                apcEllipsoidalM = p.ellipsoidalHeight, apcMslM = p.altitudeMsl, geoidSepM = p.geoidSeparation, groundMslM = groundMsl,
+                hdop = p.hdop, sigmaE = p.sigmaE, sigmaN = p.sigmaN, sigmaU = p.sigmaU, correctionAgeSec = p.correctionAgeSec, baseStationId = p.baseStationId)
             points.add(sp); seq++
             var saveError: String? = null
             store?.let { st ->

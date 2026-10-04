@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kr.archsurvey.data.AntennaDb
 import kr.archsurvey.device.*
+import kr.archsurvey.core.KoreanTmZone
 import kr.archsurvey.ui.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -49,5 +50,23 @@ class PointStoreWiringTest {
         val c = SurveyController(f, db, scope(), store = st)
         measure(c, f)
         assertTrue(c.message!!.contains("저장에 실패"))
+    }
+
+    @Test fun heightsAreConsistentAndStoredSeparately() {
+        val f = FakeGnssSource(FakeScenarios.allFixed()); val st = MemStore()
+        val c = SurveyController(f, db, scope(), store = st)
+        measure(c, f)
+        val p = st.saved.single(); val apc = p.antenna.apcHeightM
+        assertNotNull(p.apcEllipsoidalM); assertNotNull(p.apcMslM); assertNotNull(p.geoidSepM)
+        assertEquals(p.apcEllipsoidalM!! - apc, p.groundHeightM!!, 1e-9)       // 지면 타원체고 = APC 타원체고 − 안테나 높이
+        assertEquals(p.apcMslM!! - apc, p.groundMslM!!, 1e-9)                   // 지면 표고
+        assertEquals(p.apcEllipsoidalM!!, p.apcMslM!! + p.geoidSepM!!, 0.01)    // h = H + N (가짜 신호 기준, GGA 반올림 허용)
+    }
+    @Test fun zoneChoiceChangesCoordinatesAndEpsg() {
+        val f = FakeGnssSource(FakeScenarios.allFixed()); val st = MemStore()
+        val c = SurveyController(f, db, scope(), store = st)
+        measure(c, f); c.zone = KoreanTmZone.EAST; repeat(3) { f.emitNext() }; c.onMeasure(); repeat(8) { f.emitNext() }
+        assertEquals(listOf(5186, 5187), st.saved.map { it.crsEpsg })
+        assertTrue(Math.abs(st.saved[0].easting - st.saved[1].easting) > 100_000) // 원점이 2도(≈176km) 다름
     }
 }
