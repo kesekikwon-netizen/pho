@@ -325,68 +325,109 @@ fun DrawerOverlay(c: SurveyController) {
             c.drawerOpen,
             enter = slideInHorizontally { -it }, exit = slideOutHorizontally { -it },
         ) {
+            val dshape = RoundedCornerShape(topEnd = 26.dp, bottomEnd = 26.dp)
             Column(
-                Modifier.width(maxWidth * 0.8f).fillMaxHeight().background(t.bg).verticalScroll(rememberScrollState()).padding(bottom = 16.dp).testTag("drawer"),
+                Modifier.width(maxWidth * 0.8f).fillMaxHeight().clip(dshape).glossy(t.card).border(1.5.dp, t.outline, dshape)
+                    .verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 10.dp, top = 8.dp, bottom = 16.dp).testTag("drawer"),
             ) {
                 val st = c.gv.status
                 val (bg, fg) = statusColors(t, st.status)
-                Column(Modifier.padding(16.dp)) {
-                    // WP-11: 서랍 상단 로고 마크 (B안, 벡터)
+                Row(Modifier.height(34.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     androidx.compose.foundation.Image(
                         androidx.compose.ui.res.painterResource(kr.archsurvey.R.drawable.ic_logo_mark_terracotta),
-                        contentDescription = "발굴 측량 로고", modifier = Modifier.size(44.dp).testTag("drawer_logo"),
+                        contentDescription = "발굴 측량 로고", modifier = Modifier.size(30.dp).testTag("drawer_logo"),
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Text(c.projectName, style = Ty.title, color = t.ink)
-                    Text((if (c.antennaModelId == "TRIMBLE_R10") "Trimble R10" else "Spectra SP60") + if (st.reason == StatusReason.NOT_CONNECTED) " · 연결 안 됨" else "", style = Ty.body, color = t.inkSub, modifier = Modifier.testTag("drawer_device"))
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "${st.status.labelKo}${st.sigmaHM?.let { " ±${f3(it)} m" } ?: ""}", style = Ty.small, color = fg,
-                        modifier = Modifier.background(bg, RoundedCornerShape(12.dp)).padding(horizontal = 10.dp, vertical = 4.dp).testTag("drawer_status"),
-                    )
+                    Text("발굴 측량", style = Ty.small, color = t.accentText)
+                }
+                Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column {
+                        Text(c.projectName, style = Ty.title.copy(fontSize = 17.6.sp), color = t.ink, maxLines = 1)
+                        Text((if (c.antennaModelId == "TRIMBLE_R10") "Trimble R10" else "Spectra SP60") + if (st.reason == StatusReason.NOT_CONNECTED) " · 연결 안 됨" else "", style = Ty.small.copy(fontSize = 11.4.sp), color = t.inkSub, modifier = Modifier.testTag("drawer_device"))
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            "${st.status.labelKo}${st.sigmaHM?.let { " ±${f3(it)} m" } ?: ""}", style = Ty.small.copy(fontSize = 11.sp), color = fg, maxLines = 1,
+                            modifier = Modifier.background(bg, RoundedCornerShape(11.dp)).padding(horizontal = 9.dp, vertical = 3.dp).testTag("drawer_status"),
+                        )
+                    }
+                    MBtn(Modifier.size(48.dp).testTag("drawer_settings"), MKind.PLAIN, 16.dp, onClick = { c.drawerOpen = false; c.hub.open(ToolScreen.SETTINGS) }) { GearIcon(t.accent, 22.dp) }
                 }
                 for (sec in DrawerMenu.sections) {
-                    Text(sec.title, style = Ty.small, color = t.accentText, modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp))
-                    for (it in sec.items) DrawerRow(c, it)
+                    Text(sec.title, style = Ty.small.copy(fontSize = 11.sp), color = t.inkSub, modifier = Modifier.height(26.dp).padding(horizontal = 6.dp).wrapContentHeight(Alignment.Bottom))
+                    if (sec.title == "즐겨찾기") {
+                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) { for (it in sec.items) FavCard(c, it, Modifier.weight(1f)) }
+                    } else for (it in sec.items) DrawerRow(c, it)
                 }
                 Spacer(Modifier.height(16.dp))
-                Text(rememberAppVersionLabel(), style = Ty.small, color = t.inkSub, modifier = Modifier.padding(start = 16.dp).testTag("drawer_version"))
+                Text(rememberAppVersionLabel(), style = Ty.small, color = t.inkSub, modifier = Modifier.padding(start = 6.dp).testTag("drawer_version"))
             }
         }
     }
 }
 
+private fun runMenu(c: SurveyController, item: MenuItem) {
+    when (item.action) {
+            MenuAction.GO_SURVEY -> { c.drawerOpen = false; c.homeOpen = false }
+            MenuAction.GO_HOME -> { c.drawerOpen = false; c.homeOpen = true }
+            MenuAction.OPEN_ANTENNA -> { c.drawerOpen = false; c.antennaSheetOpen = true }
+            MenuAction.OPEN_TOOL_POINTS -> { c.drawerOpen = false; c.hub.open(ToolScreen.POINTS) }
+            MenuAction.OPEN_TOOL_GOTO -> { c.drawerOpen = false; c.hub.open(ToolScreen.GOTO) }
+            MenuAction.OPEN_TOOL_CALC -> { c.drawerOpen = false; c.hub.open(ToolScreen.CALC) }
+            MenuAction.OPEN_TOOL_SETTINGS -> { c.drawerOpen = false; c.hub.open(ToolScreen.SETTINGS) }
+            MenuAction.OPEN_JOB_NEW -> { c.drawerOpen = false; c.jobs?.openNew() ?: run { c.message = "작업 관리는 이 빌드에 없어요" } }
+            MenuAction.OPEN_JOB_LIST -> { c.drawerOpen = false; c.jobs?.openList() ?: run { c.message = "작업 관리는 이 빌드에 없어요" } }
+            MenuAction.OPEN_JOB_INFO -> { c.drawerOpen = false; c.jobs?.openInfo() ?: run { c.message = "작업 관리는 이 빌드에 없어요" } }
+            MenuAction.OPEN_BACKUP -> { c.drawerOpen = false; c.backup?.openScreen() ?: run { c.message = "백업은 이 빌드에 없어요" } }
+            MenuAction.OPEN_EXPORT -> { c.drawerOpen = false; c.exporter?.openScreen() ?: run { c.message = "내보내기는 이 빌드에 없어요" } }
+            MenuAction.OPEN_CONNECTION -> { c.drawerOpen = false; c.connection?.openScreen() ?: run { c.message = "연결 화면은 이 빌드에 없어요" } }
+            MenuAction.NOT_YET -> { c.drawerOpen = false; c.message = "‘${item.label}’은 다음 라운드에 연결돼요" }
+            MenuAction.TOGGLE_POLE_SIDE -> c.poleOnRight = !c.poleOnRight
+        }
+}
+
+private fun menuGlyph(id: String): Glyph? = when (id) {
+    "fav_points", "job_points" -> Glyph.LIST
+    "fav_goto", "goto" -> Glyph.LOCATE
+    "fav_calc", "calc" -> Glyph.CALC
+    "job_new" -> Glyph.PLUS
+    "job_open" -> Glyph.FOLDER
+    "job_export" -> Glyph.SHARE
+    "job_info" -> Glyph.INFO
+    "job_backup" -> Glyph.LAYERS
+    "home" -> Glyph.HOME
+    "survey" -> Glyph.PIN
+    "connection" -> Glyph.BT
+    "antenna" -> Glyph.RULER
+    "pole_side" -> Glyph.EXTENT
+    else -> null
+}
+
 @Composable
 private fun DrawerRow(c: SurveyController, item: MenuItem) {
     val t = T
-    val selected = item.action == MenuAction.GO_SURVEY
+    val selected = item.action == MenuAction.GO_SURVEY && !c.homeOpen || item.action == MenuAction.GO_HOME && c.homeOpen
+    val shape = RoundedCornerShape(14.dp)
     Row(
-        Modifier.fillMaxWidth().height(SurveyDims.MIN_TOUCH_DP.dp).padding(horizontal = 8.dp).clip(RoundedCornerShape(14.dp))
-            .background(if (selected) t.primary.copy(alpha = 0.16f) else Color.Transparent)
+        Modifier.fillMaxWidth().height(SurveyDims.MIN_TOUCH_DP.dp).clip(shape)
+            .background(if (selected) t.primaryCont else Color.Transparent)
+            .then(if (selected) Modifier.border(2.dp, t.accent, shape) else Modifier)
             .alpha(if (item.enabled) 1f else 0.5f)
-            .clickable(enabled = item.enabled) {
-                when (item.action) {
-                    MenuAction.GO_SURVEY -> { c.drawerOpen = false; c.homeOpen = false }
-                    MenuAction.GO_HOME -> { c.drawerOpen = false; c.homeOpen = true }
-                    MenuAction.OPEN_ANTENNA -> { c.drawerOpen = false; c.antennaSheetOpen = true }
-                    MenuAction.OPEN_TOOL_POINTS -> { c.drawerOpen = false; c.hub.open(ToolScreen.POINTS) }
-                    MenuAction.OPEN_TOOL_GOTO -> { c.drawerOpen = false; c.hub.open(ToolScreen.GOTO) }
-                    MenuAction.OPEN_TOOL_CALC -> { c.drawerOpen = false; c.hub.open(ToolScreen.CALC) }
-                    MenuAction.OPEN_TOOL_SETTINGS -> { c.drawerOpen = false; c.hub.open(ToolScreen.SETTINGS) }
-                    MenuAction.OPEN_JOB_NEW -> { c.drawerOpen = false; c.jobs?.openNew() ?: run { c.message = "작업 관리는 이 빌드에 없어요" } }
-                    MenuAction.OPEN_JOB_LIST -> { c.drawerOpen = false; c.jobs?.openList() ?: run { c.message = "작업 관리는 이 빌드에 없어요" } }
-                    MenuAction.OPEN_JOB_INFO -> { c.drawerOpen = false; c.jobs?.openInfo() ?: run { c.message = "작업 관리는 이 빌드에 없어요" } }
-                    MenuAction.OPEN_BACKUP -> { c.drawerOpen = false; c.backup?.openScreen() ?: run { c.message = "백업은 이 빌드에 없어요" } }
-                    MenuAction.OPEN_EXPORT -> { c.drawerOpen = false; c.exporter?.openScreen() ?: run { c.message = "내보내기는 이 빌드에 없어요" } }
-                    MenuAction.OPEN_CONNECTION -> { c.drawerOpen = false; c.connection?.openScreen() ?: run { c.message = "연결 화면은 이 빌드에 없어요" } }
-                    MenuAction.NOT_YET -> { c.drawerOpen = false; c.message = "‘${item.label}’은 다음 라운드에 연결돼요" }
-                    MenuAction.TOGGLE_POLE_SIDE -> c.poleOnRight = !c.poleOnRight
-                }
-            }.padding(horizontal = 10.dp).testTag("menu_${item.id}"),
-        verticalAlignment = Alignment.CenterVertically,
+            .clickable(enabled = item.enabled) { runMenu(c, item) }.padding(horizontal = 12.dp).testTag("menu_${item.id}"),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(item.label, style = Ty.body.copy(fontSize = 15.sp), color = t.ink, modifier = Modifier.weight(1f))
+        val g = menuGlyph(item.id)
+        if (g != null) GlyphIcon(g, t.accent, 20.dp) else Spacer(Modifier.width(20.dp))
+        Text(item.label, style = Ty.body.copy(fontSize = 15.sp, fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.Normal else androidx.compose.ui.text.font.FontWeight.Light), color = t.ink, modifier = Modifier.weight(1f))
         item.note?.let { Text(it, style = Ty.small, color = t.inkSub) }
+    }
+}
+
+/** 즐겨찾기 카드: 아이콘 위, 글자 아래 (목업 s17) */
+@Composable
+private fun FavCard(c: SurveyController, item: MenuItem, modifier: Modifier) {
+    val t = T
+    MBtn(modifier.height(48.dp).testTag("menu_${item.id}"), MKind.PLAIN, 14.dp, onClick = { runMenu(c, item) }) {
+        menuGlyph(item.id)?.let { GlyphIcon(it, t.accent, 18.dp) }
+        Text(item.label, style = Ty.small.copy(fontSize = 11.4.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = t.ink, maxLines = 1)
     }
 }
 

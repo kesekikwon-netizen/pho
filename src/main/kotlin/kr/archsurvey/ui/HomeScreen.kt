@@ -49,7 +49,7 @@ fun HomeScreen(c: SurveyController, batteryPct: Int?) {
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 StatusIcon(st.status, bg, 22.dp)
-                Text(if (notConn) "수신기 연결 안 됨" else c.gv.quality.labelKo + " · " + st.status.labelKo, style = Ty.label.copy(fontSize = 15.sp), color = t.ink, maxLines = 1, modifier = Modifier.weight(1f))
+                Text(if (notConn) "수신기 연결 안 됨" else c.gv.quality.labelKo, style = Ty.label.copy(fontSize = 15.sp), color = t.ink, maxLines = 1, modifier = Modifier.weight(1f))
                 if (!notConn) st.sigmaHM?.let { Text("±" + f3(it) + " m", style = Ty.coord.copy(fontSize = 17.6.sp), color = t.ink, maxLines = 1) }
             }
             Text(
