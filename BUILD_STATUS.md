@@ -33,3 +33,8 @@
 - 에뮬레이터에서 발견·수정: 지도 Canvas 가 영역 밖(상태 띠)까지 칠함 → clipToBounds (커밋 d823bf8)
 - WP-6: Room 점 저장(positionType, 소프트삭제), 사진 4장 제한(트랜잭션), 되돌리기/다시실행, 번호 재사용 금지. 화면(SurveyController)과의 연결은 3-E 에서.
 - WP-7: DxfWriter(R2000/CP949/INSUNITS=6), ezdxf strict·audit 0·GDAL 판독 통과(tools/validate_dxf.py). 실제 CAD 열람 미실시.
+- 3-E 일부: SurveyController ↔ PointStore(Room) 연결. 측점은 디스크에 저장, 되돌리기는 숨김(소프트 삭제), 번호는 되돌려도 재사용 안 함(P-0001 되돌린 뒤 다음은 P-0002). 앱 재시작 시 저장된 점 로드. 현재 신호는 여전히 **가짜**라서 저장되는 점도 가짜 위치(장치명에 '가짜 신호' 표시). 점 목록/편집 화면, 사진·음성 실제 연결은 **미구현**.
+- feat/wp9-11 병합(커밋 9ba2554): 앱 아이콘(WP-11) 등. 브랜치에 이후 커밋이 더 생기면 다시 병합 필요.
+- 서명 릴리스: 키 /workspace/secrets (권한 600, git 제외). dist/ 에 서명 APK·INSTALL.md·FIELD_CHECKLIST.md.
+- 3-A(블루투스 SPP GnssSource)·3-B(NTRIP): 엔진·NTRIP 클라이언트·모의 캐스터 단위 시험(401, 마운트 없음, v2 chunked, 무데이터 타임아웃)은 이전 단계 코드로 이미 있음. **앱 화면(수신기 선택·연결·VRS 입력·오류 카드)에 연결하는 일은 아직 안 함.** 실기기 시험 미실시.
+- 3-D, 3-F, 3-G(화면), 3-I, 3-J, 3-K, 폰트 번들, Phase 2: 이번 라운드에서 **착수 못 함**.
