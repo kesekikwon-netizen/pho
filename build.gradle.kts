@@ -70,7 +70,7 @@ android {
         getByName("main").java.srcDir("src/main/kotlin")
         getByName("test").java.srcDir("src/test/kotlin")
     }
-    testOptions { unitTests.isReturnDefaultValues = true }
+    testOptions { unitTests.isReturnDefaultValues = true; unitTests.isIncludeAndroidResources = true }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
 
@@ -96,6 +96,11 @@ dependencies {
     ksp("androidx.room:room-compiler:$room")
 
     testImplementation("junit:junit:4.13.2")
+    // 화면 렌더링 시험(에뮬레이터 없이 JVM 에서 Compose 를 그려 PNG 로 저장)
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("androidx.test.ext:junit:1.2.1")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
     testImplementation("org.json:json:20231013")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
 }
