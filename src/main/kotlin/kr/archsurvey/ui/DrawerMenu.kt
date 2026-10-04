@@ -11,6 +11,8 @@ enum class MenuAction {
     OPEN_EXPORT,
     /** 데이터 백업·복구 화면 */
     OPEN_BACKUP,
+    /** 도구 화면(점 목록·찾아가기·계산기·설정·작업 관리) */
+    OPEN_TOOL_POINTS, OPEN_TOOL_GOTO, OPEN_TOOL_CALC, OPEN_TOOL_SETTINGS, OPEN_JOB_NEW, OPEN_JOB_LIST, OPEN_JOB_INFO,
     /** 아직 연결되지 않은 메뉴 — 다음 라운드 */
     NOT_YET,
     /** 개발용: 가짜 GNSS 다음 구간으로 */
@@ -25,25 +27,25 @@ data class MenuSection(val title: String, val items: List<MenuItem>)
 object DrawerMenu {
     val sections: List<MenuSection> = listOf(
         MenuSection("즐겨찾기", listOf(
-            MenuItem("fav_points", "점 목록", MenuAction.NOT_YET),
-            MenuItem("fav_goto", "찾아가기", MenuAction.NOT_YET),
-            MenuItem("fav_calc", "계산기", MenuAction.NOT_YET),
+            MenuItem("fav_points", "점 목록", MenuAction.OPEN_TOOL_POINTS),
+            MenuItem("fav_goto", "찾아가기", MenuAction.OPEN_TOOL_GOTO),
+            MenuItem("fav_calc", "계산기", MenuAction.OPEN_TOOL_CALC),
         )),
         MenuSection("작업 관리", listOf(
-            MenuItem("job_new", "새 작업 만들기", MenuAction.NOT_YET),
-            MenuItem("job_open", "작업 열기 · 삭제", MenuAction.NOT_YET),
+            MenuItem("job_new", "새 작업 만들기", MenuAction.OPEN_JOB_NEW),
+            MenuItem("job_open", "작업 열기 · 삭제", MenuAction.OPEN_JOB_LIST),
             MenuItem("job_export", "작업 내보내기", MenuAction.OPEN_EXPORT),
-            MenuItem("job_info", "작업 정보", MenuAction.NOT_YET),
-            MenuItem("job_points", "점 목록", MenuAction.NOT_YET),
+            MenuItem("job_info", "작업 정보", MenuAction.OPEN_JOB_INFO),
+            MenuItem("job_points", "점 목록", MenuAction.OPEN_TOOL_POINTS),
             MenuItem("job_backup", "데이터 백업 · 복구", MenuAction.OPEN_BACKUP),
         )),
         MenuSection("측량", listOf(
             MenuItem("survey", "측량 · 지도 화면", MenuAction.GO_SURVEY),
             MenuItem("connection", "수신기 연결 · VRS", MenuAction.OPEN_CONNECTION),
             MenuItem("antenna", "안테나 높이", MenuAction.OPEN_ANTENNA),
-            MenuItem("goto", "점 찾아가기", MenuAction.NOT_YET),
-            MenuItem("calc", "계산기", MenuAction.NOT_YET),
-            MenuItem("settings", "설정", MenuAction.NOT_YET),
+            MenuItem("goto", "점 찾아가기", MenuAction.OPEN_TOOL_GOTO),
+            MenuItem("calc", "계산기", MenuAction.OPEN_TOOL_CALC),
+            MenuItem("settings", "설정", MenuAction.OPEN_TOOL_SETTINGS),
         )),
         MenuSection("AI · 점검", listOf(
             MenuItem("ai", "AI 어시스턴트", MenuAction.NOT_YET, enabled = false, note = "준비 중"),

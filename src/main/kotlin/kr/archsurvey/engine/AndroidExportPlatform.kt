@@ -14,7 +14,7 @@ import java.io.File
 /** [ExportPlatform] 의 Android 구현. ZIP 은 앱 전용 폴더에 만들고, 공유(FileProvider)·저장(문서 선택기)으로 내보낸다. */
 class AndroidExportPlatform(
     private val ctx: Context,
-    private val project: String,
+    private val project: () -> String,
     private val photoStore: PhotoStore,
     private val voiceStore: VoiceStore,
     private val docs: DocBridge,
@@ -24,14 +24,14 @@ class AndroidExportPlatform(
     private var lastZip: File? = null
 
     override suspend fun summary(): ExportSummary {
-        val pts = dao.pointsOf(project)
+        val pts = dao.pointsOf(project())
         var ph = 0; var vo = 0
         for (p in pts) { ph += dao.photoCount(p.rowId); vo += dao.voiceCount(p.rowId) }
-        return ExportSummary(project, pts.size, ph, vo, pts.count { "가짜" in it.device })
+        return ExportSummary(project(), pts.size, ph, vo, pts.count { "가짜" in it.device })
     }
 
     override suspend fun export(includePhotos: Boolean, includeVoices: Boolean): ExportOutput {
-        val r: ExportResult = svc.export(project, includePhotos, includeVoices)
+        val r: ExportResult = svc.export(project(), includePhotos, includeVoices)
         lastZip = r.zip
         return ExportOutput(r.zip.name, r.zip.length(), r.zip.path, r.pointCount, r.photoCount, r.voiceCount)
     }

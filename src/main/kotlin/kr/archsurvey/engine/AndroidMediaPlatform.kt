@@ -25,7 +25,7 @@ import kr.archsurvey.voice.VoiceStore
 class AndroidMediaPlatform(
     private val ctx: Context,
     private val scope: CoroutineScope,
-    private val project: String,
+    private val project: () -> String,
 ) : MediaPlatform {
     private val dao = SurveyDb.get(ctx).dao()
     val photoStore = PhotoStore(ctx, dao)
@@ -53,7 +53,7 @@ class AndroidMediaPlatform(
 
     override fun takePhoto(pointId: String, pointRowId: Long, onDone: (Boolean) -> Unit) {
         val l = launcher ?: return onDone(false)
-        val (rel, uri) = photoStore.newCameraTarget(project, pointId)
+        val (rel, uri) = photoStore.newCameraTarget(project(), pointId)
         prefs.edit().putString("rel", rel).putLong("row", pointRowId).apply()
         cameraCb = { ok ->
             scope.launch {
@@ -71,7 +71,7 @@ class AndroidMediaPlatform(
         pickerCb = { uris ->
             if (uris.isEmpty()) onDone(0)
             else scope.launch(Dispatchers.IO) {
-                val n = photoStore.importFromUris(pointRowId, project, pointId, uris.take(remaining))
+                val n = photoStore.importFromUris(pointRowId, project(), pointId, uris.take(remaining))
                 kotlinx.coroutines.withContext(Dispatchers.Main) { onDone(n) }
             }
         }
@@ -102,7 +102,7 @@ class AndroidMediaPlatform(
         l.requestMic()
     }
 
-    override fun startRecording(pointId: String): String? = voiceStore.start(project, pointId) { /* 30초 자동 정지는 컨트롤러 타이머가 처리 */ }
+    override fun startRecording(pointId: String): String? = voiceStore.start(project(), pointId) { /* 30초 자동 정지는 컨트롤러 타이머가 처리 */ }
     override suspend fun finishRecording(pointRowId: Long): VoiceItem? =
         voiceStore.finish(pointRowId)?.let { VoiceItem(it.id, it.relPath, it.durationMs) }
     override fun cancelRecording() = voiceStore.cancelRecording()

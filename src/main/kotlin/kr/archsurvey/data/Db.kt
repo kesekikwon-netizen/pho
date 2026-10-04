@@ -120,6 +120,28 @@ abstract class SurveyDao {
     @Query("SELECT * FROM points WHERE rowId = :rowId")
     abstract suspend fun getPoint(rowId: Long): PointEntity?
 
+    @Query("SELECT COUNT(*) FROM points WHERE project = :project AND deletedAtUtcMs IS NULL")
+    abstract suspend fun liveCount(project: String): Int
+
+    @Query("SELECT COUNT(*) FROM photos WHERE pointRowId IN (SELECT rowId FROM points WHERE project = :project AND deletedAtUtcMs IS NULL)")
+    abstract suspend fun livePhotoCount(project: String): Int
+
+    @Query("SELECT COUNT(*) FROM voice_memos WHERE pointRowId IN (SELECT rowId FROM points WHERE project = :project AND deletedAtUtcMs IS NULL)")
+    abstract suspend fun liveVoiceCount(project: String): Int
+
+    @Query("SELECT MIN(measuredAtUtcMs) FROM points WHERE project = :project AND deletedAtUtcMs IS NULL")
+    abstract suspend fun firstAt(project: String): Long?
+
+    @Query("SELECT MAX(measuredAtUtcMs) FROM points WHERE project = :project AND deletedAtUtcMs IS NULL")
+    abstract suspend fun lastAt(project: String): Long?
+
+    @Query("SELECT COUNT(*) FROM points WHERE project = :project AND deletedAtUtcMs IS NULL AND device LIKE '%가짜%'")
+    abstract suspend fun fakeCount(project: String): Int
+
+    /** 작업의 모든 점(되돌린 점 포함)을 지운다. 사진·음성 행은 외래키 연쇄 삭제 */
+    @Query("DELETE FROM points WHERE project = :project")
+    abstract suspend fun deleteProject(project: String)
+
     @Query("SELECT DISTINCT project FROM points ORDER BY project")
     abstract suspend fun projects(): List<String>
 

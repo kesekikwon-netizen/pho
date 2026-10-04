@@ -67,6 +67,8 @@ interface PointStore {
     suspend fun maxSeq(): Int
     suspend fun save(p: SavedPoint): Long
     suspend fun hideLast()
+    /** 위치 종류·메모 수정 (좌표는 바꾸지 않는다) */
+    suspend fun updateMeta(rowId: Long, type: String, memo: String) {}
 }
 
 /**
@@ -96,12 +98,34 @@ class SurveyController(
     var exporter: ExportController? = null
     /** 백업·복구 화면 상태 */
     var backup: BackupController? = null
+    /** 점 목록·찾아가기·계산기·설정·작업 관리 화면 */
+    val hub = ToolsHub(this)
+    /** 측점 결과 알림(진동·소리). true=저장됨, false=실패 */
+    var feedback: ((Boolean) -> Unit)? = null
 
     /** 사진·음성 메모 (없으면 화면 시안 동작) */
     var media: MediaPlatform? = null
     val photos = mutableStateListOf<PhotoItem>()
     val voices = mutableStateListOf<VoiceItem>()
     var playingVoiceId by mutableStateOf<Long?>(null)
+
+    /** 지금 열려 있는 작업 이름(표시용) */
+    var projectName by mutableStateOf("작업1")
+    /** 설정 화면 상태 (없으면 설정 화면 숨김) */
+    var settingsState: SettingsState? = null
+    /** 작업 관리 상태 */
+    var jobs: JobController? = null
+
+    /** 저장소에서 점을 다시 읽는다 (작업을 바꾼 뒤) */
+    fun reloadFromStore() {
+        val st = store ?: return
+        acquireJob?.cancel(); phase = Phase.IDLE; progress = 0f
+        photos.clear(); voices.clear()
+        scope.launch {
+            runCatching { val m = st.maxSeq(); val all = st.loadAll(); seq = m; points.clear(); points.addAll(all) }
+                .onFailure { message = "저장된 점을 불러오지 못했어요" }
+        }
+    }
 
     /** 개발용 가짜 소스(현재 소스가 가짜일 때만) */
     val fakeSource: kr.archsurvey.device.FakeGnssSource? get() =
@@ -167,6 +191,7 @@ class SurveyController(
         val st = gv.status
         if (StatusJudge.savePolicy(st.status) == SavePolicy.BLOCK) {
             message = "지금은 측점할 수 없어요 — ${st.reason.textKo}"
+            feedback?.invoke(false)
             return
         }
         val cfg = antenna
@@ -192,6 +217,7 @@ class SurveyController(
             if (ar != null) {
                 phase = Phase.IDLE
                 message = "신호가 ‘불가’가 되어 취득을 멈췄어요 (${ar.textKo}). 저장하지 않았어요."
+                feedback?.invoke(false)
                 return@launch
             }
             val p = avg.result()
@@ -213,6 +239,7 @@ class SurveyController(
             }
             phase = Phase.RESULT
             photos.clear(); voices.clear()
+            feedback?.invoke(saveError == null)
             message = saveError ?: if (worst == SurveyStatus.CAUTION) "주의 상태에서 취득한 점이에요 (표시가 기록돼요)" else null
         }
     }
@@ -337,6 +364,30 @@ class SurveyController(
         voiceJob?.cancel(); voiceJob = null
         if (phase == Phase.RECORDING) phase = Phase.RESULT
     }
+
+    /** 점 하나의 평면 좌표(현재 원점 기준). 저장 당시 원점이 같으면 저장값을 쓰고, 다르면 경위도에서 다시 계산한다 */
+    fun pointNE(p: SavedPoint): kr.archsurvey.core.NE =
+        if (p.crsEpsg == zone.epsg) kr.archsurvey.core.NE(p.northing, p.easting)
+        else TmProjection.forward(p.lat, p.lon, zone).let { kr.archsurvey.core.NE(it.northing, it.easting) }
+
+    /** 현재 위치의 평면 좌표(위치가 없으면 null) */
+    fun currentNE(): kr.archsurvey.core.NE? {
+        val la = gv.lat ?: return null; val lo = gv.lon ?: return null
+        return TmProjection.forward(la, lo, zone).let { kr.archsurvey.core.NE(it.northing, it.easting) }
+    }
+
+    /** 위치 종류·메모 수정 (화면 목록 + 저장소) */
+    fun updatePointMeta(name: String, type: String, memo: String) {
+        val i = points.indexOfFirst { it.name == name }
+        if (i < 0) return
+        val old = points[i]
+        val upd = old.copy(type = type.trim().ifEmpty { old.type }, memo = memo.trim())
+        points[i] = upd
+        store?.let { st -> if (upd.rowId > 0) scope.launch { runCatching { st.updateMeta(upd.rowId, upd.type, upd.memo) }.onFailure { message = "디스크 반영에 실패했어요" } } }
+    }
+
+    /** 지도를 이 점으로 옮긴다 (따라가기 해제) */
+    fun focusOn(p: SavedPoint) { follow = false; panCenter = projection.toLocal(p.lat, p.lon) }
 
     fun cycleType() { typeIndex = (typeIndex + 1) % types.size }
 

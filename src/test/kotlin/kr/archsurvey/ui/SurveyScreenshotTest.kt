@@ -165,7 +165,7 @@ class SurveyScreenshotTest {
         rule.onNodeWithTag("drawer").assertDoesNotExist()
         rule.onNodeWithTag("gear").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("menu_job_new").performClick(); rule.waitForIdle()
-        assertTrue(c.message!!.contains("다음 라운드"))
+        assertTrue(c.message!!.contains("이 빌드에 없어요"))
         File(out, "metrics.txt").appendText("drawer_width_dp=${"%.1f".format(d.width.value)} map_exposed_dp=${"%.1f".format(root.width.value - d.width.value)}\n")
     }
 

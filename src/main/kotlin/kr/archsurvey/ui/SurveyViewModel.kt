@@ -26,15 +26,19 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
 
     private var connection: ConnectionController? = null
     private fun fakeNow(): Boolean = connection?.fakeSignal ?: true
-    val store: RoomPointStore = RoomPointStore(SurveyDb.get(app), project = "작업1", device = {
+    val store: RoomPointStore = RoomPointStore(SurveyDb.get(app), project = { application.settings.project }, device = {
         if (fakeNow()) "Trimble R10 (가짜 신호)" else (connection?.profile?.displayName ?: "수신기")
     })
     val controller: SurveyController = SurveyController(switchable, db, viewModelScope, store = store)
-    val media = AndroidMediaPlatform(application, viewModelScope, "작업1")
+    val media = AndroidMediaPlatform(application, viewModelScope) { application.settings.project }
     val docs = kr.archsurvey.engine.DocBridge()
-    val exportPlatform = kr.archsurvey.engine.AndroidExportPlatform(application, "작업1", media.photoStore, media.voiceStore, docs)
+    val exportPlatform = kr.archsurvey.engine.AndroidExportPlatform(application, { application.settings.project }, media.photoStore, media.voiceStore, docs)
 
     val backupPlatform = kr.archsurvey.engine.AndroidBackupPlatform(application, docs)
+
+    /** MainActivity 가 채운다: 화면 항상 켜기 설정이 바뀔 때 창 플래그 적용 */
+    var onKeepScreen: (Boolean) -> Unit = {}
+    private val versionName: String = runCatching { app.packageManager.getPackageInfo(app.packageName, 0).versionName ?: "" }.getOrDefault("")
 
     init {
         fake.start(viewModelScope, realDelayMs = 700L)
@@ -44,6 +48,10 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
         controller.media = media
         controller.exporter = ExportController(exportPlatform, viewModelScope)
         controller.backup = BackupController(backupPlatform, viewModelScope)
+        controller.projectName = application.settings.project
+        controller.settingsState = SettingsState(controller, kr.archsurvey.engine.AndroidSettingsPlatform(application.settings) { onKeepScreen(it) })
+        controller.jobs = JobController(controller, kr.archsurvey.engine.AndroidJobPlatform(application, application.settings, versionName), viewModelScope)
+        controller.feedback = { ok -> application.feedback.play(if (ok) kr.archsurvey.feedback.FeedbackEvent.SURVEY_OK else kr.archsurvey.feedback.FeedbackEvent.SURVEY_FAIL) }
         media.recoverPending()
         applyMode(cc.fakeSignal)
     }

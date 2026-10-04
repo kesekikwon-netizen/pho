@@ -8,24 +8,26 @@ import kr.archsurvey.ui.SavedPoint
 /** [PointStore] 의 Room 구현. SavedPoint <-> PointEntity 변환을 한곳에 둔다. */
 class RoomPointStore(
     private val db: SurveyDb,
-    private val project: String,
+    private val project: () -> String,
     private val device: () -> String,
 ) : PointStore {
     private val repo = SurveyRepository(db)
     private val dao get() = db.dao()
 
-    override suspend fun loadAll(): List<SavedPoint> = repo.livePoints(project).map { fromEntity(it) }
+    override suspend fun loadAll(): List<SavedPoint> = repo.livePoints(project()).map { fromEntity(it) }
 
-    override suspend fun maxSeq(): Int = dao.lastPointId(project)?.let { id -> Regex("(\\d+)$").find(id)?.value?.toIntOrNull() } ?: 0
+    override suspend fun maxSeq(): Int = dao.lastPointId(project())?.let { id -> Regex("(\\d+)$").find(id)?.value?.toIntOrNull() } ?: 0
 
     override suspend fun save(p: SavedPoint): Long = repo.savePoint(toEntity(p))
 
-    override suspend fun hideLast() { repo.undoLast(project) }
+    override suspend fun hideLast() { repo.undoLast(project()) }
+
+    override suspend fun updateMeta(rowId: Long, type: String, memo: String) { dao.updateMemoType(rowId, memo, type) }
 
     private fun toEntity(p: SavedPoint): PointEntity {
         val apc = p.antenna.apcHeightM
         return PointEntity(
-            project = project, pointId = p.name, positionType = p.type, memo = p.memo,
+            project = project(), pointId = p.name, positionType = p.type, memo = p.memo,
             lat = p.lat, lon = p.lon,
             ellipsoidalHeight = p.apcEllipsoidalM ?: p.groundHeightM?.plus(apc), altitudeMsl = p.apcMslM, geoidSeparation = p.geoidSepM,
             northing = p.northing, easting = p.easting, crsEpsg = p.crsEpsg,

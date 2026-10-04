@@ -40,9 +40,16 @@ class MainActivity : ComponentActivity() {
             override fun create(suggestedName: String) = docCreate.launch(suggestedName)
             override fun open() = docOpen.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
         }
+        applyKeepScreen((application as App).settings.keepScreenOn)
+        vm.onKeepScreen = { applyKeepScreen(it) }
         setContent {
             SurveyTheme { SurveyMapScreen(vm.controller, batteryPercent()) }
         }
+    }
+
+    private fun applyKeepScreen(on: Boolean) {
+        if (on) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
     private fun batteryPercent(): Int? {

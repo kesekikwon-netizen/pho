@@ -45,8 +45,16 @@ class SettingsStore(private val ctx: Context) {
     fun setBtStrategy(address: String, strategy: String) = sp.edit().putString("bt_strategy_$address", strategy).apply()
 
     var project: String
-        get() = sp.getString("project", "발굴조사-1") ?: "발굴조사-1"
-        set(v) = sp.edit().putString("project", v.trim().ifEmpty { "발굴조사-1" }).apply()
+        get() = sp.getString("project", "작업1") ?: "작업1"
+        set(v) = sp.edit().putString("project", v.trim().ifEmpty { "작업1" }).apply()
+    /** 만들어 두었지만 아직 점이 없는 작업 이름들(점이 생기면 DB 에서도 찾을 수 있다) */
+    var extraProjects: Set<String>
+        get() = sp.getStringSet("extra_projects", emptySet())?.toSet() ?: emptySet()
+        set(v) = sp.edit().putStringSet("extra_projects", v).apply()
+    /** 오른쪽(true)/왼쪽 폴 띠 */
+    var poleRight: Boolean
+        get() = sp.getBoolean("pole_right", true)
+        set(v) = sp.edit().putBoolean("pole_right", v).apply()
     var idPrefix: String
         get() = sp.getString("id_prefix", "P-") ?: "P-"
         set(v) = sp.edit().putString("id_prefix", v).apply()

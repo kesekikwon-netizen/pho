@@ -67,6 +67,7 @@ fun SurveyMapScreen(
         DrawerOverlay(c)
         if (c.antennaSheetOpen) AntennaSheet(c)
         BackgroundSheets(bg)
+        if (c.hub.screen != null) ToolHost(c)
         c.exporter?.let { if (it.open) ExportScreen(it) }
         c.backup?.let { if (it.open) BackupScreen(it) }
         c.connection?.let { ConnectionHost(c, it) }
@@ -443,7 +444,7 @@ fun DrawerOverlay(c: SurveyController) {
                         contentDescription = "발굴 측량 로고", modifier = Modifier.size(44.dp).testTag("drawer_logo"),
                     )
                     Spacer(Modifier.height(8.dp))
-                    Text(if (c.fakeMode) "샘플 작업 (가짜 데이터)" else "측량 작업", style = Ty.title, color = t.ink)
+                    Text(if (c.fakeMode) "${c.projectName} (가짜 데이터)" else c.projectName, style = Ty.title, color = t.ink)
                     Text((if (c.antennaModelId == "TRIMBLE_R10") "Trimble R10" else "Spectra SP60") + if (c.fakeMode) " (가짜 신호)" else " (실제 수신기)", style = Ty.body, color = t.inkSub)
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -472,6 +473,13 @@ private fun DrawerRow(c: SurveyController, item: MenuItem) {
                 when (item.action) {
                     MenuAction.GO_SURVEY -> c.drawerOpen = false
                     MenuAction.OPEN_ANTENNA -> { c.drawerOpen = false; c.antennaSheetOpen = true }
+                    MenuAction.OPEN_TOOL_POINTS -> { c.drawerOpen = false; c.hub.open(ToolScreen.POINTS) }
+                    MenuAction.OPEN_TOOL_GOTO -> { c.drawerOpen = false; c.hub.open(ToolScreen.GOTO) }
+                    MenuAction.OPEN_TOOL_CALC -> { c.drawerOpen = false; c.hub.open(ToolScreen.CALC) }
+                    MenuAction.OPEN_TOOL_SETTINGS -> { c.drawerOpen = false; c.hub.open(ToolScreen.SETTINGS) }
+                    MenuAction.OPEN_JOB_NEW -> { c.drawerOpen = false; c.jobs?.openNew() ?: run { c.message = "작업 관리는 이 빌드에 없어요" } }
+                    MenuAction.OPEN_JOB_LIST -> { c.drawerOpen = false; c.jobs?.openList() ?: run { c.message = "작업 관리는 이 빌드에 없어요" } }
+                    MenuAction.OPEN_JOB_INFO -> { c.drawerOpen = false; c.jobs?.openInfo() ?: run { c.message = "작업 관리는 이 빌드에 없어요" } }
                     MenuAction.OPEN_BACKUP -> { c.drawerOpen = false; c.backup?.openScreen() ?: run { c.message = "백업은 이 빌드에 없어요" } }
                     MenuAction.OPEN_EXPORT -> { c.drawerOpen = false; c.exporter?.openScreen() ?: run { c.message = "내보내기는 이 빌드에 없어요" } }
                     MenuAction.OPEN_CONNECTION -> { c.drawerOpen = false; c.connection?.openScreen() ?: run { c.message = "연결 화면은 이 빌드에 없어요" } }
