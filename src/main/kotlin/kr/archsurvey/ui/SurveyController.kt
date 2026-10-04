@@ -88,6 +88,15 @@ class SurveyController(
 
     val types = listOf("유구 경계점", "유물 출토 위치", "기준점", "레벨점", "기타")
 
+    /** true = 가짜 신호(화면 시험). 상태 띠와 서랍에 항상 표시한다 */
+    var fakeMode by mutableStateOf(true)
+    /** 수신기 연결 화면 상태 (없으면 연결 UI 숨김) */
+    var connection: ConnectionController? = null
+
+    /** 개발용 가짜 소스(현재 소스가 가짜일 때만) */
+    val fakeSource: kr.archsurvey.device.FakeGnssSource? get() =
+        (source as? kr.archsurvey.device.SwitchableGnssSource)?.delegate as? kr.archsurvey.device.FakeGnssSource ?: source as? kr.archsurvey.device.FakeGnssSource
+
     var gv by mutableStateOf(GnssView())
     var phase by mutableStateOf(Phase.IDLE)
     var progress by mutableFloatStateOf(0f)

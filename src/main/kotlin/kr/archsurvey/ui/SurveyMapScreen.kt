@@ -57,6 +57,7 @@ fun SurveyMapScreen(c: SurveyController, batteryPct: Int?, map: MapSurface = rem
         }
         DrawerOverlay(c)
         if (c.antennaSheetOpen) AntennaSheet(c)
+        c.connection?.let { ConnectionHost(c, it) }
     }
 }
 
@@ -72,7 +73,7 @@ fun StatusBand(c: SurveyController) {
         SurveyStatus.CAUTION -> "주의 · 저장 시 표시 기록"
         SurveyStatus.UNAVAILABLE -> "불가 · 측점 막힘"
     }
-    val sub = st.reason.textKo + (st.sigmaHM?.let { " · ±${f3(it)} m" } ?: "")
+    val sub = st.reason.textKo + (st.sigmaHM?.let { " · ±${f3(it)} m" } ?: "") + (if (c.fakeMode) " · 가짜 신호" else "")
     Row(
         Modifier.fillMaxWidth().height(SurveyDims.STATUS_BAND_DP.dp).background(bg).testTag("status_band"),
         verticalAlignment = Alignment.CenterVertically,
@@ -380,8 +381,8 @@ fun DrawerOverlay(c: SurveyController) {
                         contentDescription = "발굴 측량 로고", modifier = Modifier.size(44.dp).testTag("drawer_logo"),
                     )
                     Spacer(Modifier.height(8.dp))
-                    Text("샘플 작업 (가짜 데이터)", style = Ty.title, color = t.ink)
-                    Text(if (c.antennaModelId == "TRIMBLE_R10") "Trimble R10 (가짜 신호)" else "Spectra SP60 (가짜 신호)", style = Ty.body, color = t.inkSub)
+                    Text(if (c.fakeMode) "샘플 작업 (가짜 데이터)" else "측량 작업", style = Ty.title, color = t.ink)
+                    Text((if (c.antennaModelId == "TRIMBLE_R10") "Trimble R10" else "Spectra SP60") + if (c.fakeMode) " (가짜 신호)" else " (실제 수신기)", style = Ty.body, color = t.inkSub)
                     Spacer(Modifier.height(8.dp))
                     Text(
                         "${st.status.labelKo}${st.sigmaHM?.let { " ±${f3(it)} m" } ?: ""}", style = Ty.small, color = fg,
@@ -409,8 +410,9 @@ private fun DrawerRow(c: SurveyController, item: MenuItem) {
                 when (item.action) {
                     MenuAction.GO_SURVEY -> c.drawerOpen = false
                     MenuAction.OPEN_ANTENNA -> { c.drawerOpen = false; c.antennaSheetOpen = true }
+                    MenuAction.OPEN_CONNECTION -> { c.drawerOpen = false; c.connection?.openScreen() ?: run { c.message = "연결 화면은 이 빌드에 없어요" } }
                     MenuAction.NOT_YET -> { c.drawerOpen = false; c.message = "‘${item.label}’은 다음 라운드에 연결돼요" }
-                    MenuAction.DEV_SKIP_SEGMENT -> (c.source as? kr.archsurvey.device.FakeGnssSource)?.skipToNextSegment()
+                    MenuAction.DEV_SKIP_SEGMENT -> c.fakeSource?.skipToNextSegment()
                     MenuAction.TOGGLE_POLE_SIDE -> c.poleOnRight = !c.poleOnRight
                 }
             }.padding(horizontal = 10.dp).testTag("menu_${item.id}"),

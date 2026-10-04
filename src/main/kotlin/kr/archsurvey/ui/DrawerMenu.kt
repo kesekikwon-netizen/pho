@@ -5,6 +5,8 @@ enum class MenuAction {
     /** 서랍을 닫고 측량+지도 화면으로 */
     GO_SURVEY,
     OPEN_ANTENNA,
+    /** 수신기 선택·블루투스·VRS 입력 화면 */
+    OPEN_CONNECTION,
     /** 아직 연결되지 않은 메뉴 — 다음 라운드 */
     NOT_YET,
     /** 개발용: 가짜 GNSS 다음 구간으로 */
@@ -33,6 +35,7 @@ object DrawerMenu {
         )),
         MenuSection("측량", listOf(
             MenuItem("survey", "측량 · 지도 화면", MenuAction.GO_SURVEY),
+            MenuItem("connection", "수신기 연결 · VRS", MenuAction.OPEN_CONNECTION),
             MenuItem("antenna", "안테나 높이", MenuAction.OPEN_ANTENNA),
             MenuItem("goto", "점 찾아가기", MenuAction.NOT_YET),
             MenuItem("calc", "계산기", MenuAction.NOT_YET),

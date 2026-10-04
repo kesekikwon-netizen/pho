@@ -14,8 +14,16 @@ import kr.archsurvey.ui.SurveyViewModel
 class MainActivity : ComponentActivity() {
     private val vm: SurveyViewModel by viewModels()
 
+    private var permCallback: ((Boolean) -> Unit)? = null
+    private val permLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()) { r ->
+        permCallback?.invoke(r.values.all { it }); permCallback = null
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        vm.platform.permissionRequester = { perms, cb ->
+            if (perms.isEmpty()) cb(true) else { permCallback = cb; permLauncher.launch(perms) }
+        }
         setContent {
             SurveyTheme { SurveyMapScreen(vm.controller, batteryPercent()) }
         }

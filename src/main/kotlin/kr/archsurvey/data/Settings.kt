@@ -108,6 +108,10 @@ class SettingsStore(private val ctx: Context) {
     var keepScreenOn: Boolean
         get() = sp.getBoolean("keep_screen", true)
         set(v) = sp.edit().putBoolean("keep_screen", v).apply()
+    /** true = 가짜 신호(화면 시험). 기본 켬: 수신기를 연결하기 전까지는 가짜임을 화면에 표시한다 */
+    var fakeSignal: Boolean
+        get() = sp.getBoolean("fake_signal", true)
+        set(v) = sp.edit().putBoolean("fake_signal", v).apply()
     var ntripEnabled: Boolean
         get() = sp.getBoolean("ntrip_enabled", true)
         set(v) = sp.edit().putBoolean("ntrip_enabled", v).apply()
