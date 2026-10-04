@@ -79,4 +79,54 @@ class FirstScreenTest {
         rule.onNodeWithTag("status_detail").assertTextContains("RTK 고정", substring = true)
         shot("r3_streaming")
     }
+
+    private fun streaming(): Pair<Stub, SurveyController> {
+        val s = Stub()
+        val c = SurveyController(s, db, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        rule.setContent { SurveyTheme(dark = false) { SurveyMapScreen(c, batteryPct = 82) } }
+        val gga = GgaMessage("", "000000", 37.0, 127.0, FixQuality.RTK_FIXED, 21, 0.8, 50.0, 25.0, 1.0, "0001")
+        rule.runOnUiThread {
+            s.link.value = LinkStatus(state = LinkState.STREAMING)
+            s.gnss.value = GnssSnapshot(gga, GstMessage("", 0.01, 0.006, 0.006, 0.012), lastGgaAtMs = 10_000L)
+        }
+        rule.waitForIdle()
+        return s to c
+    }
+
+    @Test fun homeScreenShowsRealState() {
+        val (_, c) = streaming()
+        rule.runOnUiThread { c.homeOpen = true }
+        rule.waitForIdle()
+        rule.onNodeWithTag("home_screen").assertExists()
+        rule.onNodeWithTag("home_conn").assertTextContains("연결됨")
+        rule.onNodeWithTag("home_version").assertExists()
+        shot("c_home_streaming")
+        rule.onNodeWithTag("home_survey").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("home_screen").assertDoesNotExist()
+        rule.onNodeWithTag("status_band").assertExists()
+    }
+
+    @Test fun homeScreenWhenNotConnected() {
+        val s = Stub()
+        val c = SurveyController(s, db, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        rule.setContent { SurveyTheme(dark = false) { SurveyMapScreen(c, batteryPct = 82) } }
+        rule.runOnUiThread { c.homeOpen = true }
+        rule.waitForIdle()
+        rule.onNodeWithTag("home_conn").assertTextContains("연결 안 됨")
+        shot("c_home_not_connected")
+    }
+
+    @Test fun quickSheetAndDrawerAndVersion() {
+        val (_, c) = streaming()
+        rule.onNodeWithTag("type_more").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("quick_sheet").assertExists()
+        shot("c_quick_sheet")
+        rule.onNodeWithTag("quick_type_1").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("quick_sheet").assertDoesNotExist()
+        assertEquals(1, c.typeIndex)
+        rule.runOnUiThread { c.drawerOpen = true }
+        rule.waitForIdle()
+        rule.onNodeWithTag("drawer_version", useUnmergedTree = true).assertExists()
+        shot("c_drawer")
+    }
 }

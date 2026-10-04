@@ -4,6 +4,8 @@ package kr.archsurvey.ui
 enum class MenuAction {
     /** 서랍을 닫고 측량+지도 화면으로 */
     GO_SURVEY,
+    /** 홈 화면(작업·수신기 상태·바로가기)으로 */
+    GO_HOME,
     OPEN_ANTENNA,
     /** 수신기 선택·블루투스·VRS 입력 화면 */
     OPEN_CONNECTION,
@@ -38,6 +40,7 @@ object DrawerMenu {
             MenuItem("job_backup", "데이터 백업 · 복구", MenuAction.OPEN_BACKUP),
         )),
         MenuSection("측량", listOf(
+            MenuItem("home", "홈", MenuAction.GO_HOME),
             MenuItem("survey", "측량 · 지도 화면", MenuAction.GO_SURVEY),
             MenuItem("connection", "수신기 연결 · VRS", MenuAction.OPEN_CONNECTION),
             MenuItem("antenna", "안테나 높이", MenuAction.OPEN_ANTENNA),

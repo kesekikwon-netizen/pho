@@ -61,6 +61,8 @@ fun SurveyMapScreen(
             }
             if (c.poleOnRight) PoleStrip(c, batteryPct)
         }
+        if (c.homeOpen) HomeScreen(c, batteryPct)
+        androidx.activity.compose.BackHandler(enabled = !c.homeOpen && c.hub.screen == null && !c.drawerOpen && !c.antennaSheetOpen && !c.quickSheetOpen) { c.homeOpen = true }
         DrawerOverlay(c)
         if (c.quickSheetOpen) QuickSheet(c)
         if (c.antennaSheetOpen) AntennaSheet(c)
@@ -364,7 +366,8 @@ private fun DrawerRow(c: SurveyController, item: MenuItem) {
             .alpha(if (item.enabled) 1f else 0.5f)
             .clickable(enabled = item.enabled) {
                 when (item.action) {
-                    MenuAction.GO_SURVEY -> c.drawerOpen = false
+                    MenuAction.GO_SURVEY -> { c.drawerOpen = false; c.homeOpen = false }
+                    MenuAction.GO_HOME -> { c.drawerOpen = false; c.homeOpen = true }
                     MenuAction.OPEN_ANTENNA -> { c.drawerOpen = false; c.antennaSheetOpen = true }
                     MenuAction.OPEN_TOOL_POINTS -> { c.drawerOpen = false; c.hub.open(ToolScreen.POINTS) }
                     MenuAction.OPEN_TOOL_GOTO -> { c.drawerOpen = false; c.hub.open(ToolScreen.GOTO) }

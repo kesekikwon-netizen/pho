@@ -207,6 +207,8 @@ class SurveyController(
     var drawerOpen by mutableStateOf(false)
     var antennaSheetOpen by mutableStateOf(false)
     var quickSheetOpen by mutableStateOf(false)
+    /** 앱을 처음 열었을 때 보이는 홈 화면 (목업 s2). 시험은 기본 false 로 지도부터 본다. */
+    var homeOpen by mutableStateOf(false)
     var voiceSeconds by mutableIntStateOf(0)
     var dpPerM by mutableStateOf(12.0)
     var follow by mutableStateOf(true)

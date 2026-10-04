@@ -23,7 +23,7 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
     val store: RoomPointStore = RoomPointStore(SurveyDb.get(app), project = { application.settings.project }, device = {
         connection?.profile?.displayName ?: "수신기"
     })
-    val controller: SurveyController = SurveyController(application.engine, db, viewModelScope, store = store, anchorOnFirstFix = true)
+    val controller: SurveyController = SurveyController(application.engine, db, viewModelScope, store = store, anchorOnFirstFix = true).also { it.homeOpen = true }
     val media = AndroidMediaPlatform(application, viewModelScope) { application.settings.project }
     val docs = kr.archsurvey.engine.DocBridge()
     val exportPlatform = kr.archsurvey.engine.AndroidExportPlatform(application, { application.settings.project }, media.photoStore, media.voiceStore, docs)
