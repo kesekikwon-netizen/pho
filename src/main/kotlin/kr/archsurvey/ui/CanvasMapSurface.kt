@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -31,7 +32,7 @@ class CanvasMapSurface : MapSurface {
         val tone = listOf(Color(0xFFEFEAD8), Color(0xFFE3EBD3), Color(0xFFF1DEDA))
         val toneDark = listOf(Color(0xFF34322B), Color(0xFF2E3829), Color(0xFF3B2E2C))
         val dark = t.bg.red < 0.5f
-        Canvas(modifier.fillMaxSize().testTag("map_canvas")) {
+        Canvas(modifier.fillMaxSize().clipToBounds().testTag("map_canvas")) {
             val ppm = (state.dpPerM * density).toFloat()
             val cx = size.width / 2f; val cy = size.height / 2f
             fun sx(x: Double) = cx + ((x - state.center.x) * ppm).toFloat()
