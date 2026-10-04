@@ -9,11 +9,11 @@
    "nmeaCarriesAntennaHeight": false,
    "reportedPositionPoint": "APC",
    "reportedPositionConfidence": "high (R10: Trimble Access NMEA doc + factory default Antenna Height 0.00/APC)",
-   "defaultRefPoint": "bottom_of_antenna_mount",
+   "defaultRefPoint": "bottom_of_quick_release",
    "refPoints": [
     {
      "id": "bottom_of_antenna_mount",
-     "labelKo": "수신기 바닥(마운트 하단, 어댑터 위쪽)",
+     "labelKo": "마운트 하단(보조: 어댑터 위쪽)",
      "pcoV": 0.1491,
      "pcoH": 0.0,
      "method": "vertical",
@@ -22,7 +22,7 @@
     },
     {
      "id": "bottom_of_quick_release",
-     "labelKo": "퀵릴리스 맨 아래(폴 윗단)",
+     "labelKo": "퀵릴리즈 하단(폴 윗단) — 기본",
      "pcoV": 0.1991,
      "pcoH": 0.0,
      "method": "vertical",
@@ -111,7 +111,7 @@
   "r10VsSp60_sameRefPointDifferenceMeters": 0.0804,
   "note": "R10 마운트 하단 0.1491 − SP60 ARP 0.0687 = 0.0804"
  },
- "_appNote": "R10 기본 기준점은 앱 정책으로 마운트 하단(bottom_of_antenna_mount)으로 변경(리서치 문서 기본은 퀵릴리스 하단). 퀵릴리스 하단은 선택 가능. 수치는 antenna-height.md §5 그대로. 실기기 미검증.",
+ "_appNote": "R10 기본 기준점 = 퀵릴리즈 하단 +0.1991 m (사용자 확정 2026-10-04, WP-4). 마운트 하단 +0.1491 m 는 보조 선택지. 어댑터 0.050 m 는 두 값에 이미 포함이므로 따로 더하지 않는다. SP60 = ARP +0.0687 m. 수치는 antenna-height.md §5 / phase1-antenna-reference.md. 실기기 미검증.",
  "adapters": [
   {
    "id": "trimble_qr_89845",

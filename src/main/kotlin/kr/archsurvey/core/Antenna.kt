@@ -137,14 +137,14 @@ object AntennaMath {
 
     /**
      * 입력값-기준점 어긋남 경고 (R10 전용). 경고만 하고 값은 절대 바꾸지 않는다.
-     * 2.05 근처인데 '퀵릴리스 맨 아래' / 2.00 근처인데 '수신기 바닥' 이면 어댑터 5cm 이중/누락 의심.
+     * 2.05 근처인데 '퀵릴리즈 하단' / 2.00 근처인데 '수신기 바닥' 이면 어댑터 5cm 이중/누락 의심.
      */
     fun mismatchWarning(cfg: AntennaConfig, model: AntennaModel): String? {
         if (model.dbId != "TRIMBLE_R10") return null
         val v = cfg.inputValueM
         return when {
             cfg.refPointId == "bottom_of_quick_release" && Math.abs(v - 2.05) <= NEAR ->
-                "혹시 어댑터 5 cm를 더하셨나요? 선택한 위치(퀵릴리스 맨 아래)를 다시 확인해 주세요."
+                "혹시 어댑터 5 cm를 더하셨나요? 선택한 위치(퀵릴리즈 하단)를 다시 확인해 주세요."
             cfg.refPointId == "bottom_of_antenna_mount" && Math.abs(v - 2.00) <= NEAR ->
                 "혹시 어댑터 5 cm를 빼고 재셨나요? 선택한 위치(수신기 바닥)를 다시 확인해 주세요."
             else -> null
@@ -171,7 +171,7 @@ object AntennaMath {
     /** 화면에 크게 표시할 기준점 문구 */
     fun instruction(shortName: String, ref: RefPoint): String = "$shortName · " + when (ref.id) {
         "bottom_of_antenna_mount" -> "마운트 하단부터 재세요"
-        "bottom_of_quick_release" -> "퀵릴리스 하단부터 재세요"
+        "bottom_of_quick_release" -> "퀵릴리즈 하단부터 재세요"
         "bottom_of_receiver_arp" -> "수신기 바닥면부터 재세요"
         "lever_of_r10_extension" -> "연장봉 레버까지 사선으로 재세요"
         "slant_height_mark" -> "높이 표시(후크)까지 사선으로 재세요"
@@ -181,7 +181,7 @@ object AntennaMath {
     }
 
     const val MODEL_CHANGE_NOTICE =
-        "R10과 SP60은 높이 재는 기준점이 달라 같은 폴 높이여도 안테나 위상중심이 약 8cm 차이납니다. " +
+        "R10(퀵릴리즈 하단 기준)과 SP60(수신기 바닥 기준)은 높이 재는 기준점이 달라 같은 폴 높이여도 안테나 위상중심이 약 13cm 차이납니다. " +
             "앱이 자동 보정하니 선택한 기기의 기준점부터 재 주세요."
     const val RECEIVER_SIDE_NOTICE =
         "수신기(Trimble Access·웹 설정)의 안테나 높이는 0.00(안테나 위상중심)으로 두세요. 이중으로 더해져요."
@@ -207,4 +207,26 @@ object AntennaResolver {
     /** 모델 변경 시 기본 기준점으로 바꾸려면 확인이 필요한가 (사용자가 직접 정한 설정이 있을 때) */
     fun needsOverwriteConfirm(cur: AntennaConfig, proposed: AntennaConfig): Boolean =
         cur.source == AntennaSource.USER && (cur.refPointId != proposed.refPointId || cur.tapeOn != proposed.tapeOn)
+}
+
+/**
+ * 점에 함께 저장할 안테나 기록 (WP-4): 기준점 id·이름·오프셋·입력값·위상중심(APC) 높이.
+ * 나중에 DB 값이 아닌 이 기록으로 재계산·검증할 수 있다.
+ */
+data class AntennaRecord(
+    val modelId: String,
+    val refPointId: String,
+    val refPointLabel: String,
+    val inputM: Double,
+    val method: String,
+    val pcoV: Double,
+    val pcoH: Double,
+    val apcHeightM: Double,
+) {
+    companion object {
+        fun of(model: AntennaModel, cfg: AntennaConfig): AntennaRecord? {
+            val r = AntennaMath.compute(cfg, model) ?: return null
+            return AntennaRecord(model.dbId, r.refPointId, model.ref(r.refPointId).labelKo, cfg.inputValueM, r.method, r.pcoV, r.pcoH, r.totalToApcM)
+        }
+    }
 }

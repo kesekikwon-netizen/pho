@@ -17,21 +17,12 @@ import kotlinx.coroutines.flow.*
 import kr.archsurvey.bt.*
 import kr.archsurvey.core.*
 import kr.archsurvey.device.DeviceProfile
+import kr.archsurvey.device.GnssSource
+import kr.archsurvey.device.LinkState
+import kr.archsurvey.device.LinkStatus
 import kr.archsurvey.feedback.FeedbackEvent
 import kr.archsurvey.ntrip.*
 import java.io.IOException
-
-enum class LinkState { IDLE, CONNECTING, CONNECTED_NO_DATA, STREAMING, STALE, RECONNECTING, NEEDS_USER }
-
-data class LinkStatus(
-    val state: LinkState = LinkState.IDLE,
-    val attempt: Int = 0,
-    val failures: Int = 0,
-    val error: BtError? = null,
-    val message: String = "",
-    val repairHint: Boolean = false,
-    val strategy: String? = null,
-)
 
 data class NtripStatus(
     val state: NtripState = NtripState.IDLE,
@@ -46,11 +37,12 @@ data class NtripStatus(
  * 서비스(SurveyConnectionService) 수명 동안 소켓을 소유한다(Activity/ViewModel 아님).
  * 모델별 차이는 DeviceProfile 로만 주입한다.
  */
-class SurveyEngine(private val app: Context, private val settingsStrategy: (String) -> String?, private val saveStrategy: (String, String) -> Unit) {
+class SurveyEngine(private val app: Context, private val settingsStrategy: (String) -> String?, private val saveStrategy: (String, String) -> Unit) : GnssSource {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    val link = MutableStateFlow(LinkStatus())
-    val gnss = MutableStateFlow(GnssSnapshot())
+    override val link = MutableStateFlow(LinkStatus())
+    override val gnss = MutableStateFlow(GnssSnapshot())
+    override fun clockMs(): Long = SystemClock.elapsedRealtime()
     val ntrip = MutableStateFlow(NtripStatus())
     val events = MutableSharedFlow<FeedbackEvent>(extraBufferCapacity = 16)
     val measureProgress = MutableStateFlow(0f)
@@ -86,7 +78,7 @@ class SurveyEngine(private val app: Context, private val settingsStrategy: (Stri
         restartNtrip()
     }
 
-    fun stop() {
+    override fun stop() {
         gnssJob?.cancel(); gnssJob = null
         ntripJob?.cancel(); ntripJob = null
         unregisterReceivers()
