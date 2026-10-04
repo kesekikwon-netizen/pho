@@ -19,10 +19,19 @@ class MainActivity : ComponentActivity() {
         permCallback?.invoke(r.values.all { it }); permCallback = null
     }
 
+    private val cameraLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.TakePicture()) { ok -> vm.media.deliverCamera(ok) }
+    private val pickerLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia(4)) { uris -> vm.media.deliverPicker(uris) }
+    private val micLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok -> vm.media.deliverMic(ok) }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         vm.platform.permissionRequester = { perms, cb ->
             if (perms.isEmpty()) cb(true) else { permCallback = cb; permLauncher.launch(perms) }
+        }
+        vm.media.launcher = object : kr.archsurvey.engine.AndroidMediaPlatform.Launcher {
+            override fun launchCamera(uri: android.net.Uri) = cameraLauncher.launch(uri)
+            override fun launchPicker() = pickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+            override fun requestMic() = micLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
         }
         setContent {
             SurveyTheme { SurveyMapScreen(vm.controller, batteryPercent()) }

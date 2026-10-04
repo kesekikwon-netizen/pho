@@ -75,6 +75,21 @@ data class PhotoEntity(
     val height: Int,
 )
 
+/** 음성 메모: 점당 최대 [VoiceLimit.MAX]개. AAC(m4a) 16kHz 모노 32kbps, 최대 30초 */
+@Entity(
+    tableName = "voice_memos",
+    foreignKeys = [ForeignKey(entity = PointEntity::class, parentColumns = ["rowId"], childColumns = ["pointRowId"], onDelete = ForeignKey.CASCADE)],
+    indices = [Index("pointRowId")],
+)
+data class VoiceEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val pointRowId: Long,
+    /** 앱 외부 파일 폴더(Recordings) 기준 상대경로 */
+    val relPath: String,
+    val durationMs: Long,
+    val addedAtUtcMs: Long,
+)
+
 data class PointWithCount(
     @Embedded val point: PointEntity,
     val photoCount: Int,
@@ -141,6 +156,28 @@ abstract class SurveyDao {
 
     @Delete abstract suspend fun deletePhoto(p: PhotoEntity)
 
+    @Query("SELECT * FROM photos WHERE id = :id")
+    abstract suspend fun photoById(id: Long): PhotoEntity?
+
+    @Query("SELECT * FROM voice_memos WHERE id = :id")
+    abstract suspend fun voiceById(id: Long): VoiceEntity?
+
+    @Insert abstract suspend fun insertVoice(v: VoiceEntity): Long
+
+    @Query("SELECT * FROM voice_memos WHERE pointRowId = :rowId ORDER BY id ASC")
+    abstract suspend fun voicesOf(rowId: Long): List<VoiceEntity>
+
+    @Query("SELECT COUNT(*) FROM voice_memos WHERE pointRowId = :rowId")
+    abstract suspend fun voiceCount(rowId: Long): Int
+
+    @Delete abstract suspend fun deleteVoice(v: VoiceEntity)
+
+    @androidx.room.Transaction
+    open suspend fun insertVoiceLimited(v: VoiceEntity, max: Int = VoiceLimit.MAX): Long {
+        if (voiceCount(v.pointRowId) >= max) return -1L
+        return insertVoice(v)
+    }
+
     /** 점당 사진 최대 장수. 5번째는 거부한다(동시 호출에도 4장을 넘지 않도록 한 트랜잭션에서 확인) */
     @androidx.room.Transaction
     open suspend fun insertPhotoLimited(p: PhotoEntity, max: Int = PhotoLimit.MAX): Long {
@@ -150,8 +187,12 @@ abstract class SurveyDao {
 }
 
 object PhotoLimit { const val MAX = 4 }
+object VoiceLimit { const val MAX = 3 }
 
-@Database(entities = [PointEntity::class, PhotoEntity::class], version = 1, exportSchema = true)
+@Database(
+    entities = [PointEntity::class, PhotoEntity::class, VoiceEntity::class], version = 2, exportSchema = true,
+    autoMigrations = [androidx.room.AutoMigration(from = 1, to = 2)],
+)
 abstract class SurveyDb : RoomDatabase() {
     abstract fun dao(): SurveyDao
 

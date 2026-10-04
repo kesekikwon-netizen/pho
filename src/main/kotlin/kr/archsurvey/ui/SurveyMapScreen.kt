@@ -17,6 +17,11 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.combinedClickable
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -231,12 +236,13 @@ private fun ResultStrip(c: SurveyController) {
             }
             Text("N ${f3(p.northing)}  E ${f3(p.easting)}", style = Ty.coord.copy(fontSize = 11.sp), color = t.inkSub, maxLines = 1, modifier = Modifier.testTag("result_coord"))
         }
-        IconBtn(Glyph.MIC, "voice_btn") { c.toggleVoiceMock() }
+        IconBtn(Glyph.MIC, "voice_btn") { c.toggleVoice() }
         IconBtn(if (c.phase == Phase.RESULT_EXPANDED) Glyph.CHEVRON_DOWN else Glyph.CHEVRON_UP, "expand_btn") { c.toggleExpand() }
     }
 }
 
 @Composable
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 private fun ExpandedExtra(c: SurveyController) {
     val t = T
     val p = c.lastPoint ?: return
@@ -245,23 +251,64 @@ private fun ExpandedExtra(c: SurveyController) {
             "H ${p.groundHeightM?.let { f3(it) } ?: "—"} m (지면, 타원체고) · 안테나 위상중심 ${f3(p.antenna.apcHeightM)} m · 기준점 ${p.antenna.refPointLabel}",
             style = Ty.small, color = t.inkSub, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("expanded_info"),
         )
+        var confirmPhoto by remember { mutableStateOf<PhotoItem?>(null) }
+        var confirmVoice by remember { mutableStateOf<VoiceItem?>(null) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            repeat(4) { i ->
+            repeat(MediaLimits.PHOTOS) { i ->
+                val ph = c.photos.getOrNull(i)
                 Box(
                     Modifier.size(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(12.dp)).background(t.bg)
-                        .clickable { c.message = "사진 촬영은 다음 라운드에 연결돼요 (점당 최대 4장)" }.testTag("photo_slot_$i"),
+                        .clickable { if (ph != null) confirmPhoto = ph else c.addPhotoCamera() }.testTag("photo_slot_$i"),
                     contentAlignment = Alignment.Center,
-                ) { GlyphIcon(Glyph.CAMERA, t.inkSub, 20.dp) }
+                ) {
+                    if (ph != null) PhotoThumb(c, ph) else GlyphIcon(Glyph.CAMERA, t.inkSub, 20.dp)
+                }
             }
-            Text("사진 0/4", style = Ty.small, color = t.inkSub)
+            Text("사진 ${c.photos.size}/${MediaLimits.PHOTOS}", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("photo_count"))
+            SmallButton("앨범", "photo_pick") { c.addPhotoPicker() }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(
-                Modifier.height(52.dp).clip(RoundedCornerShape(16.dp)).background(t.primary).clickable { c.toggleVoiceMock() }.padding(horizontal = 16.dp).testTag("voice_big"),
+                Modifier.height(52.dp).clip(RoundedCornerShape(16.dp)).background(t.primary).clickable { c.toggleVoice() }.padding(horizontal = 16.dp).testTag("voice_big"),
                 contentAlignment = Alignment.Center,
             ) { Row(verticalAlignment = Alignment.CenterVertically) { GlyphIcon(Glyph.MIC, t.onPrimary, 20.dp); Spacer(Modifier.width(8.dp)); Text("음성 남기기", style = Ty.label, color = t.onPrimary) } }
+            for (v in c.voices) {
+                val playing = c.playingVoiceId == v.id
+                Box(
+                    Modifier.height(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp)).background(if (playing) t.primary.copy(alpha = 0.25f) else t.bg)
+                        .combinedClickable(onClick = { c.playVoice(v) }, onLongClick = { confirmVoice = v }).padding(horizontal = 10.dp).testTag("voice_item_${v.id}"),
+                    contentAlignment = Alignment.Center,
+                ) { Text((if (playing) "■ " else "▶ ") + "0:%02d".format((v.durationMs / 1000).toInt()), style = Ty.label, color = t.ink) }
+            }
+        }
+        confirmPhoto?.let { ph ->
+            ConfirmDialog("이 사진을 지울까요?", "앱 폴더의 사진만 지워요. 앨범의 원본은 그대로예요.", "지우기", { c.deletePhoto(ph); confirmPhoto = null }, { confirmPhoto = null })
+        }
+        confirmVoice?.let { v ->
+            ConfirmDialog("이 음성 메모를 지울까요?", "지우면 되돌릴 수 없어요.", "지우기", { c.deleteVoice(v); confirmVoice = null }, { confirmVoice = null })
         }
     }
+}
+
+@Composable
+private fun PhotoThumb(c: SurveyController, ph: PhotoItem) {
+    var b by remember(ph.rel) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    androidx.compose.runtime.LaunchedEffect(ph.rel) {
+        b = withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { c.media?.thumb(ph.rel) }.getOrNull() }
+    }
+    val bm = b
+    if (bm != null) androidx.compose.foundation.Image(bm, "사진", Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+    else GlyphIcon(Glyph.CAMERA, T.accent, 20.dp)
+}
+
+@Composable
+private fun ConfirmDialog(title: String, body: String, okLabel: String, onOk: () -> Unit, onCancel: () -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(title) }, text = { Text(body) },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = onOk, modifier = Modifier.heightIn(min = 48.dp).testTag("confirm_ok")) { Text(okLabel) } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = 48.dp).testTag("confirm_cancel")) { Text("취소") } },
+    )
 }
 
 @Composable
@@ -271,10 +318,10 @@ private fun RecordStrip(c: SurveyController) {
         Box(Modifier.size(12.dp).clip(CircleShape).background(t.bad))
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
-            Text("녹음 중 0:%02d / 0:30".format(c.voiceSeconds), style = Ty.label, color = t.ink, modifier = Modifier.testTag("record_text"))
-            Text("화면 시안 — 실제 녹음은 아직 연결 전", style = Ty.small.copy(fontSize = 10.sp), color = t.inkSub)
+            Text("녹음 중 0:%02d / 0:%02d".format(c.voiceSeconds, MediaLimits.VOICE_SECONDS), style = Ty.label, color = t.ink, modifier = Modifier.testTag("record_text"))
+            Text(if (c.media != null) "마이크로 녹음하고 있어요 · 끝내기를 누르면 저장" else "화면 시안 — 실제 녹음은 아직 연결 전", style = Ty.small.copy(fontSize = 10.sp), color = t.inkSub)
         }
-        SmallButton("끝내기", "record_stop") { c.toggleVoiceMock() }
+        SmallButton("끝내기", "record_stop") { c.toggleVoice() }
     }
 }
 

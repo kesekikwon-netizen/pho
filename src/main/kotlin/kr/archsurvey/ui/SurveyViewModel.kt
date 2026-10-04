@@ -11,6 +11,7 @@ import kr.archsurvey.device.FakeGnssSource
 import kr.archsurvey.device.FakeScenarios
 import kr.archsurvey.device.SwitchableGnssSource
 import kr.archsurvey.engine.AndroidConnectionPlatform
+import kr.archsurvey.engine.AndroidMediaPlatform
 
 /**
  * 가짜 신호(시나리오 반복)와 실제 수신기(SurveyEngine)를 설정 토글로 바꿔 끼운다.
@@ -29,12 +30,15 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
         if (fakeNow()) "Trimble R10 (가짜 신호)" else (connection?.profile?.displayName ?: "수신기")
     })
     val controller: SurveyController = SurveyController(switchable, db, viewModelScope, store = store)
+    val media = AndroidMediaPlatform(application, viewModelScope, "작업1")
 
     init {
         fake.start(viewModelScope, realDelayMs = 700L)
         val cc = ConnectionController(platform) { isFake -> applyMode(isFake) }
         connection = cc
         controller.connection = cc
+        controller.media = media
+        media.recoverPending()
         applyMode(cc.fakeSignal)
     }
 
@@ -43,5 +47,5 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
         switchable.switchTo(if (isFake) fake else application.engine)
     }
 
-    override fun onCleared() { fake.stop() }
+    override fun onCleared() { fake.stop(); media.stopPlayback(); media.cancelRecording() }
 }

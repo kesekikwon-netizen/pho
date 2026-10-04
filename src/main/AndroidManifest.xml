@@ -24,6 +24,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- 음성 메모: 녹음 시작할 때 처음 한 번 묻는다 -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- 위치 권한/백그라운드 위치/저장소 권한은 요청하지 않음: 좌표는 NMEA 에서 오고, 사진은 앱 전용 폴더 + Photo Picker -->
 

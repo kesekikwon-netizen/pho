@@ -93,6 +93,12 @@ class SurveyController(
     /** 수신기 연결 화면 상태 (없으면 연결 UI 숨김) */
     var connection: ConnectionController? = null
 
+    /** 사진·음성 메모 (없으면 화면 시안 동작) */
+    var media: MediaPlatform? = null
+    val photos = mutableStateListOf<PhotoItem>()
+    val voices = mutableStateListOf<VoiceItem>()
+    var playingVoiceId by mutableStateOf<Long?>(null)
+
     /** 개발용 가짜 소스(현재 소스가 가짜일 때만) */
     val fakeSource: kr.archsurvey.device.FakeGnssSource? get() =
         (source as? kr.archsurvey.device.SwitchableGnssSource)?.delegate as? kr.archsurvey.device.FakeGnssSource ?: source as? kr.archsurvey.device.FakeGnssSource
@@ -202,6 +208,7 @@ class SurveyController(
                 catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; saveError = "디스크 저장에 실패했어요 — 다시 시도하세요" }
             }
             phase = Phase.RESULT
+            photos.clear(); voices.clear()
             message = saveError ?: if (worst == SurveyStatus.CAUTION) "주의 상태에서 취득한 점이에요 (표시가 기록돼요)" else null
         }
     }
@@ -213,16 +220,105 @@ class SurveyController(
 
     fun undo() {
         if (phase == Phase.ACQUIRING) { cancelAcquire(); return }
+        if (phase == Phase.RECORDING) media?.cancelRecording()
+        media?.stopPlayback(); playingVoiceId = null
         stopVoice()
         if (points.isEmpty()) return
         val gone = points.removeAt(points.lastIndex)
         store?.let { st -> scope.launch { runCatching { st.hideLast() }.onFailure { message = "디스크 반영에 실패했어요" } } }
         phase = Phase.IDLE
+        photos.clear(); voices.clear()
         message = "${gone.name} 되돌렸어요"
     }
 
     fun toggleExpand() {
         phase = when (phase) { Phase.RESULT -> Phase.RESULT_EXPANDED; Phase.RESULT_EXPANDED -> Phase.RESULT; else -> phase }
+    }
+
+    // ---------------- 사진 · 음성 메모 (마지막 점에 붙는다) ----------------
+
+    /** 마지막 점의 사진·음성 목록을 디스크에서 다시 읽는다 */
+    fun refreshMedia() {
+        val m = media ?: return
+        val rid = lastPoint?.rowId ?: 0L
+        if (rid == 0L) { photos.clear(); voices.clear(); return }
+        scope.launch {
+            val ph = runCatching { m.photos(rid) }.getOrDefault(emptyList())
+            val vo = runCatching { m.voices(rid) }.getOrDefault(emptyList())
+            photos.clear(); photos.addAll(ph); voices.clear(); voices.addAll(vo)
+        }
+    }
+
+    private fun mediaTarget(): SavedPoint? {
+        val p = lastPoint
+        if (p == null) { message = "먼저 측점을 하세요"; return null }
+        if (p.rowId == 0L) { message = "이 점이 디스크에 저장되지 않아 사진·음성을 붙일 수 없어요"; return null }
+        return p
+    }
+
+    fun addPhotoCamera() {
+        val m = media ?: run { message = "사진 기능을 쓸 수 없어요"; return }
+        val p = mediaTarget() ?: return
+        if (photos.size >= MediaLimits.PHOTOS) { message = "사진은 점당 ${MediaLimits.PHOTOS}장까지예요"; return }
+        m.takePhoto(p.name, p.rowId) { ok -> refreshMedia(); if (!ok) message = "사진이 저장되지 않았어요 (촬영 취소 또는 실패)" }
+    }
+
+    fun addPhotoPicker() {
+        val m = media ?: run { message = "사진 기능을 쓸 수 없어요"; return }
+        val p = mediaTarget() ?: return
+        val remaining = MediaLimits.PHOTOS - photos.size
+        if (remaining <= 0) { message = "사진은 점당 ${MediaLimits.PHOTOS}장까지예요"; return }
+        m.pickPhotos(p.name, p.rowId, remaining) { n ->
+            refreshMedia()
+            if (n > 0) message = "사진 ${n}장을 앱 폴더에 복사했어요 (원본은 그대로)"
+        }
+    }
+
+    fun deletePhoto(item: PhotoItem) {
+        val m = media ?: return
+        scope.launch { runCatching { m.deletePhoto(item.id) }.onFailure { message = "사진을 지우지 못했어요" }; refreshMedia() }
+    }
+
+    fun deleteVoice(item: VoiceItem) {
+        val m = media ?: return
+        if (playingVoiceId == item.id) { m.stopPlayback(); playingVoiceId = null }
+        scope.launch { runCatching { m.deleteVoice(item.id) }.onFailure { message = "음성을 지우지 못했어요" }; refreshMedia() }
+    }
+
+    fun playVoice(item: VoiceItem) {
+        val m = media ?: return
+        if (playingVoiceId == item.id) { m.stopPlayback(); playingVoiceId = null; return }
+        val ok = m.play(item.rel) { playingVoiceId = null }
+        if (ok) playingVoiceId = item.id else message = "음성을 재생하지 못했어요"
+    }
+
+    /** 녹음 시작/끝. 실제 녹음 기능이 연결되어 있으면 마이크 권한 → 녹음(최대 30초) → 저장 */
+    fun toggleVoice() {
+        val m = media ?: return toggleVoiceMock()
+        if (phase == Phase.RECORDING) { finishVoice(); return }
+        if (phase != Phase.RESULT && phase != Phase.RESULT_EXPANDED) return
+        val p = mediaTarget() ?: return
+        if (voices.size >= MediaLimits.VOICES) { message = "음성 메모는 점당 ${MediaLimits.VOICES}개까지예요"; return }
+        if (!m.hasMicPermission()) {
+            m.requestMicPermission { ok -> if (ok) toggleVoice() else message = "마이크 권한이 꺼져 있어요 — 설정 > 앱 > 권한 > 마이크 를 허용하세요" }
+            return
+        }
+        m.stopPlayback(); playingVoiceId = null
+        val err = m.startRecording(p.name)
+        if (err != null) { message = err; return }
+        phase = Phase.RECORDING; voiceSeconds = 0
+        voiceJob = scope.launch { while (voiceSeconds < MediaLimits.VOICE_SECONDS) { delay(1000); voiceSeconds++ }; finishVoice() }
+    }
+
+    private fun finishVoice() {
+        val m = media ?: return
+        voiceJob?.cancel(); voiceJob = null
+        if (phase == Phase.RECORDING) phase = Phase.RESULT
+        val rid = lastPoint?.rowId ?: 0L
+        scope.launch {
+            val v = runCatching { m.finishRecording(rid) }.getOrNull()
+            if (v == null) message = "녹음이 너무 짧거나 저장에 실패해서 남기지 않았어요" else voices.add(v)
+        }
     }
 
     /** 음성 메모 **화면 시안만**: 실제 녹음은 하지 않는다(Phase 1). 30초 자동 정지 타이머만 흉내. */
