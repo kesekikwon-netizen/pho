@@ -1,0 +1,159 @@
+{
+ "schemaVersion": 1,
+ "updated": "2026-10-04",
+ "units": "meters",
+ "models": {
+  "TRIMBLE_R10": {
+   "label": "Trimble R10",
+   "type": "GNSS_RECEIVER_INTEGRATED_ANTENNA",
+   "nmeaCarriesAntennaHeight": false,
+   "reportedPositionPoint": "APC",
+   "reportedPositionConfidence": "high (R10: Trimble Access NMEA doc + factory default Antenna Height 0.00/APC)",
+   "defaultRefPoint": "bottom_of_antenna_mount",
+   "refPoints": [
+    {
+     "id": "bottom_of_antenna_mount",
+     "labelKo": "수신기 바닥(마운트 하단, 어댑터 위쪽)",
+     "pcoV": 0.1491,
+     "pcoH": 0.0,
+     "method": "vertical",
+     "confidence": "high",
+     "source": "Trimble R10/R12 PCO table A; Antenna.ini"
+    },
+    {
+     "id": "bottom_of_quick_release",
+     "labelKo": "퀵릴리스 맨 아래(폴 윗단)",
+     "pcoV": 0.1991,
+     "pcoH": 0.0,
+     "method": "vertical",
+     "confidence": "high",
+     "source": "Trimble R10/R12 PCO table C; Antenna.ini"
+    },
+    {
+     "id": "lever_of_r10_extension",
+     "labelKo": "베이스 연장봉 레버(사선, 삼각대용)",
+     "pcoV": 0.3491,
+     "pcoH": 0.12,
+     "method": "slant",
+     "confidence": "medium",
+     "source": "Antenna.ini (R10 Internal id 2); R10 Model 2 User Guide"
+    },
+    {
+     "id": "bumper_bottom_outer_edge",
+     "labelKo": "범퍼 아래 바깥 모서리(사선, 고급)",
+     "pcoV": 0.0546,
+     "pcoH": 0.0584,
+     "method": "slant",
+     "confidence": "medium-derived",
+     "hidden": true,
+     "source": "derived from PCO table B,E; NOT a manufacturer method"
+    }
+   ],
+   "pcoTable": {
+    "bottomOfAntennaToAPC": 0.1491,
+    "bottomOfBumperToAPC": 0.0546,
+    "bottomOfQuickReleaseToAPC": 0.1991,
+    "quickReleaseHeight": 0.05,
+    "radialBumperEdge": 0.0584
+   },
+   "notes": [
+    "R10 Model 1/2 동일 값 사용 여부는 현장확인(도움말 표는 'R10 & R12' 공용, Antenna.ini 항목명 'R10 Internal')",
+    "베이스 연장봉 높이 0.15 m"
+   ]
+  },
+  "SPECTRA_SP60": {
+   "label": "Spectra Precision SP60",
+   "type": "GNSS_RECEIVER_INTEGRATED_ANTENNA",
+   "nmeaCarriesAntennaHeight": false,
+   "reportedPositionPoint": "APC (assumed)",
+   "reportedPositionConfidence": "unverified - 현장확인",
+   "defaultRefPoint": "bottom_of_receiver_arp",
+   "refPoints": [
+    {
+     "id": "bottom_of_receiver_arp",
+     "labelKo": "수신기 맨 아래(ARP)",
+     "pcoV": 0.0687,
+     "pcoH": 0.0,
+     "method": "vertical",
+     "confidence": "high",
+     "source": "SP60 User Guide Rev F: L1 68.7 mm; Antenna.ini 0.06870"
+    },
+    {
+     "id": "slant_height_mark",
+     "labelKo": "높이 표시(범퍼의 후크, 사선)",
+     "pcoV": 0.02795,
+     "pcoH": 0.10169,
+     "method": "slant",
+     "tapeHousingCorrection": 0.073,
+     "confidence": "medium",
+     "source": "Antenna.ini (Slant measure mark); SP60 User Guide Rev F ΔL=0.073 m"
+    },
+    {
+     "id": "bottom_of_uhf_extension",
+     "labelKo": "UHF 연장부 하단(UHF 키트 사용 시)",
+     "pcoV": 0.3187,
+     "pcoH": 0.0,
+     "method": "vertical",
+     "confidence": "medium",
+     "hidden": true,
+     "source": "Antenna.ini"
+    }
+   ],
+   "phaseCenterL1": 0.0687,
+   "phaseCenterL2": 0.0653,
+   "notes": [
+    "L2 위상중심은 65.3 mm, 앱은 L1 사용",
+    "ΔL 0.073 m는 표준 줄자 하우징을 높이 표시에 걸어 잴 때만 적용"
+   ]
+  }
+ },
+ "ruleOfThumb": {
+  "r10VsSp60_sameRefPointDifferenceMeters": 0.0804,
+  "note": "R10 마운트 하단 0.1491 − SP60 ARP 0.0687 = 0.0804"
+ },
+ "_appNote": "R10 기본 기준점은 앱 정책으로 마운트 하단(bottom_of_antenna_mount)으로 변경(리서치 문서 기본은 퀵릴리스 하단). 퀵릴리스 하단은 선택 가능. 수치는 antenna-height.md §5 그대로. 실기기 미검증.",
+ "adapters": [
+  {
+   "id": "trimble_qr_89845",
+   "model": "r10",
+   "partNumber": "89845-00",
+   "heightM": 0.05,
+   "includedInRefPoint": "bottom_of_quick_release",
+   "doNotAddSeparately": true,
+   "confidence": "high"
+  },
+  {
+   "id": "trimble_base_ext_89846",
+   "model": "r10",
+   "partNumber": "89846-00",
+   "heightM": 0.15,
+   "includedInRefPoint": "lever_of_r10_extension",
+   "addWhenUsingFixedTripodWithQR": true,
+   "refPointWhenAdded": "bottom_of_quick_release",
+   "confidence": "high"
+  },
+  {
+   "id": "trimble_tribrach_58_12180",
+   "model": "r10",
+   "partNumber": "12180",
+   "heightM": null,
+   "confidence": "unknown",
+   "note": "[미확인] 실측 입력"
+  },
+  {
+   "id": "sp60_insert",
+   "model": "sp60",
+   "heightM": 0.0,
+   "arpChange": false,
+   "confidence": "high"
+  },
+  {
+   "id": "sp60_ext_7cm_88400-50-SPN",
+   "model": "sp60",
+   "nominalLengthM": 0.07,
+   "treatment": "unknown",
+   "confidence": "unknown",
+   "note": "[미확인] 실측 입력, 자동 가산 금지"
+  }
+ ]
+}
