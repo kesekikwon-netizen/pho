@@ -13,6 +13,8 @@ data class ExportOutput(val fileName: String, val sizeBytes: Long, val path: Str
 interface ExportPlatform {
     suspend fun summary(): ExportSummary
     suspend fun export(includePhotos: Boolean, includeVoices: Boolean): ExportOutput
+    /** 0.1.14 고른 양식만(목업 11). 기본 구현은 예전 세 가지로 만든다(시험용 가짜 호환) */
+    suspend fun exportFormats(formats: Set<kr.archsurvey.export.ExportFormat>, includePhotos: Boolean, includeVoices: Boolean): ExportOutput = export(includePhotos, includeVoices)
     /** 공유 시트(카카오톡·메일·드라이브 등) 열기 */
     fun share(out: ExportOutput)
     /** 파일 저장 위치 고르기(시스템 문서 선택기). 끝나면 onDone(성공 여부) */
@@ -25,6 +27,12 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
     var summary by mutableStateOf<ExportSummary?>(null); private set
     var includePhotos by mutableStateOf(true)
     var includeVoices by mutableStateOf(true)
+    /** 0.1.14 목업 11 양식 선택(여러 개) */
+    var formats by mutableStateOf(kr.archsurvey.export.ExportFormat.DEFAULT)
+    fun toggleFormat(f: kr.archsurvey.export.ExportFormat) { formats = if (f in formats) formats - f else formats + f; output = null }
+    /** 0.1.14 목업 12 전송 방식: true = 무선 전송(공유), false = 장치 내 저장 */
+    var methodShare by mutableStateOf(true)
+    fun send() { if (methodShare) share() else saveAs() }
     var running by mutableStateOf(false); private set
     var output by mutableStateOf<ExportOutput?>(null); private set
     var error by mutableStateOf<String?>(null); private set
@@ -41,12 +49,14 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
         if (running) return
         val s = summary
         if (s != null && s.points == 0) { error = "내보낼 점이 없어요. 먼저 측점을 하세요."; onResult?.invoke(false, error!!); return }
+        if (formats.isEmpty()) { error = "양식을 하나 이상 고르세요."; onResult?.invoke(false, error!!); return }
+        val fs = formats
         running = true; error = null; notice = null; output = null
         scope.launch {
             try {
-                val o = platform.export(includePhotos && (s?.photos ?: 1) > 0, includeVoices && (s?.voices ?: 1) > 0)
+                val o = platform.exportFormats(fs, includePhotos && (s?.photos ?: 1) > 0, includeVoices && (s?.voices ?: 1) > 0)
                 output = o
-                onResult?.invoke(true, "내보내기 파일을 만들었어요 · ${o.fileName} (${sizeText(o.sizeBytes)}) · 공유/저장을 누르세요")
+                onResult?.invoke(true, "내보내기 파일을 만들었어요 · ${o.fileName} (${sizeText(o.sizeBytes)}) · ${fs.size}개 양식 · 전송 방식을 고르세요")
             }
             catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -57,7 +67,12 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
         }
     }
 
-    fun share() { output?.let { platform.share(it) } }
+    fun share() {
+        val o = output ?: return
+        runCatching { platform.share(o) }
+            .onSuccess { notice = "공유 창을 열었어요 · 받을 앱을 고르세요"; onResult?.invoke(true, "무선 전송 · ${o.fileName} 공유 창을 열었어요") }
+            .onFailure { notice = "공유 창을 열지 못했어요 (${it.javaClass.simpleName})"; onResult?.invoke(false, notice!!) }
+    }
     fun saveAs() { output?.let { o -> platform.saveAs(o) { ok -> notice = if (ok) "파일로 저장했어요" else "저장을 취소했거나 실패했어요"; onResult?.invoke(ok, notice!!) } } }
 
     companion object {

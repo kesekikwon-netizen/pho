@@ -38,7 +38,7 @@ fun HomeScreen(c: SurveyController) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(versionShort(rememberAppVersionLabel()), style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.testTag("home_version"))
-            BigSurveyCard { c.homeOpen = false }
+            BigSurveyCard { c.hub.open(ToolScreen.SURVEY_HUB) }  // 0.1.14 목업 02→08: 일반 측량 메뉴
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 HomeTile(Glyph.POLYGON, "유구 외곽", "외곽선을 이어 측량", "home_outline", Modifier.weight(1f)) {
                     c.homeOpen = false
@@ -51,7 +51,7 @@ fun HomeScreen(c: SurveyController) {
                 HomeTile(null, "환경설정", "장비 · VRS · 좌표계", "home_settings", Modifier.weight(1f)) { c.settingsMenuOpen = true }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HomeTile(Glyph.FOLDER, "작업 관리", "새 작업 · 열기", "home_jobs", Modifier.weight(1f)) { c.jobs?.openList() ?: run { c.message = "작업 관리는 이 빌드에 없어요" } }
+                HomeTile(Glyph.FOLDER, "작업 관리", "새 작업 · 열기 · 전송", "home_jobs", Modifier.weight(1f)) { c.hub.open(ToolScreen.JOB_HUB) }
                 HomeTile(Glyph.SHARE, "내보내기", "CSV · DXF · GeoJSON", "home_export", Modifier.weight(1f)) { c.exporter?.openScreen() ?: run { c.message = "내보내기는 이 빌드에 없어요" } }
             }
             c.message?.let { Text(it, style = Ty.body, color = t.ink, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(t.raised).border(1.dp, t.ink, RoundedCornerShape(12.dp)).padding(12.dp).testTag("home_message")) }
@@ -81,7 +81,7 @@ private fun BigSurveyCard(onClick: () -> Unit) {
         }
         Spacer(Modifier.weight(1f))
         Text("일반 측량", style = Ty.title.copy(fontSize = 24.sp), color = t.onPrimary)
-        Text("점 측량 · 지도 · 사진", style = Ty.small, color = t.onPrimary.copy(alpha = 0.8f))
+        Text("작업관리 · 측량 · 점 찾아가기 · 계산기", style = Ty.small, color = t.onPrimary.copy(alpha = 0.8f))
     }
 }
 
@@ -156,20 +156,29 @@ fun SettingsMenuScreen(c: SurveyController) {
                 GearIcon(t.ink, 44.dp)
             }
             Spacer(Modifier.height(8.dp))
+            // 0.1.14 목업 03 순서: 장비 연결 · RTK 설정 · VRS 설정 · 좌표계 설정 · 현재위치 모양 · 알림 소리·진동 · 앱 정보
             val rows: List<Triple<Pair<Glyph?, String>, String, Pair<String, () -> Unit>>> = listOf(
-                Triple(Glyph.FOLDER to "작업 정보 확인", "작업명 · 좌표계 · 지역 · 배경맵 · Geoid", "set_row_job" to { c.jobs?.openInfo() ?: run { c.message = "작업 관리는 이 빌드에 없어요" } }),
                 Triple(Glyph.BT to "장비 연결", "GNSS 수신기 블루투스 연결 (R10 · SP60)", "set_row_device" to { c.connection?.openScreen() ?: run { c.message = "연결 화면은 이 빌드에 없어요" } }),
-                Triple(Glyph.WIFI to "VRS 설정 (RTK 보정)", "NTRIP 서버 · 마운트포인트 · 계정 · GGA · 재접속", "set_row_vrs" to { c.connection?.openVrs() ?: run { c.message = "VRS 설정은 이 빌드에 없어요" } }),
+                Triple(Glyph.SAT to "RTK 설정", "보정 형식(RTCM) · 마운트 호환 · GGA · 재접속", "set_row_rtk" to { c.hub.open(ToolScreen.RTK) }),
+                Triple(Glyph.WIFI to "VRS 설정", "NTRIP 서버 · 마운트포인트 · 계정", "set_row_vrs" to { c.connection?.openVrs() ?: run { c.message = "VRS 설정은 이 빌드에 없어요" } }),
+                Triple(Glyph.GLOBE to "좌표계 설정", "작업명 · 좌표계(EPSG) · 지역 · 배경맵 · Geoid → 적용하면 측량", "set_row_job" to { c.jobs?.openInfo() ?: run { c.message = "작업 관리는 이 빌드에 없어요" } }),
+                Triple(Glyph.PIN to "현재위치 모양", "현재 위치 · 점 · 목표 표시 모양과 크기", "set_row_marker" to { c.markerStyleOpen = true }),
+                Triple(Glyph.MIC to "알림 소리 · 진동", "측량 완료음 · 버튼 탭 진동 · 화면 켜두기", "set_row_alert" to { c.hub.open(ToolScreen.SETTINGS) }),
+            )
+            for ((head, sub, act) in rows) SettingsRow(head.first, head.second, sub, act.first, act.second)
+            SettingsRow(Glyph.INFO, "앱 정보", rememberAppVersionLabel() + " · 발굴 측량", "set_row_info", null)
+            Text("더 보기", style = Ty.label, color = t.inkSub, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+            val more: List<Triple<Pair<Glyph?, String>, String, Pair<String, () -> Unit>>> = listOf(
+                Triple(Glyph.POLE to "IMU · 기울기", "수신기 IMU(미지원/미수신) · 폰 기포(참고용)", "set_row_imu" to { c.hub.open(ToolScreen.IMU) }),
                 Triple(Glyph.RULER to "안테나 높이", "모델 · 측정 기준점 · 높이", "set_row_antenna" to { c.antennaSheetOpen = true }),
                 Triple(Glyph.GLOBE to "GNSS 정보 · SkyPlot", "좌표 · 해 품질 · DOP · 위성 배치", "set_row_gnss" to { c.gnssInfoOpen = true }),
-                Triple(Glyph.GLOBE to "좌표계 · 측량 설정", "지역(EPSG) · Geoid · 측정 횟수 · 전자 기포 · 소리", "set_row_survey" to { c.hub.open(ToolScreen.SETTINGS) }),
+                Triple(Glyph.GLOBE to "측량 설정", "지역(EPSG) · Geoid · 측정 횟수 · 폰 기포 · 소리", "set_row_survey" to { c.hub.open(ToolScreen.SETTINGS) }),
                 Triple(Glyph.LIST to "위치 종류", "발굴 위치 종류 추가 · 순서", "set_row_types" to { c.hub.open(ToolScreen.TYPES) }),
                 Triple(Glyph.LAYERS to "V월드 지적도 · 배경맵", "API 인증키 · 도메인 · 지적선 · 연결 시험", "set_row_vworld" to { c.vworld.load(); c.hub.open(ToolScreen.VWORLD) }),
                 Triple(Glyph.LAYERS to "배경 레이어", "도면 · 정사영상 올리기", "set_row_bg" to { c.bg?.openManage() ?: run { c.message = "배경 레이어는 이 빌드에 없어요" } }),
                 Triple(Glyph.FOLDER to "백업 · 복구", "작업 데이터 ZIP 백업", "set_row_backup" to { c.backup?.openScreen() ?: run { c.message = "백업은 이 빌드에 없어요" } }),
             )
-            for ((head, sub, act) in rows) SettingsRow(head.first, head.second, sub, act.first, act.second)
-            SettingsRow(Glyph.INFO, "앱 정보", rememberAppVersionLabel() + " · 발굴 측량", "set_row_info", null)
+            for ((head, sub, act) in more) SettingsRow(head.first, head.second, sub, act.first, act.second)
             c.message?.let { Text(it, style = Ty.body, color = t.ink, modifier = Modifier.padding(top = 12.dp).testTag("settings_menu_message")) }
         }
     }

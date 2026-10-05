@@ -87,7 +87,7 @@ fun SkyPlotScreen(c: SurveyController) {
             }
             // 위성계 칩(누르면 숨김/보임)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf(Constellation.GPS, Constellation.GLONASS, Constellation.GALILEO, Constellation.BEIDOU).forEach { k ->
+                listOf(Constellation.GPS, Constellation.GLONASS, Constellation.GALILEO, Constellation.BEIDOU, Constellation.QZSS).forEach { k -> // 0.1.14 목업 06: QZSS 추가
                     val on = k !in hidden
                     Row(
                         Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(24.dp)).background(if (on) t.raised else t.chip)

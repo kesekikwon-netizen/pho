@@ -47,6 +47,10 @@ data class MapViewState(
     val tiles: List<TileLayerSpec> = emptyList(),
     /** 타일을 놓기 위한 위경도↔지도 평면 변환(작업 원점). tiles 가 있을 때만 필요 */
     val geo: LocalProjection? = null,
+    /** 0.1.14 위치 모양(목업 22) */
+    val style: MarkerStyle = MarkerStyle(),
+    /** 0.1.14 찾아갈 목표(점 찾아가기). 없으면 null */
+    val target: LocalXY? = null,
 )
 
 /** 지도 그리기 구현을 갈아끼우기 위한 경계. WP-3 은 자체 Canvas, 이후 MapLibre(WP-9 스파이크 결과에 따라). */

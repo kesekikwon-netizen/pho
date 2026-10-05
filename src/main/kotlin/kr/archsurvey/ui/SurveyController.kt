@@ -307,6 +307,18 @@ class SurveyController(
     var homeOpen by mutableStateOf(false)
     /** 0.1.11 환경설정 목록 화면(목업 03) */
     var settingsMenuOpen by mutableStateOf(false)
+    /** 0.1.14 목업 22 위치 모양 설정 창 */
+    var markerStyleOpen by mutableStateOf(false)
+    /** 0.1.14 위치 모양. 바꾸면 [onMarkerStyleChanged] 로 저장 */
+    var markerStyle by mutableStateOf(kr.archsurvey.map.MarkerStyle())
+    var onMarkerStyleChanged: ((kr.archsurvey.map.MarkerStyle) -> Unit)? = null
+    fun applyMarkerStyle(s: kr.archsurvey.map.MarkerStyle) { markerStyle = s; onMarkerStyleChanged?.invoke(s); markerStyleOpen = false; ui.ok("위치 모양을 적용했어요") }
+    /** 0.1.14 목업 20 점 길게 누르기 메뉴 */
+    var pointMenuFor by mutableStateOf<SavedPoint?>(null)
+    /** 0.1.14 목업 18 사진 확인(촬영 직후 1/4 · 취소/다시 촬영/확정) */
+    var photoReviewOpen by mutableStateOf(false)
+    /** 0.1.14 목업 14 데이터 백업/복구 창 */
+    var backupQuickOpen by mutableStateOf(false)
     /** 0.1.11 GNSS 정보 창(목업 05) — 상단 상태 알약을 누르면 열린다 */
     var gnssInfoOpen by mutableStateOf(false)
     /** 0.1.11 SkyPlot(목업 06). GSV 위성 상세가 있을 때만 점을 그린다 */
@@ -538,6 +550,7 @@ class SurveyController(
         settingsMenuOpen = false; drawerOpen = false
         gnssInfoOpen = false; skyPlotOpen = false
         antennaSheetOpen = false; setupOpen = false; quickSheetOpen = false
+        markerStyleOpen = false; pointMenuFor = null; backupQuickOpen = false
         connection?.let { if (it.mountPickerOpen) it.closeMountPicker(); it.close() }
         exporter?.close(); backup?.close(); bg?.close()
         homeOpen = false
@@ -545,6 +558,10 @@ class SurveyController(
 
     /** 지금 맨 위에 보이는 화면 이름(시험·진단용). 측량 지도가 그대로 보이면 "survey" */
     fun visibleRoute(): String = when {
+        photoReviewOpen -> "photo_review"
+        markerStyleOpen -> "marker_style"
+        backupQuickOpen -> "backup_quick"
+        pointMenuFor != null -> "point_menu"
         skyPlotOpen -> "skyplot"
         gnssInfoOpen -> "gnss_info"
         drawerOpen -> "drawer"
@@ -612,6 +629,8 @@ class SurveyController(
     }
 
     /** 결과 패널의 [다음 점]: 결과 화면을 닫고 측점 준비 화면으로 */
+    /** 0.1.14 목업 17 「아니요」: 결과 패널을 닫고 대기(측량은 시작하지 않음) */
+    fun dismissResult() { if (phase == Phase.RESULT || phase == Phase.RESULT_EXPANDED) phase = Phase.IDLE }
     fun nextPoint() { if (phase == Phase.RESULT || phase == Phase.RESULT_EXPANDED) { phase = Phase.IDLE; onMeasure() } }
 
     fun toggleExpand() {
@@ -644,8 +663,19 @@ class SurveyController(
         val m = media ?: run { message = "사진 기능을 쓸 수 없어요"; return }
         val p = mediaTarget() ?: return
         if (photos.size >= MediaLimits.PHOTOS) { message = "사진은 점당 ${MediaLimits.PHOTOS}장까지예요"; return }
-        m.takePhoto(p.name, p.rowId) { ok -> refreshMedia(); if (!ok) message = "사진이 저장되지 않았어요 (촬영 취소 또는 실패)" }
+        m.takePhoto(p.name, p.rowId) { ok ->
+            refreshMedia()
+            // 0.1.14 목업 18: 찍은 뒤 확인 화면(취소 = 지우기 · 다시 촬영 · 확정)
+            if (ok) photoReviewOpen = true else { message = "사진이 저장되지 않았어요 (촬영 취소 또는 실패)"; ui.fail("사진이 저장되지 않았어요 (촬영 취소 또는 실패)") }
+        }
     }
+    /** 사진 확인: 확정 */
+    fun confirmPhoto() { photoReviewOpen = false; ui.ok("사진 ${photos.size}/${MediaLimits.PHOTOS} 저장됨") }
+    /** 사진 확인: 취소(방금 사진 지우기) */
+    fun discardPhoto() { photoReviewOpen = false; photos.lastOrNull()?.let { deletePhoto(it) }; ui.toast("방금 찍은 사진을 지웠어요") }
+    /** 사진 확인: 다시 촬영 */
+    fun retakePhoto() { photoReviewOpen = false; val last = photos.lastOrNull(); val m = media; val p = mediaTarget()
+        if (last != null && m != null && p != null) scope.launch { runCatching { m.deletePhoto(last.id) }; refreshMedia(); addPhotoCamera() } else addPhotoCamera() }
 
     fun addPhotoPicker() {
         val m = media ?: run { message = "사진 기능을 쓸 수 없어요"; return }
@@ -750,6 +780,14 @@ class SurveyController(
     fun cycleType() { typeIndex = (typeIndex + 1) % types.size }
 
     /** 0.1.11 하단 도구 「선으로 연결」·「면으로 연결」: 외곽 취득을 켜고 닫힘 여부를 정한다. 같은 쪽을 다시 누르면 끈다 */
+    /** 0.1.14 하단 「새 연결 시작」(목업 15): 이어 오던 외곽을 마무리하고 다음 점부터 새 선/면 */
+    fun startNewLink() {
+        if (!arch.outlineMode) { setLinkMode(closed = false); message = "선 연결을 켰어요 · 다음 점부터 새 연결"; return }
+        val had = arch.activeOutlineVertices().isNotEmpty()
+        if (had) arch.finishOutline(arch.preferClosed)
+        message = if (had) "앞 외곽을 마무리했어요 · 다음 점부터 새 연결" else "다음 점부터 새 연결이에요"
+    }
+
     fun setLinkMode(closed: Boolean) {
         if (arch.outlineMode && arch.preferClosed == closed) { toggleOutlineMode(); return }
         arch.preferClosed = closed
@@ -799,6 +837,8 @@ class SurveyController(
             tiles = if (anchored) mapTiles() else emptyList(),
             geo = if (anchored) projection else null,
             outlines = arch.outlineViews().map { MapOutline(it.outline.label, it.vertices.map { v -> loc(v) }, it.outline.closed, !it.outline.finished, arch.areas.firstOrNull { a -> a.id == it.outline.areaId }?.colorIdx ?: 0) },
+            style = markerStyle,
+            target = runCatching { hub.gotoTargetNE()?.let { loc(it) } }.getOrNull(),
         )
     }
 

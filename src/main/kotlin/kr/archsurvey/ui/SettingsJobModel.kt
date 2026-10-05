@@ -155,6 +155,12 @@ class JobController(
     fun openInfo() { error = null; notice = null; loadForm(); c.hub.open(ToolScreen.JOB_INFO); refresh() }
     fun openList() { error = null; notice = null; c.hub.open(ToolScreen.JOB_OPEN); refresh() }
     /** 새 작업: 이름 + 좌표계·지역·배경맵·Geoid 를 한 화면에서. 기본값 = 지금 작업 값(마지막 사용값) */
+    /** 0.1.14 목업 10 「지역 자동 설정」 토글: 켜면 [autoZone] 으로 지금 위치 경도에서 원점 선택. 위치가 없으면 안내 후 꺼짐 */
+    var autoZoneOn by mutableStateOf(false)
+    fun changeAutoZone(on: Boolean) {
+        autoZoneOn = on && c.gv.lon != null
+        if (on) autoZone()
+    }
     fun openNew() { error = null; notice = null; newName = ""; loadForm(); c.hub.open(ToolScreen.JOB_NEW); refresh() }
 
     private fun run(label: String, block: suspend () -> Unit) {

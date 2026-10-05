@@ -204,6 +204,9 @@ fun GnssInfoDialog(c: SurveyController) {
                 "보정 연령" to (g.correctionAgeSec?.let { String.format(java.util.Locale.US, "%.1f 초", it) } ?: "—") + (g.baseId?.let { " · 기준국 $it" } ?: ""),
                 "장비" to (HeaderModel.shortModel(model) + (dev?.let { " · $it" } ?: "")),
                 "좌표계" to c.zone.labelKo,
+                // 0.1.14 목업 05: 시리얼·펌웨어는 NMEA 로 오지 않아 지어내지 않고 "—"(가짜 값 금지)
+                "시리얼 번호" to "— (수신기가 보내지 않음)",
+                "펌웨어 버전" to "— (수신기가 보내지 않음)",
             )
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
             rows.forEachIndexed { i, (k, v) ->

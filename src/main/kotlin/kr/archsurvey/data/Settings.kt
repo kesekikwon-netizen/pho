@@ -121,6 +121,10 @@ class SettingsStore(private val ctx: Context) {
      * 배경맵 id 미러(SATELLITE|CADASTRAL|NONE…). 진실원은 작업 JobConfig.mapBase.
      * 0.1.13: JobConfig 저장 때 같이 맞춰, 옛 코드가 읽어도 화면과 같게.
      */
+    /** 0.1.14 위치 모양(목업 22). [kr.archsurvey.map.MarkerStyle.encode] 문자열 */
+    var markerStyle: String
+        get() = sp.getString("marker_style", "") ?: ""
+        set(v) = sp.edit().putString("marker_style", v).apply()
     var mapBase: String
         get() = sp.getString("map_base", "NONE") ?: "NONE"
         set(v) = sp.edit().putString("map_base", v).apply()

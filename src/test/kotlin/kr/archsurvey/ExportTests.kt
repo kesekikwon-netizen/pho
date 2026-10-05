@@ -75,6 +75,36 @@ class ExportServiceTest {
         assertTrue("points.csv" in names && "points.dxf" in names)
     }
 
+    /** 0.1.14 목업 11: 고른 양식만 ZIP 에 들어간다 + Shapefile 구조(헤더 9994/1000, 점 유형 1, 좌표 X=동 Y=북) */
+    @Test fun onlySelectedFormatsAndValidShapefile() = runBlocking {
+        val photos = PhotoStore(ctx, db.dao()); val voices = VoiceStore(ctx, db.dao())
+        db.dao().insertPointRaw(pt("P-0001")); db.dao().insertPointRaw(pt("P-0002").copy(northing = 500010.0, easting = 200005.0))
+        val fs = setOf(kr.archsurvey.export.ExportFormat.SHP, kr.archsurvey.export.ExportFormat.KML, kr.archsurvey.export.ExportFormat.REPORT)
+        val r = ExportService(ctx, db.dao(), photos, voices).export("작업1", includePhotos = false, includeVoices = false, formats = fs)
+        val names = ZipFile(r.zip).use { z -> z.entries().toList().map { it.name } }
+        for (n in listOf("points.shp", "points.shx", "points.dbf", "points.prj", "points.cpg", "points.kml", "point_report.csv", "README.txt")) assertTrue("$n in $names", n in names)
+        for (n in listOf("points.csv", "points.dxf", "points.geojson")) assertFalse("$n not in $names", n in names)
+        ZipFile(r.zip).use { z ->
+            val shp = java.nio.ByteBuffer.wrap(z.getInputStream(z.getEntry("points.shp")).readBytes())
+            assertEquals(9994, shp.order(java.nio.ByteOrder.BIG_ENDIAN).getInt(0))
+            assertEquals(shp.capacity() / 2, shp.getInt(24))
+            shp.order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            assertEquals(1000, shp.getInt(28)); assertEquals(1, shp.getInt(32))
+            assertEquals(200000.0, shp.getDouble(36), 1e-9); assertEquals(500010.0, shp.getDouble(60), 1e-9) // Xmin, Ymax
+            assertEquals(100 + 2 * 28, shp.capacity())
+            assertEquals(200005.0, shp.getDouble(100 + 28 + 12), 1e-9) // 두 번째 점 X
+            val dbf = z.getInputStream(z.getEntry("points.dbf")).readBytes()
+            assertEquals(2, java.nio.ByteBuffer.wrap(dbf).order(java.nio.ByteOrder.LITTLE_ENDIAN).getInt(4))
+            assertEquals(0x1A, dbf.last().toInt())
+            val prj = z.getInputStream(z.getEntry("points.prj")).readBytes().toString(Charsets.US_ASCII)
+            assertTrue(prj.contains("Central_Belt_2010") && prj.contains("127.0") && prj.contains("600000.0"))
+            val kml = z.getInputStream(z.getEntry("points.kml")).readBytes().toString(Charsets.UTF_8)
+            assertTrue(kml.contains("<name>P-0002</name>") && kml.contains("127.000000000,37.000000000"))
+            val rep = z.getInputStream(z.getEntry("point_report.csv")).readBytes().toString(Charsets.UTF_8)
+            assertTrue(rep.startsWith("\uFEFF번호,위치 종류") && rep.contains("P-0001"))
+        }
+    }
+
     @Test fun hiddenPointsAreNotExported() = runBlocking {
         val photos = PhotoStore(ctx, db.dao()); val voices = VoiceStore(ctx, db.dao())
         val id = db.dao().insertPointRaw(pt("P-0001")); db.dao().insertPointRaw(pt("P-0002"))

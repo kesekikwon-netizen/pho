@@ -35,6 +35,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import kr.archsurvey.core.*
 import kr.archsurvey.map.MapSurface
 
@@ -80,6 +82,11 @@ fun SurveyMapScreen(
         DrawerOverlay(c)
         if (c.gnssInfoOpen) GnssInfoDialog(c)
         if (c.skyPlotOpen) SkyPlotScreen(c)
+        // 0.1.14 목업 14·18·20·22
+        if (c.backupQuickOpen) BackupQuickDialog(c)
+        c.pointMenuFor?.let { PointMenuSheet(c, it) }
+        if (c.markerStyleOpen) MarkerStyleDialog(c)
+        if (c.photoReviewOpen) PhotoReviewScreen(c)
         if (c.phase == Phase.ACQUIRING) MeasureProgress(c)
         BusyQueueBar(c) // 0.1.14 대기열·진행 게이지
         FeedbackOverlays(c.ui)
@@ -91,6 +98,10 @@ fun SurveyMapScreen(
 internal fun backTarget(c: SurveyController): (() -> Unit)? {
     val cc = c.connection
     return when {
+        c.photoReviewOpen -> { { c.confirmPhoto() } }
+        c.markerStyleOpen -> { { c.markerStyleOpen = false } }
+        c.pointMenuFor != null -> { { c.pointMenuFor = null } }
+        c.backupQuickOpen -> { { c.backupQuickOpen = false } }
         c.skyPlotOpen -> { { c.skyPlotOpen = false } }
         c.gnssInfoOpen -> { { c.gnssInfoOpen = false } }
         c.drawerOpen -> { { c.drawerOpen = false } }
@@ -181,6 +192,8 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
                 ToolBtn(Glyph.EXTENT, "전체 보기", "tool_fit") { c.fitAll() }
                 ToolBtn(Glyph.PLUS, "확대", "tool_zoom_in") { c.zoomIn() }
                 ToolBtn(Glyph.MINUS, "축소", "tool_zoom_out") { c.zoomOut() }
+                // 0.1.14 목업 15 「2D」: 평면 지도 표시 설정 → 위치 모양(목업 22)
+                MBtn(Modifier.size(48.dp).testTag("tool_2d"), MKind.PLAIN, 16.dp, onClick = { c.markerStyleOpen = true }) { Text("2D", style = Ty.label, color = t.ink) }
             }
         }
         // 오른쪽(목업 15): 배경지도 · 레이어 · 점 목록 / 아래로 기포 · 안테나 높이 · 더보기
@@ -211,6 +224,18 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
         NotConnectedCard(c, Modifier.align(Alignment.Center))
         val h = c.antennaResult?.totalToApcM
         Column(Modifier.align(Alignment.BottomStart).padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            // 0.1.14: 위치 종류(코드) 칩 — 하단 툴바가 목업처럼 선·면·삭제·새 연결이 되면서 지도 왼쪽 아래로
+            if (!SurveyLayout.isResult(c.phase)) {
+                val sel = c.typeIndex.coerceIn(0, (c.types.size - 1).coerceAtLeast(0))
+                val typeName = c.types.getOrElse(sel) { "—" }
+                MBtn(Modifier.height(48.dp).semantics { contentDescription = "위치 종류 $typeName. 눌러서 바꾸기" }.testTag("type_chip"), MKind.PLAIN, 24.dp, onClick = { c.quickSheetOpen = true }) {
+                    Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        GlyphIcon(Glyph.PIN, t.accent, 16.dp)
+                        Text(typeName, style = Ty.label.copy(fontSize = 13.sp), color = t.ink, maxLines = 1)
+                        GlyphIcon(Glyph.CHEVRON_DOWN, t.inkSub, 14.dp)
+                    }
+                }
+            }
             ArchOverlays(c)
             c.message?.let { msg ->
                 Text(msg, style = Ty.body, color = t.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -297,11 +322,12 @@ private fun ResultPanel(c: SurveyController) {
             .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 16.dp).testTag("info_zone"),
     ) {
         if (expanded) Box(Modifier.height(SurveyDims.EXPANDED_EXTRA_DP.dp)) { ExpandedExtra(c) }
+        // 0.1.14 목업 17: 「측량된 점 정보」 · 이름+고정 · X/Y/Z · 수평/수직 정밀도 · 「다음 점(Pxx)을 계속 측량할까요?」 아니요 / 예, 계속
+        Text("측량된 점 정보", style = Ty.label.copy(fontSize = 14.sp), color = t.inkSub, maxLines = 1, modifier = Modifier.height(18.dp).testTag("result_title"))
         if (p != null) {
             val (bg, fg) = statusColors(t, p.status)
-            Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(p.name, style = Ty.coord.copy(fontSize = 20.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_name"))
-                Text(p.type, style = Ty.small, color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Row(
                     Modifier.height(28.dp).clip(RoundedCornerShape(14.dp)).glossy(bg).padding(start = 6.dp, end = 9.dp).testTag("result_chip"),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -309,41 +335,34 @@ private fun ResultPanel(c: SurveyController) {
                     StatusIcon(p.status, fg, 14.dp)
                     Text(if (p.status == SurveyStatus.FIXED) "고정" else "주의", style = Ty.label.copy(fontSize = 12.sp), color = fg, maxLines = 1)
                 }
+                Text(p.type, style = Ty.small, color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                MBtn(Modifier.height(40.dp).testTag("photo_count_btn"), MKind.PLAIN, 14.dp, onClick = { if (c.photos.size < MediaLimits.PHOTOS) c.addPhotoCamera() else c.toggleExpand() }) {
+                    Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        GlyphIcon(Glyph.CAMERA, t.accent, 18.dp)
+                        Text("${c.photos.size}/${MediaLimits.PHOTOS}", style = Ty.coord.copy(fontSize = 12.sp), color = t.ink, modifier = Modifier.testTag("photo_count"))
+                    }
+                }
+                MBtn(Modifier.size(40.dp).testTag("voice_btn"), MKind.PRIMARY, 20.dp, onClick = { c.toggleVoice() }) { GlyphIcon(Glyph.MIC, t.onPrimary, 18.dp) }
+                MBtn(Modifier.size(40.dp).testTag("expand_btn"), MKind.PLAIN, 14.dp, onClick = { c.toggleExpand() }) {
+                    GlyphIcon(if (expanded) Glyph.CHEVRON_DOWN else Glyph.CHEVRON_UP, t.accent, 20.dp)
+                }
             }
-            Spacer(Modifier.height(2.dp))
             Column(Modifier.fillMaxWidth().height(40.dp), verticalArrangement = Arrangement.Center) {
                 val m = Ty.coord.copy(fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Light)
                 Text("X(N) ${grp3(p.northing)}  Y(E) ${grp3(p.easting)}", style = m, color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_coord"))
-                Text("Z(H) ${p.groundHeightM?.let { grp3(it) } ?: "—"}  수평 ±${p.sigmaHM?.let { f3(it) } ?: "—"} m", style = m, color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_h"))
+                Text("Z(H) ${p.groundHeightM?.let { grp3(it) } ?: "—"}  수평 ±${p.sigmaHM?.let { f3(it) } ?: "—"}  수직 ±${p.sigmaU?.let { f3(it) } ?: "—"} m", style = m, color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_h"))
             }
         }
-        Spacer(Modifier.height(4.dp))
-        Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MBtn(Modifier.height(48.dp).testTag("photo_count_btn"), MKind.PLAIN, 16.dp, onClick = { if (c.photos.size < MediaLimits.PHOTOS) c.addPhotoCamera() else c.toggleExpand() }) {
-                Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    GlyphIcon(Glyph.CAMERA, t.accent, 18.dp)
-                    Text("사진", style = Ty.label, color = t.ink)
-                    Text("${c.photos.size}/${MediaLimits.PHOTOS}", style = Ty.coord.copy(fontSize = 12.sp), color = t.ink, modifier = Modifier.testTag("photo_count"))
-                }
+        Text("다음 점(${c.nextName})을 계속 측량할까요?", style = Ty.small.copy(fontSize = 13.sp), color = t.ink, maxLines = 1, modifier = Modifier.height(22.dp).padding(top = 2.dp).testTag("result_question"))
+        Spacer(Modifier.height(6.dp))
+        Row(Modifier.fillMaxWidth().height(56.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            MBtn(Modifier.weight(1f).height(56.dp).testTag("result_no"), MKind.PLAIN, 28.dp, onClick = { c.dismissResult() }) {
+                Text("아니요", style = Ty.label.copy(fontSize = 16.sp), color = t.ink, maxLines = 1)
             }
-            Spacer(Modifier.weight(1f))
-            MBtn(Modifier.size(52.dp).testTag("voice_btn"), MKind.PRIMARY, 26.dp, onClick = { c.toggleVoice() }) { GlyphIcon(Glyph.MIC, t.onPrimary, 22.dp) }
-            MBtn(Modifier.size(48.dp).testTag("expand_btn"), MKind.PLAIN, 16.dp, onClick = { c.toggleExpand() }) {
-                GlyphIcon(if (expanded) Glyph.CHEVRON_DOWN else Glyph.CHEVRON_UP, t.accent, 22.dp)
+            MBtn(Modifier.weight(1f).height(56.dp).testTag("next_point"), MKind.PRIMARY, 28.dp, onClick = { c.nextPoint() }) {
+                Text("예, 계속", style = Ty.button.copy(fontSize = 18.sp), color = t.onPrimary, maxLines = 1)
             }
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth().height(72.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            MBtn(Modifier.weight(1f, fill = false).widthIn(max = 224.dp).fillMaxWidth().height(72.dp).testTag("next_point"), MKind.PRIMARY, 22.dp, onClick = { c.nextPoint() }) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Box(Modifier.rotate(90f)) { GlyphIcon(Glyph.CHEVRON_UP, t.onPrimary, 30.dp) }
-                    Column {
-                        Text("다음 점", style = Ty.button.copy(fontSize = 35.sp, letterSpacing = 3.sp, lineHeight = 38.sp), color = t.onPrimary, maxLines = 1)
-                        Text(c.nextName, style = Ty.small.copy(fontSize = 14.sp), color = t.onPrimary, maxLines = 1)
-                    }
-                }
-            }
-            MBtn(Modifier.width(52.dp).height(48.dp).testTag("undo_button"), MKind.PLAIN, 14.dp, onClick = { c.askUndo() }) { GlyphIcon(Glyph.UNDO, t.accent, 20.dp) }
+            MBtn(Modifier.width(48.dp).height(48.dp).semantics { contentDescription = "마지막 점 되돌리기" }.testTag("undo_button"), MKind.PLAIN, 14.dp, onClick = { c.askUndo() }) { GlyphIcon(Glyph.UNDO, t.accent, 20.dp) }
         }
     }
 }
@@ -398,7 +417,7 @@ private fun ExpandedExtra(c: SurveyController) {
 }
 
 @Composable
-private fun PhotoThumb(c: SurveyController, ph: PhotoItem) {
+internal fun PhotoThumb(c: SurveyController, ph: PhotoItem) {
     var b by remember(ph.rel) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
     androidx.compose.runtime.LaunchedEffect(ph.rel) {
         b = withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { c.media?.thumb(ph.rel) }.getOrNull() }

@@ -19,7 +19,7 @@ class ExportService(
     private val ctx: Context, private val dao: SurveyDao, private val photos: PhotoStore,
     private val voices: kr.archsurvey.voice.VoiceStore? = null,
 ) {
-    suspend fun export(project: String, includePhotos: Boolean, includeVoices: Boolean = false): ExportResult {
+    suspend fun export(project: String, includePhotos: Boolean, includeVoices: Boolean = false, formats: Set<ExportFormat> = ExportFormat.DEFAULT): ExportResult {
         val pts = dao.pointsOf(project)
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val base = File(ctx.getExternalFilesDir("Documents") ?: ctx.filesDir, "exports").also { it.mkdirs() }
@@ -54,11 +54,19 @@ class ExportService(
             }
             File(dir, "voice.csv").writeText(voiceRows.toString(), Charsets.UTF_8)
         }
-        File(dir, "points.csv").writeText(Formats.pointsCsv(pts, byPoint), Charsets.UTF_8)
-        File(dir, "photos.csv").writeText(Formats.photosCsv(photoRows), Charsets.UTF_8)
-        File(dir, "points.geojson").writeText(Formats.pointsGeoJson(pts, byPoint), Charsets.UTF_8)
+        // 0.1.14: 고른 양식만 만든다(목업 11). 사진 목록 CSV 는 사진을 넣을 때 또는 기본 양식일 때
+        if (ExportFormat.CSV in formats) File(dir, "points.csv").writeText(Formats.pointsCsv(pts, byPoint), Charsets.UTF_8)
+        if (ExportFormat.CSV in formats || includePhotos) File(dir, "photos.csv").writeText(Formats.photosCsv(photoRows), Charsets.UTF_8)
+        if (ExportFormat.GEOJSON in formats) File(dir, "points.geojson").writeText(Formats.pointsGeoJson(pts, byPoint), Charsets.UTF_8)
         // DXF: 지면 표고(표고 우선, 없으면 타원체고). 축 순서 기본 X=동·Y=북, 한글은 CP949
-        File(dir, "points.dxf").writeBytes(DxfWriter.write(pts.map { DxfPoint(it.pointId, it.easting, it.northing, it.groundMsl ?: it.groundEllipsoidalHeight) }))
+        if (ExportFormat.DXF in formats) File(dir, "points.dxf").writeBytes(DxfWriter.write(pts.map { DxfPoint(it.pointId, it.easting, it.northing, it.groundMsl ?: it.groundEllipsoidalHeight) }))
+        if (ExportFormat.REPORT in formats) File(dir, "point_report.csv").writeText(MoreFormats.reportCsv(pts, byPoint), Charsets.UTF_8)
+        if (ExportFormat.KML in formats) File(dir, "points.kml").writeText(MoreFormats.kml(project, pts), Charsets.UTF_8)
+        if (ExportFormat.SHP in formats) {
+            val sh = MoreFormats.shape(pts)
+            File(dir, "points.shp").writeBytes(sh.shp); File(dir, "points.shx").writeBytes(sh.shx); File(dir, "points.dbf").writeBytes(sh.dbf)
+            File(dir, "points.prj").writeText(sh.prj, Charsets.US_ASCII); File(dir, "points.cpg").writeText(sh.cpg, Charsets.US_ASCII)
+        }
         File(dir, "README.txt").writeText(readme(project, pts.size), Charsets.UTF_8)
 
         val zip = File(base, "${safe}_$stamp.zip")
@@ -77,6 +85,10 @@ class ExportService(
         points.csv      모든 항목(UTF-8, 엑셀 한글 가능)
         points.geojson  경위도(WGS84)+속성
         points.dxf      CAD용 점·번호·표고 (R2000, 단위 m, 한글 CP949, X=동 Y=북, 레이어 PT/PT_NO/PT_ELEV)
+        point_report.csv 점 보고서(엑셀용 핵심 열)
+        points.kml      구글어스(경위도+지면 타원체고)
+        points.shp/.shx/.dbf/.prj/.cpg  점 Shapefile(X=동 Y=북, 속성 UTF-8)
+        (고른 양식만 들어 있어요)
         photos.csv, photos/  점별 사진(최대 4장)
         voice.csv, voices/   점별 음성 메모(m4a, AAC 16kHz 모노). 내보낼 때 '음성 포함'을 켠 경우만
         좌표계는 CSV의 crs_epsg 열 참고. 실제 CAD 프로그램 열람은 현장에서 확인 필요.

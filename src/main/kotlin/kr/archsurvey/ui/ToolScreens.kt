@@ -42,6 +42,10 @@ fun ToolHost(c: SurveyController) {
         ToolScreen.GRID_WIZ -> GridWizardScreen(c)
         ToolScreen.TYPES -> TypesScreen(c)
         ToolScreen.VWORLD -> VWorldScreen(c)
+        ToolScreen.SURVEY_HUB -> SurveyHubScreen(c)
+        ToolScreen.JOB_HUB -> JobHubScreen(c)
+        ToolScreen.RTK -> RtkScreen(c)
+        ToolScreen.IMU -> ImuScreen(c)
         null -> {}
     }
 }
@@ -64,28 +68,49 @@ fun PointsScreen(c: SurveyController) {
                 }
             }
         }
-        for (p in list) PointRow(p) { h.openDetail(p) }
+        // 0.1.14 목업 19: 측점순 · 그룹순(위치 종류) · 이름순 + 표(이름 · X(N) · Y(E) · Z(H)). 길게 누르면 점 메뉴(목업 20)
+        var sort by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableIntStateOf(0) }
+        if (list.isNotEmpty()) {
+            Seg(listOf("측점순", "그룹순", "이름순"), sort, "points_sort") { sort = it }
+            Row(Modifier.fillMaxWidth().height(32.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                for ((w, k) in listOf(1.3f to "이름", 1.5f to "X(N)", 1.5f to "Y(E)", 1f to "Z(H)")) Text(k, style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.weight(w))
+            }
+        }
+        val sorted = when (sort) {
+            1 -> list.sortedWith(compareBy<SavedPoint>({ it.type }, { it.measuredAtMs }))
+            2 -> list.sortedBy { it.name }
+            else -> list
+        }
+        var lastType: String? = null
+        for (p in sorted) {
+            if (sort == 1 && p.type != lastType) { Text(p.type.ifBlank { "종류 없음" }, style = Ty.label, color = t.inkSub, modifier = Modifier.padding(top = 6.dp)); lastType = p.type }
+            PointRow(p, onLong = { c.pointMenuFor = p }) { h.openDetail(p) }
+        }
+        if (list.isNotEmpty()) Text("점을 길게 누르면 재측량 · 편집 · 찾아가기 · 삭제 메뉴가 열려요.", style = Ty.small, color = t.inkSub)
     }
 }
 
 @Composable
-private fun PointRow(p: SavedPoint, onClick: () -> Unit) {
+private fun PointRow(p: SavedPoint, onLong: () -> Unit, onClick: () -> Unit) {
     val t = T
     val (sbg, sfg) = statusColors(t, p.status)
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 72.dp).clip(RoundedCornerShape(16.dp)).background(t.card).hClickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp).testTag("point_row_${p.name}"),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(12.dp)).background(t.card).hCombinedClickable(onLongClick = onLong, onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 8.dp).testTag("point_row_${p.name}"),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(p.name, style = Ty.coord.copy(fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = t.ink, maxLines = 1)
-            Text(p.type + if (p.memo.isNotBlank()) " · ${p.memo}" else "", style = Ty.small, color = t.inkSub, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-            Text("N ${f3(p.northing)}  E ${f3(p.easting)}", style = Ty.coord.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1)
+        Column(Modifier.weight(1.3f)) {
+            Text(p.name, style = Ty.coord.copy(fontSize = 13.sp), color = t.ink, maxLines = 1, softWrap = false)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                // 상태는 색 + 아이콘 (목업 규칙: 색만으로 구분하지 않음)
+                Box(Modifier.size(14.dp).clip(RoundedCornerShape(7.dp)).background(sbg), contentAlignment = Alignment.Center) { StatusIcon(p.status, sfg, 10.dp) }
+                Text(p.type + if (p.memo.isNotBlank()) " · ${p.memo}" else "", style = Ty.small.copy(fontSize = 10.sp), color = t.inkSub, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            }
         }
-        // 상태는 색 + 아이콘 + 글자 (목업 규칙)
-        Row(
-            Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).background(sbg).padding(start = 8.dp, end = 12.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) { StatusIcon(p.status, sfg, 16.dp); Text(if (p.status == SurveyStatus.FIXED) "고정" else "주의", style = Ty.label.copy(fontSize = 12.sp), color = sfg) }
+        val m = Ty.coord.copy(fontSize = 11.sp)
+        Text(grp3(p.northing), style = m, color = t.ink, maxLines = 1, modifier = Modifier.weight(1.5f))
+        Text(grp3(p.easting), style = m, color = t.ink, maxLines = 1, modifier = Modifier.weight(1.5f))
+        Text(p.groundHeightM?.let { f3(it) } ?: "—", style = m, color = t.ink, maxLines = 1, modifier = Modifier.weight(1f))
     }
 }
 
@@ -97,7 +122,8 @@ fun PointDetailScreen(c: SurveyController) {
     val p = h.selected
     if (p == null) { h.back(); return }
     ToolScaffold(p.name, "point_detail", onBack = { h.back() }, bottom = {
-        PrimaryBar(if (h.saved && !h.dirty) "저장했어요" else "수정 저장", "point_save", enabled = h.dirty) { h.saveEdit() }
+        // 0.1.14 목업 21 하단: 지도에서 보기 / 편집 저장
+        DualBar("지도에서 보기", "detail_map_bar", { c.focusOn(p); c.goToSurvey() }, if (h.saved && !h.dirty) "저장했어요" else "편집 저장", "point_save", h.dirty) { h.saveEdit() }
     }) {
         ReadRow("점 이름") { Text(p.name, style = Ty.coord.copy(fontSize = 18.sp), color = t.ink, modifier = Modifier.testTag("detail_name")) }
         var typeOpen by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -135,6 +161,8 @@ fun PointDetailScreen(c: SurveyController) {
                 (p.groundMslM?.let { " · 표고 ${f3(it)} m (" + kr.archsurvey.core.GeoidModel.fromId(p.heightModel.ifEmpty { null }).shortKo + ")" } ?: "") + (if (p.measuredAtMs > 0) "\n" + SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(p.measuredAtMs)) else "") + averagingLine(p),
             style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("detail_info"),
         )
+        MeasureTable(c, p)
+        DetailPhotos(c, p)
         if (p.samples.isNotEmpty()) SamplesCard(p)
         PointHistoryCards(c, p)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -145,6 +173,52 @@ fun PointDetailScreen(c: SurveyController) {
 }
 
 private fun ToolsHub.memo() = editMemo
+
+/** 0.1.14 목업 21 측량 정보 표. 저장된 값만(PDOP 은 점에 저장하지 않아 HDOP 만) */
+@Composable
+private fun MeasureTable(c: SurveyController, p: SavedPoint) {
+    val t = T
+    val fmt = SimpleDateFormat("HH:mm:ss", Locale.KOREA)
+    val idx = c.points.indexOfFirst { it.rowId == p.rowId && it.name == p.name }
+    val prev = if (idx > 0) c.points[idx - 1] else null
+    fun d(v: Double?) = v?.let { String.format(Locale.US, "%+.3f m", it) } ?: "—"
+    val rows = listOf(
+        "HDOP" to (p.hdop?.let { String.format(Locale.US, "%.1f", it) } ?: "—"),
+        "시작 시간" to (p.avgStartedAtMs?.let { fmt.format(Date(it)) } ?: "—"),
+        "종료 시간" to (p.avgEndedAtMs?.let { fmt.format(Date(it)) } ?: (if (p.measuredAtMs > 0) fmt.format(Date(p.measuredAtMs)) else "—")),
+        "Epoch" to "${p.epochs}",
+        "위성" to "${p.satellites}",
+        "높이 지점" to p.antenna.refPointLabel,
+        "수평 / 수직 정밀도" to "${p.sigmaHM?.let { f3(it) } ?: "—"} / ${p.sigmaU?.let { f3(it) } ?: "—"} m",
+        "ΔX(N) 앞 점 대비" to (prev?.let { d(p.northing - it.northing) } ?: "— (첫 점)"),
+        "ΔY(E) 앞 점 대비" to (prev?.let { d(p.easting - it.easting) } ?: "—"),
+        "ΔZ(H) 앞 점 대비" to (prev?.let { a -> if (a.groundHeightM != null && p.groundHeightM != null) d(p.groundHeightM - a.groundHeightM) else "—" } ?: "—"),
+    )
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(t.raised).border(1.dp, t.line, RoundedCornerShape(18.dp)).padding(vertical = 4.dp).testTag("detail_measure")) {
+        Text("측량 정보" + (prev?.let { " · 앞 점 ${it.name}" } ?: ""), style = Ty.label, color = t.ink, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+        rows.forEachIndexed { i, (k, v) ->
+            Row(Modifier.fillMaxWidth().height(32.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(k, style = Ty.small.copy(fontSize = 13.sp), color = t.inkSub, modifier = Modifier.weight(1f))
+                Text(v, style = Ty.coord.copy(fontSize = 13.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("detail_m_$i"))
+            }
+        }
+    }
+}
+
+/** 0.1.14 목업 21 현장 사진(이 점에 붙은 사진, 최대 4장) */
+@Composable
+private fun DetailPhotos(c: SurveyController, p: SavedPoint) {
+    val t = T
+    var photos by androidx.compose.runtime.remember(p.rowId) { androidx.compose.runtime.mutableStateOf<List<PhotoItem>>(emptyList()) }
+    androidx.compose.runtime.LaunchedEffect(p.rowId) { photos = runCatching { c.media?.photos(p.rowId) }.getOrNull().orEmpty() }
+    Card {
+        Text("현장 사진 ${photos.size}/${MediaLimits.PHOTOS}", style = Ty.label, color = t.ink, modifier = Modifier.testTag("detail_photos_title"))
+        if (photos.isEmpty()) Text("이 점에 붙은 사진이 없어요. 측량 직후 결과 패널의 카메라로 찍어요.", style = Ty.small, color = t.inkSub)
+        else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (ph in photos.take(MediaLimits.PHOTOS)) Box(Modifier.size(72.dp).clip(RoundedCornerShape(12.dp)).background(t.bg).testTag("detail_photo_${ph.id}"), contentAlignment = Alignment.Center) { PhotoThumb(c, ph) }
+        }
+    }
+}
 
 /** 목업의 읽기 전용 줄: 왼쪽 작은 이름 + 오른쪽 값 */
 @Composable
@@ -433,6 +507,9 @@ fun JobScreen(c: SurveyController) {
                     OutlinedTextField(jc.newName, { jc.newName = it }, singleLine = true, label = { Text("예) 3지구-A트렌치") }, modifier = Modifier.fillMaxWidth().testTag("job_name"))
                 }
                 JobConfigRows(c, jc, editableZone = true)
+                // 0.1.14 목업 10: 지역 자동 설정 · 코드 라이브러리(= 위치 종류)
+                ToggleRow("지역 자동 설정 (지금 위치로 원점 선택)", jc.autoZoneOn, "job_auto_zone") { jc.changeAutoZone(it) }
+                SelectRow("코드 라이브러리 (위치 종류)", "${c.types.size}개 · 눌러서 편집", false, "job_codes") { c.hub.open(ToolScreen.TYPES) }
                 Text("새 작업은 점 번호가 P-0001부터 다시 시작해요. 이전 작업의 점은 그대로 있어요. 기본값은 지금 작업의 설정이에요.", style = Ty.small, color = t.inkSub)
             }
             ToolScreen.JOB_OPEN -> {

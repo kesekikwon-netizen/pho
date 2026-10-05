@@ -126,11 +126,11 @@ internal fun ControlArea(c: SurveyController) {
             horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically,
         ) {
             val tools: @Composable RowScope.() -> Unit = {
-                val typeName = c.types.getOrElse(sel) { "—" }
-                BarItem(Glyph.PIN, typeName, "type_chip", "위치 종류 $typeName. 눌러서 바꾸기") { c.quickSheetOpen = true }
+                // 0.1.14 목업 15 순서: 선으로 연결 · 면으로 연결 · 삭제하기 · 새 연결 시작 (위치 종류 칩은 지도 왼쪽 아래)
                 BarItem(Glyph.POLYLINE, "선으로\n연결", "tool_link_line", "외곽을 선으로 연결", a.outlineMode && !a.preferClosed) { c.setLinkMode(closed = false) }
                 BarItem(Glyph.POLYGON, "면으로\n연결", "tool_link_area", "외곽을 면으로 연결", a.outlineMode && a.preferClosed) { c.setLinkMode(closed = true) }
-                BarItem(Glyph.UNDO, "되돌리기", "tool_undo", "마지막 측점 되돌리기") { c.askUndo() }
+                BarItem(Glyph.UNDO, "삭제하기", "tool_undo", "마지막 측점 삭제(되돌리기)") { c.askUndo() }
+                BarItem(Glyph.PLUS, "새 연결\n시작", "tool_new_link", "외곽 마무리하고 새 연결 시작") { c.startNewLink() }
             }
             val measure: @Composable RowScope.() -> Unit = {
                 MBtn(

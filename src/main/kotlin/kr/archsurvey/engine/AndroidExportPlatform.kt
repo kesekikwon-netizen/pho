@@ -30,8 +30,10 @@ class AndroidExportPlatform(
         return ExportSummary(project(), pts.size, ph, vo, pts.count { "가짜" in it.device })
     }
 
-    override suspend fun export(includePhotos: Boolean, includeVoices: Boolean): ExportOutput {
-        val r: ExportResult = svc.export(project(), includePhotos, includeVoices)
+    override suspend fun export(includePhotos: Boolean, includeVoices: Boolean): ExportOutput = exportFormats(kr.archsurvey.export.ExportFormat.DEFAULT, includePhotos, includeVoices)
+
+    override suspend fun exportFormats(formats: Set<kr.archsurvey.export.ExportFormat>, includePhotos: Boolean, includeVoices: Boolean): ExportOutput {
+        val r: ExportResult = svc.export(project(), includePhotos, includeVoices, formats)
         lastZip = r.zip
         return ExportOutput(r.zip.name, r.zip.length(), r.zip.path, r.pointCount, r.photoCount, r.voiceCount)
     }

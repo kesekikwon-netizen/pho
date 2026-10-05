@@ -261,10 +261,15 @@ private fun DeviceSection(cc: ConnectionController, link: kr.archsurvey.device.L
                     .then(if (on) Modifier.border(1.dp, t.line.copy(alpha = 0.5f), RoundedCornerShape(24.dp)) else Modifier)
                     .hClickable { cc.selectProfile(d) }.testTag("conn_model_${d.id}"),
                 contentAlignment = Alignment.Center,
-            ) { Text(d.displayName.replace("Spectra Precision", "Spectra"), style = Ty.label.copy(fontSize = 15.sp), color = if (on) t.ink else t.inkSub, maxLines = 1) }
+            ) { Text(d.displayName.replace("Spectra Precision", "Spectra").replace(" ", " · "), style = Ty.label.copy(fontSize = 15.sp), color = if (on) t.ink else t.inkSub, maxLines = 1) }
         }
+        // 목업 04 「기타」: 다른 수신기는 통신 검증 전이라 지원하지 않음(누르면 안내)
+        Box(
+            Modifier.weight(0.7f).fillMaxHeight().clip(RoundedCornerShape(24.dp)).hClickable { cc.ui.fail("기타 수신기는 아직 지원하지 않아요 · R10 · SP60 만 연결돼요") }.testTag("conn_model_other"),
+            contentAlignment = Alignment.Center,
+        ) { Text("기타", style = Ty.label.copy(fontSize = 15.sp), color = t.inkSub.copy(alpha = 0.6f), maxLines = 1) }
     }
-    Text("폰에 등록된 장비", style = Ty.small.copy(fontSize = 13.sp), color = t.inkSub, modifier = Modifier.padding(top = 4.dp))
+    Text("등록된 장비 (폰 블루투스)", style = Ty.small.copy(fontSize = 13.sp), color = t.inkSub, modifier = Modifier.padding(top = 4.dp))
     if (cc.bonded.isEmpty()) {
         Text("등록된 기기가 없어요. 먼저 폰의 블루투스 설정에서 수신기를 등록하세요.", style = Ty.small, color = t.inkSub)
         for ((i, st) in p.pairingSteps.withIndex()) Text("${i + 1}. $st", style = Ty.small, color = t.inkSub)
@@ -291,10 +296,14 @@ private fun DeviceSection(cc: ConnectionController, link: kr.archsurvey.device.L
         }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Btn("목록 새로고침", Modifier.weight(1f).testTag("conn_refresh")) { cc.refresh() }
+        // 목업 04 🔍: 폰에 등록된 장비 목록을 다시 읽고 결과를 알려 줌
+        Btn("🔍 주변 장비 검색", Modifier.weight(1f).testTag("conn_refresh")) {
+            cc.refresh()
+            if (cc.bonded.isEmpty()) cc.ui.fail("등록된 장비가 없어요 · 「새 장비 등록」에서 먼저 페어링하세요") else cc.ui.ok("등록된 장비 ${cc.bonded.size}개를 찾았어요")
+        }
         Btn("새 장비 등록", Modifier.weight(1f).testTag("conn_bt_settings_top")) { cc.openBluetoothSettings() }
     }
-    Text("새 수신기는 폰의 블루투스 설정에서 먼저 등록(페어링)해요. 앱은 등록된 장비에만 연결해요(주변 검색 목록은 아직 없음).", style = Ty.small, color = t.inkSub)
+    Text("새 수신기는 폰의 블루투스 설정에서 먼저 등록(페어링)해요. 앱은 등록된 장비에만 연결해요(페어링 안 된 기기 직접 검색은 폰 블루투스 설정에서).", style = Ty.small, color = t.inkSub)
     FoldRow("처음 연결 도움말", cc.showHelp, "conn_help_toggle") { cc.showHelp = !cc.showHelp }
     if (cc.showHelp) {
         Btn("블루투스 설정 열기", Modifier.fillMaxWidth().testTag("conn_bt_settings")) { cc.openBluetoothSettings() }

@@ -126,7 +126,10 @@ class Ui0111Test {
 
     @Test fun b_homeToSurveyMapAndBack() {
         val (c, _, _) = setup()
+        // 0.1.14: 큰 카드 → 일반 측량 메뉴(목업 08) → 「측량」 → 지도
         rule.onNodeWithTag("home_survey").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("survey_hub").assertExists()
+        rule.onNodeWithTag("hub_survey").performClick(); rule.waitForIdle()
         assertFalse(c.homeOpen)
         rule.onNodeWithTag("home_screen").assertDoesNotExist()
         rule.onAllNodesWithTag("header_title").assertAny(hasText("측량"))

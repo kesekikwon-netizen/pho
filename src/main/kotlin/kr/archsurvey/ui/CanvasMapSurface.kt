@@ -100,25 +100,69 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
                 prev?.let { drawLine(t.ink, it, o, 1.5f * density) }
                 prev = o
             }
+            val st = state.style
+            val pr = 7f * density * st.scale(st.pointSize)
             for (m in state.points) {
                 val o = Offset(sx(m.at.x), sy(m.at.y))
-                drawCircle(if (m.flagged) t.caution else t.fixed, 7f * density, o)
-                drawCircle(t.bg, 7f * density, o, style = Stroke(2f * density))
+                val pc = if (m.flagged) t.caution else t.fixed
+                when (st.point) {
+                    kr.archsurvey.map.PointShape.DOT -> { drawCircle(pc, pr, o); drawCircle(t.bg, pr, o, style = Stroke(2f * density)) }
+                    kr.archsurvey.map.PointShape.SQUARE -> {
+                        drawRect(pc, Offset(o.x - pr, o.y - pr), androidx.compose.ui.geometry.Size(pr * 2, pr * 2))
+                        drawRect(t.bg, Offset(o.x - pr, o.y - pr), androidx.compose.ui.geometry.Size(pr * 2, pr * 2), style = Stroke(2f * density))
+                    }
+                    kr.archsurvey.map.PointShape.TRIANGLE -> {
+                        val tri = Path().apply { moveTo(o.x, o.y - pr * 1.2f); lineTo(o.x - pr, o.y + pr * 0.8f); lineTo(o.x + pr, o.y + pr * 0.8f); close() }
+                        drawPath(tri, pc); drawPath(tri, t.bg, style = Stroke(2f * density))
+                    }
+                }
                 // 0.1.11: 화면 밖(특히 위쪽 멀리) 점의 이름을 그리면 drawText 제약 높이가 수백만 px 가 되어 앱이 죽는다 → 보이는 범위만 그린다
                 val lt = Offset(o.x + 10f * density, o.y - 22f * density)
                 if (lt.x >= -200f * density && lt.y >= -40f * density && lt.x < size.width && lt.y < size.height)
-                    drawText(tm, m.name, lt, TextStyle(fontSize = 12.sp, color = t.ink, fontWeight = FontWeight.Normal))
+                {
+                    // 0.1.14 점 이름 배경색(검정/흰색)
+                    val dark = st.labelBg == kr.archsurvey.map.LabelBg.BLACK
+                    val lay = tm.measure(m.name, TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Normal))
+                    drawRect(if (dark) t.ink.copy(alpha = 0.85f) else t.bg.copy(alpha = 0.85f), Offset(lt.x - 2f * density, lt.y), androidx.compose.ui.geometry.Size(lay.size.width + 4f * density, lay.size.height.toFloat()))
+                    drawText(tm, m.name, lt, TextStyle(fontSize = 12.sp, color = if (dark) t.bg else t.ink, fontWeight = FontWeight.Normal))
+                }
+            }
+            // 0.1.14 찾아갈 목표(깃발/십자)
+            state.target?.let { tg ->
+                val o = Offset(sx(tg.x), sy(tg.y)); val k = st.scale(st.targetSize)
+                if (st.target == kr.archsurvey.map.TargetShape.FLAG) {
+                    drawLine(t.ink, o, Offset(o.x, o.y - 22f * density * k), 2f * density)
+                    val f = Path().apply { moveTo(o.x, o.y - 22f * density * k); lineTo(o.x + 14f * density * k, o.y - 17f * density * k); lineTo(o.x, o.y - 12f * density * k); close() }
+                    drawPath(f, t.bad)
+                } else {
+                    drawLine(t.bad, Offset(o.x - 10f * density * k, o.y), Offset(o.x + 10f * density * k, o.y), 2.5f * density)
+                    drawLine(t.bad, Offset(o.x, o.y - 10f * density * k), Offset(o.x, o.y + 10f * density * k), 2.5f * density)
+                }
             }
             // 현재 위치 (정확도 원 + 방향 삼각형)
             state.current?.let { c ->
                 val o = Offset(sx(c.at.x), sy(c.at.y))
                 val col = when (c.status) { SurveyStatus.FIXED -> t.fixed; SurveyStatus.CAUTION -> t.caution; SurveyStatus.UNAVAILABLE -> t.bad }
-                val rAcc = (c.accuracyM * ppm).toFloat().coerceIn(12f * density, 120f * density)
-                drawCircle(col.copy(alpha = 0.18f), rAcc, o)
-                drawCircle(col.copy(alpha = 0.55f), rAcc, o, style = Stroke(1.5f * density))
-                drawCircle(t.bg, 11f * density, o)
-                drawCircle(col, 8f * density, o)
-                c.headingDeg?.let { h ->
+                val k = st.scale(st.currentSize)
+                if (st.extra == kr.archsurvey.map.MarkerExtra.ERROR) {
+                    val rAcc = (c.accuracyM * ppm).toFloat().coerceIn(12f * density, 120f * density)
+                    drawCircle(col.copy(alpha = 0.18f), rAcc, o)
+                    drawCircle(col.copy(alpha = 0.55f), rAcc, o, style = Stroke(1.5f * density))
+                }
+                when (st.current) {
+                    kr.archsurvey.map.CurrentShape.RING -> {
+                        drawCircle(t.bg, 11f * density * k, o); drawCircle(col, 8f * density * k, o)
+                        drawCircle(col, 15f * density * k, o, style = Stroke(1.5f * density))
+                    }
+                    kr.archsurvey.map.CurrentShape.DOT -> { drawCircle(t.bg, 9f * density * k, o); drawCircle(col, 6.5f * density * k, o) }
+                    kr.archsurvey.map.CurrentShape.ARROW -> {
+                        rotate((c.headingDeg ?: 0.0).toFloat(), pivot = o) {
+                            val a = Path().apply { moveTo(o.x, o.y - 14f * density * k); lineTo(o.x - 9f * density * k, o.y + 10f * density * k); lineTo(o.x, o.y + 5f * density * k); lineTo(o.x + 9f * density * k, o.y + 10f * density * k); close() }
+                            drawPath(a, col); drawPath(a, t.bg, style = Stroke(2f * density))
+                        }
+                    }
+                }
+                if (st.extra == kr.archsurvey.map.MarkerExtra.HEADING) c.headingDeg?.let { h ->
                     rotate(h.toFloat(), pivot = o) {
                         val tri = Path().apply {
                             moveTo(o.x, o.y - 15f * density); lineTo(o.x - 5f * density, o.y - 6f * density); lineTo(o.x + 5f * density, o.y - 6f * density); close()

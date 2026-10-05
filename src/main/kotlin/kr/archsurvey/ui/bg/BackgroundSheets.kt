@@ -1,5 +1,7 @@
 package kr.archsurvey.ui.bg
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import kr.archsurvey.ui.hClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -180,14 +182,28 @@ private fun LayerSliderRow(bg: BackgroundController, r: LayerRow) {
 private fun ManageSheet(bg: BackgroundController) {
     val t = T
     SheetFrame("bg_sheet_manage", scrim = true, onDismiss = { bg.close() }, fixedBottom = {
-        BigBtn("파일 올리기", "btn_upload", BtnKind.PRIMARY, sub = "도면(GeoTIFF · DXF)을 지도에 맞춰 올려요") { bg.openPicker() }
+        BigBtn("＋ 배경맵 추가 (파일 올리기)", "btn_upload", BtnKind.PRIMARY, sub = "도면(GeoTIFF · DXF)을 지도에 맞춰 올려요") { bg.openPicker() }
     }) {
-        HeaderRow("배경 레이어", "manage") {
+        HeaderRow("배경맵 설정", "manage") {
             SmallPillBtn("투명도", "btn_opacity") { bg.openOpacity() }
             Spacer(Modifier.width(4.dp))
             CloseX("btn_close_sheet") { bg.close() }
         }
         Notice(bg)
+        // 0.1.14 목업 13 탭: 지도에서 범위 · 읍·면·동 검색 · 사용자 맵. 앞의 둘은 약관·범위 때문에 제한(안내만)
+        var tab by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableIntStateOf(2) }
+        kr.archsurvey.ui.Seg(listOf("지도에서 범위", "읍·면·동 검색", "사용자 맵"), tab, "bg_tab") { tab = it }
+        if (tab == 0) {
+            Text("V월드 약관상 배경지도 타일을 내려받아 저장(오프라인)하지 않아요. 지도 오른쪽 ‘배경지도’로 위성·지적도를 고르면 보는 동안만 메모리에 보관해요(인터넷 필요).",
+                style = Ty.body, color = t.ink, modifier = Modifier.testTag("bg_tab_range_note"))
+            return@SheetFrame
+        }
+        if (tab == 1) {
+            Text("읍·면·동 이름 검색은 이번 빌드에 없어요. 지도는 수신기 위치를 중심으로 열려서, 현장에서 연결하면 그 자리 배경지도가 바로 보여요.",
+                style = Ty.body, color = t.ink, modifier = Modifier.testTag("bg_tab_search_note"))
+            return@SheetFrame
+        }
+        Text("추가된 맵", style = Ty.label, color = t.inkSub)
         Text("V월드 위성·지적도는 지도 오른쪽 ‘배경지도’에서 골라요(키 필요). 여기서는 올린 도면의 윤곽만 겹쳐 보여요", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("manage_note"))
         for (r in bg.layers) {
             Row(

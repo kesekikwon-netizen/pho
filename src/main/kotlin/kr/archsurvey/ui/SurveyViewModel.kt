@@ -61,6 +61,8 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
         kr.archsurvey.data.AntennaDb.antennaIdForProfile(cc.profile.id)?.let { controller.setAntennaModel(it) }
         controller.setTypesList(application.settings.positionTypes)
         controller.onTypesChanged = { application.settings.positionTypes = it }
+        controller.markerStyle = kr.archsurvey.map.MarkerStyle.decode(application.settings.markerStyle)
+        controller.onMarkerStyleChanged = { application.settings.markerStyle = it.encode() }
         val archStore = kr.archsurvey.data.RoomArchStore(SurveyDb.get(app), project = { application.settings.project })
         controller.arch = kr.archsurvey.arch.ArchController(
             controller, archStore, viewModelScope,

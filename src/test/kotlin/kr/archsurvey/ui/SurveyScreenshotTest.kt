@@ -211,7 +211,7 @@ class SurveyScreenshotTest {
 
     @Test fun g_pole_left() {
         val (f, c) = make(poleRight = false); show(c); adv(f, 3)
-        assertTrue("측점 버튼이 왼쪽", bounds("measure_button").left.value < bounds("type_chip").left.value)
+        assertTrue("측점 버튼이 왼쪽(0.1.14: 위치 종류 칩은 지도로 옮겨 툴바 첫 버튼과 비교)", bounds("measure_button").left.value < bounds("tool_link_line").left.value)
         shot("16_pole_left")
     }
 
