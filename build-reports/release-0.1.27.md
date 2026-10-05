@@ -1,4 +1,6 @@
-# 0.1.27 릴리스 빌드 (versionCode 28) — 출시 게이트 판정 전
+# 0.1.27 릴리스 빌드 (versionCode 28) — 출시 게이트 판정 전 (UX-0127-1 수정본)
+
+> **현재 APK SHA-256 `4a755abba02c04c5fb673ddc91b1b06cf94ae2d206803007222a05137aa8d155`** (UX-0127-1 수정, 07:31 KST). 아래 §APK 의 264e2e72… 는 수정 전 = **폐기**.
 
 작성 2026-10-06 07:2x KST · 측량앱 안드로이드. **설치·Drive 업로드 안 함** (survey-release-gate: 출시게이트 「출시 가능」 판정 전).
 
@@ -24,7 +26,7 @@
 
 ## APK
 - 경로: `dist/ExcavationSurvey-0.1.27-release-signed.apk` (10,028,352 B, `gradle --offline assembleRelease`, lintVitalRelease 통과)
-- SHA-256: `264e2e72ccedf01a24b491c03cc2929adea7b58ed6d27696271c85e7ddcec55f`
+- SHA-256: ~~`264e2e72ccedf01a24b491c03cc2929adea7b58ed6d27696271c85e7ddcec55f`~~ (폐기, 수정 전) → §수정 UX-0127-1
 - aapt badging: `package: name='kr.archsurvey.field' versionCode='28' versionName='0.1.27'` · compileSdk 35 (`dist/aapt-0.1.27.txt`)
 - apksigner verify: v1 true · v2 true · v3 true (`dist/apksigner-0.1.27.txt`)
 - 인증서 SHA-1 `9dac6ce35f6bde0b75832fa8ac12aed750d173a8` = 0.1.26과 **같은 키** (DN CN=Survey Field App, O=photomaster kwon, C=KR; cert SHA-256 2f210fd4…acdf3)
@@ -53,3 +55,23 @@
 - [x] build-reports
 - [ ] QA·UX리뷰·출시게이트 회의(내보내기 전문 차단만) — **대기**
 - [ ] 실기기 내보내기 확인 — 판정 후
+
+## §수정 UX-0127-1 (출시 게이트 차단, 2026-10-06 KST)
+**문제:** 높이 없는 점이 iTwin XML 에서 화면 안내 없이 빠짐(대조표 CSV `itwin_capture_names_<EPSG>.csv` 에만 기록).
+
+**변경 (최소, 내보내기 영역만 · 버전 그대로 0.1.27 / 28):**
+- `export/ItwinCaptureXml.kt`: `droppedNoHeight(points)` — XML 쓰기와 같은 규칙(`MoreFormats.groundZ == null`)으로 빠지는 점 번호(측정 순서).
+- `export/ExportService.kt`: `ExportResult.itwinDroppedCount` / `itwinDroppedNames` (기본 0/빈 목록). ITWIN_XML 을 골랐을 때만 채움.
+- `ui/ExportModel.kt`: `ExportOutput` 에 같은 두 필드(기본값 → 기존 가짜·호출 호환), `ExportSummary.noHeightPoints`(기본 0). 완료 멘트 끝에 `ExportController.itwinDroppedNotice()` 결과를 덧붙임: 「· iTwin XML에서 높이 없는 점 n개 빠짐(4호, 7호, 9호 …)」 — 앞 3개 이름, 더 있으면 「 …」. iTwin 안 골랐거나 0개면 안 붙임.
+- `engine/AndroidExportPlatform.kt`: 위 필드 전달 + summary 에 높이 없는 점 수.
+- `ui/ExportScreen.kt`: (1) 결과 화면 개수 줄 아래 `export_itwin_dropped` 띠, (2) 내보내기 전 iTwin 옵션 아래 `export_itwin_no_height` 「높이 없는 점 n개는 iTwin XML에서 빠져요 (대조표 CSV에만 적힘)」. 둘 다 **주의 노랑 바탕(t.caution) + onCaution 글자** — 노랑 글자를 아이보리 바탕에 바로 쓰면 7:1 고대비 규칙을 못 맞춰서 상태 띠와 같은 바탕색 방식.
+- 시험 3개(`ExportTests.kt`): `ExportServiceTest.itwinDroppedNoHeightPointsAreReported`(실제 ZIP — 4호 빠짐·Target #4 없음·CSV만 고르면 0), `ExportControllerTest.itwinDroppedPointsAppendedToCompletionMessage`(멘트 끝 문구·미선택 시 없음·summary 수), `ExportControllerTest.itwinDroppedNoticeText`.
+
+**한계:** 완료 토스트 자체는 기존 OK(✓) 종류 그대로 — `FeedbackHub` 에 주의 종류가 없어 새로 만들면 공용 알림·햅틱 코드를 건드리므로 범위 밖. 주의색은 작업 전송 화면 띠로 보임. 토스트 주의 종류는 UX 판단 필요(비차단 후보).
+
+**확인:**
+- `ItwinDumpTmpTest` 소스에 없음(`rg` 0건).
+- APK: `dist/ExcavationSurvey-0.1.27-release-signed.apk` 10,030,831 B, 07:31 KST · **SHA-256 `4a755abba02c04c5fb673ddc91b1b06cf94ae2d206803007222a05137aa8d155`**
+- aapt: `kr.archsurvey.field` versionCode='28' versionName='0.1.27' · apksigner v1/v2/v3 true · cert SHA-1 `9dac6ce35f6bde0b75832fa8ac12aed750d173a8`(같은 키)
+- 시험(마지막 gradle 실행, 그 뒤 단일 시험 안 돌림): `gradle --offline cleanTestDebugUnitTest testDebugUnitTest` BUILD SUCCESSFUL, 끝 **07:33:03 KST**. 디스크 XML 90개 합산 **626 · 통과 626 · 실패 0 · 오류 0 · 건너뜀 0** (623 + 새 3).
+- 실기기·Drive: 안 함(게이트 판정 전).

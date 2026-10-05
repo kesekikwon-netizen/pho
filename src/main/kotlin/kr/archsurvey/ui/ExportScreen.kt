@@ -57,6 +57,8 @@ fun ExportScreen(ec: ExportController) {
             }
             if (ExportFormat.ITWIN_XML in ec.formats) {
                 CheckRow("iTwin 점 이름을 현장 번호 그대로 (끄면 1호 → Target #1)", ec.itwinKeepNames, "export_itwin_keep_names") { ec.itwinKeepNames = it }
+                val nh = s?.noHeightPoints ?: 0
+                if (nh > 0) Text("높이 없는 점 ${nh}개는 iTwin XML에서 빠져요 (대조표 CSV에만 적힘)", style = Ty.small, color = t.onCaution, modifier = Modifier.fillMaxWidth().background(t.caution, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp).testTag("export_itwin_no_height"))
             }
             CheckRow("사진 포함 (photos/)", ec.includePhotos, "export_photos") { ec.includePhotos = it }
             CheckRow("음성 메모 포함 (voices/)", ec.includeVoices, "export_voices") { ec.includeVoices = it }
@@ -89,6 +91,7 @@ fun ExportScreen(ec: ExportController) {
                 }
             }
             Text("${ec.formats.size}개 양식 · ${ExportController.sizeText(out.sizeBytes)} · 점 ${out.points}개 · 사진 ${out.photos}장 · 음성 ${out.voices}개", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("export_result_counts"))
+            ExportController.itwinDroppedNotice(ec.formats, out)?.let { Text(it.removePrefix("· "), style = Ty.small, color = t.onCaution, modifier = Modifier.fillMaxWidth().background(t.caution, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp).testTag("export_itwin_dropped")) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.weight(1f)) { Btn("공유하기", Modifier.fillMaxWidth().testTag("export_share")) { ec.share() } }
                 Box(Modifier.weight(1f)) { Btn("파일로 저장", Modifier.fillMaxWidth().testTag("export_save")) { ec.saveAs() } }

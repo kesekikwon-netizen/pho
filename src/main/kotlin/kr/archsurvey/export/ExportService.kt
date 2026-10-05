@@ -17,6 +17,9 @@ data class ExportResult(
     val dir: File, val zip: File, val pointCount: Int, val photoCount: Int, val voiceCount: Int = 0,
     /** 공용 문서 폴더에 둔 hgis 묶음 경로(예: Documents/ExcavationSurvey/hgis/작업_20261005_101000). 못 만들었으면 null */
     val publicFolder: String? = null,
+    /** UX-0127-1: iTwin XML 을 골랐을 때 높이가 없어 XML 에서 뺀 점 수·번호(대조표 CSV 에만 적힘) */
+    val itwinDroppedCount: Int = 0,
+    val itwinDroppedNames: List<String> = emptyList(),
 )
 
 /** 공용 문서 폴더 안 hgis 묶음 상위 경로 */
@@ -138,7 +141,8 @@ class ExportService(
         }
         // PC 로 옮겨 hgis 에 끌어 놓기 쉽게: 위 파일(사진·음성 폴더 제외)을 공용 문서 폴더에도 한 폴더로 둔다(Android 10 이상)
         val publicFolder = if (ExportFormat.SHP in formats || ExportFormat.HGIS_CSV in formats) publish(dir, "${safe}_$stamp") else null
-        return ExportResult(dir, zip, pts.size, photoCount, voiceCount, publicFolder)
+        val dropped = if (ExportFormat.ITWIN_XML in formats) ItwinCaptureXml.droppedNoHeight(pts) else emptyList()
+        return ExportResult(dir, zip, pts.size, photoCount, voiceCount, publicFolder, dropped.size, dropped)
     }
 
     /**

@@ -6,11 +6,16 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-data class ExportSummary(val project: String, val points: Int, val photos: Int, val voices: Int, val fakePoints: Int)
+data class ExportSummary(val project: String, val points: Int, val photos: Int, val voices: Int, val fakePoints: Int,
+    /** UX-0127-1: 높이가 없어 iTwin XML 에서 빠질 점 수(내보내기 전 안내) */
+    val noHeightPoints: Int = 0)
 data class ExportOutput(
     val fileName: String, val sizeBytes: Long, val path: String, val points: Int, val photos: Int, val voices: Int,
     /** hgis 묶음을 둔 공용 폴더(예: Documents/ExcavationSurvey/hgis/작업_시각). 없으면 null */
     val publicFolder: String? = null,
+    /** UX-0127-1: iTwin XML 에서 높이가 없어 뺀 점 수·번호 */
+    val itwinDroppedCount: Int = 0,
+    val itwinDroppedNames: List<String> = emptyList(),
 )
 
 /** 내보내기에 필요한 Android 기능. 시험에서는 가짜로 바꾼다. */
@@ -69,7 +74,8 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
                 output = o
                 o.publicFolder?.let { notice = hgisFolderText(it) }
                 onResult?.invoke(true, "내보내기 파일을 만들었어요 · ${o.fileName} (${sizeText(o.sizeBytes)}) · ${fs.size}개 양식 · " +
-                    (if (o.publicFolder != null) "PC로 옮길 폴더: 내장 저장공간/${o.publicFolder}" else "전송 방식을 고르세요"))
+                    (if (o.publicFolder != null) "PC로 옮길 폴더: 내장 저장공간/${o.publicFolder}" else "전송 방식을 고르세요") +
+                    (itwinDroppedNotice(fs, o)?.let { " $it" } ?: ""))
             }
             catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -89,6 +95,13 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
     fun saveAs() { output?.let { o -> platform.saveAs(o) { ok -> notice = if (ok) "파일로 저장했어요" else "저장을 취소했거나 실패했어요"; onResult?.invoke(ok, notice!!) } } }
 
     companion object {
+        /** UX-0127-1: 「· iTwin XML에서 높이 없는 점 n개 빠짐(4호, 7호, 9호 …)」. iTwin 을 안 골랐거나 빠진 점이 없으면 null */
+        fun itwinDroppedNotice(formats: Set<kr.archsurvey.export.ExportFormat>, o: ExportOutput, show: Int = 3): String? {
+            if (kr.archsurvey.export.ExportFormat.ITWIN_XML !in formats || o.itwinDroppedCount <= 0) return null
+            val names = o.itwinDroppedNames.take(show).joinToString(", ")
+            val more = if (o.itwinDroppedCount > o.itwinDroppedNames.take(show).size) " …" else ""
+            return "· iTwin XML에서 높이 없는 점 ${o.itwinDroppedCount}개 빠짐" + (if (names.isEmpty()) "" else "($names$more)")
+        }
         fun hgisFolderText(folder: String) =
             "폰을 USB로 PC에 연결 → 내장 저장공간/$folder 폴더를 PC에 복사 → 그 안의 points_EPSG.shp 를 hgis 지도에 끌어 놓으세요"
         fun sizeText(bytes: Long): String = when {

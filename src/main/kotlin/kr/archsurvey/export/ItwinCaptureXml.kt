@@ -107,6 +107,9 @@ object ItwinCaptureXml {
         return sb.toString()
     }
 
+    /** UX-0127-1: 높이(지면 표고·타원체고)가 없어 XML 에서 빠지는 점 번호(측정 순서) */
+    fun droppedNoHeight(points: List<PointEntity>): List<String> = points.filter { MoreFormats.groundZ(it) == null }.map { it.pointId }
+
     /** 이름 대조표(UTF-8 BOM CSV): 현장 번호 ↔ iTwin 이름. XML 을 표본과 똑같이 두려고 원래 이름은 여기에 적는다 */
     fun namesCsv(points: List<PointEntity>, keepOriginalNames: Boolean = false): String {
         val sb = StringBuilder("\uFEFFitwin_id,itwin_name,field_point_id,renamed,check_point,has_height,note\r\n")

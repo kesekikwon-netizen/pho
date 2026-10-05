@@ -108,6 +108,20 @@ class ExportServiceTest {
         }
     }
 
+    /** UX-0127-1: 높이 없는 점은 iTwin XML 에서 빠지고, 그 수·번호를 결과로 돌려준다(화면 안내용) */
+    @Test fun itwinDroppedNoHeightPointsAreReported() = runBlocking {
+        val photos = PhotoStore(ctx, db.dao()); val voices = VoiceStore(ctx, db.dao())
+        db.dao().insertPointRaw(pt("1호")); db.dao().insertPointRaw(pt("4호").copy(groundMsl = null, groundEllipsoidalHeight = null))
+        val svc = ExportService(ctx, db.dao(), photos, voices)
+        val r = svc.export("작업1", includePhotos = false, formats = setOf(kr.archsurvey.export.ExportFormat.ITWIN_XML))
+        assertEquals(1, r.itwinDroppedCount); assertEquals(listOf("4호"), r.itwinDroppedNames)
+        val xml = ZipFile(r.zip).use { z -> z.getInputStream(z.getEntry("itwin_capture_5186.xml")).readBytes().toString(Charsets.UTF_8) }
+        assertTrue(xml.contains("Target #1")); assertFalse(xml.contains("Target #4"))
+        // iTwin 을 안 고르면 0
+        val r2 = svc.export("작업1", includePhotos = false, formats = setOf(kr.archsurvey.export.ExportFormat.CSV))
+        assertEquals(0, r2.itwinDroppedCount)
+    }
+
     @Test fun hiddenPointsAreNotExported() = runBlocking {
         val photos = PhotoStore(ctx, db.dao()); val voices = VoiceStore(ctx, db.dao())
         val id = db.dao().insertPointRaw(pt("P-0001")); db.dao().insertPointRaw(pt("P-0002"))
@@ -169,6 +183,34 @@ class ExportControllerTest {
         assertEquals(kr.archsurvey.export.ExportFormat.HGIS, p.last)
         assertEquals("Documents/ExcavationSurvey/hgis/작업1_t", e.output!!.publicFolder)
         assertTrue(e.notice!!.contains("Documents/ExcavationSurvey/hgis/작업1_t"))
+    }
+    /** UX-0127-1: iTwin 양식 + 빠진 점 → 완료 멘트에 「· iTwin XML에서 높이 없는 점 n개 빠짐(…)」 */
+    @Test fun itwinDroppedPointsAppendedToCompletionMessage() {
+        val p = object : ExportPlatform {
+            override suspend fun summary() = ExportSummary("작업1", 6, 0, 0, 0, noHeightPoints = 5)
+            override suspend fun export(includePhotos: Boolean, includeVoices: Boolean) = error("no")
+            override suspend fun exportFormats(formats: Set<kr.archsurvey.export.ExportFormat>, includePhotos: Boolean, includeVoices: Boolean, itwinKeepNames: Boolean) =
+                ExportOutput("a.zip", 100, "/x/a.zip", 6, 0, 0, itwinDroppedCount = 5, itwinDroppedNames = listOf("4호", "7호", "9호", "11호", "12호"))
+            override fun share(out: ExportOutput) {}
+            override fun saveAs(out: ExportOutput, onDone: (Boolean) -> Unit) = onDone(true)
+        }
+        val msgs = ArrayList<Pair<Boolean, String>>()
+        val e = ExportController(p, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)).also { it.onResult = { ok, m -> msgs.add(ok to m) } }
+        e.openScreen(); assertEquals(5, e.summary!!.noHeightPoints)
+        e.toggleFormat(kr.archsurvey.export.ExportFormat.ITWIN_XML); e.run()
+        assertTrue(msgs.last().first)
+        assertTrue(msgs.last().second, msgs.last().second.endsWith(" · iTwin XML에서 높이 없는 점 5개 빠짐(4호, 7호, 9호 …)"))
+        // iTwin 을 고르지 않았으면 덧붙이지 않음
+        e.toggleFormat(kr.archsurvey.export.ExportFormat.ITWIN_XML); e.run()
+        assertFalse(msgs.last().second.contains("iTwin"))
+    }
+    @Test fun itwinDroppedNoticeText() {
+        val it = setOf(kr.archsurvey.export.ExportFormat.ITWIN_XML)
+        val o = ExportOutput("a.zip", 1, "/x", 2, 0, 0)
+        assertNull(ExportController.itwinDroppedNotice(it, o))
+        assertEquals("· iTwin XML에서 높이 없는 점 1개 빠짐(4호)", ExportController.itwinDroppedNotice(it, o.copy(itwinDroppedCount = 1, itwinDroppedNames = listOf("4호"))))
+        assertEquals("· iTwin XML에서 높이 없는 점 3개 빠짐(4호, 5호, 6호)", ExportController.itwinDroppedNotice(it, o.copy(itwinDroppedCount = 3, itwinDroppedNames = listOf("4호", "5호", "6호"))))
+        assertNull(ExportController.itwinDroppedNotice(kr.archsurvey.export.ExportFormat.DEFAULT, o.copy(itwinDroppedCount = 1, itwinDroppedNames = listOf("4호"))))
     }
     @Test fun itwinKeepNamesIsPassedThrough() {
         val p = object : ExportPlatform {

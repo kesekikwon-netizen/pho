@@ -27,7 +27,7 @@ class AndroidExportPlatform(
         val pts = dao.pointsOf(project())
         var ph = 0; var vo = 0
         for (p in pts) { ph += dao.photoCount(p.rowId); vo += dao.voiceCount(p.rowId) }
-        return ExportSummary(project(), pts.size, ph, vo, pts.count { "가짜" in it.device })
+        return ExportSummary(project(), pts.size, ph, vo, pts.count { "가짜" in it.device }, kr.archsurvey.export.ItwinCaptureXml.droppedNoHeight(pts).size)
     }
 
     override suspend fun export(includePhotos: Boolean, includeVoices: Boolean): ExportOutput = exportFormats(kr.archsurvey.export.ExportFormat.DEFAULT, includePhotos, includeVoices)
@@ -38,7 +38,7 @@ class AndroidExportPlatform(
     override suspend fun exportFormats(formats: Set<kr.archsurvey.export.ExportFormat>, includePhotos: Boolean, includeVoices: Boolean, itwinKeepNames: Boolean): ExportOutput {
         val r: ExportResult = svc.export(project(), includePhotos, includeVoices, formats, itwinKeepNames)
         lastZip = r.zip
-        return ExportOutput(r.zip.name, r.zip.length(), r.zip.path, r.pointCount, r.photoCount, r.voiceCount, r.publicFolder)
+        return ExportOutput(r.zip.name, r.zip.length(), r.zip.path, r.pointCount, r.photoCount, r.voiceCount, r.publicFolder, r.itwinDroppedCount, r.itwinDroppedNames)
     }
 
     override fun share(out: ExportOutput) {
