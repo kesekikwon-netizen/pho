@@ -357,9 +357,9 @@ private fun TiltSettings(tc: TiltController) {
         if (tc.enabled) {
             Text("허용 각도", style = Ty.label, color = t.ink)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Btn("−", Modifier.size(56.dp).testTag("tilt_minus")) { tc.stepLimit(false) }
+                MBtn(Modifier.size(56.dp).testTag("tilt_minus"), MKind.PLAIN, 16.dp, onClick = { tc.stepLimit(false) }) { GlyphIcon(Glyph.MINUS, t.accent, 22.dp) }
                 Text("${tc.f1(tc.limitDeg)}°", style = Ty.coord.copy(fontSize = 24.sp), color = t.ink, modifier = Modifier.testTag("tilt_limit"))
-                Btn("+", Modifier.size(56.dp).testTag("tilt_plus")) { tc.stepLimit(true) }
+                MBtn(Modifier.size(56.dp).testTag("tilt_plus"), MKind.PLAIN, 16.dp, onClick = { tc.stepLimit(true) }) { GlyphIcon(Glyph.PLUS, t.accent, 22.dp) }
             }
             Text("넘으면", style = Ty.label, color = t.ink)
             for (pol in kr.archsurvey.core.TiltPolicy.entries) Choice(pol.labelKo, tc.policy == pol, Modifier.fillMaxWidth().testTag("tilt_policy_${pol.id}")) { tc.changePolicy(pol) }
