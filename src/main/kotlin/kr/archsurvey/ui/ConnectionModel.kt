@@ -61,7 +61,7 @@ object ErrorCards {
         return when (ntrip.state) {
             NtripState.AUTH_FAILED ->
                 if ("403" in m) ErrorCard("NT-403", "VRS 접속이 거부됐어요 (403)", "같은 아이디가 다른 폰·컨트롤러에서 접속 중일 수 있어요. 그쪽을 끊고 다시 시도하세요. 계약(사용 기간·권한)도 확인하세요. 자동 재시도는 하지 않아요.", false)
-                else ErrorCard("NT-401", "VRS 아이디/비밀번호가 맞지 않아요 (401)", "아이디와 비밀번호를 다시 입력하세요(대소문자 구분). 자동 재시도는 하지 않아요.", false)
+                else ErrorCard("NT-401", "VRS 아이디/비밀번호가 맞지 않아요 (401)", "통합회원 ID와 비밀번호를 다시 입력하세요(대소문자 구분). 2025년 8월부터 국토지리정보원 VRS는 ‘측위보정정보 통합회원 ID’(지각변동감시시스템에서 등록)가 필요하다고 해요 — 공식 공지 원문은 확인하지 못했어요. 자동 재시도는 하지 않아요.", false)
             NtripState.ERROR ->
                 if ("마운트" in m || "404" in m) ErrorCard("NT-404", "마운트 포인트를 찾을 수 없어요", "마운트 포인트 이름이 맞는지 확인하세요(서비스 안내문의 이름, 예: VRS-RTCM31). 서버는 응답했으니 주소·포트·계정은 맞아요.", false)
                 else ErrorCard("NT-500", "VRS 서버에 연결하지 못했어요", m.ifBlank { "서버 주소·포트·마운트 포인트와 폰의 인터넷 연결을 확인하세요." }, true)
@@ -111,6 +111,10 @@ class ConnectionController(
     var bonded by mutableStateOf<List<Pair<String, String>>>(emptyList()); private set
     var notice by mutableStateOf<ErrorCard?>(null); private set
     var showNmeaSteps by mutableStateOf(false)
+    /** 접힌 영역(서버 설정·도움말·연결 전 확인)을 펼쳤는지 */
+    var showServer by mutableStateOf(false)
+    var showHelp by mutableStateOf(false)
+    var showPre by mutableStateOf(false)
     val link: StateFlow<LinkStatus> get() = platform.link
     val ntrip: StateFlow<NtripStatus> get() = platform.ntrip
     var connectRequested by mutableStateOf(false); private set

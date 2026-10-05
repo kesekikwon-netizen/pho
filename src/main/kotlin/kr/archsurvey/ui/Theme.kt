@@ -20,7 +20,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-/** design-system/mockups/v2/THEME.md 토큰 (아이보리·테라코타, 얇은 글꼴 300/400). 굵기 Bold 이상은 쓰지 않는다. */
+/** 0.1.7 테마: 흰색에 가까운 바탕, 얇은 중립 회색 선, 단일 강조색(테라코타), 얇은 글꼴 300/400. 색은 이 파일 한 곳에서만 정한다(지도 데이터색 제외). 굵기 Bold 이상은 쓰지 않는다. */
 data class Tokens(
     val bg: Color, val card: Color, val line: Color, val outline: Color,
     val ink: Color, val inkSub: Color,
@@ -29,19 +29,21 @@ data class Tokens(
     val caution: Color, val onCaution: Color,
     val bad: Color, val onBad: Color,
     val scrim: Color,
-    val raised: Color = Color(0xFFFDFCF9), val primaryCont: Color = Color(0xFFF7E4DB),
+    val raised: Color = Color(0xFFFFFFFF), val primaryCont: Color = Color(0xFFFBEDE7),
+    /** 지도 바탕(격자 뒤) */
+    val mapBg: Color = Color(0xFFF5F5F5),
 )
 
 private fun c(h: Long) = Color(0xFF000000 or h)
 
 val LightTokens = Tokens(
-    bg = c(0xFAF9F5), card = c(0xF0EEE6), line = c(0xE8E6DC), outline = c(0x8D8A80),
-    ink = c(0x141413), inkSub = c(0x5E5D59),
+    bg = c(0xFFFFFF), card = c(0xF5F5F5), line = c(0xE6E6E6), outline = c(0xC9C9C9),
+    ink = c(0x111111), inkSub = c(0x595959),
     primary = c(0xD97757), onPrimary = c(0x141413), accent = c(0xC6613F), accentText = c(0x9C4426),
-    fixed = c(0x1B6BB0), onFixed = c(0xFAF9F5),
+    fixed = c(0x1B6BB0), onFixed = c(0xFFFFFF),
     caution = c(0xF2B600), onCaution = c(0x141413),
-    bad = c(0xA3123A), onBad = c(0xFAF9F5),
-    scrim = Color(0x66141413),
+    bad = c(0xA3123A), onBad = c(0xFFFFFF),
+    scrim = Color(0x66111111),
 )
 
 val DarkTokens = Tokens(
@@ -51,7 +53,7 @@ val DarkTokens = Tokens(
     fixed = c(0x6DB6F5), onFixed = c(0x141413),
     caution = c(0xF2C14B), onCaution = c(0x141413),
     bad = c(0xFF7D96), onBad = c(0x141413),
-    scrim = Color(0x99000000), raised = c(0x33322E), primaryCont = c(0x4A2E24),
+    scrim = Color(0x99000000), raised = c(0x33322E), primaryCont = c(0x4A2E24), mapBg = Color(0xFF26251F),
 )
 
 val LocalTokens = staticCompositionLocalOf { LightTokens }
@@ -81,14 +83,9 @@ object Fonts {
     )
 }
 
-/** 목업 gloss(): 위쪽 46%에 흰 하이라이트(0.30→0.075), 안쪽 윗변 하이라이트 선, 안쪽 아랫변 어두운 선. */
-fun Modifier.glossy(base: Color, enabled: Boolean = true, strength: Float = 0.30f): Modifier = if (!enabled) this.background(base) else
-    this.background(base).drawBehind {
-        val h = size.height
-        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = strength), Color.White.copy(alpha = strength / 4f)), startY = 0f, endY = h * 0.46f), size = androidx.compose.ui.geometry.Size(size.width, h * 0.46f))
-        drawLine(Color.White.copy(alpha = 0.55f), Offset(h * 0.25f, 1f), Offset(size.width - h * 0.25f, 1f), strokeWidth = 2f)
-        drawLine(Color(0xFF141413).copy(alpha = 0.10f), Offset(h * 0.25f, h - 1f), Offset(size.width - h * 0.25f, h - 1f), strokeWidth = 3f)
-    }
+/** 0.1.7: 평평한 면(그림자·광택 없음). 이전 이름을 유지해 호출부를 건드리지 않는다. */
+@Suppress("UNUSED_PARAMETER")
+fun Modifier.glossy(base: Color, enabled: Boolean = true, strength: Float = 0f): Modifier = this.background(base)
 
 /** 글꼴: 번들 Noto Sans KR / JetBrains Mono */
 object Ty {
@@ -98,7 +95,7 @@ object Ty {
     val title = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
     val bandMain = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
     val button = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
-    val coord = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.mono)
+    val coord = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.mono)
 }
 
 private fun bundledTypography(): androidx.compose.material3.Typography {

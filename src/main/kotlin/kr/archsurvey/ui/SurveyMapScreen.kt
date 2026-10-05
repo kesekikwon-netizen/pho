@@ -80,7 +80,7 @@ private fun cm1(m: Double) = String.format(java.util.Locale.US, "%.1f", m * 100.
 /** 상태 띠 셋째 줄: Fix 종류 · 위성 수 · 수평/수직 정확도(cm). 값이 없으면 "—" */
 internal fun bandDetail(c: SurveyController): String {
     val g = c.gv
-    return "${g.quality.labelKo} · 위성 ${g.satellites}" + (g.satsInView?.let { "/$it" } ?: "") + " · 수평 " + (g.status.sigmaHM?.let { "±${cm1(it)}cm" } ?: "—") + " · 수직 " + (g.sigmaVM?.let { "±${cm1(it)}cm" } ?: "—")
+    return "${g.quality.labelKo} · 위성 ${g.satellites}" + " · 수평 " + (g.status.sigmaHM?.let { "±${cm1(it)}cm" } ?: "—") + " · 수직 " + (g.sigmaVM?.let { "±${cm1(it)}cm" } ?: "—")
 }
 
 /** 수신기가 연결되지 않았을 때 지도 가운데에 뜨는 안내 카드 */
@@ -94,7 +94,7 @@ fun NotConnectedCard(c: SurveyController, modifier: Modifier) {
         verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("수신기 연결 안 됨", style = Ty.title, color = t.ink)
-        Text("위치를 받으려면 블루투스로 수신기(R10 / SP60)를 연결하세요. 연결 전에는 위치를 표시하지 않고 측점도 할 수 없어요.", style = Ty.small, color = t.inkSub, textAlign = TextAlign.Center)
+        Text("블루투스로 R10 / SP60을 연결하면 위치가 나타나요. 그 전에는 위치를 표시하지 않고 측점도 할 수 없어요.", style = Ty.small, color = t.inkSub, textAlign = TextAlign.Center)
         Box(
             Modifier.fillMaxWidth().height(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp)).glossy(t.primary)
                 .clickable { c.connection?.openScreen() ?: run { c.message = "연결 화면을 열 수 없어요" } }.testTag("not_connected_open"),
@@ -127,19 +127,16 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
             if (!SurveyLayout.isResult(c.phase)) CoordBox(c)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 ToolBtn(Glyph.LOCATE, "내 위치 고정/해제", "tool_locate", if (c.follow) MKind.PRIMARY else MKind.PLAIN) { if (c.follow) c.follow = false else c.recenter() }
-                ToolBtn(Glyph.EXTENT, "전체 보기", "tool_fit") { c.fitAll() }
                 ToolBtn(Glyph.PLUS, "확대", "tool_zoom_in") { c.zoomIn() }
                 ToolBtn(Glyph.MINUS, "축소", "tool_zoom_out") { c.zoomOut() }
             }
         }
-        // 오른쪽: 점 목록 · 안테나 높이
+        // 오른쪽: 퀵 메뉴 · 안테나 높이 (점 목록·전체 보기·레이어는 퀵 메뉴로 접음)
         Column(Modifier.align(Alignment.TopEnd).padding(end = 10.dp, top = 84.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             ToolBtn(Glyph.CHEVRON_UP, "퀵 메뉴", "tool_quick") { c.quickSheetOpen = true }
-            ToolBtn(Glyph.LIST, "점 목록", "tool_points") { c.hub.open(ToolScreen.POINTS) }
-            c.bg?.let { b -> ToolBtn(Glyph.LAYERS, "배경 레이어", "layer_btn", if (b.screen != kr.archsurvey.ui.bg.BgScreen.NONE) MKind.PRIMARY else MKind.PLAIN) { b.toggle() } }
             MBtn(Modifier.size(48.dp).testTag("antenna_chip"), MKind.PLAIN, 16.dp, onClick = { c.antennaSheetOpen = true }) {
                 GlyphIcon(Glyph.RULER, t.accent, 18.dp)
-                Text(f3(c.antenna.inputValueM), style = Ty.coord.copy(fontSize = 11.4.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("antenna_input"))
+                Text(f3(c.antenna.inputValueM), style = Ty.coord.copy(fontSize = 12.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("antenna_input"))
             }
         }
         c.bg?.mapCaption()?.let {
@@ -154,7 +151,7 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
                     modifier = Modifier.background(t.raised.copy(alpha = 0.95f), RoundedCornerShape(10.dp)).border(1.dp, t.accent, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 6.dp).testTag("message"))
             }
             if (h != null) Text(
-                "위상중심 ${f3(h)} m", style = Ty.small.copy(fontSize = 11.4.sp), color = t.inkSub,
+                "위상중심 ${f3(h)} m", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub,
                 modifier = Modifier.background(t.bg.copy(alpha = 0.85f), RoundedCornerShape(8.dp)).padding(horizontal = 6.dp, vertical = 1.dp).testTag("apc_label"),
             )
         }
@@ -206,14 +203,14 @@ private fun ResultStrip(c: SurveyController) {
         Modifier.fillMaxSize().clickable { c.toggleExpand() }.padding(horizontal = 12.dp).testTag("result_strip"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(p.name, style = Ty.coord.copy(fontSize = 19.4.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_name"))
+        Text(p.name, style = Ty.coord.copy(fontSize = 20.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_name"))
         Text("${p.type} · 저장됨 ±${p.sigmaHM?.let { f3(it) } ?: "—"} m", style = Ty.small, color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("result_h"))
         Row(
             Modifier.height(28.dp).clip(RoundedCornerShape(14.dp)).glossy(bg).padding(start = 6.dp, end = 9.dp).testTag("result_chip"),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             StatusIcon(p.status, fg, 14.dp)
-            Text(if (p.status == SurveyStatus.FIXED) "FIXED 고정" else "주의", style = Ty.label.copy(fontSize = 12.3.sp), color = fg, maxLines = 1)
+            Text(if (p.status == SurveyStatus.FIXED) "FIXED 고정" else "주의", style = Ty.label.copy(fontSize = 12.sp), color = fg, maxLines = 1)
         }
         GlyphIcon(Glyph.CHEVRON_UP, t.accent, 20.dp)
     }
@@ -228,26 +225,26 @@ private fun ResultPanel(c: SurveyController) {
     val expanded = c.phase == Phase.RESULT_EXPANDED
     Column(
         Modifier.fillMaxWidth().height((SurveyDims.RESULT_PANEL_DP + if (expanded) SurveyDims.EXPANDED_EXTRA_DP else 0).dp)
-            .shadow(6.dp, shape).clip(shape).glossy(t.card, strength = 0.30f).border(1.5.dp, t.outline.copy(alpha = 0.9f), shape)
+            .shadow(1.dp, shape).clip(shape).glossy(t.card, strength = 0.30f).border(1.dp, t.line, shape)
             .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 16.dp).testTag("info_zone"),
     ) {
         if (expanded) Box(Modifier.height(SurveyDims.EXPANDED_EXTRA_DP.dp)) { ExpandedExtra(c) }
         if (p != null) {
             val (bg, fg) = statusColors(t, p.status)
             Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(p.name, style = Ty.coord.copy(fontSize = 19.4.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_name"))
+                Text(p.name, style = Ty.coord.copy(fontSize = 20.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_name"))
                 Text(p.type, style = Ty.small, color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Row(
                     Modifier.height(28.dp).clip(RoundedCornerShape(14.dp)).glossy(bg).padding(start = 6.dp, end = 9.dp).testTag("result_chip"),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     StatusIcon(p.status, fg, 14.dp)
-                    Text(if (p.status == SurveyStatus.FIXED) "FIXED 고정" else "주의", style = Ty.label.copy(fontSize = 12.3.sp), color = fg, maxLines = 1)
+                    Text(if (p.status == SurveyStatus.FIXED) "FIXED 고정" else "주의", style = Ty.label.copy(fontSize = 12.sp), color = fg, maxLines = 1)
                 }
             }
             Spacer(Modifier.height(2.dp))
             Column(Modifier.fillMaxWidth().height(40.dp), verticalArrangement = Arrangement.Center) {
-                val m = Ty.coord.copy(fontSize = 12.3.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Light)
+                val m = Ty.coord.copy(fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Light)
                 Text("N ${grp3(p.northing)}  E ${grp3(p.easting)}", style = m, color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_coord"))
                 Text("H ${p.groundHeightM?.let { grp3(it) } ?: "—"}  ±${p.sigmaHM?.let { f3(it) } ?: "—"} m", style = m, color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_h"))
             }
@@ -258,7 +255,7 @@ private fun ResultPanel(c: SurveyController) {
                 Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     GlyphIcon(Glyph.CAMERA, t.accent, 18.dp)
                     Text("사진", style = Ty.label, color = t.ink)
-                    Text("${c.photos.size}/${MediaLimits.PHOTOS}", style = Ty.coord.copy(fontSize = 12.3.sp), color = t.ink, modifier = Modifier.testTag("photo_count"))
+                    Text("${c.photos.size}/${MediaLimits.PHOTOS}", style = Ty.coord.copy(fontSize = 12.sp), color = t.ink, modifier = Modifier.testTag("photo_count"))
                 }
             }
             Spacer(Modifier.weight(1f))
@@ -270,7 +267,7 @@ private fun ResultPanel(c: SurveyController) {
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth().height(72.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             MBtn(Modifier.weight(1f, fill = false).widthIn(max = 224.dp).fillMaxWidth().height(72.dp).testTag("next_point"), MKind.PRIMARY, 22.dp, onClick = { c.nextPoint() }) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Box(Modifier.rotate(90f)) { GlyphIcon(Glyph.CHEVRON_UP, t.ink, 30.dp) }
                     Column {
                         Text("다음 점", style = Ty.button.copy(fontSize = 35.sp, letterSpacing = 3.sp, lineHeight = 38.sp), color = t.onPrimary, maxLines = 1)
@@ -361,7 +358,7 @@ private fun RecordStrip(c: SurveyController) {
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             Text("녹음 중 0:%02d / 0:%02d".format(c.voiceSeconds, MediaLimits.VOICE_SECONDS), style = Ty.label, color = t.ink, modifier = Modifier.testTag("record_text"))
-            Text(if (c.media != null) "마이크로 녹음하고 있어요 · 끝내기를 누르면 저장" else "화면 시안 — 실제 녹음은 아직 연결 전", style = Ty.small.copy(fontSize = 10.sp), color = t.inkSub)
+            Text(if (c.media != null) "마이크로 녹음하고 있어요 · 끝내기를 누르면 저장" else "화면 시안 — 실제 녹음은 아직 연결 전", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub)
         }
         SmallButton("끝내기", "record_stop") { c.toggleVoice() }
     }
@@ -414,18 +411,18 @@ fun DrawerOverlay(c: SurveyController) {
                 }
                 Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                     Column {
-                        Text(c.projectName, style = Ty.title.copy(fontSize = 17.6.sp), color = t.ink, maxLines = 1)
-                        Text((if (c.antennaModelId == "TRIMBLE_R10") "Trimble R10" else "Spectra SP60") + if (st.reason == StatusReason.NOT_CONNECTED) " · 연결 안 됨" else "", style = Ty.small.copy(fontSize = 11.4.sp), color = t.inkSub, modifier = Modifier.testTag("drawer_device"))
+                        Text(c.projectName, style = Ty.title.copy(fontSize = 18.sp), color = t.ink, maxLines = 1)
+                        Text((if (c.antennaModelId == "TRIMBLE_R10") "Trimble R10" else "Spectra SP60") + if (st.reason == StatusReason.NOT_CONNECTED) " · 연결 안 됨" else "", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.testTag("drawer_device"))
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            "${st.status.labelKo}${st.sigmaHM?.let { " ±${f3(it)} m" } ?: ""}", style = Ty.small.copy(fontSize = 11.sp), color = fg, maxLines = 1,
+                            "${st.status.labelKo}${st.sigmaHM?.let { " ±${f3(it)} m" } ?: ""}", style = Ty.small.copy(fontSize = 12.sp), color = fg, maxLines = 1,
                             modifier = Modifier.background(bg, RoundedCornerShape(11.dp)).padding(horizontal = 9.dp, vertical = 3.dp).testTag("drawer_status"),
                         )
                     }
                     MBtn(Modifier.size(48.dp).testTag("drawer_settings"), MKind.PLAIN, 16.dp, onClick = { c.drawerOpen = false; c.hub.open(ToolScreen.SETTINGS) }) { GearIcon(t.accent, 22.dp) }
                 }
                 for (sec in DrawerMenu.sections) {
-                    Text(sec.title, style = Ty.small.copy(fontSize = 11.sp), color = t.inkSub, modifier = Modifier.height(26.dp).padding(horizontal = 6.dp).wrapContentHeight(Alignment.Bottom))
+                    Text(sec.title, style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.height(26.dp).padding(horizontal = 6.dp).wrapContentHeight(Alignment.Bottom))
                     if (sec.title == "즐겨찾기") {
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) { for (it in sec.items) FavCard(c, it, Modifier.weight(1f)) }
                     } else for (it in sec.items) DrawerRow(c, it)
@@ -492,7 +489,7 @@ private fun DrawerRow(c: SurveyController, item: MenuItem) {
     ) {
         val g = menuGlyph(item.id)
         if (g != null) GlyphIcon(g, t.accent, 20.dp) else Spacer(Modifier.width(20.dp))
-        Text(item.label, style = Ty.body.copy(fontSize = 15.sp, fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.Normal else androidx.compose.ui.text.font.FontWeight.Light), color = t.ink, modifier = Modifier.weight(1f))
+        Text(item.label, style = Ty.body.copy(fontSize = 14.sp, fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.Normal else androidx.compose.ui.text.font.FontWeight.Light), color = t.ink, modifier = Modifier.weight(1f))
         item.note?.let { Text(it, style = Ty.small, color = t.inkSub) }
     }
 }
@@ -503,7 +500,7 @@ private fun FavCard(c: SurveyController, item: MenuItem, modifier: Modifier) {
     val t = T
     MBtn(modifier.height(48.dp).testTag("menu_${item.id}"), MKind.PLAIN, 14.dp, onClick = { runMenu(c, item) }) {
         menuGlyph(item.id)?.let { GlyphIcon(it, t.accent, 18.dp) }
-        Text(item.label, style = Ty.small.copy(fontSize = 11.4.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = t.ink, maxLines = 1)
+        Text(item.label, style = Ty.small.copy(fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = t.ink, maxLines = 1)
     }
 }
 

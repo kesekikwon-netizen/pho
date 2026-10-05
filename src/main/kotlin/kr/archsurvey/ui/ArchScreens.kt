@@ -169,7 +169,7 @@ fun TypesScreen(c: SurveyController) {
                         Box(Modifier.weight(1f)) { Btn("취소", Modifier.fillMaxWidth().testTag("type_edit_cancel")) { editing = null; msg = null } }
                     }
                 } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(name, style = Ty.label, color = t.ink, modifier = Modifier.weight(1f).testTag("type_row_$i"))
                         Btn("▲", Modifier.width(48.dp).testTag("type_up_$i")) { c.moveType(name, -1) }
                         Btn("▼", Modifier.width(48.dp).testTag("type_down_$i")) { c.moveType(name, 1) }
@@ -195,7 +195,7 @@ fun DupSheet(c: SurveyController) {
         Box(Modifier.fillMaxSize().background(t.scrim))
         val shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
         Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().shadow(8.dp, shape).clip(shape).glossy(t.card).border(1.5.dp, t.outline, shape).padding(16.dp).testTag("dup_sheet"),
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().shadow(1.dp, shape).clip(shape).glossy(t.card).border(1.5.dp, t.outline, shape).padding(16.dp).testTag("dup_sheet"),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("같은 자리에 점이 있어요", style = Ty.title, color = t.ink)
@@ -223,7 +223,7 @@ fun ArchOverlays(c: SurveyController) {
         val n = o?.pointRowIds?.size ?: 0
         Column(pill.padding(horizontal = 10.dp, vertical = 4.dp).testTag("outline_bar")) {
             Text("외곽 ${o?.label ?: "(새로 시작)"} · 꼭짓점 ${n}개", style = Ty.small.copy(fontSize = 12.sp), color = t.ink, modifier = Modifier.testTag("outline_count"))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Btn(if (a.preferClosed) "선으로 끝내기" else "✓ 선으로 끝내기", Modifier.testTag("outline_finish_line")) { a.finishOutline(false) }
                 Btn(if (a.preferClosed) "✓ 면으로 닫기" else "면으로 닫기", Modifier.testTag("outline_finish_area")) { a.finishOutline(true) }
                 Btn("끄기", Modifier.testTag("outline_off")) { c.toggleOutlineMode() }

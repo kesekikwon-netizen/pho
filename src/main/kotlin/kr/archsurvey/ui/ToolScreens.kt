@@ -11,6 +11,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,12 +52,17 @@ fun PointsScreen(c: SurveyController) {
     val t = T; val h = c.hub
     val list = h.filtered()
     ToolScaffold("점 목록", "points_screen", onBack = { h.back() }) {
-        OutlinedTextField(
-            h.query, { h.query = it }, label = { Text("검색 (번호·종류·메모)") }, singleLine = true,
-            modifier = Modifier.fillMaxWidth().testTag("points_search"),
-        )
+        Field("검색", h.query, "points_search") { h.query = it }
         Text("${list.size}개" + if (h.query.isNotBlank()) " (전체 ${c.points.size}개)" else "", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("points_count"))
-        if (list.isEmpty()) Text(if (c.points.isEmpty()) "아직 측점한 점이 없어요." else "검색 결과가 없어요.", style = Ty.body, color = t.inkSub, modifier = Modifier.testTag("points_empty"))
+        if (list.isEmpty()) {
+            Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(if (c.points.isEmpty()) "아직 측점한 점이 없어요" else "검색 결과가 없어요", style = Ty.title, color = t.ink, modifier = Modifier.testTag("points_empty"))
+                if (c.points.isEmpty()) {
+                    Text("지도 화면의 ‘측점’ 버튼으로 첫 점을 찍으면 여기에 쌓여요.", style = Ty.body, color = t.inkSub)
+                    Btn("지도로 돌아가기", Modifier.fillMaxWidth().height(56.dp).testTag("points_to_map")) { h.closeAll() }
+                }
+            }
+        }
         for (p in list) PointRow(p) { h.openDetail(p) }
     }
 }
@@ -63,16 +70,21 @@ fun PointsScreen(c: SurveyController) {
 @Composable
 private fun PointRow(p: SavedPoint, onClick: () -> Unit) {
     val t = T
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(t.card).clickable(onClick = onClick).padding(12.dp).testTag("point_row_${p.name}"),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+    val (sbg, sfg) = statusColors(t, p.status)
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 72.dp).clip(RoundedCornerShape(16.dp)).background(t.card).clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp).testTag("point_row_${p.name}"),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(p.name, style = Ty.label, color = t.ink, modifier = Modifier.weight(1f))
-            Text(if (p.status == SurveyStatus.FIXED) "고정" else "주의", style = Ty.small, color = if (p.status == SurveyStatus.FIXED) t.inkSub else t.bad)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(p.name, style = Ty.coord.copy(fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = t.ink, maxLines = 1)
+            Text(p.type + if (p.memo.isNotBlank()) " · ${p.memo}" else "", style = Ty.small, color = t.inkSub, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            Text("N ${f3(p.northing)}  E ${f3(p.easting)}", style = Ty.coord.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1)
         }
-        Text(p.type + if (p.memo.isNotBlank()) " · ${p.memo}" else "", style = Ty.small, color = t.inkSub, maxLines = 1)
-        Text("N ${f3(p.northing)}  E ${f3(p.easting)}", style = Ty.coord, color = t.inkSub)
+        // 상태는 색 + 아이콘 + 글자 (목업 규칙)
+        Row(
+            Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).background(sbg).padding(start = 8.dp, end = 12.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) { StatusIcon(p.status, sfg, 16.dp); Text(if (p.status == SurveyStatus.FIXED) "고정" else "주의", style = Ty.label.copy(fontSize = 12.sp), color = sfg) }
     }
 }
 
@@ -86,19 +98,20 @@ fun PointDetailScreen(c: SurveyController) {
     ToolScaffold(p.name, "point_detail", onBack = { h.back() }, bottom = {
         PrimaryBar(if (h.saved && !h.dirty) "저장했어요" else "수정 저장", "point_save", enabled = h.dirty) { h.saveEdit() }
     }) {
-        ReadRow("점 이름") { Text(p.name, style = Ty.coord.copy(fontSize = 17.6.sp), color = t.ink, modifier = Modifier.testTag("detail_name")) }
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("위치 종류", style = Ty.small.copy(fontSize = 12.3.sp), color = t.inkSub)
+        ReadRow("점 이름") { Text(p.name, style = Ty.coord.copy(fontSize = 18.sp), color = t.ink, modifier = Modifier.testTag("detail_name")) }
+        var typeOpen by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+        SelectRow("위치 종류", h.editType.trim().ifBlank { p.type }, typeOpen, "edit_type_toggle") { typeOpen = !typeOpen }
+        if (typeOpen) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             for (row in c.types.chunked(2)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    for (ty in row) Choice(ty, ty == h.editType.trim(), Modifier.weight(1f).testTag("edit_type_$ty")) { h.editType = ty }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (ty in row) Choice(ty, ty == h.editType.trim(), Modifier.weight(1f).testTag("edit_type_$ty")) { h.editType = ty; typeOpen = false }
                     if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
         }
         Field("비고", h.memo(), "edit_memo") { h.editMemo = it }
         ReadRow("안테나 위상중심") {
-            Text(f3(p.antenna.apcHeightM), style = Ty.coord.copy(fontSize = 17.6.sp), color = t.ink)
+            Text(f3(p.antenna.apcHeightM), style = Ty.coord.copy(fontSize = 18.sp), color = t.ink)
             Text(" m · ${p.antenna.refPointLabel}", style = Ty.small, color = t.inkSub, maxLines = 1)
         }
         // N / E / H 카드 (목업 s31)
@@ -106,22 +119,21 @@ fun PointDetailScreen(c: SurveyController) {
             val rows = listOf("N" to p.northing, "E" to p.easting, "H" to p.groundHeightM)
             rows.forEachIndexed { i, (k, v) ->
                 Row(Modifier.fillMaxWidth().height(34.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(k, style = Ty.label.copy(fontSize = 17.6.sp), color = t.ink, modifier = Modifier.width(22.dp))
+                    Text(k, style = Ty.label.copy(fontSize = 18.sp), color = t.ink, modifier = Modifier.width(22.dp))
                     Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.Bottom) {
                         Text(v?.let { grp3(it) } ?: "—", style = Ty.coord.copy(fontSize = 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Light), color = t.ink, maxLines = 1, modifier = Modifier.testTag("detail_$k"))
-                        Text(" m", style = Ty.small.copy(fontSize = 12.3.sp), color = t.inkSub, modifier = Modifier.padding(bottom = 3.dp))
+                        Text(" m", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.padding(bottom = 3.dp))
                     }
                 }
                 if (i < rows.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(t.line))
             }
         }
-        Text("좌표·높이는 바꿀 수 없어요. 잘못 측점했다면 다시 측점하세요. (H = 지면 높이, 타원체고)", style = Ty.small, color = t.inkSub)
-        Card {
-            Text("측정 정보", style = Ty.label, color = t.ink)
-            Text("좌표계 EPSG:${p.crsEpsg} · 표고 ${p.groundMslM?.let { f3(it) } ?: "—"} m", style = Ty.small, color = t.inkSub)
-            Text("${if (p.status == SurveyStatus.FIXED) "고정" else "주의"}${p.sigmaHM?.let { " ±${f3(it)} m" } ?: ""} · 위성 ${p.satellites} · ${p.epochs}회 평균", style = Ty.small, color = t.inkSub)
-            if (p.measuredAtMs > 0) Text(SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(p.measuredAtMs)), style = Ty.small, color = t.inkSub)
-        }
+        Text("좌표·높이는 바꿀 수 없어요. 잘못 쟀다면 다시 측점하세요.", style = Ty.small, color = t.inkSub)
+        Text(
+            "${if (p.status == SurveyStatus.FIXED) "고정" else "주의"}${p.sigmaHM?.let { " ±${f3(it)} m" } ?: ""} · 위성 ${p.satellites} · ${p.epochs}회 평균 · EPSG:${p.crsEpsg}" +
+                (p.groundMslM?.let { " · 표고 ${f3(it)} m" } ?: "") + if (p.measuredAtMs > 0) "\n" + SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(p.measuredAtMs)) else "",
+            style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("detail_info"),
+        )
         PointHistoryCards(c, p)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.weight(1f)) { Btn("여기로 찾아가기", Modifier.fillMaxWidth().testTag("detail_goto")) { h.startGoto(p) } }
@@ -139,9 +151,9 @@ private fun ReadRow(label: String, content: @Composable RowScope.() -> Unit) {
     val shape = RoundedCornerShape(16.dp)
     Row(
         Modifier.fillMaxWidth().height(48.dp).clip(shape).background(t.raised).border(1.5.dp, t.outline, shape).padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(label, style = Ty.small.copy(fontSize = 12.3.sp), color = t.inkSub, modifier = Modifier.widthIn(min = 72.dp))
+        Text(label, style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.widthIn(min = 72.dp))
         content()
     }
 }
@@ -302,35 +314,28 @@ fun SettingsScreen(c: SurveyController) {
     val st = c.settingsState
     ToolScaffold("설정", "settings_screen", onBack = { h.back() }) {
         if (st == null) { Text("설정을 불러올 수 없어요", style = Ty.body, color = t.inkSub); return@ToolScaffold }
-        Card {
-            Text("좌표 원점", style = Ty.label, color = t.ink)
-            Text("새로 측점하는 점부터 적용돼요. 이미 저장한 점은 저장할 때의 좌표계를 그대로 유지해요.", style = Ty.small, color = t.inkSub)
-            for (z in kr.archsurvey.core.KoreanTmZone.entries) Choice(z.labelKo, z == c.zone, Modifier.fillMaxWidth().testTag("zone_${z.epsg}")) { st.setZone(z) }
-            Text("현장이 서부·중부·동부·동해 중 어느 원점 구역인지 확인하세요. 대부분의 중부 지역은 중부원점(5186)이에요.", style = Ty.small, color = t.inkSub)
+        var zoneOpen by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+        SelectRow("좌표 원점", c.zone.labelKo, zoneOpen, "zone_toggle") { zoneOpen = !zoneOpen }
+        if (zoneOpen) Card {
+            for (z in kr.archsurvey.core.KoreanTmZone.entries) Choice(z.labelKo, z == c.zone, Modifier.fillMaxWidth().testTag("zone_${z.epsg}")) { st.setZone(z); zoneOpen = false }
+            Text("새로 측점하는 점부터 적용돼요. 대부분의 중부 지역은 중부원점(5186)이에요.", style = Ty.small, color = t.inkSub)
         }
         Card {
-            Text("폴 쪽 띠 위치", style = Ty.label, color = t.ink)
+            Text("측점 버튼 위치 (폴 쪽)", style = Ty.label, color = t.ink)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Choice("오른쪽", c.poleOnRight, Modifier.weight(1f).testTag("pole_right")) { st.setPoleRight(true) }
                 Choice("왼쪽", !c.poleOnRight, Modifier.weight(1f).testTag("pole_left")) { st.setPoleRight(false) }
             }
         }
         Card {
-            Text("알림", style = Ty.label, color = t.ink)
             ToggleRow("소리", st.sound, "set_sound") { st.changeSound(it) }
             ToggleRow("진동", st.vibration, "set_vibration") { st.changeVibration(it) }
             ToggleRow("화면 항상 켜두기", st.keepScreenOn, "set_keepscreen") { st.changeKeepScreenOn(it) }
         }
         Card {
-            Text("수신기", style = Ty.label, color = t.ink)
-            Text(if (c.gv.status.reason == kr.archsurvey.core.StatusReason.NOT_CONNECTED) "수신기 연결 안 됨" else "수신기 연결됨 · ${c.gv.quality.labelKo}", style = Ty.body, color = t.ink, modifier = Modifier.testTag("set_fake_state"))
-            Btn("수신기 연결 · VRS 열기", Modifier.fillMaxWidth().testTag("set_open_connection")) { h.closeAll(); c.connection?.openScreen() }
+            Text(if (c.gv.status.reason == kr.archsurvey.core.StatusReason.NOT_CONNECTED) "수신기 연결 안 됨" else "수신기 연결됨 · ${c.gv.quality.labelKo}", style = Ty.label, color = t.ink, modifier = Modifier.testTag("set_fake_state"))
         }
-        Card {
-            Text("앱 정보", style = Ty.label, color = t.ink)
-            Text(rememberAppVersionLabel(), style = Ty.body, color = t.ink, modifier = Modifier.testTag("app_version"))
-            Text("발굴 측량 · 실기기 시험 전 버전", style = Ty.small, color = t.inkSub)
-        }
+        Text(rememberAppVersionLabel() + " · 발굴 측량 · 실기기 시험 전 버전", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("app_version").padding(vertical = 8.dp))
     }
 }
 

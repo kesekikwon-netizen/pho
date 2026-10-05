@@ -50,6 +50,7 @@ class SurveyScreenshotTest {
     }
 
     private fun shot(name: String) {
+        ButtonCount.record(rule, name)
         rule.waitForIdle()
         // captureToImage(PixelCopy) 는 Robolectric 에서 시간 초과 → 뷰 계층을 소프트웨어 캔버스에 직접 그린다
         val view = rule.activity.window.decorView

@@ -70,7 +70,8 @@ class BgUiTest {
 
     @Test fun layerButtonOpensSheetsAndUploadFlowWorksFromScreens() {
         start()
-        rule.onNodeWithTag("layer_btn").performClick(); rule.waitForIdle()
+        ui { c.quickSheetOpen = true }
+        rule.onNodeWithTag("quick_bg").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("bg_sheet_opacity").assertExists()
         rule.onNodeWithTag("no_layers").assertExists()
         shot("b1_opacity_empty")
@@ -121,6 +122,7 @@ class BgUiTest {
     @Test fun quickSheetHasBackgroundEntry() {
         start(); ui { c.quickSheetOpen = true }
         rule.onNodeWithTag("quick_bg").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("btn_manage").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("bg_sheet_manage").assertExists()
     }
 }

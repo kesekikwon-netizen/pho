@@ -30,7 +30,7 @@ object DrawerMenu {
     val sections: List<MenuSection> = listOf(
         MenuSection("즐겨찾기", listOf(
             MenuItem("fav_points", "점 목록", MenuAction.OPEN_TOOL_POINTS),
-            MenuItem("fav_goto", "찾아가기", MenuAction.OPEN_TOOL_GOTO),
+            MenuItem("fav_goto", "점 찾아가기", MenuAction.OPEN_TOOL_GOTO),
             MenuItem("fav_calc", "계산기", MenuAction.OPEN_TOOL_CALC),
         )),
         MenuSection("작업 관리", listOf(
@@ -38,15 +38,12 @@ object DrawerMenu {
             MenuItem("job_open", "작업 열기 · 삭제", MenuAction.OPEN_JOB_LIST),
             MenuItem("job_export", "작업 내보내기", MenuAction.OPEN_EXPORT),
             MenuItem("job_info", "작업 정보", MenuAction.OPEN_JOB_INFO),
-            MenuItem("job_points", "점 목록", MenuAction.OPEN_TOOL_POINTS),
             MenuItem("job_backup", "데이터 백업 · 복구", MenuAction.OPEN_BACKUP),
         )),
         MenuSection("일반 측량", listOf(
             MenuItem("survey", "측량", MenuAction.GO_SURVEY),
-            MenuItem("goto", "점 찾아가기", MenuAction.OPEN_TOOL_GOTO),
             MenuItem("types", "위치 종류", MenuAction.OPEN_TYPES),
             MenuItem("areas", "발굴 구역 · 그리드", MenuAction.OPEN_AREAS),
-            MenuItem("calc", "계산기", MenuAction.OPEN_TOOL_CALC),
             MenuItem("bg", "배경 지도 · 레이어", MenuAction.OPEN_BG),
         )),
         MenuSection("환경 설정", listOf(

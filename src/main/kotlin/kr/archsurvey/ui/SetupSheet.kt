@@ -36,21 +36,21 @@ fun SetupSheet(c: SurveyController) {
     Box(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize().background(t.scrim).clickable { c.setupOpen = false }.testTag("setup_scrim"))
         Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().shadow(8.dp, shape).clip(shape).glossy(t.card).border(1.5.dp, t.outline, shape)
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().shadow(1.dp, shape).clip(shape).glossy(t.card).border(1.5.dp, t.outline, shape)
                 .clickable(enabled = false) {}.padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 12.dp).testTag("setup_sheet"),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("측량 설정", style = Ty.title, color = t.ink, modifier = Modifier.height(32.dp).testTag("setup_title"))
-            FieldRow("점 이름") { Text(c.nextName, style = Ty.coord.copy(fontSize = 17.6.sp), color = t.ink, modifier = Modifier.testTag("setup_name")) }
+            FieldRow("점 이름") { Text(c.nextName, style = Ty.coord.copy(fontSize = 18.sp), color = t.ink, modifier = Modifier.testTag("setup_name")) }
             // 위치 종류: 앞의 두 개 + 더보기(= 하나씩 넘기기)
-            Row(Modifier.fillMaxWidth().height(48.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth().height(48.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val shown = (0 until c.types.size).toList().let { all ->
                     val first = all.take(2).toMutableList(); if (typeIdx !in first && typeIdx in all) { first[1] = typeIdx }; first
                 }
                 for ((k, i) in shown.withIndex()) {
                     val on = i == typeIdx
                     MBtn(Modifier.weight(if (k == 0) 1.45f else 1.5f).fillMaxHeight().testTag("setup_type_$i"), if (on) MKind.SELECTED else MKind.PLAIN, 16.dp, onClick = { typeIdx = i }) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             if (on) GlyphIcon(Glyph.CHECK, t.accentText, 14.dp)
                             Text(c.types[i], style = Ty.label, color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
@@ -64,31 +64,31 @@ fun SetupSheet(c: SurveyController) {
                 BasicTextField(
                     memo, { if (it.length <= 60) memo = it.replace("\n", " ") }, singleLine = true, textStyle = Ty.body.copy(color = t.ink),
                     cursorBrush = SolidColor(t.accent), modifier = Modifier.fillMaxWidth().testTag("setup_memo"),
-                    decorationBox = { inner -> if (memo.isEmpty()) Text("한 줄 입력", style = Ty.small.copy(fontSize = 14.1.sp), color = t.inkSub); inner() },
+                    decorationBox = { inner -> if (memo.isEmpty()) Text("한 줄 입력", style = Ty.small.copy(fontSize = 14.sp), color = t.inkSub); inner() },
                 )
             }
             Row(
                 Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(16.dp)).border(1.5.dp, t.outline, RoundedCornerShape(16.dp)).background(t.bg)
                     .clickable { c.setupOpen = false; c.antennaSheetOpen = true }.padding(horizontal = 14.dp).testTag("setup_antenna"),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text("안테나 높이", style = Ty.small, color = t.inkSub, modifier = Modifier.width(72.dp))
-                Text(f3(c.antenna.inputValueM), style = Ty.coord.copy(fontSize = 17.6.sp), color = t.ink)
+                Text(f3(c.antenna.inputValueM), style = Ty.coord.copy(fontSize = 18.sp), color = t.ink)
                 Text("m", style = Ty.small, color = t.inkSub, modifier = Modifier.weight(1f))
                 Box(Modifier.rotate(-90f)) { GlyphIcon(Glyph.CHEVRON_DOWN, t.outline, 17.dp) }
             }
-            Row(Modifier.fillMaxWidth().height(48.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth().height(48.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for ((l, label) in listOf(Link.POINT to "점만", Link.LINE to "선 연결", Link.AREA to "면 연결")) {
                     val on = link == l
                     MBtn(Modifier.weight(1f).fillMaxHeight().testTag("setup_link_${l.name.lowercase()}"), if (on) MKind.SELECTED else MKind.PLAIN, 16.dp, onClick = { link = l }) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             if (on) GlyphIcon(Glyph.CHECK, t.accentText, 14.dp)
                             Text(label, style = Ty.label, color = t.ink, maxLines = 1)
                         }
                     }
                 }
             }
-            if (link != Link.POINT) Text("선·면은 외곽 취득을 켜고 위치 종류를 ‘유구 경계점’으로 맞춰요", style = Ty.small.copy(fontSize = 11.4.sp), color = t.inkSub, modifier = Modifier.testTag("setup_link_note"))
+            if (link != Link.POINT) Text("선·면은 외곽 취득을 켜고 위치 종류를 ‘유구 경계점’으로 맞춰요", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.testTag("setup_link_note"))
             Row(Modifier.fillMaxWidth().height(56.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 MBtn(Modifier.weight(1f).widthIn(max = 224.dp).fillMaxHeight().testTag("setup_apply"), MKind.PRIMARY, 18.dp, onClick = {
                     c.pendingMemo = memo.trim()
@@ -98,7 +98,7 @@ fun SetupSheet(c: SurveyController) {
                     if (wantOutline != c.arch.outlineMode) c.toggleOutlineMode()
                     c.setupOpen = false
                 }) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         GlyphIcon(Glyph.CHECK, t.ink, 22.dp); Text("적용", style = Ty.button, color = t.onPrimary)
                     }
                 }
@@ -115,7 +115,7 @@ private fun FieldRow(label: String, content: @Composable () -> Unit) {
     val t = T
     Row(
         Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(16.dp)).border(1.5.dp, t.outline, RoundedCornerShape(16.dp)).background(t.bg).padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(label, style = Ty.small, color = t.inkSub, modifier = Modifier.width(72.dp))
         Box(Modifier.weight(1f)) { content() }

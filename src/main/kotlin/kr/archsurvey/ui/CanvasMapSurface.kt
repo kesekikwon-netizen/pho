@@ -39,7 +39,7 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
             val cx = size.width / 2f; val cy = size.height / 2f
             fun sx(x: Double) = cx + ((x - state.center.x) * ppm).toFloat()
             fun sy(y: Double) = cy - ((y - state.center.y) * ppm).toFloat()
-            if (showBackdrop) drawRect(if (dark) Color(0xFF26251F) else Color(0xFFF4F1E6), size = size)
+            if (showBackdrop) drawRect(t.mapBg, size = size)
             // 업로드 배경(도면): 투명도는 레이어 슬라이더 값. 윤곽 + 옅은 면 + 격자 느낌의 대각선
             for (bgl in state.backgrounds) {
                 if (bgl.polygon.size < 3) continue
@@ -81,9 +81,9 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
                 drawPath(path, col, style = Stroke(2.5f * density, pathEffect = if (o.active) PathEffect.dashPathEffect(floatArrayOf(10f * density, 6f * density)) else null))
                 o.pts.forEachIndexed { i, q ->
                     drawCircle(col, 4.5f * density, Offset(sx(q.x), sy(q.y)))
-                    drawText(tm, "${i + 1}", Offset(sx(q.x) + 6f * density, sy(q.y) + 2f * density), TextStyle(fontSize = 10.sp, color = col, fontWeight = FontWeight.Normal))
+                    drawText(tm, "${i + 1}", Offset(sx(q.x) + 6f * density, sy(q.y) + 2f * density), TextStyle(fontSize = 12.sp, color = col, fontWeight = FontWeight.Normal))
                 }
-                if (o.pts.size >= 2) drawText(tm, o.label, Offset(sx(o.pts[0].x) - 4f * density, sy(o.pts[0].y) - 24f * density), TextStyle(fontSize = 11.sp, color = col, fontWeight = FontWeight.Normal))
+                if (o.pts.size >= 2) drawText(tm, o.label, Offset(sx(o.pts[0].x) - 4f * density, sy(o.pts[0].y) - 24f * density), TextStyle(fontSize = 12.sp, color = col, fontWeight = FontWeight.Normal))
             }
             // 이동 꼬리
             if (state.trail.size >= 2) {
@@ -103,7 +103,7 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
                 drawCircle(if (m.flagged) t.caution else t.fixed, 7f * density, o)
                 drawCircle(t.bg, 7f * density, o, style = Stroke(2f * density))
                 drawText(tm, m.name, Offset(o.x + 10f * density, o.y - 22f * density),
-                    TextStyle(fontSize = 11.sp, color = t.ink, fontWeight = FontWeight.Normal))
+                    TextStyle(fontSize = 12.sp, color = t.ink, fontWeight = FontWeight.Normal))
             }
             // 현재 위치 (정확도 원 + 방향 삼각형)
             state.current?.let { c ->

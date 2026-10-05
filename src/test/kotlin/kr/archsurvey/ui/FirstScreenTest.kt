@@ -38,6 +38,7 @@ class FirstScreenTest {
     }
 
     private fun shot(name: String) {
+        ButtonCount.record(rule, name)
         rule.waitForIdle()
         val view = rule.activity.window.decorView
         val bmp = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)

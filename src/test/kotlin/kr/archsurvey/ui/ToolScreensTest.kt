@@ -73,6 +73,7 @@ class ToolScreensTest {
     }
 
     private fun shot(name: String) {
+        ButtonCount.record(rule, name)
         rule.waitForIdle()
         val view = rule.activity.window.decorView
         val bmp = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
@@ -107,6 +108,7 @@ class ToolScreensTest {
         shot("t1_points")
         rule.onNodeWithTag("point_row_P-0002").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("point_detail").assertExists()
+        rule.onNodeWithTag("edit_type_toggle").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("edit_type_기준점").performClick()
         rule.onNodeWithTag("edit_memo").performTextInput("북동 모서리")
         shot("t2_point_detail")
@@ -141,6 +143,7 @@ class ToolScreensTest {
     @Test fun settingsAndJobs() {
         setup()
         rule.runOnUiThread { c.hub.open(ToolScreen.SETTINGS) }; rule.waitForIdle()
+        rule.onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("zone_5187").performScrollTo().performClick(); rule.waitForIdle()
         assertEquals(5187, c.zone.epsg)
         shot("t6_settings")

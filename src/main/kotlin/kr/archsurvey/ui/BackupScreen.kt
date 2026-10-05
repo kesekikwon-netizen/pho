@@ -28,10 +28,10 @@ fun BackupScreen(bc: BackupController) {
             Text("보관된 백업", style = Ty.label, color = t.ink)
             if (bc.items.isEmpty()) Text("아직 백업이 없어요.", style = Ty.body, color = t.inkSub, modifier = Modifier.testTag("backup_empty"))
             for ((i, b) in bc.items.withIndex()) {
-                Column(Modifier.fillMaxWidth().padding(vertical = 4.dp).testTag("backup_item_$i"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.fillMaxWidth().padding(vertical = 4.dp).testTag("backup_item_$i"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(b.name, style = Ty.body, color = t.ink)
                     Text("${whenText(b.createdAtMs)} · 점 ${b.points} · 사진 ${b.photos} · 음성 ${b.voices} · ${ExportController.sizeText(b.sizeBytes)}", style = Ty.small, color = t.inkSub)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(Modifier.weight(1f)) { Btn("복구", Modifier.fillMaxWidth().testTag("backup_restore_$i")) { bc.askRestore(b) } }
                         Box(Modifier.weight(1f)) { Btn("공유", Modifier.fillMaxWidth().testTag("backup_share_$i")) { bc.share(b) } }
                         Box(Modifier.weight(1f)) { Btn("저장", Modifier.fillMaxWidth().testTag("backup_save_$i")) { bc.saveAs(b) } }

@@ -72,6 +72,7 @@ class ArchUiTest {
     }
 
     private fun shot(name: String) {
+        ButtonCount.record(rule, name)
         rule.waitForIdle()
         val view = rule.activity.window.decorView
         val bmp = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
@@ -157,7 +158,7 @@ class ArchUiTest {
     @Test fun outlineModeBarAndQuickSheetEntries() {
         start()
         rule.onNodeWithTag("type_chip").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("quick_areas").assertExists(); rule.onNodeWithTag("quick_types").assertExists()
+        rule.onNodeWithTag("quick_menu").assertExists(); rule.onNodeWithTag("quick_areas").assertDoesNotExist()
         rule.onNodeWithTag("quick_outline").performClick(); rule.waitForIdle()
         assertTrue(c.arch.outlineMode)
         assertEquals(ArchTypes.OUTLINE_POINT, c.typeName)

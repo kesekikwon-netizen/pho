@@ -44,11 +44,11 @@ internal fun MBtn(
     val bgc = when (kind) { MKind.PRIMARY -> t.primary; MKind.SELECTED -> t.primaryCont; else -> t.raised }
     val bm = when (kind) {
         MKind.PRIMARY -> Modifier
-        MKind.SELECTED -> Modifier.border(2.5.dp, t.accent, shape)
-        else -> Modifier.border(1.5.dp, t.outline, shape)
+        MKind.SELECTED -> Modifier.border(1.5.dp, t.accent, shape)
+        else -> Modifier.border(1.dp, t.outline, shape)
     }
     Column(
-        modifier.alpha(alpha).shadow(3.dp, shape).clip(shape).glossy(bgc).then(bm).combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        modifier.alpha(alpha).clip(shape).glossy(bgc).then(bm).combinedClickable(onClick = onClick, onLongClick = onLongClick),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, content = content,
     )
 }
@@ -71,15 +71,19 @@ internal fun StatusBand(c: SurveyController, modifier: Modifier = Modifier) {
     val notConnected = st.reason == StatusReason.NOT_CONNECTED
     val main = if (notConnected) "불가 · 수신기 연결 안 됨" else when (st.status) {
         SurveyStatus.FIXED -> "측량 가능"
-        SurveyStatus.CAUTION -> "주의 · 저장 시 표시 기록"
-        SurveyStatus.UNAVAILABLE -> "불가 · 측점 막힘"
+        SurveyStatus.CAUTION -> "주의"
+        SurveyStatus.UNAVAILABLE -> "불가"
     }
-    val sub = if (notConnected) "블루투스로 R10 / SP60 을 연결하세요" else st.reason.textKo
+    val sub = if (notConnected) "블루투스로 R10 / SP60 을 연결하세요" else when (st.status) {
+        SurveyStatus.CAUTION -> "저장 시 표시 기록 · ${st.reason.textKo}"
+        SurveyStatus.UNAVAILABLE -> "측점 막힘 · ${st.reason.textKo}"
+        SurveyStatus.FIXED -> st.reason.textKo
+    }
     val detail = if (notConnected) null else bandDetail(c)
     val sigma = if (notConnected) null else st.sigmaHM
     val shape = RoundedCornerShape(22.dp)
     Row(
-        modifier.fillMaxWidth().height(68.dp).shadow(4.dp, shape).clip(shape).glossy(bg).testTag("status_band"),
+        modifier.fillMaxWidth().height(68.dp).shadow(1.dp, shape).clip(shape).glossy(bg).testTag("status_band"),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.width(52.dp).fillMaxHeight().clickable { c.drawerOpen = true }.testTag("gear"), contentAlignment = Alignment.Center) { GearIcon(fg, 22.dp) }
@@ -87,13 +91,14 @@ internal fun StatusBand(c: SurveyController, modifier: Modifier = Modifier) {
         Spacer(Modifier.width(10.dp))
         StatusIcon(st.status, fg, 26.dp)
         Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(main, style = Ty.bandMain, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("status_main"))
+        Column(Modifier.weight(1f).padding(end = 12.dp), verticalArrangement = Arrangement.Center) {
+            // 1줄: 상태(가장 크게) + 오른쪽에 수평 정밀도. 2줄: 판정 이유(고정이 아닐 때만). 3줄: 위성·정밀도 요약
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(sub, style = Ty.small, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).testTag("status_sub"))
-                if (sigma != null) Text("±" + f3(sigma) + " m", style = MonoLight.copy(fontSize = 13.sp), color = fg, maxLines = 1, modifier = Modifier.padding(start = 6.dp).testTag("status_sigma"))
+                Text(main, style = Ty.bandMain, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).testTag("status_main"))
+                if (sigma != null) Text("±" + f3(sigma) + " m", style = MonoLight.copy(fontSize = 14.sp), color = fg, maxLines = 1, modifier = Modifier.padding(start = 8.dp).testTag("status_sigma"))
             }
-            if (detail != null) Text(detail, style = Ty.small.copy(fontSize = 11.sp), color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("status_detail"))
+            if (st.status != SurveyStatus.FIXED || notConnected) Text(sub, style = Ty.small, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("status_sub"))
+            if (detail != null) Text(detail, style = Ty.small, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("status_detail"))
         }
     }
 }
@@ -108,10 +113,10 @@ internal fun CoordBox(c: SurveyController, modifier: Modifier = Modifier) {
         val rows = listOf("N" to p?.northing?.let { grp3(it) }, "E" to p?.easting?.let { grp3(it) }, "H" to c.gv.altM?.let { grp3(it) })
         rows.forEachIndexed { i, (k, v) ->
             Row(Modifier.fillMaxWidth().height(30.dp).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(k, style = Ty.label.copy(fontSize = 17.6.sp), color = t.ink, modifier = Modifier.width(18.dp))
+                Text(k, style = Ty.label.copy(fontSize = 18.sp), color = t.ink, modifier = Modifier.width(18.dp))
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.Bottom) {
                     Text(v ?: "—", style = MonoLight.copy(fontSize = 22.sp, lineHeight = 26.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("coord_$k"))
-                    Text(" m", style = Ty.small.copy(fontSize = 11.4.sp), color = t.inkSub, modifier = Modifier.padding(bottom = 3.dp))
+                    Text(" m", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.padding(bottom = 3.dp))
                 }
             }
             if (i < rows.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(t.line))
@@ -134,15 +139,15 @@ internal fun ControlArea(c: SurveyController) {
     val shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
     val sel = c.typeIndex.coerceIn(0, (c.types.size - 1).coerceAtLeast(0))
     Row(
-        Modifier.fillMaxWidth().height(SurveyDims.CONTROL_AREA_DP.dp).shadow(6.dp, shape).clip(shape).glossy(t.card, strength = 0.30f)
-            .border(1.5.dp, t.outline.copy(alpha = 0.9f), shape).padding(start = 12.dp, end = 12.dp, top = SurveyDims.CTRL_PAD_TOP_DP.dp, bottom = SurveyDims.CTRL_PAD_BOTTOM_DP.dp)
+        Modifier.fillMaxWidth().height(SurveyDims.CONTROL_AREA_DP.dp).shadow(1.dp, shape).clip(shape).glossy(t.card, strength = 0.30f)
+            .border(1.dp, t.line, shape).padding(start = 12.dp, end = 12.dp, top = SurveyDims.CTRL_PAD_TOP_DP.dp, bottom = SurveyDims.CTRL_PAD_BOTTOM_DP.dp)
             .testTag("control_area"),
         horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
     ) {
         val typeBtn: @Composable RowScope.() -> Unit = {
             MBtn(Modifier.weight(1f).fillMaxHeight().testTag("type_chip"), MKind.SELECTED, 18.dp, onClick = { c.quickSheetOpen = true }) {
-                Text("위치 종류", style = Ty.small.copy(fontSize = 11.sp), color = t.inkSub)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("위치 종류", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(c.types.getOrElse(sel) { "—" }, style = Ty.label.copy(fontSize = 16.sp), color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).padding(start = 8.dp))
                     GlyphIcon(Glyph.CHEVRON_UP, t.accent, 16.dp)
                 }
@@ -153,12 +158,12 @@ internal fun ControlArea(c: SurveyController) {
                 Modifier.weight(1.2f).fillMaxHeight().testTag("measure_button"),
                 MKind.PRIMARY, 22.dp, alpha = if (busy || blocked) 0.5f else 1f, onLongClick = { if (!busy) c.setupOpen = true }, onClick = { c.onMeasure() },
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     GlyphIcon(Glyph.PIN, t.ink, 28.dp)
                     Column {
                         if (notConn) {
                             Text("측점 불가", style = Ty.button.copy(fontSize = 24.sp), color = t.onPrimary)
-                            Text("수신기 연결 안 됨", style = Ty.small.copy(fontSize = 13.sp), color = t.onPrimary, modifier = Modifier.testTag("measure_disabled_reason"))
+                            Text("수신기 연결 안 됨", style = Ty.small.copy(fontSize = 14.sp), color = t.onPrimary, modifier = Modifier.testTag("measure_disabled_reason"))
                         } else {
                             Text("측점", style = Ty.button.copy(fontSize = 35.sp, letterSpacing = 3.sp, lineHeight = 38.sp), color = t.onPrimary)
                             Text(c.nextName + " 취득", style = Ty.small.copy(fontSize = 14.sp), color = t.onPrimary, maxLines = 1)
@@ -181,12 +186,12 @@ internal fun QuickSheet(c: SurveyController) {
         Box(Modifier.fillMaxSize().background(t.scrim.copy(alpha = 0.3f)).clickable { close() })
         val shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
         Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().shadow(8.dp, shape).clip(shape).glossy(t.card).border(1.5.dp, t.outline, shape)
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().shadow(1.dp, shape).clip(shape).glossy(t.card).border(1.5.dp, t.outline, shape)
                 .padding(16.dp).testTag("quick_sheet"),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("위치 종류", style = Ty.small, color = t.accentText)
-            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 c.types.forEachIndexed { i, name ->
                     val on = i == c.typeIndex
                     MBtn(Modifier.height(44.dp).testTag("quick_type_$i"), if (on) MKind.SELECTED else MKind.PLAIN, 16.dp, onClick = { c.typeIndex = i; close() }) {
@@ -196,22 +201,17 @@ internal fun QuickSheet(c: SurveyController) {
             }
             val rows = listOf(
                 Triple<String, String, () -> Unit>("되돌리기", "quick_undo", { c.undo() }),
-                Triple<String, String, () -> Unit>("수신기 연결", "quick_receiver", { c.connection?.openScreen() ?: run { c.message = "연결 화면을 열 수 없어요" } }),
-                Triple<String, String, () -> Unit>("사진 (마지막 점)", "quick_photo", { c.addPhotoCamera() }),
-                Triple<String, String, () -> Unit>(if (c.voiceSeconds > 0) "음성 녹음 끝내기" else "음성 (마지막 점)", "quick_voice", { c.toggleVoice() }),
+                Triple<String, String, () -> Unit>("사진", "quick_photo", { c.addPhotoCamera() }),
+                Triple<String, String, () -> Unit>(if (c.voiceSeconds > 0) "녹음 끝내기" else "음성", "quick_voice", { c.toggleVoice() }),
                 Triple<String, String, () -> Unit>("점 목록", "quick_points", { c.hub.open(ToolScreen.POINTS) }),
-                Triple<String, String, () -> Unit>("점 찾아가기", "quick_goto", { c.hub.open(ToolScreen.GOTO) }),
-                Triple<String, String, () -> Unit>("계산기", "quick_calc", { c.hub.open(ToolScreen.CALC) }),
-                Triple<String, String, () -> Unit>("안테나 높이", "quick_antenna", { c.antennaSheetOpen = true }),
-                Triple<String, String, () -> Unit>("내보내기", "quick_export", { c.exporter?.openScreen() ?: run { c.message = "내보내기는 이 빌드에 없어요" } }),
-                Triple<String, String, () -> Unit>("배경 레이어 (도면 올리기)", "quick_bg", { c.quickSheetOpen = false; c.bg?.openManage() ?: run { c.message = "배경 레이어는 이 빌드에 없어요" } }),
-                Triple<String, String, () -> Unit>("발굴 구역 · 그리드", "quick_areas", { c.hub.open(ToolScreen.AREAS) }),
+                Triple<String, String, () -> Unit>("전체 보기", "quick_fit", { c.fitAll() }),
+                Triple<String, String, () -> Unit>("배경 레이어", "quick_bg", { c.bg?.toggle() ?: run { c.message = "배경 레이어는 이 빌드에 없어요" } }),
+                Triple<String, String, () -> Unit>("수신기 연결", "quick_receiver", { c.connection?.openScreen() ?: run { c.message = "연결 화면을 열 수 없어요" } }),
                 Triple<String, String, () -> Unit>(if (c.arch.outlineMode) "외곽 취득 끄기" else "외곽 취득 켜기", "quick_outline", { c.toggleOutlineMode() }),
-                Triple<String, String, () -> Unit>("위치 종류 편집", "quick_types", { c.hub.open(ToolScreen.TYPES) }),
                 Triple<String, String, () -> Unit>("전체 메뉴", "quick_menu", { c.drawerOpen = true }),
             )
-            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), maxItemsInEachRow = 2) {
-                for ((label, tag, act) in rows) MBtn(Modifier.weight(1f).height(48.dp).testTag(tag), MKind.PLAIN, 16.dp, onClick = { close(); act() }) { Text(label, style = Ty.label, color = t.ink) }
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), maxItemsInEachRow = 3) {
+                for ((label, tag, act) in rows) MBtn(Modifier.weight(1f).height(56.dp).testTag(tag), MKind.PLAIN, 16.dp, onClick = { close(); act() }) { Text(label, style = Ty.label, color = t.ink, maxLines = 1) }
             }
             MBtn(Modifier.fillMaxWidth().height(56.dp).testTag("quick_close"), MKind.PRIMARY, 18.dp, onClick = close) { Text("닫기", style = Ty.label, color = t.onPrimary) }
         }
