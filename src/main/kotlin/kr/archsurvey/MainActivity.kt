@@ -50,6 +50,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() { super.onResume(); vm.controller.tilt?.resume() }
+    override fun onPause() { vm.controller.tilt?.pause(); super.onPause() }
+
     private fun applyKeepScreen(on: Boolean) {
         if (on) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

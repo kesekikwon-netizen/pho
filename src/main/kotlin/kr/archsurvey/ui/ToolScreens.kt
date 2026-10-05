@@ -327,6 +327,7 @@ fun SettingsScreen(c: SurveyController) {
                 Choice("왼쪽", !c.poleOnRight, Modifier.weight(1f).testTag("pole_left")) { st.setPoleRight(false) }
             }
         }
+        c.tilt?.let { TiltSettings(it) }
         Card {
             ToggleRow("소리", st.sound, "set_sound") { st.changeSound(it) }
             ToggleRow("진동", st.vibration, "set_vibration") { st.changeVibration(it) }
@@ -336,6 +337,37 @@ fun SettingsScreen(c: SurveyController) {
             Text(if (c.gv.status.reason == kr.archsurvey.core.StatusReason.NOT_CONNECTED) "수신기 연결 안 됨" else "수신기 연결됨 · ${c.gv.quality.labelKo}", style = Ty.label, color = t.ink, modifier = Modifier.testTag("set_fake_state"))
         }
         Text(rememberAppVersionLabel() + " · 발굴 측량 · 실기기 시험 전 버전", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("app_version").padding(vertical = 8.dp))
+    }
+}
+
+/** 전자 기포 설정: 평소엔 한 줄로 접혀 있고, 펼치면 켜기·허용 각도·넘을 때 동작·영점 잡기 */
+@Composable
+private fun TiltSettings(tc: TiltController) {
+    val t = T
+    var open by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    if (!tc.available) {
+        Card { Text("전자 기포: 이 폰에는 기울기(가속도) 센서가 없어 쓸 수 없어요", style = Ty.body, color = t.inkSub, modifier = Modifier.testTag("tilt_no_sensor")) }
+        return
+    }
+    val summary = if (tc.enabled) "켜짐 · 허용 ${tc.f1(tc.limitDeg)}° · ${tc.policy.labelKo}" else "꺼짐"
+    SelectRow("전자 기포", summary, open, "tilt_toggle") { open = !open }
+    if (!open) return
+    Card {
+        ToggleRow("폴 기울기 보기 (폰 센서)", tc.enabled, "tilt_enabled") { tc.changeEnabled(it) }
+        if (tc.enabled) {
+            Text("허용 각도", style = Ty.label, color = t.ink)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Btn("−", Modifier.size(56.dp).testTag("tilt_minus")) { tc.stepLimit(false) }
+                Text("${tc.f1(tc.limitDeg)}°", style = Ty.coord.copy(fontSize = 24.sp), color = t.ink, modifier = Modifier.testTag("tilt_limit"))
+                Btn("+", Modifier.size(56.dp).testTag("tilt_plus")) { tc.stepLimit(true) }
+            }
+            Text("넘으면", style = Ty.label, color = t.ink)
+            for (pol in kr.archsurvey.core.TiltPolicy.entries) Choice(pol.labelKo, tc.policy == pol, Modifier.fillMaxWidth().testTag("tilt_policy_${pol.id}")) { tc.changePolicy(pol) }
+            Btn("폴 세우고 영점 잡기", Modifier.fillMaxWidth().testTag("tilt_calibrate")) { tc.calibrate() }
+            tc.calibrationNote?.let { Text(it, style = Ty.small, color = t.ink, modifier = Modifier.testTag("tilt_note")) }
+            Text("폰을 폴에 세로로 고정하고, 폴을 기포·수준기로 똑바로 세운 뒤 누르세요. 각도는 경고·기록용이고 좌표를 보정하지는 않아요.", style = Ty.small, color = t.inkSub)
+            if (tc.calibrated) Btn("영점 기본값으로", Modifier.fillMaxWidth().testTag("tilt_reset")) { tc.resetCalibration() }
+        }
     }
 }
 
@@ -425,5 +457,6 @@ internal fun averagingLine(p: SavedPoint): String {
         val mx = p.maxCorrectionAgeSec
         parts += "보정 연령 ${String.format(Locale.US, "%.1f", last)}초" + (if (mx != null && mx > last) " (최대 ${String.format(Locale.US, "%.1f", mx)}초)" else "")
     }
+    p.tiltDeg?.let { a -> parts += "폴 기울기 ${String.format(Locale.US, "%.1f", a)}°" + (p.tiltMaxDeg?.let { m -> " (최대 ${String.format(Locale.US, "%.1f", m)}°)" } ?: "") }
     return if (parts.isEmpty()) "" else "\n" + parts.joinToString(" · ")
 }

@@ -55,6 +55,7 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
             deleteFiles = { bgFiles.deleteCopy(it) },
             cornersDir = bgFiles.layerDir,
         )
+        controller.tilt = TiltController(kr.archsurvey.engine.AndroidTiltPlatform(app, application.settings))
         controller.media = media
         controller.exporter = ExportController(exportPlatform, viewModelScope)
         controller.backup = BackupController(backupPlatform, viewModelScope)
@@ -65,5 +66,5 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
         media.recoverPending()
     }
 
-    override fun onCleared() { media.stopPlayback(); media.cancelRecording() }
+    override fun onCleared() { controller.tilt?.pause(); media.stopPlayback(); media.cancelRecording() }
 }

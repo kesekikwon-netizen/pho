@@ -77,6 +77,9 @@ data class SavedPoint(
     val minCorrectionAgeSec: Double? = null,
     val fixedEpochs: Int = 0,
     val floatEpochs: Int = 0,
+    /** 측정하는 동안 폰 센서로 잰 폴 기울기(°) 평균·최대(0.1.8). 센서 없음·꺼짐·옛 점은 null. 좌표 보정에는 쓰지 않음 */
+    val tiltDeg: Double? = null,
+    val tiltMaxDeg: Double? = null,
     /** 고고학: 발굴 구역·그리드·칸 이름(예: "A-3", "A-3 / B-3 경계 근처", "그리드 밖")·칸 안 위치(m) */
     val areaId: Long? = null,
     val gridId: Long? = null,
@@ -135,6 +138,11 @@ class SurveyController(
     var arch: kr.archsurvey.arch.ArchController = kr.archsurvey.arch.ArchController(this, null, scope)
     /** 중복 점 경고 시트 */
     var dupPrompt by mutableStateOf<DupPrompt?>(null)
+    /** 전자 기포(폰 센서). null = 쓰지 않음(시험 기본) */
+    var tilt: TiltController? = null
+    /** 기울기 확인 창: 측점 누를 때의 각도(°). null = 닫힘 */
+    var tiltPrompt by mutableStateOf<Double?>(null)
+    private var tiltBypass = false
     /** 재측량 대기 중인 점: 다음 측점이 이 점의 새 값이 된다 */
     var resurveyTarget by mutableStateOf<SavedPoint?>(null)
     private var resultName: String? = null
@@ -282,6 +290,14 @@ class SurveyController(
     private fun showResultStrip() { resultStripShown = true; resultStripSeq++ }
     fun hideResultStrip() { resultStripShown = false }
 
+    /** 기울기 확인 창의 답. true = 그래도 측점 */
+    fun answerTilt(go: Boolean) {
+        tiltPrompt = null
+        if (!go) { message = "측점하지 않았어요. 폴을 세운 뒤 다시 누르세요."; return }
+        tiltBypass = true
+        try { onMeasure() } finally { tiltBypass = false }
+    }
+
     fun onMeasure() {
         if (phase == Phase.ACQUIRING || phase == Phase.RECORDING) return
         resultStripShown = false
@@ -291,6 +307,16 @@ class SurveyController(
             feedback?.invoke(false)
             return
         }
+        val tc = tilt
+        if (tc != null && tc.isOver && !tiltBypass) {
+            val ang = tc.currentAngle() ?: 0.0
+            when (tc.policy) {
+                TiltPolicy.BLOCK -> { message = "폴이 ${tc.f1(ang)}° 기울었어요 (허용 ${tc.f1(tc.limitDeg)}°). 폴을 세운 뒤 다시 측점하세요."; feedback?.invoke(false); return }
+                TiltPolicy.CONFIRM -> { tiltPrompt = ang; return }
+                TiltPolicy.WARN -> {}
+            }
+        }
+        tiltPrompt = null
         val cfg = antenna
         val rec = AntennaRecord.of(antennaModel, cfg)
         if (rec == null) { message = "안테나 높이를 계산할 수 없어요. 높이 값을 확인하세요."; return }
@@ -303,11 +329,12 @@ class SurveyController(
             var worst = st.status
             var aborted: StatusReason? = null
             var avgStart: Long? = null; var avgEnd: Long? = null
+            val tilts = ArrayList<Double>()
             combine(source.gnss, source.link) { g, l -> g to l }.first { (g, l) ->
                 val r = StatusJudge.judge(g, l.state, source.clockMs())
                 if (r.status == SurveyStatus.UNAVAILABLE) { aborted = r.reason; return@first true }
                 if (r.status == SurveyStatus.CAUTION) worst = SurveyStatus.CAUTION
-                g.gga?.let { if (avg.add(it, g.gst)) { val now = clock(); if (avgStart == null) avgStart = now; avgEnd = now } }
+                g.gga?.let { if (avg.add(it, g.gst)) { val now = clock(); if (avgStart == null) avgStart = now; avgEnd = now; tilt?.currentAngle()?.let { a -> tilts.add(a) } } }
                 progress = avg.progress
                 avg.done
             }
@@ -331,6 +358,7 @@ class SurveyController(
                 hdop = p.hdop, sigmaE = p.sigmaE, sigmaN = p.sigmaN, sigmaU = p.sigmaU, correctionAgeSec = p.correctionAgeSec, baseStationId = p.baseStationId,
                 avgStartedAtMs = avgStart, avgEndedAtMs = avgEnd, maxCorrectionAgeSec = p.maxCorrectionAgeSec, minCorrectionAgeSec = p.minCorrectionAgeSec,
                 fixedEpochs = p.fixedEpochs, floatEpochs = p.floatEpochs,
+                tiltDeg = if (tilts.isEmpty()) null else tilts.average(), tiltMaxDeg = tilts.maxOrNull(),
                 areaId = arch.activeAreaId, gridId = if (cell.kind == CellKind.NO_GRID) null else arch.activeGrid?.id, cellName = cellName,
                 cellU = cell.inCellU, cellV = cell.inCellV)
             val target = resurveyTarget

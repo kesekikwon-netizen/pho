@@ -64,6 +64,7 @@ class RoomPointStore(
             correctionAgeSec = p.correctionAgeSec, baseStationId = p.baseStationId, epochs = p.epochs,
             avgStartedAtUtcMs = p.avgStartedAtMs, avgEndedAtUtcMs = p.avgEndedAtMs, maxCorrectionAgeSec = p.maxCorrectionAgeSec,
             minCorrectionAgeSec = p.minCorrectionAgeSec, fixedEpochs = p.fixedEpochs, floatEpochs = p.floatEpochs,
+            tiltDeg = p.tiltDeg, tiltMaxDeg = p.tiltMaxDeg,
             antennaHeight = apc, antennaModel = p.antenna.modelId, antennaRefPoint = p.antenna.refPointId,
             antennaInputMode = p.antenna.method, antennaInputValue = p.antenna.inputM,
             antennaPcoV = p.antenna.pcoV, antennaPcoH = p.antenna.pcoH,
@@ -88,6 +89,7 @@ class RoomPointStore(
             hdop = e.hdop, sigmaE = e.sigmaE, sigmaN = e.sigmaN, sigmaU = e.sigmaU, correctionAgeSec = e.correctionAgeSec, baseStationId = e.baseStationId,
             avgStartedAtMs = e.avgStartedAtUtcMs, avgEndedAtMs = e.avgEndedAtUtcMs, maxCorrectionAgeSec = e.maxCorrectionAgeSec,
             minCorrectionAgeSec = e.minCorrectionAgeSec, fixedEpochs = e.fixedEpochs, floatEpochs = e.floatEpochs,
+            tiltDeg = e.tiltDeg, tiltMaxDeg = e.tiltMaxDeg,
             areaId = e.areaId, gridId = e.gridId, cellName = e.cellName, cellU = e.cellU, cellV = e.cellV,
         )
     }

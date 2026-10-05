@@ -20,6 +20,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.text
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -215,5 +217,43 @@ internal fun QuickSheet(c: SurveyController) {
             }
             MBtn(Modifier.fillMaxWidth().height(56.dp).testTag("quick_close"), MKind.PRIMARY, 18.dp, onClick = close) { Text("닫기", style = Ty.label, color = t.onPrimary) }
         }
+    }
+}
+
+
+/**
+ * 전자 기포(폰 센서). 누르는 기능 없음. 바깥 원 = 허용 각도의 2배, 안쪽 원 = 허용 각도.
+ * 기포(점)는 높은 쪽으로 가므로 폴 위쪽을 기포 쪽으로 옮기면 가운데로 온다. 허용을 넘으면 주의색.
+ */
+@Composable
+internal fun TiltBubble(tc: TiltController, modifier: Modifier = Modifier) {
+    val t = T
+    val st = tc.state
+    if (st == TiltState.OFF || st == TiltState.NO_SENSOR) return
+    val over = st == TiltState.OVER
+    val col = when (st) { TiltState.OVER -> t.caution; TiltState.OK -> t.fixed; else -> t.inkSub }
+    val ang = tc.angleDeg
+    val label = when (st) { TiltState.NO_DATA -> "—"; else -> "${tc.f1(ang ?: 0.0)}°" }
+    Column(
+        modifier.width(48.dp).clip(RoundedCornerShape(12.dp)).background(if (over) t.caution.copy(alpha = 0.16f) else t.raised)
+            .border(if (over) 1.5.dp else 1.dp, if (over) t.caution else t.line, RoundedCornerShape(12.dp)).padding(vertical = 4.dp)
+            .semantics { contentDescription = "폴 기울기 $label" + if (over) ", 허용 넘음" else "" }.testTag("tilt_bubble"),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        val b = tc.bubble; val limit = tc.limitDeg
+        androidx.compose.foundation.Canvas(Modifier.size(36.dp)) {
+            val r = size.minDimension / 2f
+            val c0 = center
+            drawCircle(t.line, r, c0, style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+            drawCircle(col.copy(alpha = 0.6f), r / 2f, c0, style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+            if (b != null && st != TiltState.NO_DATA) {
+                // 성분(sin) → 각도 → 바깥 원 = 허용×2
+                val full = Math.toRadians(limit * 2.0)
+                val sx = (kotlin.math.asin(b.x.coerceIn(-1.0, 1.0)) / full).coerceIn(-1.0, 1.0)
+                val sy = (kotlin.math.asin(b.y.coerceIn(-1.0, 1.0)) / full).coerceIn(-1.0, 1.0)
+                drawCircle(col, 5.dp.toPx(), androidx.compose.ui.geometry.Offset(c0.x + (sx * (r - 5.dp.toPx())).toFloat(), c0.y + (sy * (r - 5.dp.toPx())).toFloat()))
+            }
+        }
+        Text(label, style = Ty.coord.copy(fontSize = 12.sp), color = if (over) t.ink else t.inkSub, maxLines = 1, modifier = Modifier.testTag("tilt_angle"))
     }
 }

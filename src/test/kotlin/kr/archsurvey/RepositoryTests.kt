@@ -53,6 +53,8 @@ class RepositoryTests {
         assertEquals(4, p.fixedEpochs); assertEquals(1, p.floatEpochs); assertEquals(5, p.epochs)
         val b = db.dao().getPoint(repo.savePoint(pt("P-0002")))!!
         assertNull(b.avgStartedAtUtcMs); assertNull(b.maxCorrectionAgeSec); assertEquals(0, b.fixedEpochs)
+        val t = db.dao().getPoint(repo.savePoint(pt("P-0003").copy(tiltDeg = 1.2, tiltMaxDeg = 2.4)))!!
+        assertEquals(1.2, t.tiltDeg!!, 0.0); assertEquals(2.4, t.tiltMaxDeg!!, 0.0); assertNull(b.tiltDeg)
     }
 
     @Test fun fifthPhotoIsRejected() = runBlocking {

@@ -116,6 +116,19 @@ class SettingsStore(private val ctx: Context) {
     var vibrationOn: Boolean
         get() = sp.getBoolean("vibration", true)
         set(v) = sp.edit().putBoolean("vibration", v).apply()
+    /** 전자 기포(폰 센서 폴 기울기): 켜짐, 허용 각도(°), 넘을 때 동작, 영점("x,y,z" 또는 없음) */
+    var tiltEnabled: Boolean
+        get() = sp.getBoolean("tilt_on", true)
+        set(v) = sp.edit().putBoolean("tilt_on", v).apply()
+    var tiltLimitDeg: Double
+        get() = sp.getFloat("tilt_limit", 2.0f).toDouble()
+        set(v) = sp.edit().putFloat("tilt_limit", v.toFloat()).apply()
+    var tiltPolicy: String
+        get() = sp.getString("tilt_policy", "warn") ?: "warn"
+        set(v) = sp.edit().putString("tilt_policy", v).apply()
+    var tiltReference: String?
+        get() = sp.getString("tilt_ref", null)
+        set(v) = sp.edit().putString("tilt_ref", v).apply()
     var keepScreenOn: Boolean
         get() = sp.getBoolean("keep_screen", true)
         set(v) = sp.edit().putBoolean("keep_screen", v).apply()

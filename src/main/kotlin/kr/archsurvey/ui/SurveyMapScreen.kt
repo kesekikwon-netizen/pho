@@ -60,6 +60,7 @@ fun SurveyMapScreen(
         DrawerOverlay(c)
         if (c.quickSheetOpen) QuickSheet(c)
         if (c.dupPrompt != null) DupSheet(c)
+        if (c.tiltPrompt != null) TiltSheet(c)
         c.bg?.let { b ->
             androidx.activity.compose.BackHandler(enabled = b.screen != kr.archsurvey.ui.bg.BgScreen.NONE) { b.close() }
             kr.archsurvey.ui.bg.BackgroundSheets(b)
@@ -133,6 +134,7 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
         }
         // 오른쪽: 퀵 메뉴 · 안테나 높이 (점 목록·전체 보기·레이어는 퀵 메뉴로 접음)
         Column(Modifier.align(Alignment.TopEnd).padding(end = 10.dp, top = 84.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            c.tilt?.let { TiltBubble(it) }
             ToolBtn(Glyph.CHEVRON_UP, "퀵 메뉴", "tool_quick") { c.quickSheetOpen = true }
             MBtn(Modifier.size(48.dp).testTag("antenna_chip"), MKind.PLAIN, 16.dp, onClick = { c.antennaSheetOpen = true }) {
                 GlyphIcon(Glyph.RULER, t.accent, 18.dp)
@@ -205,7 +207,8 @@ private fun ResultStrip(c: SurveyController) {
     ) {
         Box(Modifier.width(6.dp).height(32.dp).clip(RoundedCornerShape(3.dp)).background(bg))   // 상태색 막대(칩과 같은 색)
         Text(p.name, style = Ty.coord.copy(fontSize = 20.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_name"))
-        Text("${p.type} · 저장됨 ±${p.sigmaHM?.let { f3(it) } ?: "—"} m", style = Ty.small, color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("result_h"))
+        val tiltOver = p.tiltMaxDeg != null && c.tilt != null && p.tiltMaxDeg > c.tilt!!.limitDeg
+        Text("${p.type} · 저장됨 ±${p.sigmaHM?.let { f3(it) } ?: "—"} m" + if (tiltOver) " · 기울기 ${String.format(java.util.Locale.US, "%.1f", p.tiltMaxDeg)}°" else "", style = Ty.small, color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("result_h"))
         Row(
             Modifier.height(28.dp).clip(RoundedCornerShape(14.dp)).glossy(bg).padding(start = 6.dp, end = 9.dp).testTag("result_chip"),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -575,4 +578,26 @@ fun rememberMapSurface(c: SurveyController): MapSurface = remember(c) {
         runCatching { Class.forName("kr.archsurvey.ui.MapLibreMapSurface").getConstructor(kr.archsurvey.map.LocalProjection::class.java).newInstance(c.projection) as MapSurface }
             .getOrElse { CanvasMapSurface() }
     } else CanvasMapSurface()
+}
+
+
+/** 기울기 확인 창(설정 ‘측점 때 확인’): 그래도 측점 / 취소 */
+@Composable
+fun TiltSheet(c: SurveyController) {
+    val t = T
+    val a = c.tiltPrompt ?: return
+    val tc = c.tilt ?: return
+    Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().background(t.scrim).clickable { c.answerTilt(false) })
+        val shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
+        Column(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().clip(shape).background(t.bg).border(1.dp, t.line, shape).padding(20.dp).testTag("tilt_sheet"),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("폴이 기울었어요 · ${tc.f1(a)}°", style = Ty.title, color = t.ink)
+            Text("허용 ${tc.f1(tc.limitDeg)}°를 넘었어요. 폴을 세운 뒤 측점하는 것이 좋아요. 기울기 값은 점과 함께 기록돼요.", style = Ty.body, color = t.inkSub)
+            MBtn(Modifier.fillMaxWidth().height(56.dp).testTag("tilt_cancel"), MKind.PRIMARY, 18.dp, onClick = { c.answerTilt(false) }) { Text("취소 (폴 세우기)", style = Ty.label, color = t.onPrimary) }
+            MBtn(Modifier.fillMaxWidth().height(56.dp).testTag("tilt_go"), MKind.PLAIN, 18.dp, onClick = { c.answerTilt(true) }) { Text("그래도 측점", style = Ty.label, color = t.ink) }
+        }
+    }
 }
