@@ -7,7 +7,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 data class ExportSummary(val project: String, val points: Int, val photos: Int, val voices: Int, val fakePoints: Int)
-data class ExportOutput(val fileName: String, val sizeBytes: Long, val path: String, val points: Int, val photos: Int, val voices: Int)
+data class ExportOutput(
+    val fileName: String, val sizeBytes: Long, val path: String, val points: Int, val photos: Int, val voices: Int,
+    /** hgis 묶음을 둔 공용 폴더(예: Documents/ExcavationSurvey/hgis/작업_시각). 없으면 null */
+    val publicFolder: String? = null,
+)
 
 /** 내보내기에 필요한 Android 기능. 시험에서는 가짜로 바꾼다. */
 interface ExportPlatform {
@@ -30,6 +34,8 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
     /** 0.1.14 목업 11 양식 선택(여러 개) */
     var formats by mutableStateOf(kr.archsurvey.export.ExportFormat.DEFAULT)
     fun toggleFormat(f: kr.archsurvey.export.ExportFormat) { formats = if (f in formats) formats - f else formats + f; output = null }
+    /** 「hgis용 SHP」 한 번 누르기: Shape 한 벌 + hgis 기준점 CSV 만 골라 바로 만든다 */
+    fun runHgis() { if (running) return; formats = kr.archsurvey.export.ExportFormat.HGIS; output = null; run() }
     /** 0.1.14 목업 12 전송 방식: true = 무선 전송(공유), false = 장치 내 저장 */
     var methodShare by mutableStateOf(true)
     fun send() { if (methodShare) share() else saveAs() }
@@ -56,7 +62,9 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
             try {
                 val o = platform.exportFormats(fs, includePhotos && (s?.photos ?: 1) > 0, includeVoices && (s?.voices ?: 1) > 0)
                 output = o
-                onResult?.invoke(true, "내보내기 파일을 만들었어요 · ${o.fileName} (${sizeText(o.sizeBytes)}) · ${fs.size}개 양식 · 전송 방식을 고르세요")
+                o.publicFolder?.let { notice = hgisFolderText(it) }
+                onResult?.invoke(true, "내보내기 파일을 만들었어요 · ${o.fileName} (${sizeText(o.sizeBytes)}) · ${fs.size}개 양식 · " +
+                    (if (o.publicFolder != null) "PC로 옮길 폴더: 내장 저장공간/${o.publicFolder}" else "전송 방식을 고르세요"))
             }
             catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -76,6 +84,8 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
     fun saveAs() { output?.let { o -> platform.saveAs(o) { ok -> notice = if (ok) "파일로 저장했어요" else "저장을 취소했거나 실패했어요"; onResult?.invoke(ok, notice!!) } } }
 
     companion object {
+        fun hgisFolderText(folder: String) =
+            "폰을 USB로 PC에 연결 → 내장 저장공간/$folder 폴더를 PC에 복사 → 그 안의 points_EPSG.shp 를 hgis 지도에 끌어 놓으세요"
         fun sizeText(bytes: Long): String = when {
             bytes < 1024 -> "$bytes B"
             bytes < 1024 * 1024 -> "%.1f KB".format(java.util.Locale.US, bytes / 1024.0)

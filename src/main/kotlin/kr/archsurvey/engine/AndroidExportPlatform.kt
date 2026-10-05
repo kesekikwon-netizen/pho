@@ -35,7 +35,7 @@ class AndroidExportPlatform(
     override suspend fun exportFormats(formats: Set<kr.archsurvey.export.ExportFormat>, includePhotos: Boolean, includeVoices: Boolean): ExportOutput {
         val r: ExportResult = svc.export(project(), includePhotos, includeVoices, formats)
         lastZip = r.zip
-        return ExportOutput(r.zip.name, r.zip.length(), r.zip.path, r.pointCount, r.photoCount, r.voiceCount)
+        return ExportOutput(r.zip.name, r.zip.length(), r.zip.path, r.pointCount, r.photoCount, r.voiceCount, r.publicFolder)
     }
 
     override fun share(out: ExportOutput) {

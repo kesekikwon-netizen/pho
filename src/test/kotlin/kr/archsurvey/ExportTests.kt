@@ -39,6 +39,7 @@ class ExportServiceTest {
         ellipsoidalHeight = 50.0, altitudeMsl = 30.0, geoidSeparation = 20.0, northing = 500000.0, easting = 200000.0, crsEpsg = 5186,
         fixQuality = 4, allEpochsFixed = true, satellites = 20, hdop = 0.8, sigmaE = 0.01, sigmaN = 0.01, sigmaH = 0.015, sigmaU = 0.02,
         correctionAgeSec = 1.0, baseStationId = null, epochs = 5, antennaHeight = 2.199, device = device, measuredAtUtcMs = 1_700_000_000_000L,
+        groundMsl = 28.0, groundEllipsoidalHeight = 48.0, heightModel = "RECEIVER",
     )
 
     private fun seed(photos: PhotoStore, voices: VoiceStore): Long = runBlocking {
@@ -82,22 +83,24 @@ class ExportServiceTest {
         val fs = setOf(kr.archsurvey.export.ExportFormat.SHP, kr.archsurvey.export.ExportFormat.KML, kr.archsurvey.export.ExportFormat.REPORT)
         val r = ExportService(ctx, db.dao(), photos, voices).export("작업1", includePhotos = false, includeVoices = false, formats = fs)
         val names = ZipFile(r.zip).use { z -> z.entries().toList().map { it.name } }
-        for (n in listOf("points.shp", "points.shx", "points.dbf", "points.prj", "points.cpg", "points.kml", "point_report.csv", "README.txt")) assertTrue("$n in $names", n in names)
-        for (n in listOf("points.csv", "points.dxf", "points.geojson")) assertFalse("$n not in $names", n in names)
+        for (n in listOf("points_5186.shp", "points_5186.shx", "points_5186.dbf", "points_5186.prj", "points_5186.cpg", "points.kml", "point_report.csv", "README.txt")) assertTrue("$n in $names", n in names)
+        for (n in listOf("points.csv", "points.dxf", "points.geojson", "points.shp")) assertFalse("$n not in $names", n in names)
         ZipFile(r.zip).use { z ->
-            val shp = java.nio.ByteBuffer.wrap(z.getInputStream(z.getEntry("points.shp")).readBytes())
+            val shp = java.nio.ByteBuffer.wrap(z.getInputStream(z.getEntry("points_5186.shp")).readBytes())
             assertEquals(9994, shp.order(java.nio.ByteOrder.BIG_ENDIAN).getInt(0))
             assertEquals(shp.capacity() / 2, shp.getInt(24))
             shp.order(java.nio.ByteOrder.LITTLE_ENDIAN)
-            assertEquals(1000, shp.getInt(28)); assertEquals(1, shp.getInt(32))
+            assertEquals(1000, shp.getInt(28)); assertEquals(11, shp.getInt(32)) // PointZ (pt 에 groundMsl 있음)
             assertEquals(200000.0, shp.getDouble(36), 1e-9); assertEquals(500010.0, shp.getDouble(60), 1e-9) // Xmin, Ymax
-            assertEquals(100 + 2 * 28, shp.capacity())
-            assertEquals(200005.0, shp.getDouble(100 + 28 + 12), 1e-9) // 두 번째 점 X
-            val dbf = z.getInputStream(z.getEntry("points.dbf")).readBytes()
+            assertEquals(100 + 2 * 44, shp.capacity())
+            assertEquals(200005.0, shp.getDouble(100 + 44 + 12), 1e-9) // 두 번째 점 X
+            val dbf = z.getInputStream(z.getEntry("points_5186.dbf")).readBytes()
             assertEquals(2, java.nio.ByteBuffer.wrap(dbf).order(java.nio.ByteOrder.LITTLE_ENDIAN).getInt(4))
             assertEquals(0x1A, dbf.last().toInt())
-            val prj = z.getInputStream(z.getEntry("points.prj")).readBytes().toString(Charsets.US_ASCII)
-            assertTrue(prj.contains("Central_Belt_2010") && prj.contains("127.0") && prj.contains("600000.0"))
+            assertEquals("UTF-8", z.getInputStream(z.getEntry("points_5186.cpg")).readBytes().toString(Charsets.US_ASCII).trim())
+            val prj = z.getInputStream(z.getEntry("points_5186.prj")).readBytes().toString(Charsets.US_ASCII)
+            assertTrue(prj.contains("KGD2002_Central_Belt_2010") && prj.contains("127.0") && prj.contains("600000.0"))
+            assertTrue(z.getInputStream(z.getEntry("README.txt")).readBytes().toString(Charsets.UTF_8).contains("hgis(Strata)에 넣기"))
             val kml = z.getInputStream(z.getEntry("points.kml")).readBytes().toString(Charsets.UTF_8)
             assertTrue(kml.contains("<name>P-0002</name>") && kml.contains("127.000000000,37.000000000"))
             val rep = z.getInputStream(z.getEntry("point_report.csv")).readBytes().toString(Charsets.UTF_8)
@@ -148,5 +151,23 @@ class ExportControllerTest {
     }
     @Test fun sizeText() {
         assertEquals("512 B", ExportController.sizeText(512)); assertEquals("1.5 KB", ExportController.sizeText(1536)); assertEquals("2.0 MB", ExportController.sizeText(2 * 1048576L))
+    }
+    @Test fun runHgisSelectsShpAndCsvAndShowsFolder() {
+        val p = object : ExportPlatform {
+            var last: Set<kr.archsurvey.export.ExportFormat>? = null
+            override suspend fun summary() = ExportSummary("작업1", 2, 0, 0, 0)
+            override suspend fun export(includePhotos: Boolean, includeVoices: Boolean) = error("no")
+            override suspend fun exportFormats(formats: Set<kr.archsurvey.export.ExportFormat>, includePhotos: Boolean, includeVoices: Boolean): ExportOutput {
+                last = formats
+                return ExportOutput("a.zip", 100, "/x/a.zip", 2, 0, 0, "Documents/ExcavationSurvey/hgis/작업1_t")
+            }
+            override fun share(out: ExportOutput) {}
+            override fun saveAs(out: ExportOutput, onDone: (Boolean) -> Unit) = onDone(true)
+        }
+        val e = ExportController(p, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        e.openScreen(); e.runHgis()
+        assertEquals(kr.archsurvey.export.ExportFormat.HGIS, p.last)
+        assertEquals("Documents/ExcavationSurvey/hgis/작업1_t", e.output!!.publicFolder)
+        assertTrue(e.notice!!.contains("Documents/ExcavationSurvey/hgis/작업1_t"))
     }
 }

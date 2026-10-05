@@ -13,7 +13,46 @@ import java.util.Locale
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
-data class ExportResult(val dir: File, val zip: File, val pointCount: Int, val photoCount: Int, val voiceCount: Int = 0)
+data class ExportResult(
+    val dir: File, val zip: File, val pointCount: Int, val photoCount: Int, val voiceCount: Int = 0,
+    /** 공용 문서 폴더에 둔 hgis 묶음 경로(예: Documents/ExcavationSurvey/hgis/작업_20261005_101000). 못 만들었으면 null */
+    val publicFolder: String? = null,
+)
+
+/** 공용 문서 폴더 안 hgis 묶음 상위 경로 */
+const val PUBLIC_ROOT = "Documents/ExcavationSurvey/hgis"
+
+/** MediaStore 로 공용 Documents 에 파일 복사(API 29+). */
+@androidx.annotation.RequiresApi(29)
+internal object PublicDocs {
+    fun copyTopLevel(ctx: Context, dir: File, relPath: String): String? {
+        val files = dir.listFiles()?.filter { it.isFile }?.sortedBy { it.name }.orEmpty()
+        if (files.isEmpty()) return null
+        val cr = ctx.contentResolver
+        val collection = android.provider.MediaStore.Files.getContentUri("external")
+        val created = ArrayList<Uri>()
+        try {
+            for (f in files) {
+                val ext = f.extension.lowercase()
+                val mime = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
+                val cv = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, f.name)
+                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mime)
+                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "$relPath/")
+                    put(android.provider.MediaStore.MediaColumns.IS_PENDING, 1)
+                }
+                val uri = cr.insert(collection, cv) ?: error("insert ${f.name}")
+                created.add(uri)
+                (cr.openOutputStream(uri) ?: error("open ${f.name}")).use { o -> f.inputStream().use { it.copyTo(o) } }
+                cr.update(uri, android.content.ContentValues().apply { put(android.provider.MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+            }
+        } catch (e: Exception) {
+            for (u in created) runCatching { cr.delete(u, null, null) }
+            return null
+        }
+        return relPath
+    }
+}
 
 class ExportService(
     private val ctx: Context, private val dao: SurveyDao, private val photos: PhotoStore,
@@ -62,12 +101,22 @@ class ExportService(
         if (ExportFormat.DXF in formats) File(dir, "points.dxf").writeBytes(DxfWriter.write(pts.map { DxfPoint(it.pointId, it.easting, it.northing, it.groundMsl ?: it.groundEllipsoidalHeight) }))
         if (ExportFormat.REPORT in formats) File(dir, "point_report.csv").writeText(MoreFormats.reportCsv(pts, byPoint), Charsets.UTF_8)
         if (ExportFormat.KML in formats) File(dir, "points.kml").writeText(MoreFormats.kml(project, pts), Charsets.UTF_8)
+        // hgis(Strata)·QGIS: 좌표계(작업 좌표계 = 점의 crsEpsg)마다 points_<EPSG>.shp/.shx/.dbf/.prj/.cpg 한 벌. 5179 를 기본으로 쓰지 않는다
+        val shpEpsgs = ArrayList<Int>()
         if (ExportFormat.SHP in formats) {
-            val sh = MoreFormats.shape(pts)
-            File(dir, "points.shp").writeBytes(sh.shp); File(dir, "points.shx").writeBytes(sh.shx); File(dir, "points.dbf").writeBytes(sh.dbf)
-            File(dir, "points.prj").writeText(sh.prj, Charsets.US_ASCII); File(dir, "points.cpg").writeText(sh.cpg, Charsets.US_ASCII)
+            for (sh in MoreFormats.shapesByCrs(pts, byPoint)) {
+                val b = "points_${sh.epsg}"
+                File(dir, "$b.shp").writeBytes(sh.shp); File(dir, "$b.shx").writeBytes(sh.shx); File(dir, "$b.dbf").writeBytes(sh.dbf)
+                sh.prj?.let { File(dir, "$b.prj").writeText(it, Charsets.US_ASCII) }
+                File(dir, "$b.cpg").writeText(sh.cpg, Charsets.US_ASCII)
+                shpEpsgs.add(sh.epsg)
+            }
         }
-        File(dir, "README.txt").writeText(readme(project, pts.size), Charsets.UTF_8)
+        if (ExportFormat.HGIS_CSV in formats) {
+            for ((epsg, group) in pts.groupBy { it.crsEpsg })
+                File(dir, "hgis_control_points_$epsg.csv").writeText(MoreFormats.hgisControlCsv(group), Charsets.UTF_8)
+        }
+        File(dir, "README.txt").writeText(readme(project, pts.size, shpEpsgs), Charsets.UTF_8)
 
         val zip = File(base, "${safe}_$stamp.zip")
         ZipOutputStream(zip.outputStream().buffered()).use { z ->
@@ -77,21 +126,46 @@ class ExportService(
                 z.closeEntry()
             }
         }
-        return ExportResult(dir, zip, pts.size, photoCount, voiceCount)
+        // PC 로 옮겨 hgis 에 끌어 놓기 쉽게: 위 파일(사진·음성 폴더 제외)을 공용 문서 폴더에도 한 폴더로 둔다(Android 10 이상)
+        val publicFolder = if (ExportFormat.SHP in formats || ExportFormat.HGIS_CSV in formats) publish(dir, "${safe}_$stamp") else null
+        return ExportResult(dir, zip, pts.size, photoCount, voiceCount, publicFolder)
     }
 
-    private fun readme(project: String, n: Int) = """
+    /**
+     * 내보낸 폴더의 맨 위 파일들을 `Documents/ExcavationSurvey/hgis/<작업>_<시각>/` 에 복사한다(MediaStore, 권한 불필요, API 29+).
+     * USB 로 PC 에 연결하면 「내장 저장공간 › Documents › ExcavationSurvey › hgis」 에 보인다. 실패하거나 Android 9 이하면 null(ZIP 공유/저장은 그대로).
+     */
+    private fun publish(dir: File, folder: String): String? {
+        if (android.os.Build.VERSION.SDK_INT < 29) return null
+        return runCatching { PublicDocs.copyTopLevel(ctx, dir, "${PUBLIC_ROOT}/$folder") }.getOrNull()
+    }
+
+    private fun readme(project: String, n: Int, shpEpsgs: List<Int> = emptyList()) = """
         작업: $project / 점 $n 개
         points.csv      모든 항목(UTF-8, 엑셀 한글 가능)
         points.geojson  경위도(WGS84)+속성
         points.dxf      CAD용 점·번호·표고 (R2000, 단위 m, 한글 CP949, X=동 Y=북, 레이어 PT/PT_NO/PT_ELEV)
         point_report.csv 점 보고서(엑셀용 핵심 열)
         points.kml      구글어스(경위도+지면 타원체고)
-        points.shp/.shx/.dbf/.prj/.cpg  점 Shapefile(X=동 Y=북, 속성 UTF-8)
+        points_<EPSG>.shp/.shx/.dbf/.prj/.cpg  점 Shapefile(작업 좌표계, X=동 Y=북, Z=지면 표고, 속성 UTF-8)
+        hgis_control_points_<EPSG>.csv  hgis 「CSV 기준점」 양식(point_id,x,y,z,datum,ellipsoid,projection,origin,accuracy_m,pdop,fix_type)
         (고른 양식만 들어 있어요)
         photos.csv, photos/  점별 사진(최대 4장)
         voice.csv, voices/   점별 음성 메모(m4a, AAC 16kHz 모노). 내보낼 때 '음성 포함'을 켠 경우만
         좌표계는 CSV의 crs_epsg 열 참고. 실제 CAD 프로그램 열람은 현장에서 확인 필요.
+    """.trimIndent() + "\n" + (if (shpEpsgs.isEmpty()) "" else hgisReadme(shpEpsgs))
+
+    private fun hgisReadme(epsgs: List<Int>) = "\n" + """
+        [hgis(Strata)에 넣기]
+        1) 이 폴더를 통째로 PC에 복사하세요(휴대폰 화면에서 바로 끌면 안 돼요: PC에 먼저 복사).
+           ZIP으로 받았으면 먼저 압축을 푸세요(hgis는 ZIP을 끌어 놓기로 받지 않아요).
+        2) 복사한 폴더에서 ${epsgs.joinToString(", ") { "points_$it.shp" }} 를 hgis 지도나 레이어 목록에 끌어 놓으세요.
+           .shx .dbf .prj .cpg 가 같은 폴더에 같은 이름으로 있어야 해요(여러 파일을 같이 끌어도 .shp 만 읽어요).
+        3) 좌표계는 .prj 로 ${epsgs.joinToString(", ") { "EPSG:$it" }} 로 읽혀요. 조사 좌표계와 달라도 hgis가 화면에 맞춰 보여 줘요.
+           점 번호(point_id)가 라벨로 떠요. 표고는 z 칸과 도형 Z(모든 점에 높이가 있을 때)에 있어요.
+        4) 기준점으로 넣으려면: 기타 › 더보기 › CSV 기준점 → hgis_control_points_<EPSG>.csv.
+           이 CSV는 좌표계를 따로 읽지 않으니 같은 좌표계(5186/5187) 조사에 불러오세요. 모든 점이 들어 있으니 필요 없는 행은 지우고 쓰세요.
+        제출용 EPSG:5179 SHP는 hgis 「검수·제출」에서 만드세요(이 앱은 작업 좌표계로만 내보내요).
     """.trimIndent() + "\n"
 
     fun shareIntent(zip: File): Intent {

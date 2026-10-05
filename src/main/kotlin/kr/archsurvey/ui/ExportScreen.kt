@@ -39,6 +39,10 @@ fun ExportScreen(ec: ExportController) {
             }
         }
         if (out == null) {
+            // hgis(Strata)에 끌어 놓을 Shape 한 벌을 한 번에(양식 고르기 없이)
+            Btn(if (ec.running) "만드는 중…" else "hgis(Strata)용 SHP 바로 만들기", Modifier.fillMaxWidth().testTag("export_hgis_quick")) { ec.runHgis() }
+            Text("작업 좌표계 그대로 .shp .shx .dbf .prj .cpg 한 벌 + 기준점 CSV · 폰 문서 폴더(Documents/ExcavationSurvey/hgis)에도 둬요",
+                style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("export_hgis_note"))
             Text("추출할 양식을 고르세요 · 여러 개 선택 가능", style = Ty.small, color = t.inkSub)
             Column {
                 for (f in ExportFormat.entries) {
@@ -61,7 +65,8 @@ fun ExportScreen(ec: ExportController) {
                 Text("캐드 points.dxf — 점·번호·표고 (단위 m, X=동 Y=북)", style = Ty.small, color = t.inkSub)
                 Text("점 보고서 point_report.csv — 번호·종류·좌표·표고·정밀도·시각", style = Ty.small, color = t.inkSub)
                 Text("구글어스 points.kml — 경위도 + 지면 높이", style = Ty.small, color = t.inkSub)
-                Text("Shape points.shp/.shx/.dbf/.prj — GIS용 점 (Korea 2000 TM)", style = Ty.small, color = t.inkSub)
+                Text("Shape points_EPSG.shp/.shx/.dbf/.prj/.cpg — hgis·QGIS용 점 (작업 좌표계 5186/5187 등, 표고 Z, 한글 UTF-8)", style = Ty.small, color = t.inkSub)
+                Text("hgis 기준점 hgis_control_points_EPSG.csv — hgis 「CSV 기준점」 양식", style = Ty.small, color = t.inkSub)
                 Text("GeoJSON points.geojson — 경위도 + 속성", style = Ty.small, color = t.inkSub)
                 Text("README.txt — 파일 설명", style = Ty.small, color = t.inkSub)
             }
@@ -72,6 +77,13 @@ fun ExportScreen(ec: ExportController) {
             MethodCard(Glyph.SHARE, "무선 전송", "이메일 · 메신저 · 주변 기기 공유", ec.methodShare, "export_method_share") { ec.methodShare = true }
             MethodCard(Glyph.FOLDER, "장치 내 저장", "저장할 폴더를 직접 골라요", !ec.methodShare, "export_method_save") { ec.methodShare = false }
             Text(out.fileName, style = Ty.body, color = t.ink, modifier = Modifier.testTag("export_filename"))
+            out.publicFolder?.let { folder ->
+                Card {
+                    Text("hgis용 폴더: 내장 저장공간/$folder", style = Ty.body, color = t.ink, modifier = Modifier.testTag("export_public_folder"))
+                    Text("USB로 PC에 연결해 이 폴더를 PC에 복사한 뒤, 안의 points_EPSG.shp 를 hgis 지도에 끌어 놓으세요. ZIP으로 보냈다면 압축을 먼저 푸세요.",
+                        style = Ty.small, color = t.inkSub)
+                }
+            }
             Text("${ec.formats.size}개 양식 · ${ExportController.sizeText(out.sizeBytes)} · 점 ${out.points}개 · 사진 ${out.photos}장 · 음성 ${out.voices}개", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("export_result_counts"))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.weight(1f)) { Btn("공유하기", Modifier.fillMaxWidth().testTag("export_share")) { ec.share() } }
