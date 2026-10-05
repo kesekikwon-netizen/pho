@@ -518,7 +518,7 @@ class SurveyController(
     private fun finishVoice() {
         val m = media ?: return
         voiceJob?.cancel(); voiceJob = null
-        if (phase == Phase.RECORDING) phase = Phase.RESULT
+        if (phase == Phase.RECORDING) { phase = Phase.RESULT; showResultStrip() }
         val rid = lastPoint?.rowId ?: 0L
         scope.launch {
             val v = runCatching { m.finishRecording(rid) }.getOrNull()
@@ -536,7 +536,7 @@ class SurveyController(
 
     private fun stopVoice() {
         voiceJob?.cancel(); voiceJob = null
-        if (phase == Phase.RECORDING) phase = Phase.RESULT
+        if (phase == Phase.RECORDING) { phase = Phase.RESULT; showResultStrip() }
     }
 
     /** 점 하나의 평면 좌표(현재 원점 기준). 저장 당시 원점이 같으면 저장값을 쓰고, 다르면 경위도에서 다시 계산한다 */
