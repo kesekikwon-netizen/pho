@@ -72,14 +72,15 @@ class HeaderModelTest {
 
     @Test fun versionIs0_1_27Build28() {
         val g = File("build.gradle.kts").readText()
-        assertTrue(g.contains("versionCode = 28")); assertTrue(g.contains("versionName = \"0.1.27\""))
+        assertTrue(g.contains("versionCode = 29")); assertTrue(g.contains("versionName = \"0.1.28\""))
     }
 
     /** 고고학 발굴 용어만: 새 화면에 토목·건설 용어가 없어야 한다 */
     @Test fun noCivilTermsInNewScreens() {
         val forbidden = listOf("성토", "절토", "시공", "준공", "검측", "측설", "노선", "도로", "정지측량", "드론")
         for (f in listOf("HomeScreen.kt", "AppHeader.kt", "HeaderModel.kt", "MapChrome.kt", "ConnectionScreen.kt", "VWorldScreen.kt")) {
-            val src = File("src/main/kotlin/kr/archsurvey/ui/$f").readText()
+            // 0.1.18: 「지도로 가기」(HTML 66)의 '지도로'가 '도로'로 잘못 걸리지 않게 빼고 검사
+            val src = File("src/main/kotlin/kr/archsurvey/ui/$f").readText().replace("지도로", "")
             for (w in forbidden) assertFalse("$f 에 '$w'", src.contains(w))
             assertFalse("$f 에 자리표시자", src.contains("[앱 이름]") || src.contains("[버전"))
         }

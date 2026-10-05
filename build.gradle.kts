@@ -21,8 +21,8 @@ android {
         applicationId = "kr.archsurvey.field"
         minSdk = 21
         targetSdk = 35
-        versionCode = 28
-        versionName = "0.1.27"
+        versionCode = 29
+        versionName = "0.1.28"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         buildConfigField("boolean", "USE_MAPLIBRE", project.hasProperty("withMapLibre").toString()) // 옵트인 MapLibre 지도(기본 false)
     }
@@ -90,6 +90,8 @@ dependencies {
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    // 0.1.15 Google Drive OAuth (drive.file). 토큰은 GoogleAuthUtil 캐시, 앱 Pref/로그에 저장하지 않음
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
 
     val room = "2.6.1"
     implementation("androidx.room:room-runtime:$room")

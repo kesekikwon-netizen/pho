@@ -417,6 +417,12 @@ fun SettingsScreen(c: SurveyController) {
             ToggleRow("화면 항상 켜두기", st.keepScreenOn, "set_keepscreen") { st.changeKeepScreenOn(it) }
         }
         Card {
+            ToggleRow("엄격 모드 (FIX만 저장)", st.requireFixed, "set_strict_quality") { st.changeRequireFixed(it) }
+            Text("켜면 RTK 고정(FIX)만 측점해요. 유동·보정 오래됨·정밀도 낮음·폰 GPS는 저장하지 않아요. 끄면(기본) 주의 상태도 확인 후 저장할 수 있어요.", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("set_strict_note"))
+        }
+        // 0.1.28 T14 음성 「저장」(기본 끔)
+        c.voice?.let { VoiceSettingsCard(it) }
+        Card {
             Text(if (c.gv.status.reason == kr.archsurvey.core.StatusReason.NOT_CONNECTED) "수신기 연결 안 됨" else "수신기 연결됨 · ${c.gv.quality.labelKo}", style = Ty.label, color = t.ink, modifier = Modifier.testTag("set_fake_state"))
         }
         SelectRow("오류 기록", if (st.showCrash) "닫기" else "보기 · 공유", st.showCrash, "crash_toggle") { if (st.showCrash) st.showCrash = false else st.openCrash() }
@@ -469,7 +475,7 @@ private fun TiltSettings(tc: TiltController) {
 }
 
 @Composable
-private fun ToggleRow(label: String, value: Boolean, tag: String, onChange: (Boolean) -> Unit) {
+internal fun ToggleRow(label: String, value: Boolean, tag: String, onChange: (Boolean) -> Unit) {
     val t = T
     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = Ty.body, color = t.ink, modifier = Modifier.weight(1f))

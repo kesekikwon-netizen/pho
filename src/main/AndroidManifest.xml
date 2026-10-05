@@ -2,9 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- MapLibre(옵트인 빌드)가 병합시키는 위치·와이파이 권한을 제거. MapLibre 가 없으면 아무 영향 없음. 앱은 위치 권한을 요청하지 않는다(GNSS 는 외부 수신기). -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" tools:node="remove" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" tools:node="remove" />
+    <!-- 0.1.20: 폰 GPS(지도 따라가기·저정밀 측점). 수신기 NMEA 와 별도. 런타임에 필요할 때만 요청. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- MapLibre(옵트인) 와이파이 권한은 제거 -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" tools:node="remove" />
 
     <uses-feature android:name="android.hardware.bluetooth" android:required="true" />
@@ -24,14 +25,17 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
-    <!-- 음성 메모: 녹음 시작할 때 처음 한 번 묻는다 -->
+    <!-- 음성 메모: 녹음 시작할 때 처음 한 번 묻는다. 0.1.28 음성 「저장」: 설정에서 켤 때 묻는다 -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <!-- 위치 권한/백그라운드 위치/저장소 권한은 요청하지 않음: 좌표는 NMEA 에서 오고, 사진은 앱 전용 폴더 + Photo Picker -->
+    <!-- 백그라운드 위치/저장소 권한은 요청하지 않음. 전경 위치는 폰 GPS용. 사진은 앱 전용 폴더 + Photo Picker -->
 
     <queries>
         <intent><action android:name="android.media.action.IMAGE_CAPTURE" /></intent>
+        <!-- 0.1.28 T14: 음성 인식 서비스·TTS 찾기(API 30+ 패키지 가시성) -->
+        <intent><action android:name="android.speech.RecognitionService" /></intent>
+        <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
     </queries>
 
     <application
@@ -43,6 +47,7 @@
         android:supportsRtl="false"
         android:theme="@style/Theme.Survey"
         android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/network_security_config"
         tools:targetApi="35">
 
         <activity

@@ -48,6 +48,8 @@ data class GnssView(
     val baseId: String? = null,
     /** 0.1.11 SkyPlot: GSV 위성 상세(받지 못하면 빈 목록) */
     val sats: List<kr.archsurvey.core.SatInfo> = emptyList(),
+    /** 0.1.20: 폰 내장 GPS(수신기 아님) */
+    val fromPhone: Boolean = false,
 ) {
     /** 타원체고(m) = 정표고(MSL) + 지오이드 분리. 둘 중 하나라도 없으면 null */
     val ellipsoidalM: Double? get() = if (altM != null && geoidSepM != null) altM + geoidSepM else null
@@ -121,7 +123,7 @@ data class EpochSample(val n: Double, val e: Double, val h: Double?) {
     }
 }
 
-data class DupPrompt(val fresh: SavedPoint, val existing: SavedPoint, val distM: Double, val worst: SurveyStatus)
+data class DupPrompt(val fresh: SavedPoint, val existing: SavedPoint, val distM: Double, val worst: SurveyStatus, val phoneMode: Boolean = false)
 
 /** 측점 저장소. Android 의존 없음(시험용 가짜 구현 가능). 되돌리기는 숨김(소프트 삭제)이라 번호를 다시 쓰지 않는다. */
 interface PointStore {
@@ -177,8 +179,8 @@ class SurveyController(
     /** 0.1.12 작업별 지오이드(표고) 모델. 새 점부터 적용 */
     var geoid by mutableStateOf(GeoidModel.RECEIVER)
     /** 0.1.12 작업별 배경맵(V월드). NONE = 점만 */
-    var mapBase by mutableStateOf(kr.archsurvey.map.MapBase.NONE)
-    /** V월드 키·도메인·지적 스타일(선만) — 설정 저장소에서 읽는다. 키 값은 로그·화면에 그대로 내지 않는다 */
+    var mapBase by mutableStateOf(kr.archsurvey.map.MapBase.SATELLITE_CADASTRAL)
+    /** V월드 키·도메인·지적 스타일(선만) — 설정 저장소(비면 제품 기본 키). 키 원문은 로그·화면에 내지 않는다 */
     var mapKeyProvider: () -> kr.archsurvey.map.VWorldAccess = { kr.archsurvey.map.VWorldAccess("", "") }
     /** 작업 설정(좌표계·지오이드·배경맵·안테나·측정 횟수)이 바뀌면 부른다 → 앱은 지금 작업 이름으로 저장 */
     var onJobConfigChanged: ((JobConfig) -> Unit)? = null
@@ -215,6 +217,8 @@ class SurveyController(
     /** 기울기 확인 창: 측점 누를 때의 각도(°). null = 닫힘 */
     var tiltPrompt by mutableStateOf<Double?>(null)
     private var tiltBypass = false
+    /** 0.1.26 주의(CAUTION) 확인 후 재진입 시 경고 창 생략 */
+    private var qualityBypass = false
     /** 재측량 대기 중인 점: 다음 측점이 이 점의 새 값이 된다 */
     var resurveyTarget by mutableStateOf<SavedPoint?>(null)
     private var resultName: String? = null
@@ -250,12 +254,70 @@ class SurveyController(
     /** 백업·복구 화면 상태 */
     var backup: BackupController? = null
         set(v) { field = v; v?.onResult = { ok, m -> ui.result(ok, m) } }
+    /** 0.1.15 Google Drive 자동 백업·측점 업로드 */
+    var drive: DriveSyncController? = null
+        set(v) { field = v; v?.onResult = { ok, m -> ui.result(ok, m) } }
     /** 배경(도면) 레이어. 앱에서는 SurveyViewModel 이 연결한다 */
     var bg: kr.archsurvey.ui.bg.BackgroundController? = null
     /** 점 목록·찾아가기·계산기·설정·작업 관리 화면 */
     val hub = ToolsHub(this)
     /** 측점 결과 알림(진동·소리). true=저장됨, false=실패 */
     var feedback: ((Boolean) -> Unit)? = null
+
+    // ---------------- 0.1.28 T14 음성 「저장」 ----------------
+    /** 마이크 중재자 1개: 음성 명령 듣기 ↔ 음성 메모 녹음 배타 */
+    val mic = kr.archsurvey.voicecmd.MicArbiter()
+    /** 음성 명령(없으면 기능 없음 — 시험 기본) */
+    var voice: kr.archsurvey.voicecmd.VoiceCommandController? = null
+    /** 음성 「저장」·「예」를 알아들은 순간 햅틱·소리(설정 따름) */
+    var voiceHeard: (() -> Unit)? = null
+    /** 저장(새 점·재측량)마다 1 증가 — 음성 흐름이 결과를 안다 */
+    var saveSerial by mutableIntStateOf(0); private set
+    private var lastSavedSpeech: String? = null
+    /** onMeasure 가 띄운 주의(CAUTION) 확인 — 다른 확인 창(되돌리기 등)과 구분 */
+    private var qualityConfirm: ConfirmRequest? = null
+    /** 기울기 확인 창마다 새 열쇠(같은 창인지 비교) */
+    private var tiltToken: Any = Any()
+    /** 이 기울기 확인 창이 주의 확인 승인 뒤에 떴는가 */
+    private var tiltAfterCautionOk = false
+
+    /** 음성 명령이 보는 측량 화면. 저장은 측량 버튼과 같은 경로([onMeasure])만 쓴다 */
+    val voiceHost: kr.archsurvey.voicecmd.VoiceHost = object : kr.archsurvey.voicecmd.VoiceHost {
+        override fun screenReady(): Boolean {
+            val conf = ui.confirm
+            return visibleRoute() == "survey" && playingVoiceId == null && ui.choice == null &&
+                (conf == null || conf === qualityConfirm) && !setupOpen
+        }
+        override fun linkUp(): Boolean {
+            val r = gv.status.reason
+            return r != StatusReason.NOT_CONNECTED && r != StatusReason.LINK_DOWN && !gv.fromPhone
+        }
+        override fun busy(): Boolean = phase == Phase.ACQUIRING || phase == Phase.RECORDING
+        override fun requestSave() { if (phase == Phase.RESULT || phase == Phase.RESULT_EXPANDED) nextPoint() else onMeasure() }
+        override fun prompt(): kr.archsurvey.voicecmd.VoicePrompt? {
+            val conf = ui.confirm
+            if (conf != null && conf === qualityConfirm)
+                return kr.archsurvey.voicecmd.VoicePrompt(kr.archsurvey.voicecmd.VoicePrompt.Kind.CAUTION, conf, "주의 상태예요. ${gv.status.reason.textKo}. 저장할까요?")
+            val ta = tiltPrompt
+            if (ta != null)
+                return kr.archsurvey.voicecmd.VoicePrompt(kr.archsurvey.voicecmd.VoicePrompt.Kind.TILT, tiltToken, "기울기 ${String.format(java.util.Locale.US, "%.1f", ta)}도예요. 저장할까요?")
+            val d = dupPrompt
+            if (d != null)
+                return kr.archsurvey.voicecmd.VoicePrompt(kr.archsurvey.voicecmd.VoicePrompt.Kind.DUP, d, "같은 자리에 ${d.existing.name} 점이 있어요. 새 점으로 저장할까요?")
+            return null
+        }
+        override fun answer(p: kr.archsurvey.voicecmd.VoicePrompt, yes: Boolean): Boolean = when (p.kind) {
+            kr.archsurvey.voicecmd.VoicePrompt.Kind.CAUTION -> if (ui.confirm != null && ui.confirm === p.token) { ui.answer(yes); true } else false
+            kr.archsurvey.voicecmd.VoicePrompt.Kind.TILT -> if (tiltPrompt != null && tiltToken === p.token) { answerTilt(yes); true } else false
+            kr.archsurvey.voicecmd.VoicePrompt.Kind.DUP -> if (dupPrompt != null && dupPrompt === p.token) { resolveDup(if (yes) DupChoice.NEW_POINT else DupChoice.DISCARD); true } else false
+        }
+        override fun saveSerial(): Int = saveSerial
+        override fun lastSavedText(): String? = lastSavedSpeech
+        override fun lastMessage(): String? = message
+        override fun notice(text: String, ok: Boolean) = ui.result(ok, text)
+        override fun ask(title: String, body: String, okLabel: String, onOk: () -> Unit, onCancel: () -> Unit) = ui.ask(ConfirmRequest(title, body, okLabel) { onOk() })
+        override fun heardFeedback() { voiceHeard?.invoke() }
+    }
 
     /** 사진·음성 메모 (없으면 화면 시안 동작) */
     var media: MediaPlatform? = null
@@ -331,6 +393,12 @@ class SurveyController(
     var quickSheetOpen by mutableStateOf(false)
     var voiceSeconds by mutableIntStateOf(0)
     var dpPerM by mutableStateOf(12.0)
+
+    companion object {
+        /** 지도 배율(dp/m). 0.1.22: 핀치 축소·확대 클램프 완화(기존 2…80 → 0.25…320) */
+        const val DP_PER_M_MIN = 0.25
+        const val DP_PER_M_MAX = 320.0
+    }
     var follow by mutableStateOf(true)
     private var panCenter by mutableStateOf(LocalXY(0.0, 0.0))
 
@@ -371,7 +439,8 @@ class SurveyController(
                     if (shown) g.gst?.sigmaAlt else null, if (shown) gga?.hdop else null, if (shown) g.satsInView else null, if (shown) gga?.altitudeMsl else null, if (shown && gga != null) g.lastGgaAtMs else 0L,
                     pdop = if (shown) g.gsa?.pdop else null, correctionAgeSec = if (shown) gga?.correctionAgeSec else null,
                     vdop = if (shown) g.gsa?.vdop else null, geoidSepM = if (shown) gga?.geoidSeparation else null,
-                    baseId = if (shown) gga?.baseStationId else null, sats = if (shown) g.satsDetail else emptyList())
+                    baseId = if (shown) gga?.baseStationId else null, sats = if (shown) g.satsDetail else emptyList(),
+                    fromPhone = shown && g.fromPhone)
                 if (shown && gga != null && gga.hasPosition && g.lastGgaAtMs != lastGgaStamp) {
                     lastGgaStamp = g.lastGgaAtMs
                     if (anchorOnFirstFix && !anchored) anchorTo(gga.lat!!, gga.lon!!)
@@ -397,26 +466,50 @@ class SurveyController(
     /** 기울기 확인 창의 답. true = 그래도 측점 */
     fun answerTilt(go: Boolean) {
         tiltPrompt = null
+        // 0.1.28: 주의 확인을 이미 승인하고 넘어온 기울기 확인이면 주의 확인을 다시 묻지 않는다
+        // (예전: 주의 → 기울기 → 주의 → 기울기 … 끝없이 반복되던 버그. 상태는 매번 새로 판정 — 불가면 그대로 막힘)
+        val cautionOk = tiltAfterCautionOk; tiltAfterCautionOk = false
         if (!go) { message = "측점하지 않았어요. 폴을 세운 뒤 다시 누르세요."; return }
-        tiltBypass = true
-        try { onMeasure() } finally { tiltBypass = false }
+        tiltBypass = true; qualityBypass = cautionOk
+        try { onMeasure() } finally { tiltBypass = false; qualityBypass = false }
     }
 
     fun onMeasure() {
         if (phase == Phase.ACQUIRING || phase == Phase.RECORDING) return
         resultStripShown = false
         val st = gv.status
-        if (StatusJudge.savePolicy(st.status) == SavePolicy.BLOCK) {
-            message = "지금은 측점할 수 없어요 — ${st.reason.textKo}"
-            feedback?.invoke(false)
-            return
+        val strict = settingsState?.requireFixed == true
+        when (StatusJudge.savePolicy(st.status, strict)) {
+            SavePolicy.BLOCK -> {
+                message = if (strict && st.status == SurveyStatus.CAUTION)
+                    "엄격 모드에서는 FIX(고정)만 측점할 수 있어요 — ${st.reason.textKo}"
+                else
+                    "지금은 측점할 수 없어요 — ${st.reason.textKo}"
+                feedback?.invoke(false)
+                return
+            }
+            SavePolicy.ALLOW_WITH_WARNING -> if (!qualityBypass) {
+                val req = ConfirmRequest(
+                    "주의 상태에서 측점할까요?",
+                    "${st.reason.textKo} · 저장은 되지만 주의 표시가 기록돼요.",
+                    "그래도 측점",
+                ) {
+                    qualityConfirm = null
+                    qualityBypass = true
+                    try { onMeasure() } finally { qualityBypass = false }
+                }
+                qualityConfirm = req
+                ui.ask(req)
+                return
+            }
+            SavePolicy.ALLOW -> {}
         }
         val tc = tilt
         if (tc != null && tc.isOver && !tiltBypass) {
             val ang = tc.currentAngle() ?: 0.0
             when (tc.policy) {
                 TiltPolicy.BLOCK -> { message = "폴이 ${tc.f1(ang)}° 기울었어요 (허용 ${tc.f1(tc.limitDeg)}°). 폴을 세운 뒤 다시 측점하세요."; feedback?.invoke(false); return }
-                TiltPolicy.CONFIRM -> { tiltPrompt = ang; return }
+                TiltPolicy.CONFIRM -> { tiltToken = Any(); tiltAfterCautionOk = qualityBypass; tiltPrompt = ang; return }
                 TiltPolicy.WARN -> {}
             }
         }
@@ -426,7 +519,8 @@ class SurveyController(
         if (rec == null) { message = "안테나 높이를 계산할 수 없어요. 높이 값을 확인하세요."; return }
         message = null; dupPrompt = null; arch.lastSummary = null
         phase = Phase.ACQUIRING; progress = 0f
-        val typeAtStart = typeName; val nameAtStart = nextName
+        val typeAtStart = typeName; val nameAtStart = nextName; val phoneMode = gv.fromPhone
+        val strictAcquire = strict
         acquireJob?.cancel()
         acquireJob = scope.launch {
             val avg = PointAverager(epochs)
@@ -437,7 +531,9 @@ class SurveyController(
             val tilts = ArrayList<Double>()
             combine(source.gnss, source.link) { g, l -> g to l }.first { (g, l) ->
                 val r = StatusJudge.judge(g, l.state, source.clockMs())
-                if (r.status == SurveyStatus.UNAVAILABLE) { aborted = r.reason; return@first true }
+                if (r.status == SurveyStatus.UNAVAILABLE || (strictAcquire && r.status == SurveyStatus.CAUTION)) {
+                    aborted = r.reason; return@first true
+                }
                 if (r.status == SurveyStatus.CAUTION) worst = SurveyStatus.CAUTION
                 g.gga?.let { if (avg.add(it, g.gst)) { measureCount = avg.count; val now = clock(); if (avgStart == null) avgStart = now; avgEnd = now; tilt?.currentAngle()?.let { a -> tilts.add(a) } } }
                 progress = avg.progress
@@ -446,7 +542,10 @@ class SurveyController(
             val ar = aborted
             if (ar != null) {
                 phase = Phase.IDLE
-                message = "신호가 ‘불가’가 되어 취득을 멈췄어요 (${ar.textKo}). 저장하지 않았어요."
+                message = if (strictAcquire)
+                    "엄격 모드에서는 FIX만 허용돼요 — ${ar.textKo}. 저장하지 않았어요."
+                else
+                    "신호가 ‘불가’가 되어 취득을 멈췄어요 (${ar.textKo}). 저장하지 않았어요."
                 feedback?.invoke(false)
                 return@launch
             }
@@ -475,10 +574,10 @@ class SurveyController(
             val dup = findDuplicate(sp, NE(tm.northing, tm.easting))
             if (dup != null) {
                 phase = Phase.IDLE
-                dupPrompt = DupPrompt(sp, dup.first, dup.second, worst)
+                dupPrompt = DupPrompt(sp, dup.first, dup.second, worst, phoneMode)
                 return@launch
             }
-            commitNew(sp, worst)
+            commitNew(sp, worst, phoneMode)
         }
     }
 
@@ -490,7 +589,7 @@ class SurveyController(
     }
 
     /** 새 점으로 저장 (디스크 + 화면). 외곽 모드면 꼭짓점으로 이어 붙인다 */
-    private suspend fun commitNew(sp: SavedPoint, worst: SurveyStatus) {
+    private suspend fun commitNew(sp: SavedPoint, worst: SurveyStatus, phoneMode: Boolean = false) {
         resultName = null; resurveyUndo = null
         val named = (if (sp.name == nextName) sp else sp.copy(name = nextName)).let { if (pendingMemo.isNotBlank()) it.copy(memo = pendingMemo.trim()) else it }
         pendingMemo = ""
@@ -505,8 +604,17 @@ class SurveyController(
         phase = Phase.RESULT; showResultStrip()
         photos.clear(); voices.clear()
         feedback?.invoke(saveError == null)
-        message = saveError ?: if (worst == SurveyStatus.CAUTION) "주의 상태에서 취득한 점이에요 (표시가 기록돼요)" else null
-        if (saveError == null) ui.toast(savedText(points.last()))
+        message = saveError ?: when {
+            phoneMode -> "폰 GPS 저정밀 점이에요 (RTK 아님 · 표시가 기록돼요)"
+            worst == SurveyStatus.CAUTION -> "주의 상태에서 취득한 점이에요 (표시가 기록돼요)"
+            else -> null
+        }
+        if (saveError == null) {
+            saveSerial++
+            lastSavedSpeech = "${points.last().name} 저장됨" + if (worst == SurveyStatus.CAUTION) ", 주의 표시" else ""
+            ui.toast(savedText(points.last()))
+            drive?.notifyPointSaved()
+        }
     }
 
     /** 저장 알림 문구: 무엇이 저장됐는지 */
@@ -536,9 +644,12 @@ class SurveyController(
         phase = Phase.RESULT; showResultStrip()
         refreshMedia()
         feedback?.invoke(true)
+        saveSerial++
+        lastSavedSpeech = "${upd.name} 재측량 저장됨"
         val moved = Calc.distance(pointNE(old), pointNE(upd))
         ui.toast("${upd.name} 재측량 저장됨 · ${upd.epochs}회 평균")
         message = "${upd.name} 재측량 완료 · 이전 값과 ${"%.3f".format(moved)} m 차이 (이전 값은 이력에 보관)" + if (worst == SurveyStatus.CAUTION) " · 주의 상태" else ""
+        drive?.notifyPointSaved()
     }
 
     /**
@@ -590,7 +701,7 @@ class SurveyController(
         dupPrompt = null
         when (choice) {
             DupChoice.RESURVEY -> scope.launch { applyResurvey(d.existing, d.fresh, d.worst) }
-            DupChoice.NEW_POINT -> scope.launch { commitNew(d.fresh, d.worst) }
+            DupChoice.NEW_POINT -> scope.launch { commitNew(d.fresh, d.worst, d.phoneMode) }
             DupChoice.DISCARD -> { phase = Phase.IDLE; message = "취소했어요 — 방금 측점은 저장하지 않았어요" }
         }
     }
@@ -614,6 +725,7 @@ class SurveyController(
             }
             phase = Phase.IDLE; photos.clear(); voices.clear()
             message = "${prev.name} 재측량을 되돌렸어요 (이전 값으로 복원)"
+            voice?.onPointUndone()
             return
         }
         if (phase == Phase.RECORDING) media?.cancelRecording()
@@ -626,6 +738,7 @@ class SurveyController(
         phase = Phase.IDLE
         photos.clear(); voices.clear()
         message = "${gone.name} 되돌렸어요"
+        voice?.onPointUndone()
     }
 
     /** 결과 패널의 [다음 점]: 결과 화면을 닫고 측점 준비 화면으로 */
@@ -718,8 +831,10 @@ class SurveyController(
             return
         }
         m.stopPlayback(); playingVoiceId = null
+        // 0.1.28: 마이크 중재자 — 음성 명령 듣기를 먼저 멈추고 넘겨받는다
+        if (!mic.tryAcquire(kr.archsurvey.voicecmd.MicOwner.MEMO)) { message = "마이크를 다른 기능이 쓰고 있어요"; return }
         val err = m.startRecording(p.name)
-        if (err != null) { message = err; return }
+        if (err != null) { mic.release(kr.archsurvey.voicecmd.MicOwner.MEMO); message = err; return }
         phase = Phase.RECORDING; voiceSeconds = 0
         voiceJob = scope.launch { while (voiceSeconds < MediaLimits.VOICE_SECONDS) { delay(1000); voiceSeconds++ }; finishVoice() }
     }
@@ -729,8 +844,10 @@ class SurveyController(
         voiceJob?.cancel(); voiceJob = null
         if (phase == Phase.RECORDING) { phase = Phase.RESULT; showResultStrip() }
         val rid = lastPoint?.rowId ?: 0L
+        val releaseMic = { mic.release(kr.archsurvey.voicecmd.MicOwner.MEMO) }
         scope.launch {
             val v = runCatching { m.finishRecording(rid) }.getOrNull()
+            releaseMic()
             if (v == null) message = "녹음이 너무 짧거나 저장에 실패해서 남기지 않았어요" else voices.add(v)
         }
     }
@@ -745,6 +862,7 @@ class SurveyController(
 
     private fun stopVoice() {
         voiceJob?.cancel(); voiceJob = null
+        mic.release(kr.archsurvey.voicecmd.MicOwner.MEMO)
         if (phase == Phase.RECORDING) { phase = Phase.RESULT; showResultStrip() }
     }
 
@@ -796,8 +914,25 @@ class SurveyController(
 
     // ---------------- 지도 ----------------
 
-    fun zoomIn() { dpPerM = (dpPerM * 1.5).coerceAtMost(80.0) }
-    fun zoomOut() { dpPerM = (dpPerM / 1.5).coerceAtLeast(2.0) }
+    fun zoomIn() { dpPerM = (dpPerM * 1.5).coerceAtMost(DP_PER_M_MAX) }
+    fun zoomOut() { dpPerM = (dpPerM / 1.5).coerceAtLeast(DP_PER_M_MIN) }
+
+    /** 핀치 줌: factor>1 확대. focusXM/YM = 화면 초점의 지도 좌표 오프셋(m, 중심 기준). 초점이 손가락 아래에 남도록 중심을 보정한다. */
+    fun scaleBy(factor: Double, focusXM: Double = 0.0, focusYM: Double = 0.0) {
+        if (!factor.isFinite() || factor <= 0.0 || kotlin.math.abs(factor - 1.0) < 1e-9) return
+        val old = dpPerM
+        val neu = (old * factor).coerceIn(DP_PER_M_MIN, DP_PER_M_MAX)
+        val actual = neu / old
+        if (kotlin.math.abs(actual - 1.0) < 1e-9) return
+        val center = mapState().center
+        follow = false
+        panCenter = LocalXY(
+            center.x + focusXM * (1.0 - 1.0 / actual),
+            center.y + focusYM * (1.0 - 1.0 / actual),
+        )
+        dpPerM = neu
+    }
+
     fun recenter() { follow = true }
 
     /** 전체 보기: 저장한 점이 모두 보이도록 가운데와 배율을 맞춘다(점이 없으면 현재 위치로) */
@@ -808,7 +943,7 @@ class SurveyController(
         follow = false
         panCenter = LocalXY((ps.maxOf { it.x } + ps.minOf { it.x }) / 2, (ps.maxOf { it.y } + ps.minOf { it.y }) / 2)
         val span = maxOf(w, h, 5.0)
-        dpPerM = (260.0 / span).coerceIn(0.5, 80.0)
+        dpPerM = (260.0 / span).coerceIn(DP_PER_M_MIN, DP_PER_M_MAX)
     }
     fun panBy(dxM: Double, dyM: Double, currentCenter: LocalXY) { follow = false; panCenter = LocalXY(currentCenter.x + dxM, currentCenter.y + dyM) }
 
@@ -824,6 +959,8 @@ class SurveyController(
         val ref = TmProjection.forward(projection.lat0, projection.lon0, zone)
         fun loc(ne: NE) = LocalXY(ne.e - ref.easting, ne.n - ref.northing)
         val cellNow = if (g != null) arch.currentCell() else null
+        // 0.1.20: 수신기·점 없어도 배경맵 표시(기본 원점 36.5/127). 예전엔 anchored 때만 타일 → 미연결 시 위성 안 보임
+        val layers = mapTiles()
         return MapViewState(
             center = center, dpPerM = dpPerM, 
             points = points.map { MapMarker(it.name, projection.toLocal(it.lat, it.lon), it.cautionFlag) },
@@ -834,8 +971,8 @@ class SurveyController(
             cellHighlight = if (g != null && cellNow != null && cellNow.col >= 0) g.cellCorners(cellNow.col, cellNow.row).map { loc(it) } else emptyList(),
             gridColorIdx = arch.activeArea?.colorIdx ?: 0,
             backgrounds = bg?.mapLayers().orEmpty(),
-            tiles = if (anchored) mapTiles() else emptyList(),
-            geo = if (anchored) projection else null,
+            tiles = layers,
+            geo = if (layers.isNotEmpty()) projection else null,
             outlines = arch.outlineViews().map { MapOutline(it.outline.label, it.vertices.map { v -> loc(v) }, it.outline.closed, !it.outline.finished, arch.areas.firstOrNull { a -> a.id == it.outline.areaId }?.colorIdx ?: 0) },
             style = markerStyle,
             target = runCatching { hub.gotoTargetNE()?.let { loc(it) } }.getOrNull(),

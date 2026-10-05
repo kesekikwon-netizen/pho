@@ -3,7 +3,7 @@ package kr.archsurvey.ui
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -77,7 +77,7 @@ fun SurveyMapScreen(
         if (c.antennaSheetOpen) AntennaSheet(c)
         if (c.hub.screen != null) ToolHost(c)
         c.exporter?.let { if (it.open) ExportScreen(it) }
-        c.backup?.let { if (it.open) BackupScreen(it) }
+        c.backup?.let { if (it.open) BackupScreen(it, c.drive) }
         c.connection?.let { ConnectionHost(c, it) }
         DrawerOverlay(c)
         if (c.gnssInfoOpen) GnssInfoDialog(c)
@@ -89,6 +89,7 @@ fun SurveyMapScreen(
         if (c.photoReviewOpen) PhotoReviewScreen(c)
         if (c.phase == Phase.ACQUIRING) MeasureProgress(c)
         BusyQueueBar(c) // 0.1.14 대기열·진행 게이지
+        if (!c.homeOpen) VoiceConfirmBanner(c) // 0.1.28 음성 확인 대기 띠
         FeedbackOverlays(c.ui)
     }
     }
@@ -105,8 +106,11 @@ internal fun backTarget(c: SurveyController): (() -> Unit)? {
         c.skyPlotOpen -> { { c.skyPlotOpen = false } }
         c.gnssInfoOpen -> { { c.gnssInfoOpen = false } }
         c.drawerOpen -> { { c.drawerOpen = false } }
+        // 0.1.17: 「연결 중」 진행 창이 떠 있으면 그 창부터 닫음(=「닫기(계속 연결)」, 연결은 계속)
+        // 0.1.18: 진행 창 단추·BackHandler 와 같은 함수(완료면 「확인」 = 연결 화면까지 닫기, 진행 중이면 첫 1회 「연결은 계속돼요」)
+        cc != null && cc.showProgress && cc.connectRequested -> { { cc.dismissProgress(cc.progressDone(c.gv.quality.code)) } }
         cc != null && cc.open && cc.mountPickerOpen -> { { cc.closeMountPicker() } }
-        cc != null && cc.open -> { { cc.close() } }
+        cc != null && cc.open -> { { cc.leaveScreen() } }
         c.exporter?.open == true -> { { c.exporter?.close() } }
         c.backup?.open == true -> { { c.backup?.close() } }
         c.hub.screen != null -> { { c.hub.back() } }
@@ -177,9 +181,17 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
     val ms = c.mapState()
     Box(
         modifier.fillMaxWidth().testTag("map_area").pointerInput(Unit) {
-            detectDragGestures { _, drag ->
-                val ppm = c.dpPerM * density
-                c.panBy(-drag.x / ppm, drag.y / ppm, c.mapState().center)
+            // 0.1.21: 한 손가락 팬 + 두 손가락 핀치 줌(중심점 고정)
+            detectTransformGestures { centroid, pan, zoom, _ ->
+                val ppm = (c.dpPerM * density).toFloat()
+                if (pan.x != 0f || pan.y != 0f) {
+                    c.panBy((-pan.x / ppm).toDouble(), (pan.y / ppm).toDouble(), c.mapState().center)
+                }
+                if (zoom != 1f) {
+                    val fx = ((centroid.x - size.width / 2f) / ppm).toDouble()
+                    val fy = (-(centroid.y - size.height / 2f) / ppm).toDouble()
+                    c.scaleBy(zoom.toDouble(), fx, fy)
+                }
             }
         },
     ) {
@@ -214,8 +226,12 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
         }
         Column(Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 6.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             // 0.1.12 V월드: 키 없음 안내 · 오류 · 출처 표시(약관)
-            val notice = c.mapNotice() ?: if (ms.tiles.isNotEmpty()) TileImages.lastError else null
-            notice?.let { Text(it, style = Ty.small, color = t.bad, maxLines = 3, modifier = Modifier.widthIn(max = 260.dp).background(t.raised.copy(alpha = 0.92f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp).testTag("map_notice")) }
+            // 키없음 → 타일오류(지적 WMS 구분) → 위성만 모드 안내 순
+            val notice = c.mapNotice()
+                ?: (if (ms.tiles.isNotEmpty()) TileImages.lastError else null)
+                ?: kr.archsurvey.map.MapLayers.modeHint(c.mapBase)
+            val noticeColor = if (TileImages.lastError != null && notice == TileImages.lastError) t.bad else if (c.mapNotice() != null) t.bad else t.inkSub
+            notice?.let { Text(it, style = Ty.small, color = noticeColor, maxLines = 3, modifier = Modifier.widthIn(max = 260.dp).background(t.raised.copy(alpha = 0.92f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp).testTag("map_notice")) }
             if (ms.tiles.isNotEmpty()) Text("© V월드(국토교통부)", style = Ty.small.copy(fontSize = 11.sp), color = t.ink, modifier = Modifier.background(t.raised.copy(alpha = 0.85f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 1.dp).testTag("map_attribution"))
             c.bg?.mapCaption()?.let {
                 Text(it, style = Ty.small, color = t.ink, modifier = Modifier.background(t.raised.copy(alpha = 0.85f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp).testTag("map_caption"))
@@ -237,6 +253,7 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
                 }
             }
             ArchOverlays(c)
+            VoicePill(c) // 0.1.28 T14 듣는 중 표시
             c.message?.let { msg ->
                 Text(msg, style = Ty.body, color = t.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.background(t.raised.copy(alpha = 0.95f), RoundedCornerShape(10.dp)).border(1.dp, t.accent, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 6.dp).testTag("message"))
@@ -670,7 +687,12 @@ internal fun chooseMapBase(c: SurveyController) {
     c.ui.choose(ChoiceRequest("배경지도", opts, bases.indexOf(c.mapBase), "mapbase",
         if (c.vworld.hasKey) "고른 배경맵은 이 작업에 저장돼요. 지적도는 참고용이에요." else "V월드 키가 없어서 지금은 점만 보여요. ‘V월드 키 · 도메인 설정’에서 넣으세요.") { i ->
         when {
-            i < bases.size -> c.changeMapBase(bases[i])
+            i < bases.size -> {
+                c.changeMapBase(bases[i])
+                if (bases[i] == kr.archsurvey.map.MapBase.SATELLITE) {
+                    c.message = "지적선이 꺼져 있어요. ‘위성 + 지적선’을 고르면 지적 경계가 겹쳐요."
+                }
+            }
             i == bases.size -> { c.vworld.load(); c.hub.open(ToolScreen.VWORLD) }
             else -> c.bg?.toggle() ?: run { c.message = "배경 레이어는 이 빌드에 없어요" }
         }

@@ -27,12 +27,17 @@ class MainActivity : ComponentActivity() {
     private val docOpen = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri -> vm.docs.deliverOpen(uri) }
 
     private val docOpenMany = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments()) { uris -> vm.docs.deliverOpenMany(uris) }
+    private val driveSignIn = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { r ->
+        vm.driveAuth.deliver(r.data)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         vm.platform.permissionRequester = { perms, cb ->
             if (perms.isEmpty()) cb(true) else { permCallback = cb; permLauncher.launch(perms) }
         }
+        // 0.1.20: Activity 권한 연결 뒤 폰 GPS 권한·수신 시작(ViewModel init 시점에는 requester 가 아직 null)
+        vm.ensurePhoneLocationPermission()
         vm.media.launcher = object : kr.archsurvey.engine.AndroidMediaPlatform.Launcher {
             override fun launchCamera(uri: android.net.Uri) = cameraLauncher.launch(uri)
             override fun launchPicker() = pickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
@@ -43,6 +48,9 @@ class MainActivity : ComponentActivity() {
             override fun open() = docOpen.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
             override fun openMany() = docOpenMany.launch(arrayOf("*/*"))
         }
+        vm.driveAuth.launcher = object : kr.archsurvey.engine.DriveAuthBridge.Launcher {
+            override fun launch(intent: android.content.Intent) { driveSignIn.launch(intent) }
+        }
         applyKeepScreen((application as App).settings.keepScreenOn)
         vm.onKeepScreen = { applyKeepScreen(it) }
         setContent {
@@ -50,6 +58,7 @@ class MainActivity : ComponentActivity() {
         }
         // 0.1.12: 직전 작업이 있으면 그 작업(설정 포함)을 연 측량 화면에서 시작 — 「새 작업」을 누르기 전까지 항상 이어서.
         // 처음 설치면 0.1.11 처럼 홈. 회전 등으로 다시 만들어질 땐 보던 화면 유지. 수신기는 지난 성공 설정으로 자동 연결(설정에서 끌 수 있음)
+        if (savedInstanceState == null) vm.restoreVoice() // 0.1.28: 음성 저장 켜짐 복원(권한·방식 다시 확인)
         if (savedInstanceState == null) {
             vm.controller.homeOpen = !vm.resumeJob
             if (vm.resumeJob) vm.controller.ui.toast(vm.resumeNotice())
@@ -57,8 +66,19 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onResume() { super.onResume(); vm.controller.tilt?.resume() }
-    override fun onPause() { vm.controller.tilt?.pause(); super.onPause() }
+    override fun onResume() { super.onResume(); vm.controller.tilt?.resume(); vm.controller.voice?.setForeground(true) }
+    override fun onPause() { vm.controller.voice?.setForeground(false); vm.controller.tilt?.pause(); vm.onAppBackground(); super.onPause() }
+
+    /** 0.1.28 T14: 이어폰 재생/일시정지 1번 = 저장 요청(음성 저장이 켜져 있고 측량 화면이 앞일 때만). 확인 대기 중이면 취소 */
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean {
+        val media = keyCode == android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || keyCode == android.view.KeyEvent.KEYCODE_HEADSETHOOK ||
+            keyCode == android.view.KeyEvent.KEYCODE_MEDIA_PLAY || keyCode == android.view.KeyEvent.KEYCODE_MEDIA_PAUSE
+        if (media) {
+            if (event.repeatCount > 0) return vm.controller.voice?.enabled == true // 길게 누름 반복은 무시
+            if (vm.controller.voice?.onMediaKey() == true) return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
 
     private fun applyKeepScreen(on: Boolean) {
         if (on) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

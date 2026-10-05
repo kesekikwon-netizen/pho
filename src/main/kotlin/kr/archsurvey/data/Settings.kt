@@ -80,6 +80,7 @@ class SettingsStore(private val ctx: Context) {
     var epochs: Int
         get() = epochsPerPoint
         set(v) { epochsPerPoint = v }
+    /** 0.1.26 엄격 품질 게이트: true면 FIX(RTK 고정)만 측점 저장. 기본 false=주의도 경고 후 저장 */
     var requireFixed: Boolean
         get() = sp.getBoolean("require_fixed", false)
         set(v) = sp.edit().putBoolean("require_fixed", v).apply()
@@ -110,12 +111,35 @@ class SettingsStore(private val ctx: Context) {
         get() = runCatching { HeightUnit.valueOf(sp.getString("height_unit", "M")!!) }.getOrDefault(HeightUnit.M)
         set(v) = sp.edit().putString("height_unit", v.name).apply()
 
-    // 배경 지도 (V-World). 키는 사용자가 입력, 코드에 내장하지 않음
+    // 배경 지도 (V-World). 제품 기본 키(VWorldDefaults) + 사용자 오버라이드(암호화 Pref)
+    /** Pref/secure 에 실제로 저장된 키(폴백·내장 상수 제외). 시드·진단용 */
+    fun rawStoredMapKey(): String = (
+        secureGet("vworld_key")?.takeIf { it.isNotBlank() }
+            ?: sp.getString("vworld_key_mem", "")?.takeIf { it.isNotBlank() }
+            ?: ""
+    ).trim()
+
+    /**
+     * 저장이 비어 있으면 제품 기본 키를 secure(또는 mem) Pref 에 심는다.
+     * 폴백만으로는 UI 가 "빈 칸"처럼 보이고, Pref 초기화 후 복구가 약해진다.
+     */
+    fun ensureBuiltinMapKey() {
+        if (rawStoredMapKey().isBlank()) {
+            mapKey = kr.archsurvey.map.VWorldDefaults.BUILTIN_API_KEY
+        }
+    }
+
     var mapKey: String
-        get() = secureGet("vworld_key") ?: sp.getString("vworld_key_mem", "") ?: ""
+        get() {
+            val stored = rawStoredMapKey()
+            return stored.ifBlank { kr.archsurvey.map.VWorldDefaults.BUILTIN_API_KEY }
+        }
         set(v) { if (!securePut("vworld_key", v.trim())) sp.edit().putString("vworld_key_mem", v.trim()).apply() }
     var mapDomain: String
-        get() = sp.getString("vworld_domain", "") ?: ""
+        get() {
+            // 빈 값 유지(DOMAIN 미전송). DEFAULT 문자열은 WMS 에서 생략하도록 VWorldUrls 가 처리.
+            return (sp.getString("vworld_domain", "") ?: "").trim()
+        }
         set(v) = sp.edit().putString("vworld_domain", v.trim()).apply()
     /**
      * 배경맵 id 미러(SATELLITE|CADASTRAL|NONE…). 진실원은 작업 JobConfig.mapBase.
@@ -126,11 +150,11 @@ class SettingsStore(private val ctx: Context) {
         get() = sp.getString("marker_style", "") ?: ""
         set(v) = sp.edit().putString("marker_style", v).apply()
     var mapBase: String
-        get() = sp.getString("map_base", "NONE") ?: "NONE"
+        get() = sp.getString("map_base", "SAT_CAD") ?: "SAT_CAD"
         set(v) = sp.edit().putString("map_base", v).apply()
-    /** 0.1.12 지적 스타일: true = *_line(선만) */
+    /** 0.1.12 지적 스타일: false = 면+필지번호(기본, 다른 GIS와 동일). true = *_line(선만) */
     var mapLineOnly: Boolean
-        get() = sp.getBoolean("vworld_line_only", false)
+        get() = sp.getBoolean("vworld_line_only", false) // 0.1.24: 면 채우기 기본
         set(v) = sp.edit().putBoolean("vworld_line_only", v).apply()
     val hasMapKey: Boolean get() = mapKey.isNotBlank()
     /** 0.1.12 작업별 설정(좌표계·지오이드·배경맵·안테나·측정 횟수) 한 줄. 키 값은 들어가지 않는다 */
@@ -148,6 +172,7 @@ class SettingsStore(private val ctx: Context) {
     var soundOn: Boolean
         get() = sp.getBoolean("sound", true)
         set(v) = sp.edit().putBoolean("sound", v).apply()
+    /** 알림·버튼 탭 햅틱. SharedPreferences 기본 true(ON). */
     var vibrationOn: Boolean
         get() = sp.getBoolean("vibration", true)
         set(v) = sp.edit().putBoolean("vibration", v).apply()
@@ -200,6 +225,14 @@ class SettingsStore(private val ctx: Context) {
     var keepScreenOn: Boolean
         get() = sp.getBoolean("keep_screen", true)
         set(v) = sp.edit().putBoolean("keep_screen", v).apply()
+    /** 0.1.28 T14 음성 「저장」 측점(기본 끔). 켤 때 마이크 권한을 묻는다 */
+    var voiceSaveOn: Boolean
+        get() = sp.getBoolean("voice_save_on", false)
+        set(v) = sp.edit().putBoolean("voice_save_on", v).apply()
+    /** 0.1.28 온라인(표준) 인식기 사용 동의 — 말소리가 인식 서비스로 보내질 수 있음 */
+    var voiceOnlineOk: Boolean
+        get() = sp.getBoolean("voice_online_ok", false)
+        set(v) = sp.edit().putBoolean("voice_online_ok", v).apply()
     /** 0.1.11 VRS 「GGA 전송」(기본 켬) */
     var ntripSendGga: Boolean
         get() = sp.getBoolean("ntrip_send_gga", true)
@@ -249,5 +282,36 @@ class SettingsStore(private val ctx: Context) {
             .putBoolean("ntrip_v2", c.useV2).apply()
         memPassword = c.password
         securePut("ntrip_pw", c.password)
+    }
+
+    // —— 0.1.15 Google Drive 백업·측점 업로드 (토큰은 Google Sign-In 이 보관, 여기엔 계정·폴더 id 만)
+    var driveAutoBackup: Boolean
+        get() = sp.getBoolean("drive_auto_backup", false)
+        set(v) = sp.edit().putBoolean("drive_auto_backup", v).apply()
+    var driveAutoUploadPoints: Boolean
+        get() = sp.getBoolean("drive_auto_upload", false)
+        set(v) = sp.edit().putBoolean("drive_auto_upload", v).apply()
+    /** 표시용 이메일. 비밀이 아님. 비어 있으면 미연결 */
+    var driveAccountEmail: String
+        get() = sp.getString("drive_email", "") ?: ""
+        set(v) = sp.edit().putString("drive_email", v.trim()).apply()
+    var driveFolderId: String
+        get() = sp.getString("drive_folder_id", "") ?: ""
+        set(v) = sp.edit().putString("drive_folder_id", v.trim()).apply()
+    var driveLastBackupAt: Long
+        get() = sp.getLong("drive_last_backup", 0L)
+        set(v) = sp.edit().putLong("drive_last_backup", v).apply()
+    var driveLastUploadAt: Long
+        get() = sp.getLong("drive_last_upload", 0L)
+        set(v) = sp.edit().putLong("drive_last_upload", v).apply()
+    fun drivePointsFileId(project: String): String? = sp.getString("drive_pts_${project.trim()}", null)?.takeIf { it.isNotBlank() }
+    fun setDrivePointsFileId(project: String, id: String?) {
+        val k = "drive_pts_${project.trim()}"
+        if (id.isNullOrBlank()) sp.edit().remove(k).apply() else sp.edit().putString(k, id).apply()
+    }
+    fun clearDriveIds() {
+        val ed = sp.edit().remove("drive_folder_id").remove("drive_email")
+        sp.all.keys.filter { it.startsWith("drive_pts_") }.forEach { ed.remove(it) }
+        ed.apply()
     }
 }

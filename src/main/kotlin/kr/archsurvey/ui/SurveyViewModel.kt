@@ -3,16 +3,19 @@ package kr.archsurvey.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
 import kr.archsurvey.App
 import kr.archsurvey.data.AntennaDb
 import kr.archsurvey.data.RoomPointStore
 import kr.archsurvey.data.SurveyDb
 import kr.archsurvey.engine.AndroidConnectionPlatform
 import kr.archsurvey.engine.AndroidMediaPlatform
+import kr.archsurvey.feedback.FeedbackEvent
+import kr.archsurvey.feedback.bindEngineFeedback
 
 /**
- * 화면의 위치 공급원은 실제 수신기 엔진(블루투스 NMEA)뿐이다. 연결은 연결 화면의 [연결] 버튼으로만 시작한다(자동 연결 없음).
- * 연결 전에는 위치를 표시하지 않고 "수신기 연결 안 됨" 으로 보인다.
+ * 위치 공급원: 수신기(블루투스 NMEA) 우선, 미연결 시 폰 GPS(지도 따라가기·저정밀 측점).
+ * 수신기 연결은 연결 화면의 [연결] 버튼으로만 시작한다(자동 연결은 설정 옵션).
  */
 class SurveyViewModel(app: Application) : AndroidViewModel(app) {
     private val application = app as App
@@ -28,12 +31,16 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
         kr.archsurvey.diag.CrashLog.record("화면 작업", e)
         runCatching { controller.recoverFromError() }
     })
-    val controller: SurveyController = SurveyController(application.engine, db, safeScope, epochsPerPoint = application.settings.epochsPerPoint, store = store, anchorOnFirstFix = true)
+    /** 0.1.20: 폰 GPS(수신기 IDLE 때). 권한은 [ensurePhoneLocationPermission] */
+    val phoneGps = kr.archsurvey.device.PhoneGpsSource(application)
+    private val hybridSource = kr.archsurvey.device.PhoneFallbackGnssSource(application.engine, phoneGps, safeScope)
+    val controller: SurveyController = SurveyController(hybridSource, db, safeScope, epochsPerPoint = application.settings.epochsPerPoint, store = store, anchorOnFirstFix = true)
     val media = AndroidMediaPlatform(application, viewModelScope) { application.settings.project }
     val docs = kr.archsurvey.engine.DocBridge()
     val exportPlatform = kr.archsurvey.engine.AndroidExportPlatform(application, { application.settings.project }, media.photoStore, media.voiceStore, docs)
 
     val backupPlatform = kr.archsurvey.engine.AndroidBackupPlatform(application, docs)
+    val driveAuth = kr.archsurvey.engine.DriveAuthBridge()
 
     /** 앱 첫 실행 화면에서 한 번: 지난번 성공 설정으로 자동 연결(설정에서 끌 수 있음) */
     fun autoConnectOnLaunch() { runCatching { connection?.autoConnectOnLaunch() }.onFailure { kr.archsurvey.diag.CrashLog.record("자동 연결", it) } }
@@ -82,11 +89,24 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
         controller.media = media
         controller.exporter = ExportController(exportPlatform, viewModelScope)
         controller.backup = BackupController(backupPlatform, viewModelScope)
+        val drivePlatform = kr.archsurvey.engine.AndroidDrivePlatform(application, driveAuth)
+        controller.drive = DriveSyncController(
+            platform = drivePlatform,
+            settings = kr.archsurvey.engine.AndroidDriveSettings(application.settings),
+            scope = viewModelScope,
+            projectName = { application.settings.project },
+            createBackupZip = { backupPlatform.create() },
+            pointsCsvBytes = { project ->
+                val pts = SurveyDb.get(application).dao().pointsOf(project)
+                kr.archsurvey.export.Formats.pointsCsv(pts, emptyMap()).toByteArray(Charsets.UTF_8)
+            },
+        )
         controller.projectName = application.settings.project
         controller.settingsState = SettingsState(controller, kr.archsurvey.engine.AndroidSettingsPlatform(application.settings, { onKeepScreen(it) }, application))
         val jobCfgs = kr.archsurvey.engine.AndroidJobConfigPlatform(application.settings)
         controller.jobs = JobController(controller, kr.archsurvey.engine.AndroidJobPlatform(application, application.settings, versionName), viewModelScope, jobCfgs)
-        // 0.1.12 V월드 키(사용자 입력, 암호화 저장) — 지도는 메모리 사본만 읽는다
+        // 0.1.12 V월드 키(암호화 저장, 비면 제품 기본 키) — 지도는 vworld.access 메모리 사본
+        application.settings.ensureBuiltinMapKey()
         controller.vworld = VWorldSettingsState(kr.archsurvey.engine.AndroidMapPlatform(application.settings), viewModelScope)
         controller.mapKeyProvider = { controller.vworld.access }
         // 0.1.12 직전 작업 복원: 마지막에 열었던 작업(settings.project) + 그 작업의 설정(좌표계·Geoid·배경맵·안테나·측정 횟수)
@@ -95,9 +115,34 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
         resumeJob = saved != null || application.settings.hasProject
         if (saved != null) { controller.applyJobConfig(saved); controller.settingsState?.syncZone() } else jobCfgs.save(project, controller.jobConfig())
         controller.onJobConfigChanged = { jobCfgs.save(application.settings.project, it) }
-        controller.feedback = { ok -> application.feedback.play(if (ok) kr.archsurvey.feedback.FeedbackEvent.SURVEY_OK else kr.archsurvey.feedback.FeedbackEvent.SURVEY_FAIL) }
+        controller.feedback = { ok -> application.feedback.play(if (ok) FeedbackEvent.SURVEY_OK else FeedbackEvent.SURVEY_FAIL) }
+        // 0.1.19: Engine FIX/LINK/NTRIP 이벤트 → FeedbackPlayer (이전엔 emit 만 하고 재생 경로 없음)
+        bindEngineFeedback(viewModelScope, application.engine.events, application.feedback::play)
+        cc.onFeedback = { application.feedback.play(it) }
+        // 0.1.28 T14 음성 「저장」: 같은 onMeasure 경로 · 마이크 중재자는 controller.mic(음성 메모와 공유)
+        val vc = kr.archsurvey.voicecmd.VoiceCommandController(controller.voiceHost, kr.archsurvey.engine.AndroidVoicePlatform(application, application.settings, media), controller.mic)
+        controller.voice = vc
+        controller.voiceHeard = { application.feedback.play(FeedbackEvent.VOICE_HEARD) }
+        viewModelScope.launch { while (true) { kotlinx.coroutines.delay(200); if (vc.enabled) runCatching { vc.tick() }.onFailure { kr.archsurvey.diag.CrashLog.record("음성 저장", it) } } }
         media.recoverPending()
+        // 수신기 미연결이면 폰 GPS(지도·저정밀 측점) — 위치 권한은 이때만 요청
+        ensurePhoneLocationPermission()
     }
 
-    override fun onCleared() { controller.tilt?.pause(); media.stopPlayback(); media.cancelRecording() }
+    /** 0.1.20: 수신기 없을 때 폰 GPS용 위치 권한. 이미 있으면 즉시 시작 */
+    fun ensurePhoneLocationPermission() {
+        if (phoneGps.hasPermission()) { phoneGps.ensureStarted(); return }
+        val req = platform.permissionRequester
+        if (req == null) return
+        req(kr.archsurvey.device.PhoneGpsSource.PERMISSIONS) { ok ->
+            if (ok) phoneGps.ensureStarted()
+        }
+    }
+
+    fun onAppBackground() { runCatching { controller.drive?.onAppBackground() }.onFailure { kr.archsurvey.diag.CrashLog.record("Drive 자동 백업", it) } }
+
+    /** Activity 가 앞에 오면 MainActivity.onResume 에서 부른다(권한 통로 연결 뒤) */
+    fun restoreVoice() { runCatching { controller.voice?.restore() }.onFailure { kr.archsurvey.diag.CrashLog.record("음성 저장 복원", it) } }
+
+    override fun onCleared() { controller.voice?.release(); controller.tilt?.pause(); media.stopPlayback(); media.cancelRecording() }
 }
