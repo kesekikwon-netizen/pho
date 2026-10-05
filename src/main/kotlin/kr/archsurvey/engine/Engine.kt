@@ -30,7 +30,8 @@ import java.io.IOException
  * 모델별 차이는 DeviceProfile 로만 주입한다.
  */
 class SurveyEngine(private val app: Context, private val settingsStrategy: (String) -> String?, private val saveStrategy: (String, String) -> Unit) : GnssSource {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    /** 백그라운드 작업의 예외는 앱을 끄지 않고 오류 기록에 남긴다(0.1.9) */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, e -> kr.archsurvey.diag.CrashLog.record("엔진(블루투스·보정) 작업", e) })
 
     override val link = MutableStateFlow(LinkStatus())
     override val gnss = MutableStateFlow(GnssSnapshot())

@@ -30,7 +30,7 @@ import kr.archsurvey.device.DeviceProfiles
  */
 class SurveyConnectionService : Service() {
     private var wake: PowerManager.WakeLock? = null
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main + CoroutineExceptionHandler { _, e -> kr.archsurvey.diag.CrashLog.record("연결 서비스 알림", e) })
     private var obs: Job? = null
     private var wakeRenew: Job? = null
 
@@ -58,7 +58,8 @@ class SurveyConnectionService : Service() {
         val addr = intent?.getStringExtra(EXTRA_ADDR) ?: profile?.let { s.btAddressFor(it.id) }
         if (profile == null || addr == null || !BtCompat.hasConnectPermission(this)) { shutdown(); return START_NOT_STICKY }
 
-        app.engine.start(profile, addr, s.loadNtrip(), s.ntripEnabled)
+        try { app.engine.start(profile, addr, s.loadNtrip(), s.ntripEnabled) }
+        catch (e: Exception) { kr.archsurvey.diag.CrashLog.record("연결 시작", e); shutdown(); return START_NOT_STICKY }
         obs?.cancel()
         obs = scope.launch {
             // 알림은 제목/문구가 **바뀔 때만** 갱신한다. (이전: 위치가 갱신될 때마다 초당 여러 번 notify → 불필요한 IPC·배터리)

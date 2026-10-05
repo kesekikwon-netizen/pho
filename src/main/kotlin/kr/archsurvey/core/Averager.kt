@@ -68,6 +68,7 @@ class PointAverager(private val targetEpochs: Int) {
             fixedEpochs = samples.count { it.quality == FixQuality.RTK_FIXED },
             floatEpochs = samples.count { it.quality == FixQuality.RTK_FLOAT },
             rejectedDuplicate = rejectedDup, rejectedNoPosition = rejectedNoPos,
+            positions = samples.map { Triple(it.lat!!, it.lon!!, it.ellipsoidalHeight) },
         )
     }
 
@@ -91,6 +92,8 @@ data class AveragedPoint(
     val maxCorrectionAgeSec: Double? = null, val minCorrectionAgeSec: Double? = null, val epochsWithoutAge: Int = 0,
     val fixedEpochs: Int = 0, val floatEpochs: Int = 0,
     val rejectedDuplicate: Int = 0, val rejectedNoPosition: Int = 0,
+    /** 평균에 쓴 각 에폭의 위치(위도, 경도, 타원체고) — 점 상세의 ‘각 측정값과 편차’용 */
+    val positions: List<Triple<Double, Double, Double?>> = emptyList(),
 ) {
     val durationMs: Long? get() = if (startedAtMs != null && endedAtMs != null) endedAtMs - startedAtMs else null
 }

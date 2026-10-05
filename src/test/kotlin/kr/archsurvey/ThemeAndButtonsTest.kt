@@ -23,6 +23,23 @@ class ThemeTokensTest {
         )) assertTrue("$name 대비 ${"%.2f".format(ratio(fg, bg))}", ratio(fg, bg) >= 4.5)
     }
 
+    /** 0.1.9 고대비 흰 테마: 본문 7:1, 경계·테두리 3:1 이상(0.1.7 경계선 1.7:1 문제) */
+    @Test fun highContrastWhite_0_1_9() {
+        assertEquals(1f, t.bg.red); assertEquals(1f, t.bg.green); assertEquals(1f, t.bg.blue)
+        for ((name, fg) in listOf("본문" to t.ink, "보조글자" to t.inkSub, "강조글자" to t.accentText))
+            assertTrue("$name 7:1 (${"%.2f".format(ratio(fg, t.bg))})", ratio(fg, t.bg) >= 7.0)
+        assertTrue("보조글자/카드 7:1", ratio(t.inkSub, t.card) >= 7.0)
+        assertTrue("고정 띠 7:1", ratio(t.onFixed, t.fixed) >= 7.0)
+        for ((name, c) in listOf("경계선" to t.line, "입력 테두리" to t.outline))
+            assertTrue("$name 3:1 (${"%.2f".format(ratio(c, t.bg))})", ratio(c, t.bg) >= 3.0)
+    }
+
+    @Test fun themeNeverFollowsSystemDark() {
+        val src = File("src/main/kotlin/kr/archsurvey/ui/Theme.kt").readText()
+        assertFalse(src.contains("isSystemInDarkTheme"))
+        assertTrue(File("src/main/res/values-v29/themes.xml").readText().contains("forceDarkAllowed"))
+    }
+
     @Test fun accentIsSingleTerracotta() {
         assertEquals(0xFFD97757.toInt(), t.primary.toArgb())
     }

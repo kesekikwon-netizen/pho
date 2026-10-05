@@ -45,6 +45,8 @@ data class PointEntity(
     /** 폰 센서 폴 기울기(°) 평균·최대(DB v5). 센서 없음·꺼짐·옛 행은 null */
     val tiltDeg: Double? = null,
     val tiltMaxDeg: Double? = null,
+    /** 평균에 쓴 각 측정값 "북,동,지면높이;…"(DB v6). 옛 행은 null */
+    val samplesCsv: String? = null,
     /** 지면→안테나 위상중심(APC) 총 높이(m) = 직고(+사선환산) + 기준점→APC 오프셋. 내부 저장은 미터 */
     val antennaHeight: Double,
     /** 안테나 모델(DB id), 기준점 종류, 입력 방식, 입력 원값, 기준점→APC 오프셋(수직/수평) */
@@ -235,8 +237,8 @@ object VoiceLimit { const val MAX = 3 }
         PointEntity::class, PhotoEntity::class, VoiceEntity::class,
         AreaEntity::class, GridEntity::class, OutlineEntity::class, OutlinePointEntity::class, PointRevisionEntity::class,
     ],
-    version = 5, exportSchema = true,
-    autoMigrations = [androidx.room.AutoMigration(from = 1, to = 2), androidx.room.AutoMigration(from = 2, to = 3), androidx.room.AutoMigration(from = 3, to = 4), androidx.room.AutoMigration(from = 4, to = 5)],
+    version = 6, exportSchema = true,
+    autoMigrations = [androidx.room.AutoMigration(from = 1, to = 2), androidx.room.AutoMigration(from = 2, to = 3), androidx.room.AutoMigration(from = 3, to = 4), androidx.room.AutoMigration(from = 4, to = 5), androidx.room.AutoMigration(from = 5, to = 6)],
 )
 abstract class SurveyDb : RoomDatabase() {
     abstract fun dao(): SurveyDao

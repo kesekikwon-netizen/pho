@@ -104,6 +104,10 @@ class ConsecutivePointsTest {
         // 되돌리기는 퀵 메뉴에 있다
         rule.runOnIdle { c.quickSheetOpen = true }; rule.waitForIdle()
         rule.onNodeWithTag("quick_undo").performClick(); rule.waitForIdle()
+        // 0.1.9: 되돌리기는 확인 창을 거친다
+        assertEquals(1, c.points.size)
+        rule.onNodeWithTag("confirm_dialog").assertExists()
+        rule.onNodeWithTag("confirm_ok").performClick(); rule.waitForIdle()
         assertEquals(0, c.points.size)
     }
 }

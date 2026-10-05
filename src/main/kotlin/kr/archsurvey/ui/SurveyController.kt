@@ -36,6 +36,8 @@ data class GnssView(
     val satsInView: Int? = null,
     /** GGA 안테나 고도(MSL, m). 없으면 null */
     val altM: Double? = null,
+    /** 마지막 GGA 받은 시각(수신 시계 ms). 0 = 없음. 위성 수가 오래됐는지 판단 */
+    val ggaAtMs: Long = 0L,
 )
 
 /** 화면이 보는 측점. 저장소([PointStore])가 있으면 디스크에도 남는다. */
@@ -80,6 +82,8 @@ data class SavedPoint(
     /** 측정하는 동안 폰 센서로 잰 폴 기울기(°) 평균·최대(0.1.8). 센서 없음·꺼짐·옛 점은 null. 좌표 보정에는 쓰지 않음 */
     val tiltDeg: Double? = null,
     val tiltMaxDeg: Double? = null,
+    /** 평균에 쓴 각 측정값(0.1.9). 지면 높이 기준. 옛 점은 비어 있음 */
+    val samples: List<EpochSample> = emptyList(),
     /** 고고학: 발굴 구역·그리드·칸 이름(예: "A-3", "A-3 / B-3 경계 근처", "그리드 밖")·칸 안 위치(m) */
     val areaId: Long? = null,
     val gridId: Long? = null,
@@ -91,6 +95,17 @@ data class SavedPoint(
 enum class DupChoice { RESURVEY, NEW_POINT, DISCARD }
 
 /** 중복 점 경고: 방금 잰 값 [fresh] 가 기존 점 [existing] 에서 [distM] m 안에 있다 */
+/** 평균에 쓴 한 번의 측정값(TM 북·동, 지면 높이) */
+data class EpochSample(val n: Double, val e: Double, val h: Double?) {
+    companion object {
+        fun encode(l: List<EpochSample>): String? = if (l.isEmpty()) null else l.joinToString(";") { "%.4f,%.4f,%s".format(java.util.Locale.US, it.n, it.e, it.h?.let { h -> "%.4f".format(java.util.Locale.US, h) } ?: "") }
+        fun decode(s: String?): List<EpochSample> = s?.split(";")?.mapNotNull { r ->
+            val f = r.split(","); val n = f.getOrNull(0)?.toDoubleOrNull(); val e = f.getOrNull(1)?.toDoubleOrNull()
+            if (n == null || e == null) null else EpochSample(n, e, f.getOrNull(2)?.toDoubleOrNull())
+        } ?: emptyList()
+    }
+}
+
 data class DupPrompt(val fresh: SavedPoint, val existing: SavedPoint, val distM: Double, val worst: SurveyStatus)
 
 /** 측점 저장소. Android 의존 없음(시험용 가짜 구현 가능). 되돌리기는 숨김(소프트 삭제)이라 번호를 다시 쓰지 않는다. */
@@ -120,10 +135,25 @@ class SurveyController(
     /** true = 처음 받은 실제 위치(또는 마지막 점)를 지도 그림의 기준으로 삼는다 */
     private val anchorOnFirstFix: Boolean = false,
     zone: KoreanTmZone = KoreanTmZone.CENTRAL,
-    private val epochsPerPoint: Int = 5,
+    /** 한 점에 평균하는 측정(에폭) 횟수 기본값. 설정에서 바꾼다(0.1.9 기본 3) */
+    epochsPerPoint: Int = 3,
     private val store: PointStore? = null,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
+    /** 한 점의 측정 횟수(1~30). 설정 화면에서 바꾸면 다음 측점부터 */
+    var epochs by mutableIntStateOf(epochsPerPoint.coerceIn(1, 30))
+    /** 저장 알림·확인·선택 창 */
+    val ui = FeedbackHub()
+    /** 지금 측정에서 모은 횟수(진행 창 ‘2/3’) */
+    var measureCount by mutableIntStateOf(0); private set
+    var measureStartedAtMs by mutableStateOf(0L); private set
+
+    /** 화면 작업에서 예외가 나 앱 대신 기록했을 때: 측정 중이면 대기로 되돌리고 안내 */
+    fun recoverFromError() {
+        if (phase == Phase.ACQUIRING) { acquireJob?.cancel(); phase = Phase.IDLE; progress = 0f }
+        message = "오류가 생겨 작업을 멈췄어요. 설정 > 오류 기록에서 내용을 볼 수 있어요"
+    }
+
     /** 지도 그림용 기준 위치. 측량 좌표 계산에는 쓰지 않는다 */
     var projection by mutableStateOf(projection)
     private var anchored = false
@@ -216,6 +246,9 @@ class SurveyController(
     }
 
     var gv by mutableStateOf(GnssView())
+    /** 마지막 GGA 이후 지난 초. 없으면 null (상태 띠가 1초마다 다시 부른다) */
+    fun nowMs(): Long = clock()
+    fun ggaAgeSec(): Long? = gv.ggaAtMs.takeIf { it > 0L }?.let { ((source.clockMs() - it) / 1000).coerceAtLeast(0) }
     var phase by mutableStateOf(Phase.IDLE)
     var progress by mutableFloatStateOf(0f)
     var message by mutableStateOf<String?>(null)
@@ -267,7 +300,7 @@ class SurveyController(
                 // 연결이 없으면 마지막 위치도 지도에 남기지 않는다
                 val shown = st.reason != StatusReason.NOT_CONNECTED && st.reason != StatusReason.LINK_DOWN
                 gv = GnssView(st, g.quality, if (shown) gga?.satellites ?: 0 else 0, if (shown) gga?.lat else null, if (shown) gga?.lon else null,
-                    if (shown) g.gst?.sigmaAlt else null, if (shown) gga?.hdop else null, if (shown) g.satsInView else null, if (shown) gga?.altitudeMsl else null)
+                    if (shown) g.gst?.sigmaAlt else null, if (shown) gga?.hdop else null, if (shown) g.satsInView else null, if (shown) gga?.altitudeMsl else null, if (shown && gga != null) g.lastGgaAtMs else 0L)
                 if (shown && gga != null && gga.hasPosition && g.lastGgaAtMs != lastGgaStamp) {
                     lastGgaStamp = g.lastGgaAtMs
                     if (anchorOnFirstFix && !anchored) anchorTo(gga.lat!!, gga.lon!!)
@@ -325,7 +358,8 @@ class SurveyController(
         val typeAtStart = typeName; val nameAtStart = nextName
         acquireJob?.cancel()
         acquireJob = scope.launch {
-            val avg = PointAverager(epochsPerPoint)
+            val avg = PointAverager(epochs)
+            measureCount = 0; measureStartedAtMs = clock()
             var worst = st.status
             var aborted: StatusReason? = null
             var avgStart: Long? = null; var avgEnd: Long? = null
@@ -334,7 +368,7 @@ class SurveyController(
                 val r = StatusJudge.judge(g, l.state, source.clockMs())
                 if (r.status == SurveyStatus.UNAVAILABLE) { aborted = r.reason; return@first true }
                 if (r.status == SurveyStatus.CAUTION) worst = SurveyStatus.CAUTION
-                g.gga?.let { if (avg.add(it, g.gst)) { val now = clock(); if (avgStart == null) avgStart = now; avgEnd = now; tilt?.currentAngle()?.let { a -> tilts.add(a) } } }
+                g.gga?.let { if (avg.add(it, g.gst)) { measureCount = avg.count; val now = clock(); if (avgStart == null) avgStart = now; avgEnd = now; tilt?.currentAngle()?.let { a -> tilts.add(a) } } }
                 progress = avg.progress
                 avg.done
             }
@@ -359,6 +393,7 @@ class SurveyController(
                 avgStartedAtMs = avgStart, avgEndedAtMs = avgEnd, maxCorrectionAgeSec = p.maxCorrectionAgeSec, minCorrectionAgeSec = p.minCorrectionAgeSec,
                 fixedEpochs = p.fixedEpochs, floatEpochs = p.floatEpochs,
                 tiltDeg = if (tilts.isEmpty()) null else tilts.average(), tiltMaxDeg = tilts.maxOrNull(),
+                samples = p.positions.map { (la, lo, h) -> val q = TmProjection.forward(la, lo, zone); EpochSample(q.northing, q.easting, h?.let { it - rec.apcHeightM }) },
                 areaId = arch.activeAreaId, gridId = if (cell.kind == CellKind.NO_GRID) null else arch.activeGrid?.id, cellName = cellName,
                 cellU = cell.inCellU, cellV = cell.inCellV)
             val target = resurveyTarget
@@ -397,6 +432,18 @@ class SurveyController(
         photos.clear(); voices.clear()
         feedback?.invoke(saveError == null)
         message = saveError ?: if (worst == SurveyStatus.CAUTION) "주의 상태에서 취득한 점이에요 (표시가 기록돼요)" else null
+        if (saveError == null) ui.toast(savedText(points.last()))
+    }
+
+    /** 저장 알림 문구: 무엇이 저장됐는지 */
+    internal fun savedText(p: SavedPoint): String =
+        "${p.name} 저장됨 · ${p.type} · ${p.epochs}회 평균" + (p.sigmaHM?.let { " · ±${String.format(java.util.Locale.US, "%.3f", it)} m" } ?: "")
+
+    /** 화면의 되돌리기 버튼: 확인 창을 거친다(측정 중 취소는 바로) */
+    fun askUndo() {
+        if (phase == Phase.ACQUIRING) { cancelAcquire(); return }
+        val last = resurveyUndo?.name?.let { "$it 재측량" } ?: points.lastOrNull()?.name ?: run { message = "되돌릴 점이 없어요"; return }
+        ui.ask(ConfirmRequest("$last 을(를) 되돌릴까요?", "되돌린 점은 목록과 지도에서 사라져요. 번호는 다시 쓰지 않아요.", "되돌리기") { undo() })
     }
 
     /** 재측량: 번호·종류·메모·사진은 두고 측정값만 새 값으로. 이전 값은 이력에 남는다 */
@@ -416,6 +463,7 @@ class SurveyController(
         refreshMedia()
         feedback?.invoke(true)
         val moved = Calc.distance(pointNE(old), pointNE(upd))
+        ui.toast("${upd.name} 재측량 저장됨 · ${upd.epochs}회 평균")
         message = "${upd.name} 재측량 완료 · 이전 값과 ${"%.3f".format(moved)} m 차이 (이전 값은 이력에 보관)" + if (worst == SurveyStatus.CAUTION) " · 주의 상태" else ""
     }
 

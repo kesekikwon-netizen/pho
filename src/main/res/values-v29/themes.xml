@@ -1,0 +1,11 @@
+<resources>
+    <!-- 0.1.9: 시스템 다크 모드·강제 다크와 관계없이 항상 흰 테마. 상태·내비게이션 막대 아이콘은 어둡게 -->
+    <style name="Theme.Survey" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+</resources>

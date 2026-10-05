@@ -23,19 +23,28 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
     val store: RoomPointStore = RoomPointStore(SurveyDb.get(app), project = { application.settings.project }, device = {
         connection?.profile?.displayName ?: "수신기"
     })
-    val controller: SurveyController = SurveyController(application.engine, db, viewModelScope, store = store, anchorOnFirstFix = true)
+    /** 화면 작업에서 난 예외: 앱을 끄지 않고 기록 + 안내(0.1.9). 측정 중이었다면 대기 상태로 되돌린다 */
+    private val safeScope = kotlinx.coroutines.CoroutineScope(viewModelScope.coroutineContext + kotlinx.coroutines.CoroutineExceptionHandler { _, e ->
+        kr.archsurvey.diag.CrashLog.record("화면 작업", e)
+        runCatching { controller.recoverFromError() }
+    })
+    val controller: SurveyController = SurveyController(application.engine, db, safeScope, epochsPerPoint = application.settings.epochsPerPoint, store = store, anchorOnFirstFix = true)
     val media = AndroidMediaPlatform(application, viewModelScope) { application.settings.project }
     val docs = kr.archsurvey.engine.DocBridge()
     val exportPlatform = kr.archsurvey.engine.AndroidExportPlatform(application, { application.settings.project }, media.photoStore, media.voiceStore, docs)
 
     val backupPlatform = kr.archsurvey.engine.AndroidBackupPlatform(application, docs)
 
+    /** 앱 첫 실행 화면에서 한 번: 지난번 성공 설정으로 자동 연결(설정에서 끌 수 있음) */
+    fun autoConnectOnLaunch() { runCatching { connection?.autoConnectOnLaunch() }.onFailure { kr.archsurvey.diag.CrashLog.record("자동 연결", it) } }
+
     /** MainActivity 가 채운다: 화면 항상 켜기 설정이 바뀔 때 창 플래그 적용 */
     var onKeepScreen: (Boolean) -> Unit = {}
     private val versionName: String = runCatching { app.packageManager.getPackageInfo(app.packageName, 0).versionName ?: "" }.getOrDefault("")
 
     init {
-        val cc = ConnectionController(platform)
+        val cc = ConnectionController(platform, safeScope)
+        cc.ui = controller.ui
         connection = cc
         controller.connection = cc
         controller.setTypesList(application.settings.positionTypes)
@@ -60,7 +69,7 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
         controller.exporter = ExportController(exportPlatform, viewModelScope)
         controller.backup = BackupController(backupPlatform, viewModelScope)
         controller.projectName = application.settings.project
-        controller.settingsState = SettingsState(controller, kr.archsurvey.engine.AndroidSettingsPlatform(application.settings) { onKeepScreen(it) })
+        controller.settingsState = SettingsState(controller, kr.archsurvey.engine.AndroidSettingsPlatform(application.settings, { onKeepScreen(it) }, application))
         controller.jobs = JobController(controller, kr.archsurvey.engine.AndroidJobPlatform(application, application.settings, versionName), viewModelScope)
         controller.feedback = { ok -> application.feedback.play(if (ok) kr.archsurvey.feedback.FeedbackEvent.SURVEY_OK else kr.archsurvey.feedback.FeedbackEvent.SURVEY_FAIL) }
         media.recoverPending()

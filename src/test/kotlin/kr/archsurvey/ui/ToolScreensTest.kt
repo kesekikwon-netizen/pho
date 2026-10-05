@@ -144,7 +144,7 @@ class ToolScreensTest {
         setup()
         rule.runOnUiThread { c.hub.open(ToolScreen.SETTINGS) }; rule.waitForIdle()
         rule.onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("zone_5187").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("zone_" + kr.archsurvey.core.KoreanTmZone.entries.indexOfFirst { it.epsg == 5187 }).performClick(); rule.waitForIdle()
         assertEquals(5187, c.zone.epsg)
         shot("t6_settings")
         rule.runOnUiThread { c.jobs!!.openList() }; rule.waitForIdle()

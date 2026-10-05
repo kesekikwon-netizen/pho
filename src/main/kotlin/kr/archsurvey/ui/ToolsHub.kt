@@ -50,7 +50,11 @@ class ToolsHub(private val c: SurveyController) {
 
     fun openDetail(p: SavedPoint) { selectedName = p.name; editType = p.type; editMemo = p.memo; saved = false; open(ToolScreen.POINT_DETAIL) }
     val dirty: Boolean get() = selected?.let { it.type != editType.trim() || it.memo != editMemo.trim() } ?: false
-    fun saveEdit() { val p = selected ?: return; c.updatePointMeta(p.name, editType, editMemo); saved = true; editType = selected?.type ?: editType }
+    fun saveEdit() {
+        val p = selected ?: return
+        c.updatePointMeta(p.name, editType, editMemo); saved = true; editType = selected?.type ?: editType
+        c.ui.toast("${p.name} 수정 저장됨 · 위치 종류 ${editType.trim().ifBlank { p.type }}" + if (editMemo.isNotBlank()) " · 비고" else "")
+    }
 
     // ---------------- 점 찾아가기 ----------------
     var gotoTarget by mutableStateOf<GotoTarget?>(null)

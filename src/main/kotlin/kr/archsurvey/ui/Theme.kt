@@ -1,6 +1,5 @@
 package kr.archsurvey.ui
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -36,11 +35,15 @@ data class Tokens(
 
 private fun c(h: Long) = Color(0xFF000000 or h)
 
+/**
+ * 0.1.9 흰색 고대비: 본문 7:1 이상(ink 18.9:1, inkSub 8.9:1, accentText 7.4:1 — 흰/FAFAFA 바탕 기준),
+ * 경계선·입력 테두리 3:1 이상(line 3.5:1, outline 4.4:1). 시스템 다크 모드와 무관하게 항상 이 토큰을 쓴다.
+ */
 val LightTokens = Tokens(
-    bg = c(0xFFFFFF), card = c(0xF5F5F5), line = c(0xE6E6E6), outline = c(0xC9C9C9),
-    ink = c(0x111111), inkSub = c(0x595959),
-    primary = c(0xD97757), onPrimary = c(0x141413), accent = c(0xC6613F), accentText = c(0x9C4426),
-    fixed = c(0x1B6BB0), onFixed = c(0xFFFFFF),
+    bg = c(0xFFFFFF), card = c(0xFAFAFA), line = c(0x858585), outline = c(0x767676),
+    ink = c(0x111111), inkSub = c(0x474747),
+    primary = c(0xD97757), onPrimary = c(0x111111), accent = c(0xB4532F), accentText = c(0x8A3A1F),
+    fixed = c(0x155A96), onFixed = c(0xFFFFFF),
     caution = c(0xF2B600), onCaution = c(0x141413),
     bad = c(0xA3123A), onBad = c(0xFFFFFF),
     scrim = Color(0x66111111),
@@ -60,7 +63,8 @@ val LocalTokens = staticCompositionLocalOf { LightTokens }
 val T: Tokens @Composable get() = LocalTokens.current
 
 @Composable
-fun SurveyTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+/** [dark] 는 시험용으로만 남김. 앱은 시스템 다크 모드를 따르지 않고 항상 흰 테마(0.1.9) */
+fun SurveyTheme(dark: Boolean = false, content: @Composable () -> Unit) {
     val t = if (dark) DarkTokens else LightTokens
     val base = if (dark) darkColorScheme() else lightColorScheme()
     val scheme = base.copy(

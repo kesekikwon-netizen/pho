@@ -71,6 +71,22 @@ fun SurveyMapScreen(
         c.exporter?.let { if (it.open) ExportScreen(it) }
         c.backup?.let { if (it.open) BackupScreen(it) }
         c.connection?.let { ConnectionHost(c, it) }
+        if (c.phase == Phase.ACQUIRING) MeasureProgress(c)
+        FeedbackOverlays(c.ui)
+    }
+}
+
+/** 측정 진행 창: 1/3 → 2/3 → 3/3, 경과 시간, 중지 */
+@Composable
+private fun MeasureProgress(c: SurveyController) {
+    val n = c.epochs; val k = c.measureCount.coerceAtMost(n)
+    val steps = (1..n).map { i -> StepView("$i/$n 측정", when { i <= k -> StepState.DONE; i == k + 1 -> StepState.ACTIVE; else -> StepState.WAIT }) }
+    val sec = rememberElapsedSec(c.measureStartedAtMs) { c.nowMs() }
+    ProgressWindow(
+        "측정 중 $k/$n", if (n <= 5) steps else emptyList(), sec, "measure_progress",
+        note = "폴을 세운 채 움직이지 마세요 · ${c.gv.status.reason.textKo} · 끝나면 ${n}회 평균을 저장해요", progress = k.toFloat() / n,
+    ) {
+        MBtn(Modifier.weight(1f).height(56.dp).testTag("measure_stop"), MKind.PLAIN, 16.dp, onClick = { c.cancelAcquire() }) { Text("중지", style = Ty.label, color = T.ink) }
     }
 }
 
@@ -78,10 +94,16 @@ fun SurveyMapScreen(
 
 private fun cm1(m: Double) = String.format(java.util.Locale.US, "%.1f", m * 100.0)
 
-/** 상태 띠 셋째 줄: 위성 수 · 수평/수직 정확도(cm). 값이 없으면 "—" */
+/** GGA 가 이 초보다 오래되면 위성 수 옆에 “오래됨” */
+internal const val SATS_STALE_SEC = 3L
+
+/** 상태 띠 셋째 줄: 위성 사용/보임 · 수평/수직 정확도(cm). 값이 없으면 "—". GGA 가 3초 넘게 안 오면 “N초 전(오래됨)” */
 internal fun bandDetail(c: SurveyController): String {
     val g = c.gv
-    return g.quality.labelKo.removePrefix("RTK ") + " · 위성 ${g.satellites}" + " · H " + (g.status.sigmaHM?.let { "±${cm1(it)}cm" } ?: "—") + " · V " + (g.sigmaVM?.let { "±${cm1(it)}cm" } ?: "—")
+    val sats = "위성 ${g.satellites}" + (g.satsInView?.let { "/$it" } ?: "")
+    val age = c.ggaAgeSec()
+    val stale = if (age != null && age > SATS_STALE_SEC) " · ${age}초 전(오래됨)" else ""
+    return g.quality.labelKo.removePrefix("RTK ") + " · " + sats + " · H " + (g.status.sigmaHM?.let { "±${cm1(it)}cm" } ?: "—") + " · V " + (g.sigmaVM?.let { "±${cm1(it)}cm" } ?: "—") + stale
 }
 
 /** 수신기가 연결되지 않았을 때 지도 가운데에 뜨는 안내 카드 */
@@ -185,7 +207,7 @@ private fun AcquireStrip(c: SurveyController) {
     val t = T
     Row(Modifier.fillMaxSize().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text("취득 중 · ${c.gv.status.reason.textKo}", style = Ty.label, color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("acquire_text"))
+            Text("측정 ${c.measureCount.coerceAtMost(c.epochs)}/${c.epochs} · ${c.gv.status.reason.textKo}", style = Ty.label, color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("acquire_text"))
             Spacer(Modifier.height(6.dp))
             Box(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(t.line)) {
                 Box(Modifier.fillMaxHeight().fillMaxWidth(c.progress.coerceIn(0f, 1f)).background(t.primary))
@@ -279,7 +301,7 @@ private fun ResultPanel(c: SurveyController) {
                     }
                 }
             }
-            MBtn(Modifier.width(52.dp).height(48.dp).testTag("undo_button"), MKind.PLAIN, 14.dp, onClick = { c.undo() }) { GlyphIcon(Glyph.UNDO, t.accent, 20.dp) }
+            MBtn(Modifier.width(52.dp).height(48.dp).testTag("undo_button"), MKind.PLAIN, 14.dp, onClick = { c.askUndo() }) { GlyphIcon(Glyph.UNDO, t.accent, 20.dp) }
         }
     }
 }

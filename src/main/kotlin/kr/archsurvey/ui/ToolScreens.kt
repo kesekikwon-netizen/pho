@@ -134,6 +134,7 @@ fun PointDetailScreen(c: SurveyController) {
                 (p.groundMslM?.let { " · 표고 ${f3(it)} m" } ?: "") + (if (p.measuredAtMs > 0) "\n" + SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(p.measuredAtMs)) else "") + averagingLine(p),
             style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("detail_info"),
         )
+        if (p.samples.isNotEmpty()) SamplesCard(p)
         PointHistoryCards(c, p)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.weight(1f)) { Btn("여기로 찾아가기", Modifier.fillMaxWidth().testTag("detail_goto")) { h.startGoto(p) } }
@@ -314,11 +315,15 @@ fun SettingsScreen(c: SurveyController) {
     val st = c.settingsState
     ToolScaffold("설정", "settings_screen", onBack = { h.back() }) {
         if (st == null) { Text("설정을 불러올 수 없어요", style = Ty.body, color = t.inkSub); return@ToolScaffold }
-        var zoneOpen by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-        SelectRow("좌표 원점", c.zone.labelKo, zoneOpen, "zone_toggle") { zoneOpen = !zoneOpen }
-        if (zoneOpen) Card {
-            for (z in kr.archsurvey.core.KoreanTmZone.entries) Choice(z.labelKo, z == c.zone, Modifier.fillMaxWidth().testTag("zone_${z.epsg}")) { st.setZone(z); zoneOpen = false }
-            Text("새로 측점하는 점부터 적용돼요. 대부분의 중부 지역은 중부원점(5186)이에요.", style = Ty.small, color = t.inkSub)
+        val zones = kr.archsurvey.core.KoreanTmZone.entries
+        SelectRow("좌표 원점", c.zone.labelKo, false, "zone_toggle") {
+            c.ui.choose(ChoiceRequest("좌표 원점", zones.map { it.labelKo }, zones.indexOf(c.zone), "zone",
+                "새로 측점하는 점부터 적용돼요. 대부분의 중부 지역은 중부원점(5186)이에요.") { st.setZone(zones[it]) })
+        }
+        val counts = listOf(1, 3, 5, 10)
+        SelectRow("측정 횟수", "${c.epochs}회 평균", false, "epochs_toggle") {
+            c.ui.choose(ChoiceRequest("한 점 측정 횟수", counts.map { "${it}회" + if (it == 3) " (기본)" else "" }, counts.indexOf(c.epochs), "epochs",
+                "측점 버튼을 누르면 이 횟수만큼 위치를 받아 평균해 저장해요. 각 측정값과 편차는 점 상세에서 볼 수 있어요.") { st.setEpochs(counts[it]) })
         }
         Card {
             Text("측점 버튼 위치 (폴 쪽)", style = Ty.label, color = t.ink)
@@ -335,6 +340,18 @@ fun SettingsScreen(c: SurveyController) {
         }
         Card {
             Text(if (c.gv.status.reason == kr.archsurvey.core.StatusReason.NOT_CONNECTED) "수신기 연결 안 됨" else "수신기 연결됨 · ${c.gv.quality.labelKo}", style = Ty.label, color = t.ink, modifier = Modifier.testTag("set_fake_state"))
+        }
+        SelectRow("오류 기록", if (st.showCrash) "닫기" else "보기 · 공유", st.showCrash, "crash_toggle") { if (st.showCrash) st.showCrash = false else st.openCrash() }
+        if (st.showCrash) Card {
+            val txt = st.crashText
+            Text(if (txt.isBlank()) "기록된 오류가 없어요." else "최근 오류 기록 (문의할 때 ‘공유’로 보내 주세요)", style = Ty.label, color = t.ink)
+            if (txt.isNotBlank()) Text(txt.takeLast(4000), style = Ty.coord.copy(fontSize = 12.sp, lineHeight = 16.sp), color = t.ink, modifier = Modifier.testTag("crash_text"))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) { Btn("공유", Modifier.fillMaxWidth().testTag("crash_share")) { st.shareCrash() } }
+                Box(Modifier.weight(1f)) { Btn("지우기", Modifier.fillMaxWidth().testTag("crash_clear")) {
+                    c.ui.ask(ConfirmRequest("오류 기록을 지울까요?", "지운 기록은 되살릴 수 없어요.", "지우기") { st.clearCrash() })
+                } }
+            }
         }
         Text(rememberAppVersionLabel() + " · 발굴 측량 · 실기기 시험 전 버전", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("app_version").padding(vertical = 8.dp))
     }
@@ -459,4 +476,25 @@ internal fun averagingLine(p: SavedPoint): String {
     }
     p.tiltDeg?.let { a -> parts += "폴 기울기 ${String.format(Locale.US, "%.1f", a)}°" + (p.tiltMaxDeg?.let { m -> " (최대 ${String.format(Locale.US, "%.1f", m)}°)" } ?: "") }
     return if (parts.isEmpty()) "" else "\n" + parts.joinToString(" · ")
+}
+
+
+/** 점 상세: 평균에 쓴 각 측정값과 평균에서의 편차(mm) */
+@Composable
+private fun SamplesCard(p: SavedPoint) {
+    val t = T
+    val n = p.samples.map { it.n }.average(); val e = p.samples.map { it.e }.average()
+    val hs = p.samples.mapNotNull { it.h }; val h = if (hs.isEmpty()) null else hs.average()
+    fun mm(v: Double) = (if (v >= 0) "+" else "−") + String.format(Locale.US, "%.0f", kotlin.math.abs(v) * 1000)
+    Card {
+        Text("측정값 ${p.samples.size}회 · 평균에서의 편차(mm)", style = Ty.label, color = t.ink)
+        for ((i, s) in p.samples.withIndex()) {
+            Column(Modifier.fillMaxWidth().testTag("sample_$i")) {
+                Text("${i + 1}회  N ${String.format(Locale.US, "%.3f", s.n)}  E ${String.format(Locale.US, "%.3f", s.e)}", style = Ty.coord.copy(fontSize = 12.sp), color = t.ink, maxLines = 1)
+                Text((s.h?.let { "H ${String.format(Locale.US, "%.3f", it)} · " } ?: "") + "ΔN ${mm(s.n - n)} ΔE ${mm(s.e - e)}" + (if (s.h != null && h != null) " ΔH ${mm(s.h - h)}" else "") + " mm", style = Ty.coord.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1)
+            }
+        }
+        val spread = p.samples.maxOf { kotlin.math.hypot(it.n - n, it.e - e) }
+        Text("수평 최대 편차 ${String.format(Locale.US, "%.0f", spread * 1000)} mm", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("samples_spread"))
+    }
 }

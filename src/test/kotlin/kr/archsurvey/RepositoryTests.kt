@@ -55,6 +55,12 @@ class RepositoryTests {
         assertNull(b.avgStartedAtUtcMs); assertNull(b.maxCorrectionAgeSec); assertEquals(0, b.fixedEpochs)
         val t = db.dao().getPoint(repo.savePoint(pt("P-0003").copy(tiltDeg = 1.2, tiltMaxDeg = 2.4)))!!
         assertEquals(1.2, t.tiltDeg!!, 0.0); assertEquals(2.4, t.tiltMaxDeg!!, 0.0); assertNull(b.tiltDeg)
+        // v6: 각 측정값(N,E,H)
+        val enc = kr.archsurvey.ui.EpochSample.encode(listOf(kr.archsurvey.ui.EpochSample(500000.001, 200000.002, 49.9), kr.archsurvey.ui.EpochSample(500000.004, 199999.998, null)))
+        val sm = db.dao().getPoint(repo.savePoint(pt("P-0004").copy(samplesCsv = enc)))!!
+        val back = kr.archsurvey.ui.EpochSample.decode(sm.samplesCsv)
+        assertEquals(2, back.size); assertEquals(500000.004, back[1].n, 1e-9); assertNull(back[1].h); assertEquals(49.9, back[0].h!!, 1e-9)
+        assertNull(b.samplesCsv)
     }
 
     @Test fun fifthPhotoIsRejected() = runBlocking {

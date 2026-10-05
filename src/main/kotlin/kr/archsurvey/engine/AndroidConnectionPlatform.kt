@@ -3,6 +3,7 @@ package kr.archsurvey.engine
 import kr.archsurvey.App
 import kr.archsurvey.bt.BtCompat
 import kr.archsurvey.device.DeviceProfile
+import kr.archsurvey.ntrip.MountInfo
 import kr.archsurvey.ntrip.NtripConfig
 import kr.archsurvey.ui.ConnectionPlatform
 import kr.archsurvey.ui.NtripForm
@@ -45,4 +46,20 @@ class AndroidConnectionPlatform(private val app: App) : ConnectionPlatform {
         s.deviceId?.let { st.deviceId = it; st.setBtAddress(it, s.address); st.setPreChecked(it, s.preChecked) }
         st.saveNtrip(s.ntrip.toConfig()); st.ntripEnabled = s.ntrip.enabled
     }
+
+    override suspend fun fetchMounts(cfg: NtripConfig): List<MountInfo> = app.engine.fetchMountPoints(cfg)
+    override fun hostProfile(host: String): NtripForm? {
+        val s = app.settings
+        val (u, port, mount) = s.hostProfile(host) ?: return null
+        return NtripForm(host = host.trim(), port = port.toString(), mount = mount, user = u, password = s.hostPassword(host))
+    }
+    override fun markSuccess(form: NtripForm) {
+        val s = app.settings
+        s.lastConnectOkAt = System.currentTimeMillis()
+        if (form.enabled) s.saveHostProfile(form.toConfig())
+    }
+    override fun hadSuccess() = app.settings.lastConnectOkAt > 0L
+    override var autoConnect: Boolean
+        get() = app.settings.autoConnect
+        set(v) { app.settings.autoConnect = v }
 }

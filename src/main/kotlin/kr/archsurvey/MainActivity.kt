@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             SurveyTheme { SurveyMapScreen(vm.controller, batteryPercent()) }
         }
+        if (savedInstanceState == null) vm.autoConnectOnLaunch()
     }
 
     override fun onResume() { super.onResume(); vm.controller.tilt?.resume() }

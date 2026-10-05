@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -81,7 +83,10 @@ internal fun StatusBand(c: SurveyController, modifier: Modifier = Modifier) {
         SurveyStatus.UNAVAILABLE -> "측점 막힘 · ${st.reason.textKo}"
         SurveyStatus.FIXED -> st.reason.textKo
     }
-    val detail = if (notConnected) null else bandDetail(c)
+    // 1초마다 다시 계산해 위성 수가 멈추면 “오래됨”을 붙인다
+    var tick by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    if (!notConnected) androidx.compose.runtime.LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(1000); tick++ } }
+    val detail = if (notConnected) null else { tick; bandDetail(c) }
     val sigma = if (notConnected) null else st.sigmaHM
     val shape = RoundedCornerShape(22.dp)
     Row(
@@ -202,7 +207,7 @@ internal fun QuickSheet(c: SurveyController) {
                 }
             }
             val rows = listOf(
-                Triple<String, String, () -> Unit>("되돌리기", "quick_undo", { c.undo() }),
+                Triple<String, String, () -> Unit>("되돌리기", "quick_undo", { c.askUndo() }),
                 Triple<String, String, () -> Unit>("사진", "quick_photo", { c.addPhotoCamera() }),
                 Triple<String, String, () -> Unit>(if (c.voiceSeconds > 0) "녹음 끝내기" else "음성", "quick_voice", { c.toggleVoice() }),
                 Triple<String, String, () -> Unit>("점 목록", "quick_points", { c.hub.open(ToolScreen.POINTS) }),

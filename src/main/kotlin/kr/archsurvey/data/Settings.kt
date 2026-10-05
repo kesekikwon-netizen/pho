@@ -34,6 +34,10 @@ class SettingsStore(private val ctx: Context) {
         } catch (e: Exception) { null }
     }
 
+    /** 암호화 저장소 읽기·쓰기. 기기별 Keystore 문제로 예외가 나도 앱을 끄지 않고 기록만 남긴다(0.1.9) */
+    private fun secureGet(key: String): String? = try { securePrefs()?.getString(key, "") } catch (e: Exception) { kr.archsurvey.diag.CrashLog.record("암호화 저장소 읽기", e); null }
+    private fun securePut(key: String, v: String): Boolean = try { securePrefs()?.edit()?.putString(key, v)?.apply() != null } catch (e: Exception) { kr.archsurvey.diag.CrashLog.record("암호화 저장소 쓰기", e); false }
+
     var deviceId: String?
         get() = sp.getString("device_id", null)
         set(v) = sp.edit().putString("device_id", v).apply()
@@ -95,8 +99,8 @@ class SettingsStore(private val ctx: Context) {
 
     // 배경 지도 (V-World). 키는 사용자가 입력, 코드에 내장하지 않음
     var mapKey: String
-        get() = securePrefs()?.getString("vworld_key", "") ?: sp.getString("vworld_key_mem", "") ?: ""
-        set(v) { if (securePrefs() != null) securePrefs()!!.edit().putString("vworld_key", v.trim()).apply() else sp.edit().putString("vworld_key_mem", v.trim()).apply() }
+        get() = secureGet("vworld_key") ?: sp.getString("vworld_key_mem", "") ?: ""
+        set(v) { if (!securePut("vworld_key", v.trim())) sp.edit().putString("vworld_key_mem", v.trim()).apply() }
     var mapDomain: String
         get() = sp.getString("vworld_domain", "") ?: ""
         set(v) = sp.edit().putString("vworld_domain", v.trim()).apply()
@@ -129,6 +133,30 @@ class SettingsStore(private val ctx: Context) {
     var tiltReference: String?
         get() = sp.getString("tilt_ref", null)
         set(v) = sp.edit().putString("tilt_ref", v).apply()
+    /** 한 점 측정(에폭) 횟수. 0.1.9 기본 3 */
+    var epochsPerPoint: Int
+        get() = sp.getInt("epochs_per_point", 3)
+        set(v) = sp.edit().putInt("epochs_per_point", v).apply()
+    /** 마지막으로 연결에 성공한 시각(ms). 0 = 아직 없음. 자동 연결은 이 값이 있을 때만 */
+    var lastConnectOkAt: Long
+        get() = sp.getLong("conn_ok_at", 0L)
+        set(v) = sp.edit().putLong("conn_ok_at", v).apply()
+    var autoConnect: Boolean
+        get() = sp.getBoolean("auto_connect", true)
+        set(v) = sp.edit().putBoolean("auto_connect", v).apply()
+    /** 서버(주소)별 마지막 성공 아이디·포트·마운트. 비밀번호는 암호화 저장소에만 */
+    fun hostProfile(host: String): Triple<String, Int, String>? {
+        val k = host.trim().lowercase(); val u = sp.getString("hp_user_$k", null) ?: return null
+        return Triple(u, sp.getInt("hp_port_$k", 2101), sp.getString("hp_mount_$k", "") ?: "")
+    }
+    fun hostPassword(host: String): String = secureGet("hp_pw_${host.trim().lowercase()}") ?: hostPwMem[host.trim().lowercase()] ?: ""
+    private val hostPwMem = HashMap<String, String>()
+    fun saveHostProfile(c: NtripConfig) {
+        val k = c.host.trim().lowercase()
+        sp.edit().putString("hp_user_$k", c.username.trim()).putInt("hp_port_$k", c.port).putString("hp_mount_$k", c.mountPoint.trim()).apply()
+        hostPwMem[k] = c.password
+        securePut("hp_pw_$k", c.password)
+    }
     var keepScreenOn: Boolean
         get() = sp.getBoolean("keep_screen", true)
         set(v) = sp.edit().putBoolean("keep_screen", v).apply()
@@ -160,7 +188,7 @@ class SettingsStore(private val ctx: Context) {
             port = sp.getInt("ntrip_port", d.port),
             mountPoint = sp.getString("ntrip_mount", d.mountPoint) ?: d.mountPoint,
             username = sp.getString("ntrip_user", "") ?: "",
-            password = securePrefs()?.getString("ntrip_pw", "") ?: memPassword,
+            password = secureGet("ntrip_pw")?.takeIf { it.isNotEmpty() || memPassword.isEmpty() } ?: memPassword,
             useV2 = sp.getBoolean("ntrip_v2", false),
         )
     }
@@ -172,6 +200,6 @@ class SettingsStore(private val ctx: Context) {
             .putString("ntrip_mount", c.mountPoint.trim()).putString("ntrip_user", c.username.trim())
             .putBoolean("ntrip_v2", c.useV2).apply()
         memPassword = c.password
-        securePrefs()?.edit()?.putString("ntrip_pw", c.password)?.apply()
+        securePut("ntrip_pw", c.password)
     }
 }

@@ -11,4 +11,10 @@ class App : Application() {
     val db by lazy { SurveyDb.get(this) }
     val engine by lazy { SurveyEngine(this, { settings.btStrategy(it) }, { a, s -> settings.setBtStrategy(a, s) }) }
     val feedback by lazy { FeedbackPlayer(this, settings) }
+
+    override fun onCreate() {
+        super.onCreate()
+        val ver = runCatching { packageManager.getPackageInfo(packageName, 0).versionName ?: "" }.getOrDefault("")
+        kr.archsurvey.diag.CrashLog.install(filesDir, ver)
+    }
 }

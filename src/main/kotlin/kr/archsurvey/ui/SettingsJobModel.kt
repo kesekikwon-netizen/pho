@@ -14,6 +14,12 @@ interface SettingsPlatform {
     var sound: Boolean
     var vibration: Boolean
     var keepScreenOn: Boolean
+    /** 한 점 측정 횟수(0.1.9). 기본 3 */
+    var epochs: Int get() = 3; set(_) {}
+    /** 오류 기록(앱 내부 파일) 읽기·공유·지우기 */
+    fun crashLog(): String = ""
+    fun shareCrashLog() {}
+    fun clearCrashLog() {}
 }
 
 /** 설정 화면 상태. 바꾸면 곧바로 저장하고 화면(좌표 원점·폴 위치)에 적용한다. */
@@ -22,9 +28,17 @@ class SettingsState(private val c: SurveyController, private val p: SettingsPlat
     var vibration by mutableStateOf(p.vibration); private set
     var keepScreenOn by mutableStateOf(p.keepScreenOn); private set
 
-    init { c.zone = p.zone; c.poleOnRight = p.poleRight }
+    var crashText by mutableStateOf(""); private set
+    var showCrash by mutableStateOf(false)
 
-    fun setZone(z: KoreanTmZone) { c.zone = z; p.zone = z }
+    init { c.zone = p.zone; c.poleOnRight = p.poleRight; c.epochs = p.epochs.coerceIn(1, 30) }
+
+    fun setEpochs(n: Int) { val v = n.coerceIn(1, 30); c.epochs = v; p.epochs = v; c.ui.toast("측정 횟수 ${v}회로 저장됨 · 다음 측점부터") }
+    fun openCrash() { crashText = p.crashLog(); showCrash = true }
+    fun shareCrash() = p.shareCrashLog()
+    fun clearCrash() { p.clearCrashLog(); crashText = ""; c.ui.toast("오류 기록을 지웠어요") }
+
+    fun setZone(z: KoreanTmZone) { c.zone = z; p.zone = z; c.ui.toast("좌표 원점 저장됨 · ${z.labelKo}") }
     fun setPoleRight(v: Boolean) { c.poleOnRight = v; p.poleRight = v }
     fun changeSound(v: Boolean) { sound = v; p.sound = v }
     fun changeVibration(v: Boolean) { vibration = v; p.vibration = v }

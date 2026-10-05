@@ -12,6 +12,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -37,7 +38,119 @@ fun ConnectionHost(c: SurveyController, cc: ConnectionController) {
     val cards = ErrorCards.from(link, ntrip, cc.form.enabled)
     if (!cc.open && cards.isNotEmpty()) AlertStrip(cards.first(), onClick = { cc.openScreen() })
     if (cc.open) ConnectionScreen(cc)
+    if (cc.open && cc.mountPickerOpen) MountPicker(cc)
+    // 연결 성공 → 설정 자동 저장(한 번)
+    LaunchedEffect(link, ntrip, cc.connectRequested) { cc.onStatus(link, ntrip) }
+    if (cc.showProgress && cc.connectRequested) ConnectionProgress(c, cc, link, ntrip)
 }
+
+/** 연결 진행 창: 블루투스 → 수신기 데이터 → VRS 접속 → 보정 수신 → 고정. 닫아도 연결은 계속된다 */
+@Composable
+private fun ConnectionProgress(c: SurveyController, cc: ConnectionController, link: kr.archsurvey.device.LinkStatus, ntrip: kr.archsurvey.engine.NtripStatus) {
+    val states = ConnectSteps.compute(link, ntrip, cc.form.enabled, c.gv.quality.code)
+    val details = listOf(
+        link.message.ifBlank { null }?.takeIf { states[0] != StepState.DONE },
+        null,
+        if (cc.form.enabled) "${cc.form.host}:${cc.form.port} · ${cc.form.mount}" else null,
+        null,
+        "지금: ${c.gv.quality.labelKo} · 위성 ${c.gv.satellites}개",
+    )
+    val steps = ConnectSteps.labels.mapIndexed { i, l -> StepView(l, states[i], details[i]) }
+    val sec = rememberElapsedSec(cc.progressStartMs)
+    val card = ErrorCards.from(link, ntrip, cc.form.enabled).firstOrNull()
+    val done = states.last() == StepState.DONE
+    ProgressWindow(
+        if (done) "연결 완료 · 고정됨" else "연결 중", steps, sec, "conn_progress",
+        note = card?.let { "${it.title} (${it.code}) — ${it.action}" } ?: if (done) "측량할 준비가 됐어요." else "닫아도 연결은 계속돼요. 상태 띠에서 진행을 볼 수 있어요.",
+    ) {
+        if (!done) MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_progress_cancel"), MKind.PLAIN, 16.dp, onClick = { cc.disconnect() }) { Text("연결 취소", style = Ty.label, color = T.ink) }
+        MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_progress_close"), MKind.PRIMARY, 16.dp, onClick = { cc.showProgress = false; if (done) cc.close() }) {
+            Text(if (done) "확인" else "닫기(계속 연결)", style = Ty.label, color = T.onPrimary)
+        }
+    }
+}
+
+/** 마운트 선택 창: 서버의 소스테이블을 받아 검색·선택. 실패하면 알려진 목록 + 직접 입력 */
+@Composable
+private fun MountPicker(cc: ConnectionController) {
+    val t = T
+    Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().background(t.scrim).clickable { cc.closeMountPicker() })
+        val shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        Column(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.9f).clip(shape).background(t.bg).border(1.dp, t.line, shape)
+                .padding(horizontal = 16.dp, vertical = 16.dp).testTag("mount_picker"),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("마운트 포인트 선택", style = Ty.title, color = t.ink, modifier = Modifier.weight(1f))
+                MBtn(Modifier.size(48.dp).testTag("mount_close"), MKind.PLAIN, 16.dp, onClick = { cc.closeMountPicker() }) { Text("✕", style = Ty.label, color = t.ink) }
+            }
+            Text("${cc.form.host}:${cc.form.port}", style = Ty.small, color = t.inkSub)
+            when (cc.mountLoad) {
+                MountLoad.LOADING -> {
+                    val sec = rememberElapsedSec(cc.mountStartMs)
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(t.card).border(1.dp, t.line, RoundedCornerShape(16.dp)).padding(16.dp).testTag("mount_loading"),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("서버에서 마운트 목록을 받는 중 · ${sec}초", style = Ty.label, color = t.ink)
+                            Text("보통 몇 초 걸려요(최대 15초)", style = Ty.small, color = t.inkSub)
+                        }
+                        Btn("취소", Modifier.testTag("mount_cancel")) { cc.cancelMountLoad() }
+                    }
+                }
+                MountLoad.FAILED -> Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(t.bad.copy(alpha = 0.08f)).border(1.dp, t.bad.copy(alpha = 0.6f), RoundedCornerShape(16.dp)).padding(12.dp).testTag("mount_failed"),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text("목록을 받지 못했어요", style = Ty.label, color = t.ink)
+                    Text(cc.mountError, style = Ty.small, color = t.ink, maxLines = 3)
+                    if (cc.mounts.isNotEmpty()) Text("아래는 알려진 목록이에요. " + KnownMounts.SOURCE, style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("mount_known_note"))
+                    else Text("이 서버의 알려진 목록이 없어요. 아래에 이름을 직접 입력하세요.", style = Ty.small, color = t.inkSub)
+                    Btn("다시 받기", Modifier.testTag("mount_retry")) { cc.loadMounts() }
+                }
+                MountLoad.OK -> Text("서버 목록 ${cc.mounts.size}개 · 받은 그대로 보여 줘요", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("mount_ok"))
+                MountLoad.IDLE -> {}
+            }
+            if (cc.mounts.isNotEmpty()) Field("검색", cc.mountQuery, "mount_search") { cc.mountQuery = it }
+            val list = cc.filteredMounts()
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (m in list) {
+                    val on = m.mountPoint == cc.form.mount
+                    Column(
+                        Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(16.dp)).background(if (on) t.primaryCont else t.bg)
+                            .border(if (on) 1.5.dp else 1.dp, if (on) t.accent else t.line, RoundedCornerShape(16.dp)).clickable { cc.pickMount(m.mountPoint) }
+                            .padding(horizontal = 16.dp, vertical = 8.dp).testTag("mount_item_${m.mountPoint}"),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(m.mountPoint, style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.weight(1f))
+                            if (on) Text("선택됨", style = Ty.label.copy(fontSize = 12.sp), color = t.accentText)
+                        }
+                        Text(mountLine(m, cc.mountFromKnown), style = Ty.small, color = t.inkSub, maxLines = 2)
+                    }
+                }
+                if (cc.mounts.isNotEmpty() && list.isEmpty()) Text("‘${cc.mountQuery}’와 맞는 마운트가 없어요", style = Ty.small, color = t.inkSub)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { Field("직접 입력", cc.mountManual, "mount_manual") { cc.mountManual = it } }
+                MBtn(Modifier.height(48.dp).testTag("mount_apply"), MKind.PRIMARY, 16.dp, onClick = { cc.pickMount(cc.mountManual) }) {
+                    Text("적용", style = Ty.label, color = t.onPrimary, modifier = Modifier.padding(horizontal = 12.dp))
+                }
+            }
+        }
+    }
+}
+
+private fun mountLine(m: kr.archsurvey.ntrip.MountInfo, known: Boolean): String = buildList {
+    add(m.format.ifBlank { "형식 미상" } + (m.formatDetails.takeIf { it.isNotBlank() && !known }?.let { " ($it)" } ?: ""))
+    if (m.navSystem.isNotBlank() && !known) add(m.navSystem)
+    add(if (m.needsNmea) "VRS·내 위치 필요" else "고정 기준국")
+    if (m.lat != null && m.lon != null && !(m.lat == 0.0 && m.lon == 0.0)) add(String.format(java.util.Locale.US, "%.3f, %.3f", m.lat, m.lon))
+    if (known) add(m.identifier) else if (m.identifier.isNotBlank()) add(m.identifier)
+    when (m.authentication) { "B" -> add("인증 Basic"); "D" -> add("인증 Digest"); "N" -> add("인증 없음") }
+}.joinToString(" · ")
 
 @Composable
 private fun AlertStrip(card: ErrorCard, onClick: () -> Unit) {
@@ -141,21 +254,32 @@ fun ConnectionScreen(cc: ConnectionController) {
                     Switch(cc.form.enabled, { cc.updateForm(cc.form.copy(enabled = it)) }, modifier = Modifier.testTag("conn_ntrip_switch"))
                 }
                 if (cc.form.enabled) {
+                    // SmartTopo 흐름: 보정 서비스 → 계정 → 마운트(목록 받기·검색·선택)
+                    SelectRow("보정 서비스", cc.currentService().short, false, "conn_service") { cc.askService() }
                     Field("아이디 (통합회원 ID)", cc.form.user, "conn_user") { cc.updateForm(cc.form.copy(user = it)) }
                     Field("비밀번호", cc.form.password, "conn_pw", KeyboardType.Password, hide = true) { cc.updateForm(cc.form.copy(password = it)) }
-                    Text("국토지리정보원 VRS는 2025년 8월부터 ‘측위보정정보 통합회원 ID’(지각변동감시시스템에서 등록)를 쓴다고 알려져 있어요. 공식 공지 원문은 확인하지 못했어요.", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("conn_id_help"))
-                    FoldRow("서버 설정 · ${cc.form.host}:${cc.form.port} · ${cc.form.mount}", cc.showServer, "conn_server_toggle") { cc.showServer = !cc.showServer }
+                    SelectRow("마운트 포인트", cc.form.mount.ifBlank { "눌러서 목록 받기" }, false, "conn_mount_pick") { cc.openMountPicker() }
+                    Text("마운트 줄을 누르면 서버에서 전체 목록을 받아 고를 수 있어요(아이디·비밀번호를 먼저 넣으세요). 국토지리정보원 VRS는 2025년 8월부터 ‘측위보정정보 통합회원 ID’를 쓴다고 알려져 있어요 — 공식 공지 원문은 확인하지 못했어요.", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("conn_id_help"))
+                    FoldRow("고급 · 서버 주소·포트 직접 입력 · ${cc.form.host}:${cc.form.port}", cc.showServer, "conn_server_toggle") { cc.showServer = !cc.showServer }
                     if (cc.showServer) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Btn("VRS 기본값", Modifier.weight(1f)) { val v = NtripPresets.VRS; cc.updateForm(cc.form.copy(host = v.host, port = v.port.toString(), mount = v.mountPoint)) }
-                            Btn("FKP 기본값", Modifier.weight(1f)) { val v = NtripPresets.FKP; cc.updateForm(cc.form.copy(host = v.host, port = v.port.toString(), mount = v.mountPoint)) }
-                        }
                         Field("서버 주소", cc.form.host, "conn_host") { cc.updateForm(cc.form.copy(host = it)) }
                         Field("포트", cc.form.port, "conn_port", KeyboardType.Number) { cc.updateForm(cc.form.copy(port = it.filter { ch -> ch.isDigit() }.take(5))) }
                         Field("마운트 포인트", cc.form.mount, "conn_mount") { cc.updateForm(cc.form.copy(mount = it)) }
+                        Btn("이 서버의 마지막 성공 설정 불러오기", Modifier.fillMaxWidth().testTag("conn_recall")) { cc.recallHost() }
                         Text("서버·마운트 기본값은 국토지리정보원 공개 안내(2022-05) 기준이에요. 현행 정책은 첫 접속 때 확인이 필요해요.", style = Ty.small, color = t.inkSub)
                     }
                 }
+            }
+            // 4. 다음 실행 때 자동 연결
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(16.dp)).background(t.raised).border(1.dp, t.outline, RoundedCornerShape(16.dp)).padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("다음 실행 때 자동 연결", style = Ty.label, color = t.ink)
+                    Text("한 번 연결에 성공하면 수신기·VRS 설정을 저장하고, 앱을 열 때 바로 연결해요", style = Ty.small, color = t.inkSub)
+                }
+                Switch(cc.autoConnect, { cc.changeAutoConnect(it) }, modifier = Modifier.testTag("conn_auto"))
             }
             Spacer(Modifier.height(8.dp))
         }
