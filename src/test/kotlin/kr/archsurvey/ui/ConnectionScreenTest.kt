@@ -30,7 +30,7 @@ import java.io.FileOutputStream
 @Config(sdk = [34], qualifiers = "w360dp-h800dp-notnight-xxhdpi")
 class ConnectionScreenTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
-    private val out = File("../build-reports/conn").apply { mkdirs() }
+    private val out = File(REPORTS_ROOT + "/conn").apply { mkdirs() }
     private val db = AntennaDb.parse(File("src/main/assets/antenna_db.json").readText())
 
     private class P : ConnectionPlatform {

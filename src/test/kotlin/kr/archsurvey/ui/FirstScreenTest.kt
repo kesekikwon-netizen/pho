@@ -27,7 +27,7 @@ import java.io.FileOutputStream
 @Config(sdk = [34], qualifiers = "w360dp-h800dp-notnight-xxhdpi")
 class FirstScreenTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
-    private val out = File("../build-reports/real").apply { mkdirs() }
+    private val out = File(REPORTS_ROOT + "/real").apply { mkdirs() }
     private val db = AntennaDb.parse(File("src/main/assets/antenna_db.json").readText())
 
     private class Stub : GnssSource {
@@ -75,8 +75,8 @@ class FirstScreenTest {
         rule.onNodeWithTag("not_connected_card").assertDoesNotExist()
         rule.onNodeWithTag("status_main").assertTextContains("측량 가능", substring = true); rule.onNodeWithTag("status_band").assertExists()
         rule.onNodeWithTag("status_detail").assertTextContains("위성 21", substring = true)
-        rule.onNodeWithTag("status_detail").assertTextContains("수평 ±0.8cm", substring = true)
-        rule.onNodeWithTag("status_detail").assertTextContains("수직 ±1.2cm", substring = true)
+        rule.onNodeWithTag("status_detail").assertTextContains("H ±0.8cm", substring = true)
+        rule.onNodeWithTag("status_detail").assertTextContains("V ±1.2cm", substring = true)
         rule.onNodeWithTag("status_detail").assertTextContains("RTK 고정", substring = true)
         shot("r3_streaming")
     }

@@ -77,10 +77,10 @@ fun SurveyMapScreen(
 
 private fun cm1(m: Double) = String.format(java.util.Locale.US, "%.1f", m * 100.0)
 
-/** 상태 띠 셋째 줄: Fix 종류 · 위성 수 · 수평/수직 정확도(cm). 값이 없으면 "—" */
+/** 상태 띠 셋째 줄: 위성 수 · 수평/수직 정확도(cm). 값이 없으면 "—" */
 internal fun bandDetail(c: SurveyController): String {
     val g = c.gv
-    return "${g.quality.labelKo} · 위성 ${g.satellites}" + " · 수평 " + (g.status.sigmaHM?.let { "±${cm1(it)}cm" } ?: "—") + " · 수직 " + (g.sigmaVM?.let { "±${cm1(it)}cm" } ?: "—")
+    return "위성 ${g.satellites}" + " · H " + (g.status.sigmaHM?.let { "±${cm1(it)}cm" } ?: "—") + " · V " + (g.sigmaVM?.let { "±${cm1(it)}cm" } ?: "—")
 }
 
 /** 수신기가 연결되지 않았을 때 지도 가운데에 뜨는 안내 카드 */
@@ -203,6 +203,7 @@ private fun ResultStrip(c: SurveyController) {
         Modifier.fillMaxSize().clickable { c.toggleExpand() }.padding(horizontal = 12.dp).testTag("result_strip"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        Box(Modifier.width(6.dp).height(32.dp).clip(RoundedCornerShape(3.dp)).background(bg))   // 상태색 막대(칩과 같은 색)
         Text(p.name, style = Ty.coord.copy(fontSize = 20.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_name"))
         Text("${p.type} · 저장됨 ±${p.sigmaHM?.let { f3(it) } ?: "—"} m", style = Ty.small, color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("result_h"))
         Row(
@@ -251,7 +252,7 @@ private fun ResultPanel(c: SurveyController) {
         }
         Spacer(Modifier.height(4.dp))
         Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MBtn(Modifier.height(44.dp).testTag("photo_count_btn"), MKind.PLAIN, 16.dp, onClick = { if (c.photos.size < MediaLimits.PHOTOS) c.addPhotoCamera() else c.toggleExpand() }) {
+            MBtn(Modifier.height(48.dp).testTag("photo_count_btn"), MKind.PLAIN, 16.dp, onClick = { if (c.photos.size < MediaLimits.PHOTOS) c.addPhotoCamera() else c.toggleExpand() }) {
                 Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     GlyphIcon(Glyph.CAMERA, t.accent, 18.dp)
                     Text("사진", style = Ty.label, color = t.ink)
@@ -275,7 +276,7 @@ private fun ResultPanel(c: SurveyController) {
                     }
                 }
             }
-            MBtn(Modifier.width(52.dp).height(44.dp).testTag("undo_button"), MKind.PLAIN, 14.dp, onClick = { c.undo() }) { GlyphIcon(Glyph.UNDO, t.accent, 20.dp) }
+            MBtn(Modifier.width(52.dp).height(48.dp).testTag("undo_button"), MKind.PLAIN, 14.dp, onClick = { c.undo() }) { GlyphIcon(Glyph.UNDO, t.accent, 20.dp) }
         }
     }
 }

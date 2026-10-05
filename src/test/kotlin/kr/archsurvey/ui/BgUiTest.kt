@@ -31,7 +31,7 @@ import org.junit.rules.TemporaryFolder
 class BgUiTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
     @get:Rule val tmp = TemporaryFolder()
-    private val out = File("../build-reports/bg").apply { mkdirs() }
+    private val out = File(REPORTS_ROOT + "/bg").apply { mkdirs() }
     private val db = AntennaDb.parse(File("src/main/assets/antenna_db.json").readText())
 
     class MemPoints : PointStore {

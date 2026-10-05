@@ -25,7 +25,7 @@ import java.io.FileOutputStream
 @Config(sdk = [34], qualifiers = "w360dp-h800dp-notnight-xxhdpi")
 class ToolScreensTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
-    private val out = File("../build-reports/tools").apply { mkdirs() }
+    private val out = File(REPORTS_ROOT + "/tools").apply { mkdirs() }
     private val db = AntennaDb.parse(File("src/main/assets/antenna_db.json").readText())
 
     private class Store : PointStore {

@@ -34,7 +34,7 @@ import java.io.FileOutputStream
 class SurveyScreenshotTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
 
-    private val out = File("../build-reports").apply { mkdirs() }
+    private val out = File(REPORTS_ROOT).apply { mkdirs() }
     private val db = AntennaDb.parse(File("src/main/assets/antenna_db.json").readText())
 
     private fun make(scn: FakeScenario = FakeScenarios.fieldWalk(), poleRight: Boolean = true): Pair<FakeGnssSource, SurveyController> {

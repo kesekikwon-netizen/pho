@@ -25,7 +25,7 @@ import java.io.FileOutputStream
 @Config(sdk = [34], qualifiers = "xxhdpi")
 class IconRenderTest {
     private val ctx: Context = ApplicationProvider.getApplicationContext()
-    private val out = File("../build-reports/icon").apply { mkdirs() }
+    private val out = File(REPORTS_ROOT + "/icon").apply { mkdirs() }
     private val PX = 10f // 1dp = 10px -> 108dp = 1080px
 
     private fun drawable(id: Int): Drawable = ContextCompat.getDrawable(ctx, id)!!.mutate()

@@ -1,5 +1,6 @@
 package kr.archsurvey
 
+import kr.archsurvey.ui.REPORTS_ROOT
 import kr.archsurvey.core.KoreanTmZone
 import kr.archsurvey.core.TmProjection
 import kr.archsurvey.georef.*
@@ -18,7 +19,7 @@ import kotlin.math.sin
 private val RES = File("src/test/resources/georef")
 private fun res(n: String) = File(RES, n)
 private fun json(n: String) = res(n).readText()
-private val REPORT = File("../build-reports/georef").apply { mkdirs() }
+private val REPORT = File(REPORTS_ROOT + "/georef").apply { mkdirs() }
 
 private fun metersBetween(a: LonLat, b: LonLat) = haversineKm(a, b) * 1000.0
 

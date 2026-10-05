@@ -194,7 +194,7 @@ internal fun QuickSheet(c: SurveyController) {
             androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 c.types.forEachIndexed { i, name ->
                     val on = i == c.typeIndex
-                    MBtn(Modifier.height(44.dp).testTag("quick_type_$i"), if (on) MKind.SELECTED else MKind.PLAIN, 16.dp, onClick = { c.typeIndex = i; close() }) {
+                    MBtn(Modifier.height(48.dp).testTag("quick_type_$i"), if (on) MKind.SELECTED else MKind.PLAIN, 16.dp, onClick = { c.typeIndex = i; close() }) {
                         Text(name, style = Ty.label, color = t.ink, modifier = Modifier.padding(horizontal = 14.dp), maxLines = 1)
                     }
                 }
