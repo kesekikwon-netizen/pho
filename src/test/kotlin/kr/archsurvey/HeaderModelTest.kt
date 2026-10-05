@@ -70,15 +70,15 @@ class HeaderModelTest {
         assertEquals("버전 확인 불가", versionShort("버전 확인 불가"))
     }
 
-    @Test fun versionIs0_1_11Build12() {
+    @Test fun versionIs0_1_12Build13() {
         val g = File("build.gradle.kts").readText()
-        assertTrue(g.contains("versionCode = 12")); assertTrue(g.contains("versionName = \"0.1.11\""))
+        assertTrue(g.contains("versionCode = 13")); assertTrue(g.contains("versionName = \"0.1.12\""))
     }
 
     /** 고고학 발굴 용어만: 새 화면에 토목·건설 용어가 없어야 한다 */
     @Test fun noCivilTermsInNewScreens() {
         val forbidden = listOf("성토", "절토", "시공", "준공", "검측", "측설", "노선", "도로", "정지측량", "드론")
-        for (f in listOf("HomeScreen.kt", "AppHeader.kt", "HeaderModel.kt", "MapChrome.kt", "ConnectionScreen.kt")) {
+        for (f in listOf("HomeScreen.kt", "AppHeader.kt", "HeaderModel.kt", "MapChrome.kt", "ConnectionScreen.kt", "VWorldScreen.kt")) {
             val src = File("src/main/kotlin/kr/archsurvey/ui/$f").readText()
             for (w in forbidden) assertFalse("$f 에 '$w'", src.contains(w))
             assertFalse("$f 에 자리표시자", src.contains("[앱 이름]") || src.contains("[버전"))

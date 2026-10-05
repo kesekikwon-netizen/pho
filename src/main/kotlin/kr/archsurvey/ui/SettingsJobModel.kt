@@ -33,12 +33,20 @@ class SettingsState(private val c: SurveyController, private val p: SettingsPlat
 
     init { c.zone = p.zone; c.poleOnRight = p.poleRight; c.epochs = p.epochs.coerceIn(1, 30) }
 
-    fun setEpochs(n: Int) { val v = n.coerceIn(1, 30); c.epochs = v; p.epochs = v; c.ui.toast("측정 횟수 ${v}회로 저장됨 · 다음 측점부터") }
+    fun setEpochs(n: Int) { val v = n.coerceIn(1, 30); c.epochs = v; p.epochs = v; c.jobConfigChanged(); c.ui.toast("측정 횟수 ${v}회로 저장됨 · 다음 측점부터") }
     fun openCrash() { crashText = p.crashLog(); showCrash = true }
     fun shareCrash() = p.shareCrashLog()
     fun clearCrash() { p.clearCrashLog(); crashText = ""; c.ui.toast("오류 기록을 지웠어요") }
 
-    fun setZone(z: KoreanTmZone) { c.zone = z; p.zone = z; c.ui.toast("좌표 원점 저장됨 · ${z.labelKo}") }
+    /** 0.1.12: 작업의 좌표계(지역). 다른 좌표계로 저장된 점이 있으면 바꾸지 않는다(한 작업에 좌표계가 섞이지 않게) */
+    fun setZone(z: KoreanTmZone): Boolean {
+        if (z == c.zone) return true
+        c.zoneChangeProblem(z)?.let { c.ui.toast(it); return false }
+        c.zone = z; p.zone = z; c.jobConfigChanged(); c.ui.toast("좌표계 저장됨 · ${z.labelKo} · 이 작업에 적용")
+        return true
+    }
+    /** 작업을 바꿔 좌표계가 바뀌었을 때 전역 기본값도 맞춤(다른 화면이 읽는 값) */
+    fun syncZone() { p.zone = c.zone; p.epochs = c.epochs }
     fun setPoleRight(v: Boolean) { c.poleOnRight = v; p.poleRight = v }
     fun changeSound(v: Boolean) { sound = v; p.sound = v }
     fun changeVibration(v: Boolean) { vibration = v; p.vibration = v }
@@ -76,7 +84,38 @@ object JobNames {
     }
 }
 
-class JobController(private val c: SurveyController, private val platform: JobPlatform, private val scope: CoroutineScope) {
+class JobController(
+    private val c: SurveyController, private val platform: JobPlatform, private val scope: CoroutineScope,
+    /** 0.1.12 작업별 설정 저장소 */
+    private val configs: JobConfigPlatform = MemoryJobConfigPlatform(),
+) {
+    // 0.1.12 작업 정보 확인 / 새 작업 창(SmartTopo 와 같은 순서: 작업명·좌표계·지역·배경맵·Geoid)
+    var formZone by mutableStateOf(c.zone)
+    var formGeoid by mutableStateOf(c.geoid)
+    var formMap by mutableStateOf(c.mapBase)
+
+    private fun loadForm() { formZone = c.zone; formGeoid = c.geoid; formMap = c.mapBase }
+
+    /** 「자동」: 수신기 위치 경도로 지역 고르기. 위치가 없으면 안내만 */
+    fun autoZone() {
+        val z = ZoneAuto.fromLon(c.gv.lon)
+        if (z == null) { c.ui.toast("수신기 위치가 없어 자동으로 고를 수 없어요. 직접 고르세요."); return }
+        formZone = z; c.ui.toast("현재 위치(경도 ${String.format(java.util.Locale.US, "%.2f", c.gv.lon)}) → ${z.labelKo}")
+    }
+
+    /** 작업 정보 확인 → 적용. 좌표계는 다른 좌표계로 저장된 점이 있으면 바꾸지 않는다 */
+    fun applyInfo() {
+        error = null
+        if (formZone != c.zone) {
+            val prob = c.zoneChangeProblem(formZone)
+            if (prob != null) { error = prob; formZone = c.zone; return }
+            c.settingsState?.setZone(formZone) ?: run { c.zone = formZone }
+        }
+        c.geoid = formGeoid; c.mapBase = formMap
+        c.jobConfigChanged()
+        notice = "작업 설정을 적용했어요 · ${formZone.labelKo} · Geoid ${formGeoid.shortKo} · 배경맵 ${formMap.labelKo}"
+    }
+
     var current by mutableStateOf(platform.current); private set
     var list by mutableStateOf<List<JobInfo>>(emptyList()); private set
     var info by mutableStateOf<JobInfo?>(null); private set
@@ -94,9 +133,10 @@ class JobController(private val c: SurveyController, private val platform: JobPl
         }
     }
 
-    fun openInfo() { error = null; notice = null; c.hub.open(ToolScreen.JOB_INFO); refresh() }
+    fun openInfo() { error = null; notice = null; loadForm(); c.hub.open(ToolScreen.JOB_INFO); refresh() }
     fun openList() { error = null; notice = null; c.hub.open(ToolScreen.JOB_OPEN); refresh() }
-    fun openNew() { error = null; notice = null; newName = ""; c.hub.open(ToolScreen.JOB_NEW); refresh() }
+    /** 새 작업: 이름 + 좌표계·지역·배경맵·Geoid 를 한 화면에서. 기본값 = 지금 작업 값(마지막 사용값) */
+    fun openNew() { error = null; notice = null; newName = ""; loadForm(); c.hub.open(ToolScreen.JOB_NEW); refresh() }
 
     private fun run(label: String, block: suspend () -> Unit) {
         if (busy) return
@@ -114,8 +154,10 @@ class JobController(private val c: SurveyController, private val platform: JobPl
         val prob = JobNames.problem(newName, list.map { it.name })
         if (prob != null) { error = prob; return }
         val n = newName.trim()
+        val cfg = c.jobConfig().copy(epsg = formZone.epsg, geoid = formGeoid, mapBase = formMap)
         run("새 작업") {
             platform.create(n)
+            configs.save(n, cfg)
             switched(n)
             notice = "‘$n’ 작업을 만들고 열었어요"
             c.hub.open(ToolScreen.JOB_INFO)
@@ -133,6 +175,7 @@ class JobController(private val c: SurveyController, private val platform: JobPl
         confirmDelete = null
         run("작업 삭제") {
             val backupName = platform.delete(j.name)
+            configs.delete(j.name)
             if (j.name == current) switched(platform.current)
             notice = "‘${j.name}’ 작업을 지웠어요. 지우기 직전 상태는 백업 ($backupName) 에 있어요."
             refresh()
@@ -142,6 +185,10 @@ class JobController(private val c: SurveyController, private val platform: JobPl
     private suspend fun switched(name: String) {
         current = name
         c.projectName = name
+        // 0.1.12: 그 작업의 설정(좌표계·지오이드·배경맵·안테나)으로 화면을 맞춘다. 저장된 게 없으면 지금 값을 그 작업 것으로 저장
+        val cfg = configs.load(name)
+        if (cfg != null) { c.applyJobConfig(cfg); c.settingsState?.syncZone() } else configs.save(name, c.jobConfig())
+        loadForm()
         c.reloadFromStore()
         list = runCatching { platform.list() }.getOrDefault(list)
         info = runCatching { platform.info(name) }.getOrNull()

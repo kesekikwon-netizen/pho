@@ -40,6 +40,8 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
             fun sx(x: Double) = cx + ((x - state.center.x) * ppm).toFloat()
             fun sy(y: Double) = cy - ((y - state.center.y) * ppm).toFloat()
             if (showBackdrop) drawRect(t.mapBg, size = size)
+            // 0.1.12 V월드 배경(위성/일반지도) + 지적선. 타일이 오면 TileImages.version 이 바뀌어 다시 그린다
+            if (state.tiles.isNotEmpty() && state.geo != null) { TileImages.version; drawTiles(state, ppm, ::sx, ::sy) }
             // 업로드 배경(도면): 투명도는 레이어 슬라이더 값. 윤곽 + 옅은 면 + 격자 느낌의 대각선
             for (bgl in state.backgrounds) {
                 if (bgl.polygon.size < 3) continue
@@ -124,6 +126,33 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
                         drawPath(tri, t.ink)
                     }
                 }
+            }
+        }
+    }
+
+    /** 웹 메르카토르 타일을 작업 평면(등장방형 근사)에 놓는다. 수 km 안에서는 어긋남이 화면 1 px 미만 [가설: 실기기 미확인] */
+    private fun DrawScope.drawTiles(s: MapViewState, ppm: Float, sx: (Double) -> Float, sy: (Double) -> Float) {
+        val geo = s.geo ?: return
+        val halfW = size.width / 2.0 / ppm; val halfH = size.height / 2.0 / ppm
+        val corners = listOf(LocalXY(s.center.x - halfW, s.center.y - halfH), LocalXY(s.center.x + halfW, s.center.y + halfH),
+            LocalXY(s.center.x - halfW, s.center.y + halfH), LocalXY(s.center.x + halfW, s.center.y - halfH)).map { geo.toLatLon(it) }
+        val latMin = corners.minOf { it.first }; val latMax = corners.maxOf { it.first }
+        val lonMin = corners.minOf { it.second }; val lonMax = corners.maxOf { it.second }
+        val z = MapLayers.zoomFor(ppm.toDouble(), (latMin + latMax) / 2)
+        val x0 = TileMath.tileIndex(TileMath.lonToX(lonMin, z)); val x1 = TileMath.tileIndex(TileMath.lonToX(lonMax, z))
+        val y0 = TileMath.tileIndex(TileMath.latToY(latMax, z)); val y1 = TileMath.tileIndex(TileMath.latToY(latMin, z))
+        if ((x1 - x0 + 1) * (y1 - y0 + 1) > 64) return
+        for (layer in s.tiles) {
+            if (layer.id == "cad" && z < MapLayers.CADASTRAL_MIN_ZOOM) continue
+            for (ty in y0..y1) for (tx in x0..x1) {
+                val img = TileImages.get(layer.urlOf(z, tx, ty)) ?: continue
+                val tl = geo.toLocal(TileMath.yToLat(ty * 256.0, z), TileMath.xToLon(tx * 256.0, z))
+                val br = geo.toLocal(TileMath.yToLat((ty + 1) * 256.0, z), TileMath.xToLon((tx + 1) * 256.0, z))
+                val l = kotlin.math.floor(sx(tl.x)).toInt(); val tp = kotlin.math.floor(sy(tl.y)).toInt()
+                val r = kotlin.math.ceil(sx(br.x)).toInt(); val b = kotlin.math.ceil(sy(br.y)).toInt()
+                if (r <= l || b <= tp) continue
+                drawImage(img, srcOffset = androidx.compose.ui.unit.IntOffset.Zero, srcSize = androidx.compose.ui.unit.IntSize(img.width, img.height),
+                    dstOffset = androidx.compose.ui.unit.IntOffset(l, tp), dstSize = androidx.compose.ui.unit.IntSize(r - l, b - tp), alpha = layer.alpha)
             }
         }
     }

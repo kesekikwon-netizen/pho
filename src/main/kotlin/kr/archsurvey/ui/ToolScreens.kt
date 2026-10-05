@@ -41,6 +41,7 @@ fun ToolHost(c: SurveyController) {
         ToolScreen.AREAS -> AreasScreen(c)
         ToolScreen.GRID_WIZ -> GridWizardScreen(c)
         ToolScreen.TYPES -> TypesScreen(c)
+        ToolScreen.VWORLD -> VWorldScreen(c)
         null -> {}
     }
 }
@@ -131,7 +132,7 @@ fun PointDetailScreen(c: SurveyController) {
         Text("좌표·높이는 바꿀 수 없어요. 잘못 쟀다면 다시 측점하세요.", style = Ty.small, color = t.inkSub)
         Text(
             "${if (p.status == SurveyStatus.FIXED) "고정" else "주의"}${p.sigmaHM?.let { " ±${f3(it)} m" } ?: ""} · 위성 ${p.satellites} · ${p.epochs}회 평균 · EPSG:${p.crsEpsg}" +
-                (p.groundMslM?.let { " · 표고 ${f3(it)} m" } ?: "") + (if (p.measuredAtMs > 0) "\n" + SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(p.measuredAtMs)) else "") + averagingLine(p),
+                (p.groundMslM?.let { " · 표고 ${f3(it)} m (" + kr.archsurvey.core.GeoidModel.fromId(p.heightModel.ifEmpty { null }).shortKo + ")" } ?: "") + (if (p.measuredAtMs > 0) "\n" + SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(p.measuredAtMs)) else "") + averagingLine(p),
             style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("detail_info"),
         )
         if (p.samples.isNotEmpty()) SamplesCard(p)
@@ -316,10 +317,16 @@ fun SettingsScreen(c: SurveyController) {
     ToolScaffold("설정", "settings_screen", onBack = { h.back() }) {
         if (st == null) { Text("설정을 불러올 수 없어요", style = Ty.body, color = t.inkSub); return@ToolScaffold }
         val zones = kr.archsurvey.core.KoreanTmZone.entries
-        SelectRow("좌표 원점", c.zone.labelKo, false, "zone_toggle") {
-            c.ui.choose(ChoiceRequest("좌표 원점", zones.map { it.labelKo }, zones.indexOf(c.zone), "zone",
-                "새로 측점하는 점부터 적용돼요. 대부분의 중부 지역은 중부원점(5186)이에요.") { st.setZone(zones[it]) })
+        SelectRow("지역(좌표계)", c.zone.labelKo, false, "zone_toggle") {
+            c.ui.choose(ChoiceRequest("지역 · 좌표계 (GRS80 TM)", zones.map { it.labelKo }, zones.indexOf(c.zone), "zone",
+                "지금 작업에 저장돼요. 중부 127°E(5186) · 동부 129°E(5187, 경북·경남 동부). 다른 좌표계로 저장된 점이 있으면 바꿀 수 없어요.") { st.setZone(zones[it]) })
         }
+        val geoids = kr.archsurvey.core.GeoidModel.entries
+        SelectRow("Geoid", c.geoid.labelKo, false, "geoid_toggle") {
+            c.ui.choose(ChoiceRequest("Geoid (표고 모델)", geoids.map { it.labelKo }, geoids.indexOf(c.geoid), "geoid",
+                "지금 작업에 저장되고 새 점부터 적용돼요. KNGeoid18은 격자 파일이 없어 아직 지원하지 않아요.") { c.changeGeoid(geoids[it]) })
+        }
+        SelectRow("배경맵", c.mapBase.labelKo, false, "mapbase_toggle") { c.hub.open(ToolScreen.VWORLD); c.vworld.load() }
         val counts = listOf(1, 3, 5, 10)
         SelectRow("측정 횟수", "${c.epochs}회 평균", false, "epochs_toggle") {
             c.ui.choose(ChoiceRequest("한 점 측정 횟수", counts.map { "${it}회" + if (it == 3) " (기본)" else "" }, counts.indexOf(c.epochs), "epochs",
@@ -401,24 +408,34 @@ private fun ToggleRow(label: String, value: Boolean, tag: String, onChange: (Boo
 
 // ---------------- 작업 관리 ----------------
 
+/**
+ * 0.1.12 작업 정보 확인 / 새 작업: SmartTopo 2024 「작업 정보 확인」과 같은 배치(구조만) —
+ * 위에서부터 작업명 · 좌표계 · 지역 · 배경맵 · Geoid, 각 줄 오른쪽 ›, 아래 고정 「나가기 | 적용」.
+ * 색·글꼴·아이콘은 이 앱 것(아이보리·검정). 작업 열기·삭제 목록은 그대로.
+ */
 @Composable
 fun JobScreen(c: SurveyController) {
     val t = T; val h = c.hub
     val jc = c.jobs
     if (jc == null) { Box(Modifier.fillMaxSize().background(t.bg)) { Text("작업 관리를 쓸 수 없어요", style = Ty.body, color = t.inkSub, modifier = Modifier.padding(24.dp)) }; return }
-    val title = when (h.screen) { ToolScreen.JOB_NEW -> "새 작업 만들기"; ToolScreen.JOB_OPEN -> "작업 열기 · 삭제"; else -> "작업 정보" }
+    val title = when (h.screen) { ToolScreen.JOB_NEW -> "새 작업"; ToolScreen.JOB_OPEN -> "작업 열기 · 삭제"; else -> "작업 정보 확인" }
     ToolScaffold(title, "job_screen", onBack = { h.back() }, bottom = {
-        if (h.screen == ToolScreen.JOB_NEW) PrimaryBar(if (jc.busy) "만드는 중…" else "만들고 열기", "job_create", enabled = !jc.busy) { jc.create() }
+        when (h.screen) {
+            ToolScreen.JOB_NEW -> DualBar("나가기", "job_exit", { h.back() }, if (jc.busy) "만드는 중…" else "만들기", "job_create", !jc.busy) { jc.create() }
+            ToolScreen.JOB_INFO -> DualBar("나가기", "job_exit", { h.back() }, "적용", "job_apply", !jc.busy) { jc.applyInfo() }
+            else -> {}
+        }
     }) {
         jc.notice?.let { Text(it, style = Ty.body, color = t.ink, modifier = Modifier.testTag("job_notice")) }
-        jc.error?.let { ErrorCardView(ErrorCard("-", it, "이름을 바꾸거나 다시 시도하세요.", false), "job_error") }
+        jc.error?.let { ErrorCardView(ErrorCard("-", it, "이름이나 값을 바꾸거나 다시 시도하세요.", false), "job_error") }
         when (h.screen) {
             ToolScreen.JOB_NEW -> {
-                Card {
-                    Text("작업 이름", style = Ty.label, color = t.ink)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("작업명", style = Ty.small, color = t.inkSub)
                     OutlinedTextField(jc.newName, { jc.newName = it }, singleLine = true, label = { Text("예) 3지구-A트렌치") }, modifier = Modifier.fillMaxWidth().testTag("job_name"))
-                    Text("새 작업은 점 번호가 P-0001부터 다시 시작해요. 이전 작업의 점은 그대로 있어요.", style = Ty.small, color = t.inkSub)
                 }
+                JobConfigRows(c, jc, editableZone = true)
+                Text("새 작업은 점 번호가 P-0001부터 다시 시작해요. 이전 작업의 점은 그대로 있어요. 기본값은 지금 작업의 설정이에요.", style = Ty.small, color = t.inkSub)
             }
             ToolScreen.JOB_OPEN -> {
                 Text("열려 있는 작업: ${jc.current}", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("job_current"))
@@ -436,16 +453,20 @@ fun JobScreen(c: SurveyController) {
             }
             else -> {
                 val i = jc.info
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("작업명", style = Ty.small, color = t.inkSub)
+                    Text(jc.current, style = Ty.title, color = t.inkSub, modifier = Modifier.testTag("job_info_name"))
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(t.line))
+                }
+                JobConfigRows(c, jc, editableZone = true)
                 Card {
-                    Text("열려 있는 작업", style = Ty.label, color = t.ink)
-                    Text(jc.current, style = Ty.title, color = t.ink, modifier = Modifier.testTag("job_info_name"))
                     if (i != null) {
                         Text("점 ${i.points}개 · 사진 ${i.photos}장 · 음성 ${i.voices}개", style = Ty.body, color = t.ink, modifier = Modifier.testTag("job_info_counts"))
                         i.firstAtMs?.let { Text("첫 측점 " + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA).format(Date(it)), style = Ty.small, color = t.inkSub) }
                         i.lastAtMs?.let { Text("마지막 측점 " + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA).format(Date(it)), style = Ty.small, color = t.inkSub) }
                         if (i.fakePoints > 0) Text("이전 시험 버전(0.1.1)에서 수신기 없이 만든 점이 ${i.fakePoints}개 있어요. 실측 데이터가 아니에요.", style = Ty.small, color = t.bad)
                     }
-                    Text("좌표계 EPSG:${c.zone.epsg} (새 점 기준)", style = Ty.small, color = t.inkSub)
+                    Text("좌표계 EPSG:${c.zone.epsg} · Geoid ${c.geoid.shortKo} · 앱을 다시 켜면 이 작업과 설정이 그대로 열려요", style = Ty.small, color = t.inkSub)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(Modifier.weight(1f)) { Btn("작업 열기 · 삭제", Modifier.fillMaxWidth().testTag("job_to_list")) { jc.openList() } }
@@ -460,6 +481,59 @@ fun JobScreen(c: SurveyController) {
                 "지우기", { jc.delete() }, { jc.confirmDelete = null },
             )
         }
+    }
+}
+
+/** 좌표계 · 지역 · 배경맵 · Geoid 네 줄(SmartTopo 순서). 값은 [JobController] 의 form 에 담겼다가 「만들기/적용」에서 반영 */
+@Composable
+private fun JobConfigRows(c: SurveyController, jc: JobController, editableZone: Boolean) {
+    val zones = kr.archsurvey.core.KoreanTmZone.entries
+    FormRow("좌표계", "GRS80 (TM)", "job_crs") {
+        c.ui.choose(ChoiceRequest("좌표계", listOf("GRS80 (TM) · 한국 평면직각"), 0, "jobcrs",
+            "지금은 GRS80 TM(EPSG:5185~5188)만 써요. Bessel·UTM·경위도 좌표계는 이 앱에서 지원하지 않아요.") {})
+    }
+    FormRow("지역", jc.formZone.labelKo, "job_zone") {
+        if (!editableZone) return@FormRow
+        val opts = zones.map { it.labelKo } + "자동 (현재 위치로 고르기)"
+        c.ui.choose(ChoiceRequest("지역 (투영 원점)", opts, zones.indexOf(jc.formZone), "jobzone",
+            "서부 125°E · 중부 127°E · 동부 129°E(EPSG:5187, 경북·경남 동부) · 동해 131°E. 점이 있는 작업은 다른 좌표계로 바꿀 수 없어요.") { i ->
+            if (i < zones.size) jc.formZone = zones[i] else jc.autoZone()
+        })
+    }
+    val bases = kr.archsurvey.map.MapBase.entries
+    FormRow("배경맵", jc.formMap.labelKo, "job_map") {
+        c.ui.choose(ChoiceRequest("배경맵", bases.map { it.labelKo }, bases.indexOf(jc.formMap), "jobmap",
+            if (c.vworld.hasKey) "V월드 지적도는 인터넷으로 받아요(참고용)." else "V월드 키가 아직 없어요. 환경설정 → V월드 지적도에서 키를 넣어야 보여요(지금은 점만).") { jc.formMap = bases[it] })
+    }
+    val geoids = kr.archsurvey.core.GeoidModel.entries
+    FormRow("Geoid", jc.formGeoid.labelKo, "job_geoid") {
+        c.ui.choose(ChoiceRequest("Geoid (표고 모델)", geoids.map { it.labelKo }, geoids.indexOf(jc.formGeoid), "jobgeoid",
+            "새 점부터 적용돼요. 수신기 출력 = 수신기가 보낸 해발고 그대로. EGM96 = 앱이 타원체고에서 EGM96 지오이드고를 빼요(수신기가 지오이드 분리를 보내야 함). KNGeoid18은 격자 파일이 없어 아직 지원하지 않아요.") { jc.formGeoid = geoids[it] })
+    }
+}
+
+/** SmartTopo 식 입력 줄: 작은 이름 위, 값 + › 아래, 밑줄 (48dp 이상) */
+@Composable
+internal fun FormRow(label: String, value: String, tag: String, onClick: () -> Unit) {
+    val t = T
+    Column(Modifier.fillMaxWidth().clickable(onClick = onClick).testTag(tag), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, style = Ty.small, color = t.inkSub)
+        Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(value, style = Ty.body.copy(fontSize = 17.sp), color = t.ink, modifier = Modifier.weight(1f).testTag(tag + "_value"), maxLines = 2)
+            Box(Modifier.size(28.dp).clip(RoundedCornerShape(6.dp)).background(t.chip), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.CHEVRON_RIGHT, t.ink, 16.dp) }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(t.line))
+    }
+}
+
+/** 아래 고정 두 칸 막대: 왼쪽 나가기 · 오른쪽 적용(주 동작) */
+@Composable
+internal fun DualBar(left: String, leftTag: String, onLeft: () -> Unit, right: String, rightTag: String, enabled: Boolean = true, onRight: () -> Unit) {
+    val t = T
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        MBtn(Modifier.weight(1f).height(56.dp).testTag(leftTag), MKind.PLAIN, 28.dp, onClick = onLeft) { Text(left, style = Ty.button, color = t.ink) }
+        Box(Modifier.weight(1f).height(56.dp).clip(RoundedCornerShape(28.dp)).glossy(if (enabled) t.primary else t.chip, enabled).clickable(enabled = enabled, onClick = onRight).testTag(rightTag),
+            contentAlignment = Alignment.Center) { Text(right, style = Ty.button, color = if (enabled) t.onPrimary else t.inkSub) }
     }
 }
 

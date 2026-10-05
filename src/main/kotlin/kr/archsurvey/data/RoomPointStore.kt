@@ -68,7 +68,7 @@ class RoomPointStore(
             antennaHeight = apc, antennaModel = p.antenna.modelId, antennaRefPoint = p.antenna.refPointId,
             antennaInputMode = p.antenna.method, antennaInputValue = p.antenna.inputM,
             antennaPcoV = p.antenna.pcoV, antennaPcoH = p.antenna.pcoH,
-            groundEllipsoidalHeight = p.groundHeightM, groundMsl = p.groundMslM,
+            groundEllipsoidalHeight = p.groundHeightM, groundMsl = p.groundMslM, heightModel = p.heightModel,
             device = device(), measuredAtUtcMs = p.measuredAtMs,
             areaId = p.areaId, gridId = p.gridId, cellName = p.cellName, cellU = p.cellU, cellV = p.cellV,
         )
@@ -85,7 +85,7 @@ class RoomPointStore(
             groundHeightM = e.groundEllipsoidalHeight, sigmaHM = e.sigmaH,
             status = if (caution) SurveyStatus.CAUTION else SurveyStatus.FIXED, cautionFlag = caution, epochs = e.epochs, antenna = rec,
             fixQuality = e.fixQuality, satellites = e.satellites, measuredAtMs = e.measuredAtUtcMs, rowId = e.rowId, memo = e.memo,
-            apcEllipsoidalM = e.ellipsoidalHeight, apcMslM = e.altitudeMsl, geoidSepM = e.geoidSeparation, groundMslM = e.groundMsl,
+            apcEllipsoidalM = e.ellipsoidalHeight, apcMslM = e.altitudeMsl, geoidSepM = e.geoidSeparation, groundMslM = e.groundMsl, heightModel = e.heightModel,
             hdop = e.hdop, sigmaE = e.sigmaE, sigmaN = e.sigmaN, sigmaU = e.sigmaU, correctionAgeSec = e.correctionAgeSec, baseStationId = e.baseStationId,
             avgStartedAtMs = e.avgStartedAtUtcMs, avgEndedAtMs = e.avgEndedAtUtcMs, maxCorrectionAgeSec = e.maxCorrectionAgeSec,
             minCorrectionAgeSec = e.minCorrectionAgeSec, fixedEpochs = e.fixedEpochs, floatEpochs = e.floatEpochs,

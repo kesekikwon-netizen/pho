@@ -43,6 +43,10 @@ data class MapViewState(
     val cellHighlight: List<LocalXY> = emptyList(),
     val gridColorIdx: Int = 0,
     val outlines: List<MapOutline> = emptyList(),
+    /** 0.1.12 V월드 타일 레이어(아래→위). 비어 있으면 배경 없음 */
+    val tiles: List<TileLayerSpec> = emptyList(),
+    /** 타일을 놓기 위한 위경도↔지도 평면 변환(작업 원점). tiles 가 있을 때만 필요 */
+    val geo: LocalProjection? = null,
 )
 
 /** 지도 그리기 구현을 갈아끼우기 위한 경계. WP-3 은 자체 Canvas, 이후 MapLibre(WP-9 스파이크 결과에 따라). */

@@ -157,12 +157,14 @@ fun SettingsMenuScreen(c: SurveyController) {
             }
             Spacer(Modifier.height(8.dp))
             val rows: List<Triple<Pair<Glyph?, String>, String, Pair<String, () -> Unit>>> = listOf(
+                Triple(Glyph.FOLDER to "작업 정보 확인", "작업명 · 좌표계 · 지역 · 배경맵 · Geoid", "set_row_job" to { c.jobs?.openInfo() ?: run { c.message = "작업 관리는 이 빌드에 없어요" } }),
                 Triple(Glyph.BT to "장비 연결", "GNSS 수신기 블루투스 연결 (R10 · SP60)", "set_row_device" to { c.connection?.openScreen() ?: run { c.message = "연결 화면은 이 빌드에 없어요" } }),
                 Triple(Glyph.WIFI to "VRS 설정 (RTK 보정)", "NTRIP 서버 · 마운트포인트 · 계정 · GGA · 재접속", "set_row_vrs" to { c.connection?.openVrs() ?: run { c.message = "VRS 설정은 이 빌드에 없어요" } }),
                 Triple(Glyph.RULER to "안테나 높이", "모델 · 측정 기준점 · 높이", "set_row_antenna" to { c.antennaSheetOpen = true }),
                 Triple(Glyph.GLOBE to "GNSS 정보 · SkyPlot", "좌표 · 해 품질 · DOP · 위성 배치", "set_row_gnss" to { c.gnssInfoOpen = true }),
-                Triple(Glyph.GLOBE to "좌표계 · 측량 설정", "좌표 원점 · 측정 횟수 · 전자 기포(폰 센서) · 소리 알림", "set_row_survey" to { c.hub.open(ToolScreen.SETTINGS) }),
+                Triple(Glyph.GLOBE to "좌표계 · 측량 설정", "지역(EPSG) · Geoid · 측정 횟수 · 전자 기포 · 소리", "set_row_survey" to { c.hub.open(ToolScreen.SETTINGS) }),
                 Triple(Glyph.LIST to "위치 종류", "발굴 위치 종류 추가 · 순서", "set_row_types" to { c.hub.open(ToolScreen.TYPES) }),
+                Triple(Glyph.LAYERS to "V월드 지적도 · 배경맵", "API 인증키 · 도메인 · 지적선 · 연결 시험", "set_row_vworld" to { c.vworld.load(); c.hub.open(ToolScreen.VWORLD) }),
                 Triple(Glyph.LAYERS to "배경 레이어", "도면 · 정사영상 올리기", "set_row_bg" to { c.bg?.openManage() ?: run { c.message = "배경 레이어는 이 빌드에 없어요" } }),
                 Triple(Glyph.FOLDER to "백업 · 복구", "작업 데이터 ZIP 백업", "set_row_backup" to { c.backup?.openScreen() ?: run { c.message = "백업은 이 빌드에 없어요" } }),
             )

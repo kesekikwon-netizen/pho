@@ -195,9 +195,10 @@ class SurveyScreenshotTest {
         rule.onNodeWithTag("ref_bottom_of_antenna_mount").performClick()
         repeat(5) { rule.onNodeWithTag("step_plus").performClick() }
         rule.waitForIdle()
-        assertEquals(2.05, c.antenna.inputValueM, 1e-9)
-        assertEquals(2.1991, c.antennaResult!!.totalToApcM, 1e-9)
-        rule.onNodeWithTag("sheet_summary").assertTextContains("2.199 m", substring = true)
+        // 0.1.12: + 한 번 = 10 cm → 5번 = 2.5 m
+        assertEquals(2.5, c.antenna.inputValueM, 1e-9)
+        assertEquals(2.6491, c.antennaResult!!.totalToApcM, 1e-9)
+        rule.onNodeWithTag("sheet_summary").assertTextContains("2.649 m", substring = true)
         shot("14_antenna_sheet_r10_mount_2050_2_1991")
         rule.onNodeWithTag("model_SPECTRA_SP60").performClick(); rule.waitForIdle()
         repeat(5) { rule.onNodeWithTag("step_minus").performClick() }

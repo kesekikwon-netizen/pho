@@ -30,7 +30,7 @@ object Formats {
         "height_apc_ellipsoidal", "height_ground_ellipsoidal", "height_apc_msl", "height_ground_msl",
         "antenna_height_m", "antenna_model", "antenna_ref_point", "antenna_input_mode", "antenna_input_m", "pco_v_m", "pco_h_m", "extra_parts_m", "base_ext_m", "antenna_receiver_applied",
         "lat", "lon", "fix", "all_epochs_fixed", "sats", "hdop", "sigma_e", "sigma_n", "sigma_h", "sigma_u",
-        "corr_age_s", "base_id", "epochs", "time_utc", "time_local", "photo_count", "photo_files", "device", "project",
+        "corr_age_s", "base_id", "epochs", "time_utc", "time_local", "photo_count", "photo_files", "device", "project", "height_model",
     )
 
     fun fixLabel(q: Int) = when (q) { 4 -> "RTK_FIXED"; 5 -> "RTK_FLOAT"; 2 -> "DGPS"; 1 -> "SINGLE"; 0 -> "NONE"; else -> "OTHER_$q" }
@@ -50,7 +50,7 @@ object Formats {
                 f(p.sigmaE, 4), f(p.sigmaN, 4), f(p.sigmaH, 4), f(p.sigmaU, 4),
                 f(p.correctionAgeSec, 1), csvEscape(p.baseStationId ?: ""), p.epochs.toString(),
                 utc(p.measuredAtUtcMs), local(p.measuredAtUtcMs, tz), photos.size.toString(),
-                csvEscape(photos.joinToString(";")), csvEscape(p.device), csvEscape(p.project),
+                csvEscape(photos.joinToString(";")), csvEscape(p.device), csvEscape(p.project), p.heightModel.ifEmpty { "RECEIVER" },
             )
             sb.append(row.joinToString(",")).append("\r\n")
         }
@@ -95,6 +95,7 @@ object Formats {
             sb.append(",\"height_ground_ellipsoidal\":").append(jnum(p.groundEllipsoidalHeight, 3))
             sb.append(",\"height_apc_msl\":").append(jnum(p.altitudeMsl, 3))
             sb.append(",\"height_ground_msl\":").append(jnum(p.groundMsl, 3))
+            sb.append(",\"height_model\":").append(jsonStr(p.heightModel.ifEmpty { "RECEIVER" }))
             sb.append(",\"antenna_height_m\":").append(jnum(p.antennaHeight, 3))
             sb.append(",\"antenna_model\":").append(jsonStr(p.antennaModel))
             sb.append(",\"antenna_ref_point\":").append(jsonStr(p.antennaRefPoint))

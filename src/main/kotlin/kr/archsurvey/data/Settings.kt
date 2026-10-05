@@ -54,6 +54,8 @@ class SettingsStore(private val ctx: Context) {
     var project: String
         get() = sp.getString("project", "작업1") ?: "작업1"
         set(v) = sp.edit().putString("project", v.trim().ifEmpty { "작업1" }).apply()
+    /** 작업을 한 번이라도 열었거나 만든 적이 있으면 true(새 설치 = false) */
+    val hasProject: Boolean get() = sp.contains("project")
     /** 만들어 두었지만 아직 점이 없는 작업 이름들(점이 생기면 DB 에서도 찾을 수 있다) */
     var extraProjects: Set<String>
         get() = sp.getStringSet("extra_projects", emptySet())?.toSet() ?: emptySet()
@@ -108,6 +110,14 @@ class SettingsStore(private val ctx: Context) {
     var mapBase: String
         get() = sp.getString("map_base", "SATELLITE") ?: "SATELLITE"
         set(v) = sp.edit().putString("map_base", v).apply()
+    /** 0.1.12 지적 스타일: true = *_line(선만) */
+    var mapLineOnly: Boolean
+        get() = sp.getBoolean("vworld_line_only", false)
+        set(v) = sp.edit().putBoolean("vworld_line_only", v).apply()
+    val hasMapKey: Boolean get() = mapKey.isNotBlank()
+    /** 0.1.12 작업별 설정(좌표계·지오이드·배경맵·안테나·측정 횟수) 한 줄. 키 값은 들어가지 않는다 */
+    fun jobConfigRaw(project: String): String? = sp.getString("job_cfg_$project", null)
+    fun setJobConfigRaw(project: String, v: String?) { if (v == null) sp.edit().remove("job_cfg_$project").apply() else sp.edit().putString("job_cfg_$project", v).apply() }
     var cadastralOverlay: Boolean
         get() = sp.getBoolean("map_cad_overlay", false)
         set(v) = sp.edit().putBoolean("map_cad_overlay", v).apply()

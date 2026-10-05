@@ -48,8 +48,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             SurveyTheme { SurveyMapScreen(vm.controller, batteryPercent()) }
         }
-        // 0.1.11: 목업처럼 홈(메인 메뉴)에서 시작. 회전 등으로 다시 만들어질 땐 보던 화면 유지
-        if (savedInstanceState == null) { vm.controller.homeOpen = true; vm.autoConnectOnLaunch() }
+        // 0.1.12: 직전 작업이 있으면 그 작업(설정 포함)을 연 측량 화면에서 시작 — 「새 작업」을 누르기 전까지 항상 이어서.
+        // 처음 설치면 0.1.11 처럼 홈. 회전 등으로 다시 만들어질 땐 보던 화면 유지. 수신기는 지난 성공 설정으로 자동 연결(설정에서 끌 수 있음)
+        if (savedInstanceState == null) {
+            vm.controller.homeOpen = !vm.resumeJob
+            if (vm.resumeJob) vm.controller.ui.toast(vm.resumeNotice())
+            vm.autoConnectOnLaunch()
+        }
     }
 
     override fun onResume() { super.onResume(); vm.controller.tilt?.resume() }

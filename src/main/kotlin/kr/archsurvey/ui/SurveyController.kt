@@ -79,6 +79,8 @@ data class SavedPoint(
     val apcMslM: Double? = null,
     val geoidSepM: Double? = null,
     val groundMslM: Double? = null,
+    /** 0.1.12: groundMslM 을 낸 지오이드 모델 id (RECEIVER/EGM96/NONE). 옛 점은 "" */
+    val heightModel: String = "",
     val hdop: Double? = null,
     val sigmaE: Double? = null,
     val sigmaN: Double? = null,
@@ -172,6 +174,33 @@ class SurveyController(
     private var anchored = false
     /** 투영 원점(EPSG:5185~5188). 이미 저장한 점은 저장 당시 값을 유지한다 */
     var zone by mutableStateOf(zone)
+    /** 0.1.12 작업별 지오이드(표고) 모델. 새 점부터 적용 */
+    var geoid by mutableStateOf(GeoidModel.RECEIVER)
+    /** 0.1.12 작업별 배경맵(V월드). NONE = 점만 */
+    var mapBase by mutableStateOf(kr.archsurvey.map.MapBase.NONE)
+    /** V월드 키·도메인·지적 스타일(선만) — 설정 저장소에서 읽는다. 키 값은 로그·화면에 그대로 내지 않는다 */
+    var mapKeyProvider: () -> kr.archsurvey.map.VWorldAccess = { kr.archsurvey.map.VWorldAccess("", "") }
+    /** 작업 설정(좌표계·지오이드·배경맵·안테나·측정 횟수)이 바뀌면 부른다 → 앱은 지금 작업 이름으로 저장 */
+    var onJobConfigChanged: ((JobConfig) -> Unit)? = null
+    fun jobConfig() = JobConfig(zone.epsg, geoid, mapBase, antennaModelId, antenna.inputValueM, antenna.refPointId, epochs, poleUserSet = antenna.source == AntennaSource.USER)
+    fun jobConfigChanged() { onJobConfigChanged?.invoke(jobConfig()) }
+    /** 저장된 작업 설정을 화면 상태에 적용(작업 열기·앱 시작). 저장 콜백은 부르지 않는다 */
+    fun applyJobConfig(cfg: JobConfig) {
+        zone = KoreanTmZone.fromEpsg(cfg.epsg); geoid = cfg.geoid; mapBase = cfg.mapBase
+        if (antennaDb.containsKey(cfg.antennaModelId)) antennaModelId = cfg.antennaModelId
+        val m = antennaModel
+        val ref = if (m.refPoints.any { it.id == cfg.refPointId }) cfg.refPointId else m.defaultRefPoint
+        antenna = antenna.copy(inputValueM = AntennaMath.snapPole(cfg.poleM), refPointId = ref, tapeOn = false,
+            source = if (cfg.poleUserSet) AntennaSource.USER else antenna.source)
+        epochs = cfg.epochs.coerceIn(1, 30)
+    }
+    /** 이 작업에 다른 좌표계로 저장된 점이 있으면 이유 문구(바꾸지 않음). SmartTopo 는 전 점을 변환하지만 여기선 원본 보존을 위해 막는다 */
+    fun zoneChangeProblem(z: KoreanTmZone): String? {
+        val other = points.count { it.crsEpsg != z.epsg }
+        return if (other > 0) "이 작업에 EPSG:${points.first().crsEpsg} 로 저장된 점이 ${other}개 있어 좌표계를 바꿀 수 없어요. 새 작업을 만들어 고르세요." else null
+    }
+    fun changeMapBase(b: kr.archsurvey.map.MapBase) { mapBase = b; jobConfigChanged() }
+    fun changeGeoid(g: GeoidModel) { geoid = g; jobConfigChanged() }
 
     /** 위치 종류 목록(편집 가능, 이름 8자 이하). 기본 = 고고학 3종(유구 경계점·유물 출토 위치·그리드 모서리) + 기준점·레벨점·기타 */
     val types = mutableStateListOf<String>().apply { addAll(kr.archsurvey.arch.ArchTypes.seed) }
@@ -237,6 +266,8 @@ class SurveyController(
     var settingsState: SettingsState? = null
     /** 작업 관리 상태 */
     var jobs: JobController? = null
+    /** 0.1.12 V월드 키·도메인 설정 (없으면 메모리 기본값 — 시험) */
+    var vworld: VWorldSettingsState = VWorldSettingsState(MemoryMapKeyPlatform(), scope)
 
     /** 저장소에서 점을 다시 읽는다 (작업을 바꾼 뒤) */
     private fun anchorTo(lat: Double, lon: Double) { projection = LocalProjection(lat, lon); anchored = true; trail.clear() }
@@ -253,7 +284,7 @@ class SurveyController(
         dupPrompt = null; resurveyTarget = null; resultName = null; resurveyUndo = null
         arch.reload()
         scope.launch {
-            runCatching { val m = st.maxSeq(); val all = st.loadAll(); seq = m; points.clear(); points.addAll(all) }
+            runCatching { val m = st.maxSeq(); val all = st.loadAll(); seq = m; points.clear(); points.addAll(all); anchorToLastPoint() }
                 .onFailure { message = "저장된 점을 불러오지 못했어요" }
         }
     }
@@ -407,12 +438,15 @@ class SurveyController(
             if (p == null) { phase = Phase.IDLE; message = "위치를 얻지 못했어요"; return@launch }
             val tm = TmProjection.forward(p.lat, p.lon, zone)
             val ground = p.ellipsoidalHeight?.let { it - rec.apcHeightM }
-            val groundMsl = p.altitudeMsl?.let { it - rec.apcHeightM }
+            // 0.1.12: 작업의 지오이드 설정으로 표고를 낸다(기본 = 수신기 해발고 그대로)
+            val ortho = GeoidHeights.apcOrtho(geoid, p.lat, p.lon, p.altitudeMsl, p.geoidSeparation)
+            val groundMsl = ortho.heightM?.let { it - rec.apcHeightM }
+            ortho.note?.let { ui.toast(it) }
             val cell = arch.locate(NE(tm.northing, tm.easting), p.sigmaH)
             val cellName = when (cell.kind) { CellKind.INSIDE, CellKind.NEAR_BOUNDARY, CellKind.OUTSIDE -> cell.label; CellKind.NO_GRID -> "" }
             val sp = SavedPoint(nameAtStart, typeAtStart, p.lat, p.lon, tm.northing, tm.easting, zone.epsg, ground, p.sigmaH,
                 worst, worst == SurveyStatus.CAUTION, p.epochs, rec, gv.quality.code, gv.satellites, clock(),
-                apcEllipsoidalM = p.ellipsoidalHeight, apcMslM = p.altitudeMsl, geoidSepM = p.geoidSeparation, groundMslM = groundMsl,
+                apcEllipsoidalM = p.ellipsoidalHeight, apcMslM = p.altitudeMsl, geoidSepM = p.geoidSeparation, groundMslM = groundMsl, heightModel = ortho.usedModel.id,
                 hdop = p.hdop, sigmaE = p.sigmaE, sigmaN = p.sigmaN, sigmaU = p.sigmaU, correctionAgeSec = p.correctionAgeSec, baseStationId = p.baseStationId,
                 avgStartedAtMs = avgStart, avgEndedAtMs = avgEnd, maxCorrectionAgeSec = p.maxCorrectionAgeSec, minCorrectionAgeSec = p.minCorrectionAgeSec,
                 fixedEpochs = p.fixedEpochs, floatEpochs = p.floatEpochs,
@@ -727,6 +761,8 @@ class SurveyController(
             cellHighlight = if (g != null && cellNow != null && cellNow.col >= 0) g.cellCorners(cellNow.col, cellNow.row).map { loc(it) } else emptyList(),
             gridColorIdx = arch.activeArea?.colorIdx ?: 0,
             backgrounds = bg?.mapLayers().orEmpty(),
+            tiles = if (anchored) mapTiles() else emptyList(),
+            geo = if (anchored) projection else null,
             outlines = arch.outlineViews().map { MapOutline(it.outline.label, it.vertices.map { v -> loc(v) }, it.outline.closed, !it.outline.finished, arch.areas.firstOrNull { a -> a.id == it.outline.areaId }?.colorIdx ?: 0) },
         )
     }
@@ -737,7 +773,26 @@ class SurveyController(
         if (id == antennaModelId) return
         antennaModelId = id
         antenna = AntennaResolver.proposeDefault(antenna, antennaModel)
+        jobConfigChanged()
     }
-    fun setRefPoint(id: String) { antenna = antenna.copy(refPointId = id) }
-    fun stepAntennaCm(deltaCm: Int) { antenna = AntennaResolver.userEdit(antenna.copy(inputValueM = AntennaMath.step(antenna.inputValueM, deltaCm))) }
+    fun setRefPoint(id: String) { antenna = antenna.copy(refPointId = id); jobConfigChanged() }
+    /** 0.1.12: 폴 높이는 10 cm(0.1 m) 단위로만 바꾼다. 지금 값을 0.1 m 에 맞춘 뒤 ±0.1 m */
+    fun stepAntennaCm(deltaCm: Int) {
+        antenna = AntennaResolver.userEdit(antenna.copy(inputValueM = AntennaMath.stepPole(antenna.inputValueM, deltaCm)))
+        jobConfigChanged()
+    }
+    /** 정해진 높이로 바로(칩·새 작업 창). 0.1 m 로 맞춘다 */
+    fun setPoleHeight(m: Double) {
+        antenna = AntennaResolver.userEdit(antenna.copy(inputValueM = AntennaMath.snapPole(m.coerceIn(0.0, AntennaMath.MAX_HEIGHT_M))))
+        jobConfigChanged()
+    }
+
+    // ---------------- 배경맵(V월드) ----------------
+    /** 지금 배경맵 선택 → 타일 레이어(아래→위). 키가 없으면 빈 목록(점만) */
+    fun mapTiles(): List<kr.archsurvey.map.TileLayerSpec> {
+        if (mapBase == kr.archsurvey.map.MapBase.NONE) return emptyList()
+        val a = mapKeyProvider()
+        return kr.archsurvey.map.MapLayers.resolve(mapBase, a)
+    }
+    fun mapNotice(): String? = kr.archsurvey.map.MapLayers.fallbackMessage(mapBase, mapKeyProvider().key)
 }

@@ -1,0 +1,112 @@
+package kr.archsurvey.ui
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kr.archsurvey.map.MapBase
+import kr.archsurvey.map.VWorldAccess
+
+/** V월드 키 저장소. Android = 암호화 SharedPreferences(설정 DB). 키는 코드·로그·커밋에 넣지 않는다 */
+interface MapKeyPlatform {
+    var key: String
+    var domain: String
+    var lineOnly: Boolean
+    fun access(): VWorldAccess = VWorldAccess(key, domain, lineOnly)
+    /** 타일 한두 장을 받아 보고 결과 문구(키 가림) */
+    fun test(a: VWorldAccess): String = "이 빌드에서는 시험할 수 없어요"
+}
+
+class MemoryMapKeyPlatform(override var key: String = "", override var domain: String = "", override var lineOnly: Boolean = false) : MapKeyPlatform
+
+/** 0.1.12 환경설정 → V월드 지적도: API 키(사용자 입력)·도메인·지적 스타일·연결 시험 */
+class VWorldSettingsState(private val p: MapKeyPlatform, private val scope: CoroutineScope, private val io: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO) {
+    /** 지도 그릴 때마다 암호화 저장소를 읽지 않도록 메모리에 둔다 */
+    var access by mutableStateOf(runCatching { p.access() }.getOrDefault(VWorldAccess("", "")))
+        private set
+    var keyInput by mutableStateOf("")
+    var domainInput by mutableStateOf(access.domain)
+    var lineOnly by mutableStateOf(access.lineOnly)
+    var showKey by mutableStateOf(false)
+    var testing by mutableStateOf(false); private set
+    var testResult by mutableStateOf<String?>(null); private set
+    val hasKey: Boolean get() = access.key.isNotBlank()
+
+    fun load() { access = runCatching { p.access() }.getOrDefault(access); keyInput = ""; domainInput = access.domain; lineOnly = access.lineOnly; testResult = null }
+
+    /** 저장. 키 칸이 비어 있으면 기존 키를 그대로 둔다 */
+    fun save(): String {
+        val k = keyInput.trim()
+        if (k.isNotEmpty()) {
+            if (k.length < 8 || k.any { it.isWhitespace() }) return "키 모양이 이상해요. V월드에서 받은 인증키를 그대로 붙여 넣으세요."
+            p.key = k
+        }
+        p.domain = domainInput.trim(); p.lineOnly = lineOnly
+        access = VWorldAccess(if (k.isNotEmpty()) k else access.key, domainInput.trim(), lineOnly)
+        keyInput = ""
+        TileImages.clear()
+        return if (hasKey) "V월드 설정을 저장했어요" else "도메인을 저장했어요. 키를 넣어야 지도가 보여요"
+    }
+
+    fun clearKey() { p.key = ""; access = access.copy(key = ""); keyInput = ""; TileImages.clear() }
+
+    fun test() {
+        if (testing) return
+        val a = if (keyInput.isNotBlank()) VWorldAccess(keyInput.trim(), domainInput.trim(), lineOnly) else access.copy(domain = domainInput.trim(), lineOnly = lineOnly)
+        testing = true; testResult = null
+        scope.launch {
+            val r = try { withContext(io) { p.test(a) } } catch (e: Exception) { "시험 실패 (${e.javaClass.simpleName})" }
+            testResult = r; testing = false
+        }
+    }
+}
+
+@Composable
+fun VWorldScreen(c: SurveyController) {
+    val t = T; val v = c.vworld
+    ToolScaffold("V월드 지적도 · 배경맵", "vworld_screen", onBack = { c.hub.back() }, bottom = {
+        PrimaryBar("저장", "vworld_save") { c.ui.toast(v.save()) }
+    }) {
+        Card {
+            Text("API 인증키", style = Ty.label, color = t.ink)
+            Text(if (v.hasKey) "저장된 키가 있어요 (값은 보이지 않게 보관). 바꾸려면 새 키를 넣으세요." else "아직 키가 없어요. V월드(vworld.kr) 오픈API에서 받은 인증키를 넣으세요.",
+                style = Ty.small, color = if (v.hasKey) t.inkSub else t.bad, modifier = Modifier.testTag("vworld_key_state"))
+            Field("인증키", v.keyInput, "vworld_key", hide = !v.showKey) { v.keyInput = it }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) { Btn(if (v.showKey) "가리기" else "보기", Modifier.fillMaxWidth().testTag("vworld_show")) { v.showKey = !v.showKey } }
+                if (v.hasKey) Box(Modifier.weight(1f)) { Btn("키 지우기", Modifier.fillMaxWidth().testTag("vworld_clear")) {
+                    c.ui.ask(ConfirmRequest("V월드 키를 지울까요?", "지우면 배경맵이 보이지 않고 점만 표시돼요.", "지우기") { v.clearKey() })
+                } }
+            }
+            Field("도메인", v.domainInput, "vworld_domain", kb = KeyboardType.Uri) { v.domainInput = it }
+            Text("키를 받을 때 적은 서비스 URL과 같게 넣으세요(예: http://localhost). 비워 두면 보내지 않아요. 맞지 않으면 V월드가 거절할 수 있어요.", style = Ty.small, color = t.inkSub)
+        }
+        Card {
+            Text("지적선 모양", style = Ty.label, color = t.ink)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Choice("기본 (면+선)", !v.lineOnly, Modifier.weight(1f).testTag("vworld_style_fill")) { v.lineOnly = false }
+                Choice("선만", v.lineOnly, Modifier.weight(1f).testTag("vworld_style_line")) { v.lineOnly = true }
+            }
+            Text("위성 위에 겹칠 때는 ‘선만’이 잘 보여요. 지적선은 가까이 확대했을 때(줌 ${kr.archsurvey.map.MapLayers.CADASTRAL_MIN_ZOOM} 이상) 받아요.", style = Ty.small, color = t.inkSub)
+        }
+        Card {
+            Text("이 작업의 배경맵", style = Ty.label, color = t.ink)
+            for (b in MapBase.entries) Choice(b.labelKo, c.mapBase == b, Modifier.fillMaxWidth().testTag("vworld_base_${b.id}")) { c.changeMapBase(b) }
+            Text("배경맵은 작업마다 저장돼요. 지적도는 참고용이에요 — 측량 좌표(TM)와 지적 경계가 몇 m 어긋날 수 있어요.", style = Ty.small, color = t.inkSub)
+        }
+        Btn(if (v.testing) "시험 중…" else "연결 시험 (타일 받아 보기)", Modifier.fillMaxWidth().testTag("vworld_test")) { v.test() }
+        v.testResult?.let { Text(it, style = Ty.body, color = t.ink, modifier = Modifier.testTag("vworld_test_result")) }
+        Text("타일은 화면에 보이는 동안 메모리에만 두고 폰에 저장하지 않아요(V월드 약관). 데이터 요금이 들 수 있어요. 출처: V월드(국토교통부).", style = Ty.small, color = t.inkSub)
+    }
+}
+

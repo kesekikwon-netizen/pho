@@ -185,7 +185,7 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
         // 오른쪽(목업 15): 배경지도 · 레이어 · 점 목록 / 아래로 기포 · 안테나 높이 · 더보기
         Column(Modifier.align(Alignment.TopEnd).padding(end = 10.dp, top = 10.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                MBtn(Modifier.height(48.dp).testTag("tool_bgmap"), MKind.PLAIN, 24.dp, onClick = { c.bg?.toggle() ?: run { c.message = "배경 레이어는 이 빌드에 없어요" } }) {
+                MBtn(Modifier.height(48.dp).testTag("tool_bgmap"), MKind.PLAIN, 24.dp, onClick = { chooseMapBase(c) }) {
                     Text("배경지도", style = Ty.label.copy(fontSize = 13.sp), color = t.ink, maxLines = 1, modifier = Modifier.padding(horizontal = 12.dp))
                 }
                 ToolBtn(Glyph.LAYERS, "레이어 관리", "tool_layers") { c.bg?.openManage() ?: run { c.message = "배경 레이어는 이 빌드에 없어요" } }
@@ -198,8 +198,14 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
             }
             ToolBtn(Glyph.MENU, "더보기", "tool_quick") { c.quickSheetOpen = true }
         }
-        c.bg?.mapCaption()?.let {
-            Text(it, style = Ty.small, color = t.ink, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 6.dp).background(t.raised.copy(alpha = 0.85f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp).testTag("map_caption"))
+        Column(Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 6.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            // 0.1.12 V월드: 키 없음 안내 · 오류 · 출처 표시(약관)
+            val notice = c.mapNotice() ?: if (ms.tiles.isNotEmpty()) TileImages.lastError else null
+            notice?.let { Text(it, style = Ty.small, color = t.bad, maxLines = 3, modifier = Modifier.widthIn(max = 260.dp).background(t.raised.copy(alpha = 0.92f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp).testTag("map_notice")) }
+            if (ms.tiles.isNotEmpty()) Text("© V월드(국토교통부)", style = Ty.small.copy(fontSize = 11.sp), color = t.ink, modifier = Modifier.background(t.raised.copy(alpha = 0.85f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 1.dp).testTag("map_attribution"))
+            c.bg?.mapCaption()?.let {
+                Text(it, style = Ty.small, color = t.ink, modifier = Modifier.background(t.raised.copy(alpha = 0.85f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp).testTag("map_caption"))
+            }
         }
         NotConnectedCard(c, Modifier.align(Alignment.Center))
         val h = c.antennaResult?.totalToApcM
@@ -602,10 +608,19 @@ fun AntennaSheet(c: SurveyController) {
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StepBtn("−1 cm", "step_minus") { c.stepAntennaCm(-1) }
-                Text(f3(c.antenna.inputValueM) + " m", style = Ty.title, color = t.ink, textAlign = TextAlign.Center, modifier = Modifier.weight(1f).testTag("sheet_input"))
-                StepBtn("+1 cm", "step_plus") { c.stepAntennaCm(1) }
+                StepBtn("−10 cm", "step_minus") { c.stepAntennaCm(-AntennaMath.POLE_STEP_CM) }
+                Text(String.format(java.util.Locale.US, "%.1f", c.antenna.inputValueM) + " m", style = Ty.title, color = t.ink, textAlign = TextAlign.Center, modifier = Modifier.weight(1f).testTag("sheet_input"))
+                StepBtn("+10 cm", "step_plus") { c.stepAntennaCm(AntennaMath.POLE_STEP_CM) }
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (m in AntennaMath.CHIPS_M) Box(
+                    Modifier.weight(1f).height(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp))
+                        .background(if (kotlin.math.abs(c.antenna.inputValueM - m) < 1e-6) t.primary.copy(alpha = 0.2f) else t.card)
+                        .clickable { c.setPoleHeight(m) }.testTag("pole_chip_" + String.format(java.util.Locale.US, "%.1f", m)),
+                    contentAlignment = Alignment.Center,
+                ) { Text(String.format(java.util.Locale.US, "%.1f m", m), style = Ty.label, color = t.ink) }
+            }
+            Text("폴 높이는 10 cm 단위로만 바꿔요 · 작업마다 저장", style = Ty.small, color = t.inkSub)
             val r = c.antennaResult
             Text(r?.let { AntennaMath.summary(it) } ?: "계산할 수 없어요", style = Ty.body, color = t.ink, modifier = Modifier.testTag("sheet_summary"))
             Text(if (c.antennaModelId == "TRIMBLE_R10") (if (c.antenna.refPointId == "bottom_of_antenna_mount") AntennaMath.ADAPTER_NOTE_R10_MOUNT else AntennaMath.ADAPTER_NOTE_R10) else AntennaMath.ADAPTER_NOTE_SP60, style = Ty.small, color = t.inkSub)
@@ -626,6 +641,20 @@ private fun StepBtn(label: String, tag: String, onClick: () -> Unit) {
         Modifier.size(width = 84.dp, height = SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp)).background(t.card).clickable(onClick = onClick).testTag(tag),
         contentAlignment = Alignment.Center,
     ) { Text(label, style = Ty.label, color = t.ink) }
+}
+
+/** 「배경지도」 버튼: V월드 배경맵(작업별 저장) 고르기 + 올린 도면 켜기/끄기 */
+internal fun chooseMapBase(c: SurveyController) {
+    val bases = kr.archsurvey.map.MapBase.entries
+    val opts = bases.map { it.labelKo } + listOf("V월드 키 · 도메인 설정…", "올린 도면 보이기 / 숨기기")
+    c.ui.choose(ChoiceRequest("배경지도", opts, bases.indexOf(c.mapBase), "mapbase",
+        if (c.vworld.hasKey) "고른 배경맵은 이 작업에 저장돼요. 지적도는 참고용이에요." else "V월드 키가 없어서 지금은 점만 보여요. ‘V월드 키 · 도메인 설정’에서 넣으세요.") { i ->
+        when {
+            i < bases.size -> c.changeMapBase(bases[i])
+            i == bases.size -> { c.vworld.load(); c.hub.open(ToolScreen.VWORLD) }
+            else -> c.bg?.toggle() ?: run { c.message = "배경 레이어는 이 빌드에 없어요" }
+        }
+    })
 }
 
 /** 기본은 자체 Canvas 지도. `-PwithMapLibre` 로 빌드해 클래스가 있을 때만 MapLibre 지도를 쓴다(실기기 확인 전이라 기본값 아님). */

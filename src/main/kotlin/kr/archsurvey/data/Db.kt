@@ -64,6 +64,8 @@ data class PointEntity(
     /** 지면 높이 = 수신기 고도(APC) − 안테나 높이 (타원체고/MSL 각각). 수신기 반영 시 원값 그대로 */
     val groundEllipsoidalHeight: Double? = null,
     val groundMsl: Double? = null,
+    /** 0.1.12(DB v7): groundMsl 을 낸 지오이드 모델 id (RECEIVER/EGM96/NONE). 옛 행은 '' = 수신기 해발고 */
+    @ColumnInfo(defaultValue = "''") val heightModel: String = "",
     val device: String,
     val measuredAtUtcMs: Long,
     /** 고고학(Phase 2): 발굴 구역·그리드·칸 이름과 칸 안 위치(m). 그리드를 쓰지 않은 점은 비어 있음 */
@@ -237,8 +239,8 @@ object VoiceLimit { const val MAX = 3 }
         PointEntity::class, PhotoEntity::class, VoiceEntity::class,
         AreaEntity::class, GridEntity::class, OutlineEntity::class, OutlinePointEntity::class, PointRevisionEntity::class,
     ],
-    version = 6, exportSchema = true,
-    autoMigrations = [androidx.room.AutoMigration(from = 1, to = 2), androidx.room.AutoMigration(from = 2, to = 3), androidx.room.AutoMigration(from = 3, to = 4), androidx.room.AutoMigration(from = 4, to = 5), androidx.room.AutoMigration(from = 5, to = 6)],
+    version = 7, exportSchema = true,
+    autoMigrations = [androidx.room.AutoMigration(from = 1, to = 2), androidx.room.AutoMigration(from = 2, to = 3), androidx.room.AutoMigration(from = 3, to = 4), androidx.room.AutoMigration(from = 4, to = 5), androidx.room.AutoMigration(from = 5, to = 6), androidx.room.AutoMigration(from = 6, to = 7)],
 )
 abstract class SurveyDb : RoomDatabase() {
     abstract fun dao(): SurveyDao

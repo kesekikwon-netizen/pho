@@ -38,6 +38,12 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
     /** 앱 첫 실행 화면에서 한 번: 지난번 성공 설정으로 자동 연결(설정에서 끌 수 있음) */
     fun autoConnectOnLaunch() { runCatching { connection?.autoConnectOnLaunch() }.onFailure { kr.archsurvey.diag.CrashLog.record("자동 연결", it) } }
 
+    /** 0.1.12: 앱 시작 때 직전 작업이 있으면 true → 홈 대신 그 작업의 측량 화면으로 바로 연다 */
+    var resumeJob: Boolean = false; private set
+
+    /** 시작 안내 문구: 어떤 작업·설정으로 열었는지 */
+    fun resumeNotice(): String = "‘${application.settings.project}’ 작업을 이어서 열었어요 · EPSG:${controller.zone.epsg} · Geoid ${controller.geoid.shortKo} · 배경맵 ${controller.mapBase.labelKo}"
+
     /** MainActivity 가 채운다: 화면 항상 켜기 설정이 바뀔 때 창 플래그 적용 */
     var onKeepScreen: (Boolean) -> Unit = {}
     private val versionName: String = runCatching { app.packageManager.getPackageInfo(app.packageName, 0).versionName ?: "" }.getOrDefault("")
@@ -70,7 +76,17 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
         controller.backup = BackupController(backupPlatform, viewModelScope)
         controller.projectName = application.settings.project
         controller.settingsState = SettingsState(controller, kr.archsurvey.engine.AndroidSettingsPlatform(application.settings, { onKeepScreen(it) }, application))
-        controller.jobs = JobController(controller, kr.archsurvey.engine.AndroidJobPlatform(application, application.settings, versionName), viewModelScope)
+        val jobCfgs = kr.archsurvey.engine.AndroidJobConfigPlatform(application.settings)
+        controller.jobs = JobController(controller, kr.archsurvey.engine.AndroidJobPlatform(application, application.settings, versionName), viewModelScope, jobCfgs)
+        // 0.1.12 V월드 키(사용자 입력, 암호화 저장) — 지도는 메모리 사본만 읽는다
+        controller.vworld = VWorldSettingsState(kr.archsurvey.engine.AndroidMapPlatform(application.settings), viewModelScope)
+        controller.mapKeyProvider = { controller.vworld.access }
+        // 0.1.12 직전 작업 복원: 마지막에 열었던 작업(settings.project) + 그 작업의 설정(좌표계·Geoid·배경맵·안테나·측정 횟수)
+        val project = application.settings.project
+        val saved = jobCfgs.load(project)
+        resumeJob = saved != null || application.settings.hasProject
+        if (saved != null) { controller.applyJobConfig(saved); controller.settingsState?.syncZone() } else jobCfgs.save(project, controller.jobConfig())
+        controller.onJobConfigChanged = { jobCfgs.save(application.settings.project, it) }
         controller.feedback = { ok -> application.feedback.play(if (ok) kr.archsurvey.feedback.FeedbackEvent.SURVEY_OK else kr.archsurvey.feedback.FeedbackEvent.SURVEY_FAIL) }
         media.recoverPending()
     }

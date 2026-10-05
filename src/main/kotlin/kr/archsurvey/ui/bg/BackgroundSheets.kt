@@ -186,7 +186,7 @@ private fun ManageSheet(bg: BackgroundController) {
             CloseX("btn_close_sheet") { bg.close() }
         }
         Notice(bg)
-        Text("위성·지적도 배경은 이 버전에 없어요. 올린 도면의 윤곽만 지도에 겹쳐 보여요", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("manage_note"))
+        Text("V월드 위성·지적도는 지도 오른쪽 ‘배경지도’에서 골라요(키 필요). 여기서는 올린 도면의 윤곽만 겹쳐 보여요", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("manage_note"))
         for (r in bg.layers) {
             Row(
                 Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(14.dp)).background(t.card).padding(start = 12.dp, end = 4.dp).testTag("manage_row_${r.id}"),

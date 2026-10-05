@@ -134,7 +134,7 @@ class SurveyControllerTest {
         val f = FakeGnssSource(FakeScenarios.allFixed()); val c = ctrl(f)
         assertEquals(2.1991, c.antennaResult!!.totalToApcM, 1e-9)
         c.setRefPoint("bottom_of_antenna_mount"); assertEquals(2.1491, c.antennaResult!!.totalToApcM, 1e-9)
-        c.stepAntennaCm(5); assertEquals(2.05, c.antenna.inputValueM, 1e-9); assertEquals(2.1991, c.antennaResult!!.totalToApcM, 1e-9)
+        c.stepAntennaCm(10); assertEquals(2.1, c.antenna.inputValueM, 1e-9); assertEquals(2.2491, c.antennaResult!!.totalToApcM, 1e-9) // 0.1.12: 10 cm 단위
         assertEquals(AntennaSource.USER, c.antenna.source)
     }
     @Test fun measureBlockedWhenUnavailable() {

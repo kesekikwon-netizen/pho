@@ -141,7 +141,7 @@ class ToolScreensTest {
     }
 
     @Test fun settingsAndJobs() {
-        setup()
+        setup(points = 0) // 0.1.12: 점이 있는 작업은 좌표계를 못 바꾼다 → 빈 작업에서
         rule.runOnUiThread { c.hub.open(ToolScreen.SETTINGS) }; rule.waitForIdle()
         rule.onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("zone_" + kr.archsurvey.core.KoreanTmZone.entries.indexOfFirst { it.epsg == 5187 }).performClick(); rule.waitForIdle()

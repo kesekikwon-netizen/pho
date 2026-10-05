@@ -97,7 +97,23 @@ object AntennaMath {
     /** 1.0~3.0 m 밖이면 "폴 높이가 맞나요?" 확인 */
     fun isUnusual(m: Double) = m < 1.0 || m > 3.0
 
-    /** +/- 버튼: cm 단위로 증감, 0~MAX 로 제한 */
+    /** 0.1.12: 폴(안테나) 높이 조정 단위 = 10 cm. 사용자 조정(± 버튼·칩·새 작업 창)은 이 단위로만 */
+    const val POLE_STEP_CM = 10
+
+    /** 0.1 m 단위로 맞춤(반올림), 0~MAX */
+    fun snapPole(m: Double, maxM: Double = MAX_HEIGHT_M): Double {
+        if (m.isNaN() || m.isInfinite()) return 0.0
+        return (Math.round(m * 10.0) / 10.0).coerceIn(0.0, maxM)
+    }
+
+    /** ± 버튼(0.1.12): 현재 값을 0.1 m 로 맞춘 뒤 10 cm 배수로 증감. deltaCm 이 10 의 배수가 아니면 부호만 보고 한 칸(10 cm) */
+    fun stepPole(currentM: Double, deltaCm: Int, maxM: Double = MAX_HEIGHT_M): Double {
+        val steps = when { deltaCm == 0 -> 0; deltaCm % POLE_STEP_CM == 0 -> deltaCm / POLE_STEP_CM; deltaCm > 0 -> 1; else -> -1 }
+        val base = Math.round(currentM * 10.0)
+        return snapPole((base + steps) / 10.0, maxM)
+    }
+
+    /** +/- 버튼: cm 단위로 증감, 0~MAX 로 제한 (0.1.11 까지 화면에서 쓰던 1 cm 단위 — 이제 화면에서는 [stepPole]) */
     fun step(currentM: Double, deltaCm: Int, maxM: Double = MAX_HEIGHT_M): Double {
         val cm = Math.round(currentM * 100.0) + deltaCm
         return (cm / 100.0).coerceIn(0.0, maxM)
