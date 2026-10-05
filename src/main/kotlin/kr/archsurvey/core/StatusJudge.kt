@@ -13,6 +13,7 @@ enum class StatusReason(val textKo: String) {
     FLOAT("플로트 — 아직 고정 전"),
     LOW_PRECISION("고정이지만 정밀도가 낮아요"),
     NO_SIGMA("정밀도 값을 받지 못했어요"),
+    OLD_CORRECTION("보정 데이터가 오래됐어요"),
     SINGLE_OR_DGPS("보정 없이 단독 측위"),
     NO_POSITION("위치를 아직 못 찾았어요"),
     NO_DATA("수신기 데이터가 없어요"),
@@ -27,6 +28,8 @@ data class StatusThresholds(
     val fixedMaxSigmaHM: Double = 0.02,
     /** 마지막 GGA 이후 이 시간이 넘으면 불가(끊김) */
     val staleAfterMs: Long = 5_000,
+    /** RTK 고정이어도 보정 연령(GGA 값 + GGA 수신 후 경과)이 이 값(초)을 넘으면 주의. 제안값 [현장검증] */
+    val maxCorrectionAgeSec: Double = 10.0,
 )
 
 data class StatusResult(val status: SurveyStatus, val reason: StatusReason, val sigmaHM: Double?)
@@ -49,6 +52,7 @@ object StatusJudge {
         if (!gga.hasPosition) return StatusResult(SurveyStatus.UNAVAILABLE, StatusReason.NO_POSITION, sigma)
         return when (gga.quality) {
             FixQuality.RTK_FIXED -> when {
+                (snap.correctionAgeNowSec(nowMs) ?: 0.0) > th.maxCorrectionAgeSec -> StatusResult(SurveyStatus.CAUTION, StatusReason.OLD_CORRECTION, sigma)
                 sigma == null -> StatusResult(SurveyStatus.CAUTION, StatusReason.NO_SIGMA, null)
                 sigma > th.fixedMaxSigmaHM + EPS -> StatusResult(SurveyStatus.CAUTION, StatusReason.LOW_PRECISION, sigma)
                 else -> StatusResult(SurveyStatus.FIXED, StatusReason.OK, sigma)

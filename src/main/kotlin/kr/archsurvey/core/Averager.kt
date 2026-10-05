@@ -8,16 +8,32 @@ class PointAverager(private val targetEpochs: Int) {
     private var sigmaE: Double? = null
     private var sigmaN: Double? = null
     private var lastGgaTime: String? = null
+    private var startedAtMs: Long? = null
+    private var endedAtMs: Long? = null
+    private var rejectedDup = 0
+    private var rejectedNoPos = 0
+    private var maxAge: Double? = null
+    private var minAge: Double? = null
+    private var epochsWithoutAge = 0
 
     val count: Int get() = samples.size
     val progress: Float get() = (samples.size.toFloat() / targetEpochs).coerceIn(0f, 1f)
     val done: Boolean get() = samples.size >= targetEpochs
 
-    /** GGA 에폭 추가 (같은 시각 중복 문장은 무시). 위치 없는 문장은 무시. */
-    fun add(gga: GgaMessage, gst: GstMessage?): Boolean {
-        if (!gga.hasPosition) return false
-        if (gga.utcTime == lastGgaTime) return false
+    /**
+     * GGA 에폭 추가 (같은 시각 중복 문장은 무시). 위치 없는 문장은 무시.
+     * [nowMs]: 호출자 단조 시계(elapsedRealtime 등). 주면 평균화 시작/종료 시각을 기록한다(없어도 기존처럼 동작).
+     */
+    fun add(gga: GgaMessage, gst: GstMessage?, nowMs: Long? = null): Boolean {
+        if (!gga.hasPosition) { rejectedNoPos++; return false }
+        // 시각 필드가 비어 있는 수신기는 중복 판정을 하지 않는다(전부 같은 "" 로 보여 첫 에폭만 쓰이던 문제)
+        if (gga.utcTime.isNotEmpty() && gga.utcTime == lastGgaTime) { rejectedDup++; return false }
         lastGgaTime = gga.utcTime
+        if (nowMs != null) { if (startedAtMs == null) startedAtMs = nowMs; endedAtMs = nowMs }
+        val age = gga.correctionAgeSec
+        if (age == null) epochsWithoutAge++ else {
+            maxAge = maxOf(maxAge ?: age, age); minAge = minOf(minAge ?: age, age)
+        }
         samples.add(gga)
         gst?.let { g ->
             sigmaN = g.sigmaLat; sigmaE = g.sigmaLon; sigmaV = g.sigmaAlt; sigmaH = g.sigmaHoriz
@@ -47,6 +63,11 @@ class PointAverager(private val targetEpochs: Int) {
             correctionAgeSec = last.correctionAgeSec,
             baseStationId = last.baseStationId,
             epochs = n,
+            startedAtMs = startedAtMs, endedAtMs = endedAtMs,
+            maxCorrectionAgeSec = maxAge, minCorrectionAgeSec = minAge, epochsWithoutAge = epochsWithoutAge,
+            fixedEpochs = samples.count { it.quality == FixQuality.RTK_FIXED },
+            floatEpochs = samples.count { it.quality == FixQuality.RTK_FLOAT },
+            rejectedDuplicate = rejectedDup, rejectedNoPosition = rejectedNoPos,
         )
     }
 
@@ -64,4 +85,12 @@ data class AveragedPoint(
     val sigmaE: Double?, val sigmaN: Double?, val sigmaH: Double?, val sigmaU: Double?,
     val correctionAgeSec: Double?, val baseStationId: String?,
     val epochs: Int,
-)
+    /** 평균화 시작/종료 시각(호출자 단조 시계 ms; 벽시계 변환은 호출자 몫). add(nowMs) 를 안 줬으면 null */
+    val startedAtMs: Long? = null, val endedAtMs: Long? = null,
+    /** 사용한 에폭 중 보정 연령의 최대/최소(초). correctionAgeSec(마지막 값)만으로는 중간에 보정이 끊겼던 것을 알 수 없다 */
+    val maxCorrectionAgeSec: Double? = null, val minCorrectionAgeSec: Double? = null, val epochsWithoutAge: Int = 0,
+    val fixedEpochs: Int = 0, val floatEpochs: Int = 0,
+    val rejectedDuplicate: Int = 0, val rejectedNoPosition: Int = 0,
+) {
+    val durationMs: Long? get() = if (startedAtMs != null && endedAtMs != null) endedAtMs - startedAtMs else null
+}

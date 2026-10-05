@@ -11,6 +11,7 @@ enum class BtError(val code: String, val retry: Boolean, val title: String, val 
     NOT_PAIRED("BT-111", false, "고른 수신기가 폰에 등록되어 있지 않아요", "폰 블루투스 설정에서 수신기를 다시 등록해 주세요."),
     CONNECT_TIMEOUT("BT-120", true, "수신기를 찾지 못했어요 (시간 초과)", "수신기 전원과 거리(2m 이내)를 확인하세요. 다른 폰이나 컨트롤러가 붙어 있으면 연결을 끊어 주세요."),
     CONNECT_REFUSED("BT-121", true, "수신기가 연결을 받아주지 않아요", "수신기를 껐다 켠 뒤 다시 해 보세요. 안 되면 폰에서 수신기 등록을 삭제하고 다시 등록하세요."),
+    POWER_OR_RANGE("BT-123", true, "수신기 전원이 꺼졌거나 범위를 벗어났을 수 있어요", "수신기 전원·배터리와 거리(폰과 10m 이내)를 확인하세요. 켜지면 자동으로 다시 연결해요. 이미 저장한 측점은 그대로예요."),
     SOCKET_CLOSED("BT-122", true, "연결이 바로 끊겼어요", "수신기에 다른 기기가 연결돼 있을 수 있어요. 그 기기의 블루투스를 끄고 다시 시도하세요."),
     ALL_FAILED("BT-124", true, "여러 방법으로 시도했지만 연결하지 못했어요", "① 폰 블루투스 껐다 켜기 ② 수신기 껐다 켜기 ③ 폰에서 수신기 등록 삭제 후 재등록"),
     NO_DATA("BT-130", false, "연결은 됐는데 위치가 오지 않아요", "수신기 설정에서 블루투스 포트의 NMEA 출력(GGA)을 켜야 해요."),
@@ -29,6 +30,14 @@ enum class BtError(val code: String, val retry: Boolean, val title: String, val 
     val needsUserAction: Boolean get() = !retry || this == BT_OFF || this == PERMISSION_NEARBY || this == AIRPLANE_MODE
 
     companion object {
+        /**
+         * 한 번 연결됐던 수신기를 다시 못 잡을 때의 추정. 클래식 블루투스는 "전원 꺼짐"과 "범위 밖"을 구분하는 공개 API 가 없다.
+         * 연속 [minFailures] 회 이상 시간 초과/소켓 닫힘/전부 실패면 [POWER_OR_RANGE] 로 안내한다(추정이며 확정 아님).
+         */
+        fun refineAfterLoss(err: BtError, everConnected: Boolean, consecutiveFailures: Int, minFailures: Int = 2): BtError =
+            if (everConnected && consecutiveFailures >= minFailures &&
+                (err == CONNECT_TIMEOUT || err == SOCKET_CLOSED || err == ALL_FAILED || err == LINK_LOST)) POWER_OR_RANGE else err
+
         /** 예외 메시지는 제조사별로 다르므로 문자열 매칭은 보조. 사전 점검(권한/꺼짐/등록)을 먼저 적용할 것 */
         fun classify(e: Throwable?): BtError {
             if (e is SecurityException) return PERMISSION_NEARBY
@@ -37,7 +46,8 @@ enum class BtError(val code: String, val retry: Boolean, val title: String, val 
                 "service discovery failed" in m -> CONNECT_REFUSED
                 "timeout" in m && "read failed" !in m -> CONNECT_TIMEOUT
                 "socket might closed" in m || "read ret: -1" in m || "bt socket closed" in m || "broken pipe" in m -> SOCKET_CLOSED
-                "host is down" in m || "connection refused" in m -> CONNECT_REFUSED
+                "host is down" in m -> POWER_OR_RANGE
+                "connection refused" in m -> CONNECT_REFUSED
                 "bluetooth is off" in m || ("adapter" in m && "off" in m) -> BT_OFF
                 "stalled" in m -> WRITE_STALLED
                 else -> UNKNOWN
