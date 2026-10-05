@@ -10,12 +10,14 @@ enum class FixQuality(val code: Int, val labelKo: String, val short: String) {
     RTK_FLOAT(5, "RTK 플로트", "RTK FLOAT"),
     DEAD_RECKONING(6, "추측항법", "DR"),
     MANUAL(7, "수동 입력", "MANUAL"),
-    SIMULATION(8, "시뮬레이션", "SIM");
+    SIMULATION(8, "시뮬레이션", "SIM"),
+    /** NMEA quality 9 — SBAS 보정 위치(형제기종 SP80 ICD). 위치 없음(0)으로 두지 않음 */
+    SBAS(9, "SBAS 보정", "SBAS");
 
     /** RTK(고정/플로트): 반송파 기반 보정 해 */
     val isRtk: Boolean get() = this == RTK_FIXED || this == RTK_FLOAT
     /** 코드 기반 차동 보정(DGPS/SBAS 등) 또는 RTK */
-    val isCorrected: Boolean get() = this == DGPS || this == RTK_FIXED || this == RTK_FLOAT
+    val isCorrected: Boolean get() = this == DGPS || this == SBAS || this == RTK_FIXED || this == RTK_FLOAT
 
     companion object {
         fun fromCode(c: Int?): FixQuality = entries.firstOrNull { it.code == c } ?: NONE

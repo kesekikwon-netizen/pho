@@ -48,19 +48,19 @@ fun ConnectionHost(c: SurveyController, cc: ConnectionController) {
 @Composable
 private fun ConnectionProgress(c: SurveyController, cc: ConnectionController, link: kr.archsurvey.device.LinkStatus, ntrip: kr.archsurvey.engine.NtripStatus) {
     val states = ConnectSteps.compute(link, ntrip, cc.form.enabled, c.gv.quality.code)
-    val details = listOf(
-        link.message.ifBlank { null }?.takeIf { states[0] != StepState.DONE },
-        null,
-        if (cc.form.enabled) "${cc.form.host}:${cc.form.port} · ${cc.form.mount}" else null,
-        null,
-        "지금: ${c.gv.quality.labelKo} · 위성 ${c.gv.satellites}개",
-    )
-    val steps = ConnectSteps.labels.mapIndexed { i, l -> StepView(l, states[i], details[i]) }
+    val hostMount = if (cc.form.enabled) "${cc.form.host}:${cc.form.port} · ${cc.form.mount}" else null
+    val steps = ConnectSteps.labels.mapIndexed { i, l ->
+        StepView(l, states[i], ConnectSteps.detail(i, link, states, hostMount, c.gv.quality.labelKo, c.gv.satellites))
+    }
     val sec = rememberElapsedSec(cc.progressStartMs)
     val card = ErrorCards.from(link, ntrip, cc.form.enabled).firstOrNull()
     val done = states.last() == StepState.DONE
     ProgressWindow(
-        if (done) "연결 완료 · 고정됨" else "연결 중", steps, sec, "conn_progress",
+        when {
+            done -> "연결 완료 · 고정됨"
+            states[0] == StepState.DONE && states[1] == StepState.FAIL -> "연결됨 · 위치 없음"
+            else -> "연결 중"
+        }, steps, sec, "conn_progress",
         note = card?.let { "${it.title} (${it.code}) — ${it.action}" } ?: if (done) "측량할 준비가 됐어요." else "닫아도 연결은 계속돼요. 상태 띠에서 진행을 볼 수 있어요.",
     ) {
         if (!done) MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_progress_cancel"), MKind.PLAIN, 16.dp, onClick = { cc.disconnect() }) { Text("연결 취소", style = Ty.label, color = T.ink) }
@@ -129,6 +129,7 @@ private fun MountPicker(cc: ConnectionController) {
                             if (on) Text("선택됨", style = Ty.label.copy(fontSize = 12.sp), color = t.accentText)
                         }
                         Text(mountLine(m, cc.mountFromKnown), style = Ty.small, color = t.inkSub, maxLines = 2)
+                        cc.mountCompatNote(m)?.let { Text(it, style = Ty.small, color = t.bad, maxLines = 1, modifier = Modifier.testTag("mount_warn_${m.mountPoint}")) }
                     }
                 }
                 if (cc.mounts.isNotEmpty() && list.isEmpty()) Text("‘${cc.mountQuery}’와 맞는 마운트가 없어요", style = Ty.small, color = t.inkSub)

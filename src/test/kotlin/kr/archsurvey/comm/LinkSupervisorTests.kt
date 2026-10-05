@@ -164,13 +164,39 @@ class LinkSupervisorTests {
     }
 
     @Test fun noSentencesAtAllMeansNmeaNotEnabled_needsUser_noRetryStorm() {
-        val r = Rig(profile(dead = 400), scope) { MockSocket() }
+        // heal=0: 치유 없이 바로 NEEDS_USER (치유 경로는 아래 별도 시험)
+        val r = Rig(profile(dead = 400).copy(nmeaHealAttempts = 0), scope) { MockSocket() }
         r.waitFor(what = "needs user") { r.link.value.state == LinkState.NEEDS_USER }
         assertEquals(BtError.NO_DATA, r.link.value.error)
         Thread.sleep(600)
         assertEquals("사용자 조치 전까지 재연결 폭주 금지", 1, r.sockets.size)
+        assertTrue(r.link.value.message.contains("위성") || r.link.value.message.contains("NMEA") || r.link.value.message.contains("다시 연결"))
         r.wake.trySend(Unit)
         r.waitFor { r.sockets.size == 2 }
+    }
+
+    @Test fun noGgaTriggersNmeaHealThenNeedsUser() {
+        val r = Rig(profile(dead = 350, initial = 80, max = 200).copy(nmeaHealAttempts = 2), scope) { MockSocket() }
+        r.waitFor(ms = 8000, what = "needs user after heals") { r.link.value.state == LinkState.NEEDS_USER }
+        assertEquals(BtError.NO_DATA, r.link.value.error)
+        assertTrue("치유 재연결로 소켓이 늘어야 함: ${r.sockets.size}", r.sockets.size >= 3)
+        assertEquals(2, r.sup.nmeaHeals)
+    }
+
+    @Test fun sp60ActivationSendsPashesCandidatesAndSeesGga() {
+        val ack = kr.archsurvey.core.NmeaParser.build("PASHR,ACK")
+        val r = Rig(DeviceProfiles.SP60.copy(staleAfterMs = 5_000, reconnectAfterMs = 12_000, nmeaHealAttempts = 0,
+            reconnect = ReconnectPolicy(initialDelayMs = 100, maxDelayMs = 400, settleMs = 0, repairHintAfterFailures = 3, firstConnectDelayMs = 0)),
+            scope) { MockSocket() }
+        r.waitFor { r.sockets.size == 1 && r.link.value.state == LinkState.CONNECTED_NO_DATA }
+        // 활성화가 GGA 명령을 쓸 때까지 기다린 뒤 ACK+GGA 응답
+        r.waitFor(ms = 6000, what = "PASHS written") {
+            val w = r.sockets[0].written.toString("US-ASCII"); "PASHS,NME,GGA" in w || "PASHQ,NMO" in w
+        }
+        val written = r.sockets[0].written.toString("US-ASCII")
+        assertTrue(written, "PASHQ,NMO" in written || "PASHS,NME,GGA,C,ON" in written)
+        r.sockets[0].push(ack + gga())
+        r.waitFor(what = "streaming after activation") { r.link.value.state == LinkState.STREAMING }
     }
 
     @Test fun stalledRtcmWriteIsDetected() {

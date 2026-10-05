@@ -25,11 +25,31 @@ class Logic019Tests {
         assertEquals(listOf(StepState.DONE, StepState.ACTIVE, StepState.SKIP, StepState.SKIP, StepState.WAIT), noVrs)
     }
 
+    /** BT-130: 소켓은 됐는데 GGA 없음 → 블루투스 성공 · 위치 데이터 실패 (현장 진행창 오표시 수정) */
+    @Test fun connectStepsSeparatesBluetoothOkFromNoGga() {
+        val bt130 = ConnectSteps.compute(
+            LinkStatus(LinkState.NEEDS_USER, error = kr.archsurvey.bt.BtError.NO_DATA, message = "연결은 됐는데…"),
+            NtripStatus(NtripState.CONNECTED), true, 0,
+        )
+        assertEquals(StepState.DONE, bt130[0])
+        assertEquals(StepState.FAIL, bt130[1])
+        assertEquals("소켓 연결됨", ConnectSteps.detail(0, LinkStatus(LinkState.NEEDS_USER, error = kr.archsurvey.bt.BtError.NO_DATA), bt130, null, "없음", 0))
+        val btOff = ConnectSteps.compute(LinkStatus(LinkState.NEEDS_USER, error = kr.archsurvey.bt.BtError.BT_OFF), NtripStatus(), false, 0)
+        assertEquals(StepState.FAIL, btOff[0])
+        assertEquals(StepState.WAIT, btOff[1])
+        val heal = ConnectSteps.compute(
+            LinkStatus(LinkState.RECONNECTING, error = kr.archsurvey.bt.BtError.NO_DATA, message = "치유 1/2"),
+            NtripStatus(), true, 0,
+        )
+        assertEquals(listOf(StepState.DONE, StepState.ACTIVE, StepState.WAIT, StepState.WAIT, StepState.WAIT), heal)
+    }
+
     @Test fun knownMountsAreMarkedUnverifiedWithSource() {
         val r1 = KnownMounts.forHost("RTS1.ngii.go.kr").map { it.mountPoint }
-        assertEquals(listOf("VRS-RTCM31", "VRS-CMRx", "VRS-RTCM23", "RTK-RTCM32"), r1)
+        assertTrue(r1.containsAll(listOf("VRS-RTCM31", "VRS-RTCM32", "VRS-RTCM34", "VRS-CMRx", "VRS-RTCM23", "RTK-RTCM32")))
         val r2 = KnownMounts.forHost(" rts2.NGII.go.kr ").map { it.mountPoint }
-        assertTrue(r2.containsAll(listOf("VRS-RTCM31", "VRS-RTCM32", "FKP-RTCM31", "SSR-SSRG")))
+        assertTrue(r2.containsAll(listOf("VRS-RTCM31", "VRS-RTCM32", "VRS-RTCM34", "FKP-RTCM31", "SSR-SSRG")))
+        assertTrue(KnownMounts.forHost("rts1.ngii.go.kr").first { it.mountPoint == "VRS-RTCM34" }.identifier.contains("SP60"))
         assertTrue(KnownMounts.forHost("rts1.ngii.go.kr").all { "미확인" in it.identifier })
         assertTrue(KnownMounts.SOURCE.contains("미확인") && KnownMounts.SOURCE.contains("2022"))
         assertTrue(KnownMounts.forHost("caster.example.com").isEmpty())

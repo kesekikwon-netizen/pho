@@ -39,6 +39,11 @@ data class DeviceProfile(
     /** 보안 연결 실패 시 insecure RFCOMM 폴백 허용 */
     val allowInsecureFallback: Boolean,
     val connectAttemptsPerCycle: Int,
+    /**
+     * 소켓은 붙었는데 GGA가 없을 때(BT-130) 자동 NMEA 명령·재연결을 몇 번 더 시도할지.
+     * 다 쓴 뒤에는 NEEDS_USER + 현장 체크리스트. 0이면 치유 없이 바로 안내.
+     */
+    val nmeaHealAttempts: Int = 2,
     val verifiedOnRealDevice: Boolean = false,
 ) {
     fun matchesName(name: String?): Boolean {
@@ -82,7 +87,7 @@ object DeviceProfiles {
             "다른 컨트롤러(Trimble Access 등)는 같은 포트에 연결하지 않아요",
         ),
         portNote = "블루투스 포트 1부터 시도하고, 안 되면 2·3 으로 바꿔 보세요. 다른 컨트롤러가 같은 블루투스 포트에 붙으면 설정이 바뀌어 NMEA 가 끊길 수 있어요. [현장확인]",
-        noDataHint = "연결은 됐지만 위치 데이터가 안 와요. R10 웹 화면에서 이 블루투스 포트의 NMEA(GGA) 출력이 켜져 있는지, 다른 기기가 같은 포트를 쓰고 있지 않은지 확인하세요.",
+        noDataHint = "연결은 됐지만 위치(GGA)가 없어요. ① 위성 LED ② 다른 컨트롤러 끊기 ③ 도난경보·시작잠금 확인 ④ 웹 UI NMEA(GGA/GST) 켜기 ⑤ 다시 연결",
         repairHint = "연결이 계속 실패해요. 폰 블루투스 설정에서 R10을 삭제한 뒤 다시 페어링해 보세요.",
         requiredSentences = setOf("GGA"),
         recommendedSentences = listOf("GGA", "GST", "GSA", "ZDA"),
@@ -94,6 +99,7 @@ object DeviceProfiles {
         ggaUploadIntervalMs = 5_000,
         allowInsecureFallback = true,
         connectAttemptsPerCycle = 1,
+        nmeaHealAttempts = 2,
     )
 
     val SP60 = DeviceProfile(
@@ -120,7 +126,7 @@ object DeviceProfiles {
             "SP60 블루투스 포트에서 NMEA(GGA) 출력을 켰어요",
         ),
         portNote = "장거리(베이스↔로버) 블루투스와 데이터콜렉터 연결은 별개예요. 이 앱은 데이터콜렉터용 SPP 연결을 씁니다. [현장확인]",
-        noDataHint = "연결은 됐지만 위치 데이터가 안 와요. SP60 이 위성을 잡았는지, 블루투스 포트의 NMEA(GGA) 출력이 켜져 있는지 확인하세요.",
+        noDataHint = "연결은 됐지만 위치(GGA)가 없어요. ① 위성 LED(추적) ② 다른 폰·컨트롤러·SPace 끊기 ③ 도난경보·시작잠금 확인 ④ NMEA(GGA) 켜기(앱 자동 · 안 되면 SPace/Survey Pro) ⑤ 다시 연결",
         repairHint = "연결이 계속 실패해요. SP60 이 위성을 잡은 뒤, 폰 블루투스 설정에서 SP60 을 삭제하고 다시 페어링하세요.",
         requiredSentences = setOf("GGA"),
         recommendedSentences = listOf("GGA", "GST", "GSA", "ZDA"),
@@ -136,6 +142,7 @@ object DeviceProfiles {
         ggaUploadIntervalMs = 5_000,
         allowInsecureFallback = true,
         connectAttemptsPerCycle = 1,
+        nmeaHealAttempts = 2,
     )
 
     val all: List<DeviceProfile> = listOf(R10, SP60)

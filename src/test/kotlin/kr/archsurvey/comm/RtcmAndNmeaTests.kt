@@ -121,6 +121,8 @@ class NmeaCommTests {
         assertTrue(FixQuality.RTK_FIXED.isRtk && FixQuality.RTK_FLOAT.isRtk && !FixQuality.DGPS.isRtk)
         assertTrue(FixQuality.DGPS.isCorrected && !FixQuality.SINGLE.isCorrected)
         assertEquals(FixQuality.NONE, FixQuality.fromCode(99))
+        assertEquals(FixQuality.SBAS, FixQuality.fromCode(9))
+        assertTrue(FixQuality.SBAS.isCorrected && !FixQuality.SBAS.isRtk)
     }
 
     @Test fun statusCautionWhenCorrectionTooOld() {

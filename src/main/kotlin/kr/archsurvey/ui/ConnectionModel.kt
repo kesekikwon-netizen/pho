@@ -12,6 +12,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kr.archsurvey.ntrip.MountInfo
+import kr.archsurvey.ntrip.RtcmMountCompat
 import kr.archsurvey.bt.BtError
 import kr.archsurvey.device.DeviceProfile
 import kr.archsurvey.device.DeviceProfiles
@@ -134,13 +135,16 @@ object KnownMounts {
     fun forHost(host: String): List<MountInfo> = when (host.trim().lowercase()) {
         "rts1.ngii.go.kr" -> listOf(
             m("VRS-RTCM31", "RTCM 3.1", true, "미확인"),
+            m("VRS-RTCM32", "RTCM 3.2", true, "미확인 · SP60 권장"),
+            m("VRS-RTCM34", "RTCM 3.4", true, "R10 허용 · SP60 비호환(최대 3.2) · 미확인"),
             m("VRS-CMRx", "CMRx", true, "미확인"),
             m("VRS-RTCM23", "RTCM 2.3", true, "미확인"),
             m("RTK-RTCM32", "RTCM 3.2", false, "Single RTK · 성과심사 불가 · 미확인"),
         )
         "rts2.ngii.go.kr" -> listOf(
             m("VRS-RTCM31", "RTCM 3.1", true, "미확인"),
-            m("VRS-RTCM32", "RTCM 3.2", true, "미확인"),
+            m("VRS-RTCM32", "RTCM 3.2", true, "미확인 · SP60 권장"),
+            m("VRS-RTCM34", "RTCM 3.4", true, "R10 허용 · SP60 비호환(최대 3.2) · 미확인"),
             m("FKP-RTCM31", "RTCM 3.1", true, "FKP 면보정 · 미확인"),
             m("SSR-SSRG", "SSR", false, "SSR 보정 · 미확인"),
         )
@@ -151,20 +155,34 @@ object KnownMounts {
 /** 마운트 선택 창 상태 */
 enum class MountLoad { IDLE, LOADING, OK, FAILED }
 
-/** 연결 진행 단계 계산(블루투스 → 수신기 데이터 → VRS 접속 → 보정 수신 → 고정). 화면 없이 시험 가능 */
+/**
+ * 연결 진행 단계 계산(블루투스 → 수신기 데이터 → VRS 접속 → 보정 수신 → 고정).
+ * 소켓이 붙었는데 GGA만 없으면(BT-130) **블루투스=성공**, **수신기 위치 데이터=실패**로 나눈다.
+ * (0.1.9는 NEEDS_USER 전체를 블루투스 실패로 표시해 현장 혼동을 일으킴)
+ */
 object ConnectSteps {
     val labels = listOf("블루투스 연결", "수신기 위치 데이터", "VRS 서버 접속", "보정 데이터 수신", "RTK 고정(FIX)")
+
     fun compute(link: LinkStatus, ntrip: NtripStatus, ntripEnabled: Boolean, fixQuality: Int): List<StepState> {
-        val bt = when (link.state) {
-            LinkState.IDLE -> StepState.WAIT
-            LinkState.CONNECTING, LinkState.RECONNECTING -> StepState.ACTIVE
-            LinkState.NEEDS_USER -> StepState.FAIL
+        val nmeaIssue = kr.archsurvey.bt.NmeaActivation.isNmeaIssue(link.error)
+        // 소켓 연결 성공 후: CONNECTED_* / STREAMING / STALE, 또는 NMEA 문제로 NEEDS_USER·치유 재연결 중
+        val socketOk = when (link.state) {
+            LinkState.CONNECTED_NO_DATA, LinkState.STREAMING, LinkState.STALE -> true
+            LinkState.NEEDS_USER, LinkState.RECONNECTING -> nmeaIssue
+            else -> false
+        }
+        val bt = when {
+            link.state == LinkState.IDLE -> StepState.WAIT
+            socketOk -> StepState.DONE
+            link.state == LinkState.NEEDS_USER -> StepState.FAIL
+            link.state == LinkState.CONNECTING || link.state == LinkState.RECONNECTING -> StepState.ACTIVE
             else -> StepState.DONE
         }
         val data = when (link.state) {
             LinkState.STREAMING -> StepState.DONE
             LinkState.CONNECTED_NO_DATA, LinkState.STALE -> StepState.ACTIVE
-            LinkState.NEEDS_USER -> StepState.FAIL
+            LinkState.NEEDS_USER -> if (nmeaIssue) StepState.FAIL else StepState.WAIT
+            LinkState.RECONNECTING -> if (nmeaIssue) StepState.ACTIVE else StepState.WAIT
             else -> StepState.WAIT
         }
         val (srv, rx) = if (!ntripEnabled) StepState.SKIP to StepState.SKIP else when (ntrip.state) {
@@ -181,6 +199,25 @@ object ConnectSteps {
             else -> StepState.WAIT
         }
         return listOf(bt, data, srv, rx, fix)
+    }
+
+    /** 진행 창 단계별 부가 문구 */
+    fun detail(i: Int, link: LinkStatus, states: List<StepState>, hostMount: String?, qualityLabel: String, sats: Int): String? = when (i) {
+        0 -> when (states[0]) {
+            StepState.DONE -> "소켓 연결됨" + (link.strategy?.let { " · $it" } ?: "")
+            StepState.FAIL -> link.message.ifBlank { link.error?.title }.orEmpty().ifBlank { null }
+            StepState.ACTIVE -> link.message.ifBlank { null }
+            else -> null
+        }
+        1 -> when (states[1]) {
+            StepState.FAIL -> (link.error?.let { "${it.code} · ${it.action}" } ?: link.message).ifBlank { null }
+            StepState.ACTIVE -> link.message.ifBlank { "위치(GGA) 기다리는 중" }
+            StepState.DONE -> "GGA 수신 중"
+            else -> null
+        }
+        2 -> hostMount
+        4 -> "지금: $qualityLabel · 위성 ${sats}개"
+        else -> null
     }
 }
 
@@ -250,6 +287,7 @@ class ConnectionController(
         if (p.id == profile.id) return
         profile = p; resetChecks(); address = null; notice = null; refresh()
         persist()
+        RtcmMountCompat.warnIfIncompatible(profile, form.mount)?.let { ui.toast(it) }
     }
 
     fun selectAddress(a: String) { address = a; notice = null; persist() }
@@ -322,11 +360,17 @@ class ConnectionController(
     fun pickMount(name: String) {
         val m = name.trim()
         if (m.isEmpty()) { ui.toast("마운트 이름을 입력하세요"); return }
+        val info = mounts.firstOrNull { it.mountPoint.equals(m, true) }
         form = form.copy(mount = m)
         mountPickerOpen = false; mountJob?.cancel()
         persistSafe()
-        ui.toast("마운트 포인트 저장됨 · $m")
+        val warn = RtcmMountCompat.warnIfIncompatible(profile, m, info?.format.orEmpty(), info?.formatDetails.orEmpty())
+        if (warn != null) ui.toast(warn) else ui.toast("마운트 포인트 저장됨 · $m")
     }
+
+    /** 목록 행에 붙일 짧은 경고(호환이면 null) */
+    fun mountCompatNote(m: MountInfo): String? =
+        RtcmMountCompat.warnIfIncompatible(profile, m.mountPoint, m.format, m.formatDetails)?.let { "SP60 비호환 · 3.1/3.2 권장" }
 
     fun closeMountPicker() { mountPickerOpen = false; mountJob?.cancel(); if (mountLoad == MountLoad.LOADING) mountLoad = MountLoad.IDLE }
 
@@ -378,6 +422,10 @@ class ConnectionController(
         if (checks.any { !it }) { notice = ErrorCard("-", "연결 전 확인을 모두 체크해 주세요", "수신기의 NMEA 출력을 켜지 않으면 연결돼도 위치가 오지 않아요.", false); return }
         val probs = form.problems()
         if (probs.isNotEmpty()) { notice = ErrorCard("-", "VRS 입력을 확인해 주세요", probs.joinToString(" · "), false); return }
+        RtcmMountCompat.warnIfIncompatible(profile, form.mount)?.let { w ->
+            notice = ErrorCard("RTCM", "이 수신기에 맞지 않는 보정 형식일 수 있어요", w, false)
+            // 막지 않고 안내만 — 사용자가 다시 누르면 진행(알림은 유지)
+        }
         persistSafe()
         startNow(addr)
         showProgress = true
