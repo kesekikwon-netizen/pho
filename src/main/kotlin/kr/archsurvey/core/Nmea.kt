@@ -12,6 +12,11 @@ enum class FixQuality(val code: Int, val labelKo: String, val short: String) {
     MANUAL(7, "수동 입력", "MANUAL"),
     SIMULATION(8, "시뮬레이션", "SIM");
 
+    /** RTK(고정/플로트): 반송파 기반 보정 해 */
+    val isRtk: Boolean get() = this == RTK_FIXED || this == RTK_FLOAT
+    /** 코드 기반 차동 보정(DGPS/SBAS 등) 또는 RTK */
+    val isCorrected: Boolean get() = this == DGPS || this == RTK_FIXED || this == RTK_FLOAT
+
     companion object {
         fun fromCode(c: Int?): FixQuality = entries.firstOrNull { it.code == c } ?: NONE
     }
@@ -71,13 +76,19 @@ data class ParserStats(
     var malformed: Long = 0,
     var overflows: Long = 0,
     var ignored: Long = 0,
-)
+) {
+    /** 체크섬 오류 비율(0..1). 판정 가능한 문장이 20개 미만이면 0 (표본 부족) */
+    val checksumErrorRate: Double get() {
+        val total = valid + checksumErrors
+        return if (total < 20) 0.0 else checksumErrors.toDouble() / total
+    }
+}
 
 /**
  * NMEA 0183 스트림 파서. 라인 단위 버퍼링, 체크섬 불일치 문장은 폐기(카운터 증가),
  * 버퍼 상한 초과 시 리셋. 어떤 입력에도 예외를 던지지 않는다.
  */
-class NmeaParser(private val maxLine: Int = 4096) {
+class NmeaParser(private val maxLine: Int = 512) {
     val stats = ParserStats()
     private val sb = StringBuilder()
     private var overflowed = false

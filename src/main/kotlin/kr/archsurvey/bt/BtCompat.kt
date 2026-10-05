@@ -79,12 +79,15 @@ enum class Strategy { SECURE_SPP, INSECURE_SPP, SDP_UUID, REFLECT_CH1 }
 data class Attempt(val strategy: Strategy, val uuid: UUID? = null)
 
 /** RFCOMM(SPP) 전송 계층. 한 인스턴스 = 한 소켓. close() 는 멱등. 4단계 폴백, 성공한 방식을 반환. */
-class BtTransport(private val ctx: Context, private val address: String) {
+class BtTransport(private val ctx: Context, private val address: String, private val preferred: Strategy? = null) : kr.archsurvey.engine.LinkTransport {
     @Volatile private var socket: BluetoothSocket? = null
     @Volatile private var closed = false
-    lateinit var input: InputStream; private set
-    lateinit var output: OutputStream; private set
+    override lateinit var input: InputStream; private set
+    override lateinit var output: OutputStream; private set
     var usedStrategy: Strategy? = null; private set
+    override val strategyName: String? get() = usedStrategy?.name
+
+    override fun connect() = connect(preferred)
 
     /** 블로킹. IO 스레드에서 호출. preferred: 지난번 성공한 방식(있으면 먼저 시도) */
     @SuppressLint("MissingPermission")
@@ -152,7 +155,7 @@ class BtTransport(private val ctx: Context, private val address: String) {
         return if (preferred == null) plan else plan.sortedBy { if (it.strategy == preferred) 0 else 1 }
     }
 
-    fun close() {
+    override fun close() {
         closed = true
         try { socket?.close() } catch (_: Exception) {}
     }

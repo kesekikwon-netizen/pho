@@ -18,6 +18,15 @@ data class GnssSnapshot(
     /** 보이는 위성 수 합계. GSV 를 받지 못했으면 null */
     val satsInView: Int? get() = if (inViewByTalker.isEmpty()) null else inViewByTalker.values.sum()
     val quality: FixQuality get() = gga?.quality ?: FixQuality.NONE
+
+    /**
+     * 지금 시점의 보정 연령(초). GGA 의 "보정 연령" 필드는 그 문장이 만들어진 순간의 값이므로,
+     * GGA 를 받은 뒤 흐른 시간을 더해 보수적으로(크게) 표시한다. GGA 에 값이 없으면 null.
+     */
+    fun correctionAgeNowSec(nowMs: Long): Double? {
+        val a = gga?.correctionAgeSec ?: return null
+        return a + (nowMs - lastGgaAtMs).coerceAtLeast(0) / 1000.0
+    }
 }
 
 enum class DataHealth { NO_DATA_YET, OK, STALE, DEAD }
@@ -28,31 +37,60 @@ enum class DataHealth { NO_DATA_YET, OK, STALE, DEAD }
  */
 class NmeaDriver(val profile: DeviceProfile) {
     private val parser = NmeaParser()
-    var snapshot = GnssSnapshot()
+    /** 읽기 스레드가 쓰고 워치독/UI 스레드가 읽는다 */
+    @Volatile var snapshot = GnssSnapshot()
         private set
     private var startedAtMs = 0L
+
+    val parserStats: ParserStats get() = parser.stats
 
     fun reset(nowMs: Long) {
         snapshot = GnssSnapshot()
         startedAtMs = nowMs
     }
 
-    /** 수신 바이트를 처리하고 새로 파싱된 메시지를 반환 */
+    /**
+     * 수신 바이트를 처리하고 새로 파싱된 메시지를 반환.
+     * 스냅샷은 호출당 한 번만 복사한다(문장마다 copy/Set 복사를 하던 이전 방식은 GSV 가 많은 출력에서 초당 수십 번 객체를 만들었다).
+     */
     fun onBytes(buf: ByteArray, len: Int, nowMs: Long): List<NmeaMessage> {
         val msgs = parser.feed(buf, len)
-        var s = snapshot
-        for (m in msgs) {
-            s = when (m) {
-                is GgaMessage -> s.copy(gga = m, lastGgaAtMs = nowMs)
-                is GstMessage -> s.copy(gst = m)
-                is GsaMessage -> s.copy(gsa = m)
-                is GsvMessage -> s.copy(inViewByTalker = s.inViewByTalker + (m.talker to (m.satsInView ?: 0)))
-                is ZdaMessage -> s
-            }
-            s = s.copy(seenTypes = s.seenTypes + typeOf(m))
+        if (msgs.isEmpty()) {
+            if (parser.stats.checksumErrors != snapshot.checksumErrors) snapshot = snapshot.copy(checksumErrors = parser.stats.checksumErrors)
+            return msgs
         }
-        if (msgs.isNotEmpty()) s = s.copy(lastAnyAtMs = nowMs, sentencesTotal = s.sentencesTotal + msgs.size)
-        snapshot = s.copy(checksumErrors = parser.stats.checksumErrors)
+        val s0 = snapshot
+        var gga = s0.gga; var gst = s0.gst; var gsa = s0.gsa
+        var lastGgaAt = s0.lastGgaAtMs
+        var types: MutableSet<String>? = null
+        var inView: MutableMap<String, Int>? = null
+        for (m in msgs) {
+            when (m) {
+                is GgaMessage -> { gga = m; lastGgaAt = nowMs }
+                is GstMessage -> gst = m
+                is GsaMessage -> gsa = m
+                is GsvMessage -> {
+                    val v = m.satsInView ?: 0
+                    if (s0.inViewByTalker[m.talker] != v || inView != null) {
+                        if (inView == null) inView = HashMap(s0.inViewByTalker)
+                        inView[m.talker] = v
+                    }
+                }
+                is ZdaMessage -> {}
+            }
+            val t = typeOf(m)
+            if (t !in s0.seenTypes && (types == null || t !in types)) {
+                if (types == null) types = HashSet(s0.seenTypes)
+                types.add(t)
+            }
+        }
+        snapshot = s0.copy(
+            gga = gga, gst = gst, gsa = gsa, lastGgaAtMs = lastGgaAt,
+            lastAnyAtMs = nowMs, sentencesTotal = s0.sentencesTotal + msgs.size,
+            seenTypes = types ?: s0.seenTypes,
+            inViewByTalker = inView ?: s0.inViewByTalker,
+            checksumErrors = parser.stats.checksumErrors,
+        )
         return msgs
     }
 

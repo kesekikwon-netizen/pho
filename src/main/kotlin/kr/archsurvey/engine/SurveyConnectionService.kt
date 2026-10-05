@@ -16,6 +16,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kr.archsurvey.App
 import kr.archsurvey.MainActivity
 import kr.archsurvey.R
@@ -31,6 +32,7 @@ class SurveyConnectionService : Service() {
     private var wake: PowerManager.WakeLock? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var obs: Job? = null
+    private var wakeRenew: Job? = null
 
     override fun onBind(i: Intent?): IBinder? = null
 
@@ -59,21 +61,28 @@ class SurveyConnectionService : Service() {
         app.engine.start(profile, addr, s.loadNtrip(), s.ntripEnabled)
         obs?.cancel()
         obs = scope.launch {
-            combine(app.engine.link, app.engine.gnss, app.engine.ntrip) { l, g, nt -> Triple(l, g, nt) }.collect { (l, g, nt) ->
+            // 알림은 제목/문구가 **바뀔 때만** 갱신한다. (이전: 위치가 갱신될 때마다 초당 여러 번 notify → 불필요한 IPC·배터리)
+            combine(app.engine.link, app.engine.gnss, app.engine.ntrip) { l, g, nt ->
                 val title = when (l.state) {
                     LinkState.STREAMING -> "${profile.displayName} · ${g.quality.labelKo}"
                     LinkState.IDLE -> "측량 준비"
                     LinkState.NEEDS_USER -> "확인이 필요해요"
                     else -> "${profile.displayName} 연결 중"
                 }
-                val text = "보정: " + when (nt.state) {
-                    kr.archsurvey.ntrip.NtripState.RECEIVING -> "정상"
-                    kr.archsurvey.ntrip.NtripState.IDLE -> "사용 안 함"
+                val text = "보정: " + when {
+                    nt.paused -> "수신기 위치 대기"
+                    nt.state == kr.archsurvey.ntrip.NtripState.RECEIVING -> "정상"
+                    nt.state == kr.archsurvey.ntrip.NtripState.IDLE -> "사용 안 함"
                     else -> "확인 필요"
                 }
+                title to text
+            }.distinctUntilChanged().collect { (title, text) ->
                 (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).notify(NOTI_ID, buildNotification(title, text))
             }
         }
+        // 웨이크락은 시간 제한을 두고 주기적으로 갱신한다(서비스가 비정상 종료돼도 영구히 CPU 를 붙잡지 않도록)
+        wakeRenew?.cancel()
+        wakeRenew = scope.launch { while (true) { delay(WAKE_RENEW_MS); acquireWake() } }
         return START_NOT_STICKY
     }
 
@@ -105,14 +114,14 @@ class SurveyConnectionService : Service() {
     }
 
     private fun acquireWake() {
-        if (wake?.isHeld == true) return
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "survey:connection").apply { setReferenceCounted(false); acquire() }
+        val w = wake ?: pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "survey:connection").apply { setReferenceCounted(false) }.also { wake = it }
+        w.acquire(WAKE_TIMEOUT_MS) // 비참조 카운트: 다시 acquire 하면 만료 시각만 연장된다
     }
 
     private fun shutdown() {
         (application as App).engine.stop()
-        obs?.cancel()
+        obs?.cancel(); wakeRenew?.cancel()
         runCatching { wake?.takeIf { it.isHeld }?.release() }
         wake = null
         if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE) else @Suppress("DEPRECATION") stopForeground(true)
@@ -121,13 +130,16 @@ class SurveyConnectionService : Service() {
 
     override fun onDestroy() {
         runCatching { wake?.takeIf { it.isHeld }?.release() }
-        obs?.cancel(); scope.cancel()
+        obs?.cancel(); wakeRenew?.cancel(); scope.cancel()
         (application as App).engine.stop()
         super.onDestroy()
     }
 
     companion object {
         const val CHANNEL = "survey_connection"
+        /** 웨이크락 유효 시간과 갱신 주기(갱신 주기 < 유효 시간) */
+        const val WAKE_TIMEOUT_MS = 10 * 60_000L
+        const val WAKE_RENEW_MS = 5 * 60_000L
         const val NOTI_ID = 4201
         const val ACTION_STOP = "kr.archsurvey.STOP"
         const val EXTRA_DEVICE = "device"
