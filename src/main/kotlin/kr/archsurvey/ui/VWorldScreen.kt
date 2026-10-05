@@ -40,6 +40,8 @@ class VWorldSettingsState(private val p: MapKeyPlatform, private val scope: Coro
     var showKey by mutableStateOf(false)
     var testing by mutableStateOf(false); private set
     var testResult by mutableStateOf<String?>(null); private set
+    /** 0.1.14 시험(타일 받기) 끝 멘트 — SurveyController 가 완료/오류 알림으로 연결 */
+    var onResult: ((Boolean, String) -> Unit)? = null
     val hasKey: Boolean get() = access.key.isNotBlank()
 
     fun load() { access = runCatching { p.access() }.getOrDefault(access); keyInput = ""; domainInput = access.domain; lineOnly = access.lineOnly; testResult = null }
@@ -67,6 +69,7 @@ class VWorldSettingsState(private val p: MapKeyPlatform, private val scope: Coro
         scope.launch {
             val r = try { withContext(io) { p.test(a) } } catch (e: Exception) { "시험 실패 (${e.javaClass.simpleName})" }
             testResult = r; testing = false
+            onResult?.invoke(VWorldTestText.isOk(r), "V월드 연결 시험 · $r")
         }
     }
 }
@@ -75,7 +78,7 @@ class VWorldSettingsState(private val p: MapKeyPlatform, private val scope: Coro
 fun VWorldScreen(c: SurveyController) {
     val t = T; val v = c.vworld
     ToolScaffold("V월드 지적도 · 배경맵", "vworld_screen", onBack = { c.hub.back() }, bottom = {
-        PrimaryBar("저장", "vworld_save") { c.ui.toast(v.save()) }
+        PrimaryBar("저장", "vworld_save") { v.save().let { m -> c.ui.result(!m.startsWith("키 모양"), m) } }
     }) {
         Card {
             Text("API 인증키", style = Ty.label, color = t.ink)
@@ -110,3 +113,6 @@ fun VWorldScreen(c: SurveyController) {
     }
 }
 
+
+/** 0.1.14 V월드 시험 결과 문구 → 성공 여부 */
+object VWorldTestText { fun isOk(r: String): Boolean = r.startsWith("성공") }

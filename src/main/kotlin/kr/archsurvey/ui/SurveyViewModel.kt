@@ -51,8 +51,14 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
     init {
         val cc = ConnectionController(platform, safeScope)
         cc.ui = controller.ui
+        // BT 프로필 ↔ 안테나 모델 단일화(서랍·홈·GNSS·안테나 시트 기기명 일치)
+        cc.onProfileChanged = { p ->
+            kr.archsurvey.data.AntennaDb.antennaIdForProfile(p.id)?.let { controller.setAntennaModel(it) }
+        }
         connection = cc
         controller.connection = cc
+        // 시작 시 이미 고른 프로필이 있으면 안테나도 맞춤
+        kr.archsurvey.data.AntennaDb.antennaIdForProfile(cc.profile.id)?.let { controller.setAntennaModel(it) }
         controller.setTypesList(application.settings.positionTypes)
         controller.onTypesChanged = { application.settings.positionTypes = it }
         val archStore = kr.archsurvey.data.RoomArchStore(SurveyDb.get(app), project = { application.settings.project })

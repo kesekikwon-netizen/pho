@@ -38,6 +38,13 @@ object AntennaDb {
         return out
     }
 
+    /** DeviceProfile.id → 안테나 DB 키 (TRIMBLE_R10 / SPECTRA_SP60) */
+    fun antennaIdForProfile(deviceProfileId: String?): String? = ID_MAP[deviceProfileId]
+
     /** DeviceProfile.id -> 안테나 모델 */
     fun forDevice(all: Map<String, AntennaModel>, deviceId: String?): AntennaModel? = all[ID_MAP[deviceId]]
+
+    /** 안테나 DB 키 → DeviceProfile.id (양방향 표시 일치용) */
+    fun profileIdForAntenna(antennaModelId: String?): String? =
+        ID_MAP.entries.firstOrNull { it.value == antennaModelId }?.key
 }

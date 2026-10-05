@@ -139,6 +139,7 @@ class Feature0112Test {
     }
     private class Sett : SettingsPlatform {
         override var zone = KoreanTmZone.CENTRAL; override var poleRight = true; override var sound = true; override var vibration = true; override var keepScreenOn = true
+        override var epochs = 3
     }
 
     @Test fun newJobAppliesAllSettingsAtOnceAndSwitchingRestoresEach() {
@@ -174,4 +175,83 @@ class Feature0112Test {
         val jc = JobController(c, Jobs(), scope()); jc.formZone = KoreanTmZone.EAST; jc.applyInfo()
         assertNotNull(jc.error); assertEquals(5186, c.zone.epsg)
     }
+
+    @Test fun applyInfoGoesToSurveyAndMatchesSettings() {
+        val cfgs = MemoryJobConfigPlatform(); val jobs = Jobs()
+        val c = SurveyController(FakeGnssSource(FakeScenarios.allFixed()), db, scope())
+        c.homeOpen = true
+        val sett = Sett()
+        val st = SettingsState(c, sett); c.settingsState = st
+        val jc = JobController(c, jobs, scope(), cfgs); c.jobs = jc
+        c.onJobConfigChanged = { cfgs.save(jobs.current, it) }
+        jc.openInfo()
+        assertEquals(ToolScreen.JOB_INFO, c.hub.screen)
+        jc.formZone = KoreanTmZone.EAST
+        jc.formGeoid = GeoidModel.EGM96
+        jc.formMap = MapBase.CADASTRAL
+        jc.applyInfo()
+        // 측량으로 이동
+        assertNull(c.hub.screen); assertFalse(c.homeOpen)
+        // 컨트롤러 = 설정 Pref 미러 = JobConfig = 같음
+        assertEquals(5187, c.zone.epsg)
+        assertEquals(GeoidModel.EGM96, c.geoid)
+        assertEquals(MapBase.CADASTRAL, c.mapBase)
+        assertEquals(KoreanTmZone.EAST, sett.zone)
+        assertEquals(5187, cfgs.load(jobs.current)!!.epsg)
+        assertEquals(GeoidModel.EGM96, cfgs.load(jobs.current)!!.geoid)
+        assertEquals(MapBase.CADASTRAL, cfgs.load(jobs.current)!!.mapBase)
+        // 설정 화면이 읽는 값도 동일
+        assertEquals(c.zone, sett.zone)
+        assertEquals(c.epochs, sett.epochs)
+        // 작업 정보 다시 열면 폼도 동일
+        jc.openInfo()
+        assertEquals(KoreanTmZone.EAST, jc.formZone)
+        assertEquals(GeoidModel.EGM96, jc.formGeoid)
+        assertEquals(MapBase.CADASTRAL, jc.formMap)
+        // 나가기는 저장 없이 뒤로(폼만 바꾼 뒤)
+        jc.formGeoid = GeoidModel.NONE
+        c.hub.back()
+        assertNull(c.hub.screen)
+        assertEquals(GeoidModel.EGM96, c.geoid) // 적용 안 했으므로 유지
+    }
+
+    @Test fun settingsAndJobInfoStayInSyncWhenChangedFromSettings() {
+        val cfgs = MemoryJobConfigPlatform(); val jobs = Jobs()
+        val c = SurveyController(FakeGnssSource(FakeScenarios.allFixed()), db, scope())
+        val sett = Sett(); val st = SettingsState(c, sett); c.settingsState = st
+        val jc = JobController(c, jobs, scope(), cfgs); c.jobs = jc
+        c.onJobConfigChanged = { cfgs.save(jobs.current, it) }
+        assertTrue(st.setZone(KoreanTmZone.EAST))
+        c.changeGeoid(GeoidModel.EGM96)
+        c.changeMapBase(MapBase.SATELLITE)
+        st.setEpochs(5)
+        assertEquals(5187, c.zone.epsg)
+        assertEquals(5187, cfgs.load(jobs.current)!!.epsg)
+        assertEquals(GeoidModel.EGM96, cfgs.load(jobs.current)!!.geoid)
+        assertEquals(MapBase.SATELLITE, cfgs.load(jobs.current)!!.mapBase)
+        assertEquals(5, cfgs.load(jobs.current)!!.epochs)
+        assertEquals(5, sett.epochs)
+        assertEquals(KoreanTmZone.EAST, sett.zone)
+        jc.openInfo()
+        assertEquals(KoreanTmZone.EAST, jc.formZone)
+        assertEquals(GeoidModel.EGM96, jc.formGeoid)
+        assertEquals(MapBase.SATELLITE, jc.formMap)
+    }
+
+
+    @Test fun profileSelectSyncsAntennaModelAndDrawerSource() {
+        val c = SurveyController(FakeGnssSource(FakeScenarios.allFixed()), db, scope())
+        // ConnectionController 흉내: onProfileChanged 배선
+        val antBefore = c.antennaModelId
+        assertEquals("TRIMBLE_R10", antBefore)
+        val id = kr.archsurvey.data.AntennaDb.antennaIdForProfile(DeviceProfiles.SP60_ID)
+        assertEquals("SPECTRA_SP60", id)
+        c.setAntennaModel(id!!)
+        assertEquals("SPECTRA_SP60", c.antennaModelId)
+        assertEquals(DeviceProfiles.SP60_ID, kr.archsurvey.data.AntennaDb.profileIdForAntenna(c.antennaModelId))
+        // 표시 우선순위: profile.displayName ?: antennaModel 라벨 — Home/헤더와 동일 규칙
+        val shown = c.connection?.profile?.displayName ?: if (c.antennaModelId == "TRIMBLE_R10") "Trimble R10" else "Spectra SP60"
+        assertEquals("Spectra SP60", shown)
+    }
+
 }

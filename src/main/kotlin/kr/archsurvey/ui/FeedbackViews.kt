@@ -17,6 +17,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,14 +35,25 @@ fun FeedbackOverlays(ui: FeedbackHub) {
 private fun ToastView(ui: FeedbackHub) {
     val t = T
     val msg = ui.toast ?: return
-    LaunchedEffect(ui.toastSeq) { delay(ui.toastMs); ui.hideToast() }
+    val kind = ui.toastKind
+    val view = androidx.compose.ui.platform.LocalView.current
+    val hap = LocalTapHaptic.current
+    // 0.1.14: 완료/오류 멘트에 햅틱 한 번(같은 알림이 다시 그려져도 한 번만). 오류는 조금 더 오래 보인다
+    LaunchedEffect(ui.toastSeq) {
+        if (hap) when (kind) { ToastKind.OK -> TapHaptics.ok(view); ToastKind.ERROR -> TapHaptics.error(view); else -> {} }
+        delay(if (kind == ToastKind.ERROR) ui.toastMs + 2000L else ui.toastMs); ui.hideToast()
+    }
+    val bgc = if (kind == ToastKind.ERROR) t.bad else t.ink
+    val fg = if (kind == ToastKind.ERROR) t.onBad else t.bg
     Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 88.dp), contentAlignment = Alignment.TopCenter) {
         Row(
-            Modifier.clip(RoundedCornerShape(16.dp)).background(t.ink).padding(horizontal = 16.dp, vertical = 12.dp).testTag("toast"),
+            Modifier.clip(RoundedCornerShape(16.dp)).background(bgc).padding(horizontal = 16.dp, vertical = 12.dp).testTag("toast")
+                .semantics { contentDescription = when (kind) { ToastKind.OK -> "완료"; ToastKind.ERROR -> "오류"; else -> "알림" } },
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            GlyphIcon(Glyph.CHECK, t.bg, 20.dp)
-            Text(msg, style = Ty.body, color = t.bg, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("toast_text"))
+            if (kind == ToastKind.ERROR) Text("✕", style = Ty.label, color = fg, modifier = Modifier.testTag("toast_error_mark"))
+            else GlyphIcon(Glyph.CHECK, fg, 20.dp)
+            Text(msg, style = Ty.body, color = fg, maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("toast_text"))
         }
     }
 }
@@ -49,10 +61,10 @@ private fun ToastView(ui: FeedbackHub) {
 @Composable
 private fun ConfirmDialog(ui: FeedbackHub, r: ConfirmRequest) {
     val t = T
-    Box(Modifier.fillMaxSize().background(t.scrim).clickable { ui.answer(false) }, contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxSize().background(t.scrim).hClickable { ui.answer(false) }, contentAlignment = Alignment.Center) {
         Column(
             Modifier.padding(24.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(t.bg).border(1.dp, t.line, RoundedCornerShape(20.dp))
-                .clickable(enabled = false) {}.padding(20.dp).testTag("confirm_dialog"),
+                .hClickable(enabled = false) {}.padding(20.dp).testTag("confirm_dialog"),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(r.title, style = Ty.title, color = t.ink, modifier = Modifier.testTag("confirm_title"))
@@ -69,7 +81,7 @@ private fun ConfirmDialog(ui: FeedbackHub, r: ConfirmRequest) {
 private fun ChoiceSheet(ui: FeedbackHub, r: ChoiceRequest) {
     val t = T
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().background(t.scrim).clickable { ui.dismissChoice() })
+        Box(Modifier.fillMaxSize().background(t.scrim).hClickable { ui.dismissChoice() })
         val shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = 560.dp).clip(shape).background(t.bg).border(1.dp, t.line, shape)
@@ -83,7 +95,7 @@ private fun ChoiceSheet(ui: FeedbackHub, r: ChoiceRequest) {
                     val on = i == r.selected
                     Row(
                         Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(16.dp)).background(if (on) t.primaryCont else t.bg)
-                            .border(if (on) 1.5.dp else 1.dp, if (on) t.accent else t.line, RoundedCornerShape(16.dp)).clickable { ui.pick(i) }
+                            .border(if (on) 1.5.dp else 1.dp, if (on) t.accent else t.line, RoundedCornerShape(16.dp)).hClickable { ui.pick(i) }
                             .padding(horizontal = 16.dp).testTag("${r.tagPrefix}_$i"),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {

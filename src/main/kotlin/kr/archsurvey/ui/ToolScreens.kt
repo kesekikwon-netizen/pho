@@ -60,7 +60,7 @@ fun PointsScreen(c: SurveyController) {
                 Text(if (c.points.isEmpty()) "아직 측점한 점이 없어요" else "검색 결과가 없어요", style = Ty.title, color = t.ink, modifier = Modifier.testTag("points_empty"))
                 if (c.points.isEmpty()) {
                     Text("지도 화면의 ‘측점’ 버튼으로 첫 점을 찍으면 여기에 쌓여요.", style = Ty.body, color = t.inkSub)
-                    Btn("지도로 돌아가기", Modifier.fillMaxWidth().height(56.dp).testTag("points_to_map")) { h.closeAll() }
+                    Btn("지도로 돌아가기", Modifier.fillMaxWidth().height(56.dp).testTag("points_to_map")) { c.goToSurvey() }
                 }
             }
         }
@@ -73,7 +73,7 @@ private fun PointRow(p: SavedPoint, onClick: () -> Unit) {
     val t = T
     val (sbg, sfg) = statusColors(t, p.status)
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 72.dp).clip(RoundedCornerShape(16.dp)).background(t.card).clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp).testTag("point_row_${p.name}"),
+        Modifier.fillMaxWidth().heightIn(min = 72.dp).clip(RoundedCornerShape(16.dp)).background(t.card).hClickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp).testTag("point_row_${p.name}"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -139,7 +139,7 @@ fun PointDetailScreen(c: SurveyController) {
         PointHistoryCards(c, p)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.weight(1f)) { Btn("여기로 찾아가기", Modifier.fillMaxWidth().testTag("detail_goto")) { h.startGoto(p) } }
-            Box(Modifier.weight(1f)) { Btn("지도에서 보기", Modifier.fillMaxWidth().testTag("detail_map")) { c.focusOn(p); h.closeAll() } }
+            Box(Modifier.weight(1f)) { Btn("지도에서 보기", Modifier.fillMaxWidth().testTag("detail_map")) { c.focusOn(p); c.goToSurvey() } }
         }
     }
 }
@@ -214,7 +214,7 @@ fun PointChooser(points: List<SavedPoint>, tag: String, onPick: (SavedPoint) -> 
     if (points.isEmpty()) { Text("측점한 점이 없어요.", style = Ty.small, color = t.inkSub); return }
     LazyColumn(Modifier.fillMaxWidth().heightIn(max = 240.dp).clip(RoundedCornerShape(12.dp)).border(1.dp, t.line, RoundedCornerShape(12.dp)).testTag(tag)) {
         items(points, key = { it.name }) { p ->
-            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { onPick(p) }.padding(horizontal = 12.dp).testTag("${tag}_${p.name}"), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).hClickable { onPick(p) }.padding(horizontal = 12.dp).testTag("${tag}_${p.name}"), verticalAlignment = Alignment.CenterVertically) {
                 Text(p.name, style = Ty.label, color = t.ink, modifier = Modifier.weight(1f))
                 Text(p.type, style = Ty.small, color = t.inkSub)
             }
@@ -302,7 +302,7 @@ fun CalcScreen(c: SurveyController) {
 @Composable
 private fun PickRow(label: String, value: String?, tag: String, onClick: () -> Unit) {
     val t = T
-    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp)).border(1.dp, t.outline, RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp).testTag(tag), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp)).border(1.dp, t.outline, RoundedCornerShape(14.dp)).hClickable(onClick = onClick).padding(horizontal = 12.dp).testTag(tag), verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = Ty.small, color = t.inkSub, modifier = Modifier.width(56.dp))
         Text(value ?: "고르기", style = Ty.body, color = if (value == null) t.accentText else t.ink)
     }
@@ -316,17 +316,14 @@ fun SettingsScreen(c: SurveyController) {
     val st = c.settingsState
     ToolScaffold("설정", "settings_screen", onBack = { h.back() }) {
         if (st == null) { Text("설정을 불러올 수 없어요", style = Ty.body, color = t.inkSub); return@ToolScaffold }
-        val zones = kr.archsurvey.core.KoreanTmZone.entries
-        SelectRow("지역(좌표계)", c.zone.labelKo, false, "zone_toggle") {
-            c.ui.choose(ChoiceRequest("지역 · 좌표계 (GRS80 TM)", zones.map { it.labelKo }, zones.indexOf(c.zone), "zone",
-                "지금 작업에 저장돼요. 중부 127°E(5186) · 동부 129°E(5187, 경북·경남 동부). 다른 좌표계로 저장된 점이 있으면 바꿀 수 없어요.") { st.setZone(zones[it]) })
+        // 0.1.13 P0-2A: CRS·Geoid·배경맵은 작업 정보에서만 편집(즉시저장 vs 적용 충돌 제거). 표시는 현재 작업(c.*)
+        Text("지금 작업 · ${c.projectName}", style = Ty.small, color = t.inkSub)
+        SelectRow("지역 · Geoid · 배경맵", "${c.zone.labelKo} · ${c.geoid.shortKo} · ${c.mapBase.labelKo}", false, "zone_toggle") {
+            c.jobs?.openInfo() ?: c.ui.toast("작업 관리를 쓸 수 없어요")
         }
-        val geoids = kr.archsurvey.core.GeoidModel.entries
-        SelectRow("Geoid", c.geoid.labelKo, false, "geoid_toggle") {
-            c.ui.choose(ChoiceRequest("Geoid (표고 모델)", geoids.map { it.labelKo }, geoids.indexOf(c.geoid), "geoid",
-                "지금 작업에 저장되고 새 점부터 적용돼요. KNGeoid18은 격자 파일이 없어 아직 지원하지 않아요.") { c.changeGeoid(geoids[it]) })
+        SelectRow("V월드 키 · 지적 스타일", if (c.vworld.hasKey) "키 있음 · 배경맵은 작업 정보에서" else "키 없음 · 설정으로", false, "mapbase_toggle") {
+            c.vworld.load(); c.hub.open(ToolScreen.VWORLD)
         }
-        SelectRow("배경맵", c.mapBase.labelKo, false, "mapbase_toggle") { c.hub.open(ToolScreen.VWORLD); c.vworld.load() }
         val counts = listOf(1, 3, 5, 10)
         SelectRow("측정 횟수", "${c.epochs}회 평균", false, "epochs_toggle") {
             c.ui.choose(ChoiceRequest("한 점 측정 횟수", counts.map { "${it}회" + if (it == 3) " (기본)" else "" }, counts.indexOf(c.epochs), "epochs",
@@ -342,7 +339,7 @@ fun SettingsScreen(c: SurveyController) {
         c.tilt?.let { TiltSettings(it) }
         Card {
             ToggleRow("소리", st.sound, "set_sound") { st.changeSound(it) }
-            ToggleRow("진동", st.vibration, "set_vibration") { st.changeVibration(it) }
+            ToggleRow("진동 (알림 · 버튼 탭)", st.vibration, "set_vibration") { st.changeVibration(it) }
             ToggleRow("화면 항상 켜두기", st.keepScreenOn, "set_keepscreen") { st.changeKeepScreenOn(it) }
         }
         Card {
@@ -402,7 +399,8 @@ private fun ToggleRow(label: String, value: Boolean, tag: String, onChange: (Boo
     val t = T
     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = Ty.body, color = t.ink, modifier = Modifier.weight(1f))
-        androidx.compose.material3.Switch(value, onChange, modifier = Modifier.testTag(tag))
+        val view = androidx.compose.ui.platform.LocalView.current; val hap = LocalTapHaptic.current
+        androidx.compose.material3.Switch(value, { if (hap) TapHaptics.tap(view); onChange(it) }, modifier = Modifier.testTag(tag))
     }
 }
 
@@ -466,7 +464,9 @@ fun JobScreen(c: SurveyController) {
                         i.lastAtMs?.let { Text("마지막 측점 " + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA).format(Date(it)), style = Ty.small, color = t.inkSub) }
                         if (i.fakePoints > 0) Text("이전 시험 버전(0.1.1)에서 수신기 없이 만든 점이 ${i.fakePoints}개 있어요. 실측 데이터가 아니에요.", style = Ty.small, color = t.bad)
                     }
-                    Text("좌표계 EPSG:${c.zone.epsg} · Geoid ${c.geoid.shortKo} · 앱을 다시 켜면 이 작업과 설정이 그대로 열려요", style = Ty.small, color = t.inkSub)
+                    // 0.1.13 P0: 같은 화면에서 form(초안)과 라이브가 어긋나지 않게 — 적용 전 미리보기도 form*
+                    Text("적용 예정 EPSG:${jc.formZone.epsg} · Geoid ${jc.formGeoid.shortKo} · 배경맵 ${jc.formMap.labelKo}", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("job_info_preview"))
+                    Text("「적용」하면 저장하고 바로 측량 화면으로 이동해요. 앱을 다시 켜도 이 작업 설정이 열려요. 「나가기」는 저장하지 않고 뒤로 가요.", style = Ty.small, color = t.inkSub)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(Modifier.weight(1f)) { Btn("작업 열기 · 삭제", Modifier.fillMaxWidth().testTag("job_to_list")) { jc.openList() } }
@@ -516,7 +516,7 @@ private fun JobConfigRows(c: SurveyController, jc: JobController, editableZone: 
 @Composable
 internal fun FormRow(label: String, value: String, tag: String, onClick: () -> Unit) {
     val t = T
-    Column(Modifier.fillMaxWidth().clickable(onClick = onClick).testTag(tag), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.fillMaxWidth().hClickable(onClick = onClick).testTag(tag), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, style = Ty.small, color = t.inkSub)
         Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(value, style = Ty.body.copy(fontSize = 17.sp), color = t.ink, modifier = Modifier.weight(1f).testTag(tag + "_value"), maxLines = 2)
@@ -532,7 +532,7 @@ internal fun DualBar(left: String, leftTag: String, onLeft: () -> Unit, right: S
     val t = T
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         MBtn(Modifier.weight(1f).height(56.dp).testTag(leftTag), MKind.PLAIN, 28.dp, onClick = onLeft) { Text(left, style = Ty.button, color = t.ink) }
-        Box(Modifier.weight(1f).height(56.dp).clip(RoundedCornerShape(28.dp)).glossy(if (enabled) t.primary else t.chip, enabled).clickable(enabled = enabled, onClick = onRight).testTag(rightTag),
+        Box(Modifier.weight(1f).height(56.dp).clip(RoundedCornerShape(28.dp)).glossy(if (enabled) t.primary else t.chip, enabled).hClickable(enabled = enabled, onClick = onRight).testTag(rightTag),
             contentAlignment = Alignment.Center) { Text(right, style = Ty.button, color = if (enabled) t.onPrimary else t.inkSub) }
     }
 }

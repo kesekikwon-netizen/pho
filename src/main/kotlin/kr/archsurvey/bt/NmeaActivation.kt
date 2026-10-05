@@ -30,19 +30,24 @@ object NmeaActivation {
     /** 수신기별 후보. 빈 목록 = 자동 명령 없음(감시만) */
     fun candidates(profile: DeviceProfile): List<NmeaCmd> = when (profile.id) {
         // 연결당 1회. 포트 C=BT는 SP80 문서 기준 — SP60 실기 미확인, 실패해도 다음으로 계속
+        // 순서: PRT/NMO 조회 → OUT 재개(C→A→B) → NME GGA/GST/GSA(C) → DIF → 포트 A/B GGA → 주기생략
+        // GSV: 학습 캐시에 SP60 `$PASHS,NME,GSV` 명시 근거 없음 → 0.1.13에서 생략(형제기종 NME 문법만으로는 넣지 않음)
         DeviceProfiles.SP60_ID -> listOf(
             NmeaCmd("PASHQ,PRT", "현재 포트 문자·보드레이트 조회"),
             NmeaCmd("PASHQ,NMO", "NMEA 출력 상태 조회"),
             NmeaCmd("PASHS,OUT,C,ON", "포트 C 주기 메시지 재개"),
+            NmeaCmd("PASHS,OUT,A,ON", "포트 A 주기 메시지 재개"),
+            NmeaCmd("PASHS,OUT,B,ON", "포트 B 주기 메시지 재개"),
             NmeaCmd("PASHS,NME,GGA,C,ON,1", "GGA 1Hz · 포트 C(Bluetooth 추정)"),
             NmeaCmd("PASHS,NME,GST,C,ON,1", "GST 1Hz · 포트 C"),
             NmeaCmd("PASHS,NME,GSA,C,ON,1", "GSA 1Hz · 포트 C"),
             NmeaCmd("PASHS,DIF,PRT,C,RT3", "포트 C RTCM3 보정 수신(RT3=3.0~3.2)"),
             NmeaCmd("PASHS,DIF,PRT,C,ALL", "포트 C 보정 수신 ALL"),
-            NmeaCmd("PASHS,NME,GGA,A,ON,1", "GGA 1Hz · 포트 A(시리얼)"),
-            NmeaCmd("PASHS,OUT,A,ON", "포트 A 주기 메시지 재개"),
+            NmeaCmd("PASHS,NME,GGA,A,ON,1", "GGA 1Hz · 포트 A"),
             NmeaCmd("PASHS,NME,GGA,B,ON,1", "GGA 1Hz · 포트 B"),
             NmeaCmd("PASHS,NME,GGA,C,ON", "GGA ON · 포트 C(주기 생략)"),
+            NmeaCmd("PASHS,NME,GGA,A,ON", "GGA ON · 포트 A(주기 생략)"),
+            NmeaCmd("PASHS,NME,GGA,B,ON", "GGA ON · 포트 B(주기 생략)"),
         )
         DeviceProfiles.R10_ID -> emptyList() // 웹 UI 설정. 자동 명령 후보 없음
         else -> emptyList()
@@ -70,9 +75,9 @@ object NmeaActivation {
         write: (ByteArray) -> Unit,
         hasGga: () -> Boolean,
         clock: () -> Long,
-        naturalWaitMs: Long = 2_000,
-        perCmdWaitMs: Long = 1_200,
-        afterAllWaitMs: Long = 1_500,
+        naturalWaitMs: Long = 3_000,
+        perCmdWaitMs: Long = 1_400,
+        afterAllWaitMs: Long = 2_500,
         onStatus: (String) -> Unit = {},
         sawAck: () -> Boolean = { false },
         clearAck: () -> Unit = {},

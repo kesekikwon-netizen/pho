@@ -17,12 +17,19 @@ class NmeaActivationTests {
         assertTrue(c.any { it.body.startsWith("PASHQ,PRT") })
         assertTrue(c.any { it.body.startsWith("PASHQ,NMO") })
         assertTrue(c.any { it.body == "PASHS,OUT,C,ON" })
+        assertTrue(c.any { it.body == "PASHS,OUT,A,ON" })
+        assertTrue(c.any { it.body == "PASHS,OUT,B,ON" })
         assertTrue(c.any { "DIF,PRT,C,RT3" in it.body || "DIF,PRT,C,ALL" in it.body })
         assertTrue(c.any { "GGA,C,ON" in it.body })
         assertTrue(c.any { "GGA,A,ON" in it.body })
         assertTrue(c.any { "GGA,B,ON" in it.body })
+        // GSV: 학습 캐시 명시 근거 없음 → 후보에 넣지 않음
+        assertTrue(c.none { "GSV" in it.body })
         assertTrue(c.all { it.line().startsWith("$") && "*" in it.line() })
         assertEquals(NmeaParser.build("PASHS,NME,GGA,C,ON,1"), c.first { "GGA,C,ON,1" in it.body }.line())
+        assertTrue(DeviceProfiles.SP60.nmeaHealAttempts >= 4)
+        assertTrue(DeviceProfiles.SP60.noDataHoldMs >= 15_000)
+        assertTrue(DeviceProfiles.SP60.reconnectAfterMs >= 40_000)
     }
 
     @Test fun r10HasNoAutomaticCommands() {

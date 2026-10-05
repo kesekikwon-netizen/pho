@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
+enum class ToastKind { INFO, OK, ERROR }
+
 /** 확인 대화상자: 되돌릴 수 없거나 조심할 동작 앞에서 */
 data class ConfirmRequest(
     val title: String, val body: String, val okLabel: String,
@@ -30,7 +32,16 @@ class FeedbackHub {
     /** 알림 표시 시간(ms) */
     var toastMs = 3500L
 
-    fun toast(text: String) { toast = text; toastSeq++ }
+    /** 0.1.14 알림 종류: 일반 / 완료(✓·완료 햅틱) / 오류(✕·빨간 테두리·오류 햅틱·조금 더 오래) */
+    var toastKind by mutableStateOf(ToastKind.INFO); private set
+
+    fun toast(text: String) { toastKind = ToastKind.INFO; toast = text; toastSeq++ }
+    /** 완료 멘트(업로드·다운로드·저장·적용 끝) */
+    fun ok(text: String) { toastKind = ToastKind.OK; toast = text; toastSeq++ }
+    /** 오류 멘트 */
+    fun fail(text: String) { toastKind = ToastKind.ERROR; toast = text; toastSeq++ }
+    /** 결과 하나로: 성공이면 [ok], 아니면 [fail] */
+    fun result(success: Boolean, text: String) = if (success) ok(text) else fail(text)
     fun hideToast() { toast = null }
 
     fun ask(r: ConfirmRequest) { confirm = r }

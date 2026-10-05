@@ -105,6 +105,8 @@ class Ui0112Test {
         rule.onNodeWithTag("jobgeoid_" + GeoidModel.entries.indexOf(GeoidModel.NONE)).performClick(); rule.waitForIdle()
         rule.onNodeWithTag("job_apply").performClick(); rule.waitForIdle()
         assertEquals(GeoidModel.NONE, c.geoid); assertEquals(GeoidModel.NONE, cfgs.load("동부-트렌치1")!!.geoid)
+        // 0.1.13: 적용 → 측량 화면(도구 닫힘 · 홈 아님)
+        assertNull(c.hub.screen); assertFalse(c.homeOpen)
     }
 
     @Test fun vworldKeyEntryAndMapNotice() {

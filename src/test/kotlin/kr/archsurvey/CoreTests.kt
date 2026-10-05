@@ -165,15 +165,16 @@ class ReconnectPolicyTest {
 
 class NmeaDriverTest {
     @Test fun healthTransitions() {
+        // R10: staleAfterMs=5s, reconnectAfterMs=20s (0.1.13)
         val d = NmeaDriver(DeviceProfiles.R10); d.reset(0)
         assertEquals(DataHealth.NO_DATA_YET, d.health(1000))
         assertEquals(DataHealth.STALE, d.health(5500))
-        assertEquals(DataHealth.DEAD, d.health(12500))
+        assertEquals(DataHealth.DEAD, d.health(20500))
         val b = (gga(4) + "\r\n").toByteArray()
-        d.onBytes(b, b.size, 20000)
-        assertEquals(DataHealth.OK, d.health(21000))
-        assertEquals(DataHealth.STALE, d.health(26000))
-        assertEquals(DataHealth.DEAD, d.health(33000))
+        d.onBytes(b, b.size, 30000)
+        assertEquals(DataHealth.OK, d.health(31000))
+        assertEquals(DataHealth.STALE, d.health(36000))
+        assertEquals(DataHealth.DEAD, d.health(51000))
         assertEquals(FixQuality.RTK_FIXED, d.snapshot.quality)
         assertTrue(d.missingRequired().isEmpty())
     }

@@ -74,5 +74,6 @@ class AndroidConnectionPlatform(private val app: App) : ConnectionPlatform {
 
 /** 오류 기록에서 연결 진단(NMEA 활성화·블루투스·보정) 블록만 최근 4건 골라 짧게 돌려준다 */
 internal fun diagnosticsFrom(log: String): String =
-    log.split(Regex("(?m)^(?==== )")).filter { b -> listOf("NMEA", "블루투스", "보정", "연결").any { it in b } }
-        .takeLast(4).joinToString("\n") { it.trim().lines().take(8).joinToString("\n") }.takeLast(3000)
+    log.split(Regex("(?m)^(?==== )")).filter { b ->
+        listOf("NMEA", "블루투스", "보정", "연결", "진단", "BT-130", "치유", "PASH").any { it in b }
+    }.takeLast(6).joinToString("\n") { it.trim().lines().take(16).joinToString("\n") }.takeLast(5000)

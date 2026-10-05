@@ -66,7 +66,7 @@ fun StatusPill(c: SurveyController, modifier: Modifier = Modifier) {
     val corrColor = when (p.correctionTone) { Tone.BAD -> t.bad; Tone.NONE -> t.inkSub; else -> t.ink }
     val shape = RoundedCornerShape(18.dp)
     Box(
-        modifier.height(48.dp).clickable { c.gnssInfoOpen = true }
+        modifier.height(48.dp).hClickable { c.gnssInfoOpen = true }
             .semantics { contentDescription = "위성 ${p.sats}개, ${p.correction}, ${p.fix}. 눌러서 GNSS 정보" }.testTag("status_pill"),
         contentAlignment = Alignment.Center,
     ) {
@@ -87,7 +87,7 @@ fun StatusPill(c: SurveyController, modifier: Modifier = Modifier) {
 /** 머리글 아이콘 단추(48dp) */
 @Composable
 internal fun HeaderIcon(g: Glyph, desc: String, tag: String, onClick: () -> Unit) {
-    Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onClick).semantics { contentDescription = desc }.testTag(tag), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(48.dp).clip(CircleShape).hClickable(onClick = onClick).semantics { contentDescription = desc }.testTag(tag), contentAlignment = Alignment.Center) {
         GlyphIcon(g, T.ink, 22.dp)
     }
 }
@@ -184,10 +184,10 @@ fun GnssInfoDialog(c: SurveyController) {
     val dev = cc?.let { x -> x.bonded.firstOrNull { it.second == x.address }?.first ?: x.address }
     val model = cc?.profile?.displayName ?: if (c.antennaModelId == "TRIMBLE_R10") "Trimble R10" else "Spectra SP60"
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().background(t.scrim).clickable { c.gnssInfoOpen = false }.testTag("gnss_info_scrim"))
+        Box(Modifier.fillMaxSize().background(t.scrim).hClickable { c.gnssInfoOpen = false }.testTag("gnss_info_scrim"))
         val shape = RoundedCornerShape(24.dp)
         Column(
-            Modifier.align(Alignment.Center).padding(horizontal = 20.dp).fillMaxWidth().clip(shape).background(t.raised).clickable(enabled = false) {}
+            Modifier.align(Alignment.Center).padding(horizontal = 20.dp).fillMaxWidth().clip(shape).background(t.raised).hClickable(enabled = false) {}
                 .padding(20.dp).testTag("gnss_info"),
         ) {
             Text("GNSS 정보", style = Ty.title, color = t.ink, modifier = Modifier.padding(bottom = 8.dp))

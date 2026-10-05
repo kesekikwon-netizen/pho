@@ -36,7 +36,7 @@ fun PrimaryBar(label: String, tag: String, enabled: Boolean = true, onClick: () 
     Box(Modifier.fillMaxWidth().padding(16.dp)) {
         Box(
             Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(28.dp)).glossy(if (enabled) t.primary else t.chip, enabled)
-                .clickable(enabled = enabled, onClick = onClick).testTag(tag),
+                .hClickable(enabled = enabled, onClick = onClick).testTag(tag),
             contentAlignment = Alignment.Center,
         ) { Text(label, style = Ty.button.copy(fontSize = 18.sp), color = if (enabled) t.onPrimary else t.inkSub) }
     }
@@ -46,7 +46,7 @@ fun PrimaryBar(label: String, tag: String, enabled: Boolean = true, onClick: () 
 @Composable
 fun CheckRow(label: String, checked: Boolean, tag: String, onChange: (Boolean) -> Unit) {
     val t = T
-    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { onChange(!checked) }.testTag(tag), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).hClickable { onChange(!checked) }.testTag(tag), verticalAlignment = Alignment.CenterVertically) {
         androidx.compose.material3.Checkbox(checked, { onChange(it) })
         Text(label, style = Ty.body, color = t.ink)
     }
@@ -61,7 +61,7 @@ fun SelectRow(label: String, value: String, open: Boolean, tag: String, onClick:
     val t = T
     val shape = RoundedCornerShape(16.dp)
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(shape).background(t.raised).border(1.dp, t.outline, shape).clickable(onClick = onClick).padding(horizontal = 16.dp).testTag(tag),
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(shape).background(t.raised).border(1.dp, t.outline, shape).hClickable(onClick = onClick).padding(horizontal = 16.dp).testTag(tag),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(label, style = Ty.small, color = t.inkSub, modifier = Modifier.widthIn(min = 72.dp))
@@ -74,7 +74,7 @@ fun SelectRow(label: String, value: String, open: Boolean, tag: String, onClick:
 @Composable
 fun FoldRow(text: String, open: Boolean, tag: String, onClick: () -> Unit) {
     val t = T
-    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick).testTag(tag), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).hClickable(onClick = onClick).testTag(tag), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(text, style = Ty.label, color = t.accentText, modifier = Modifier.weight(1f))
         Box(Modifier.rotate(if (open) 0f else 180f)) { GlyphIcon(Glyph.CHEVRON_UP, t.accent, 16.dp) }
     }

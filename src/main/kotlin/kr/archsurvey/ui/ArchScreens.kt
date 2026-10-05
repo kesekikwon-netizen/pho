@@ -215,7 +215,7 @@ fun ArchOverlays(c: SurveyController) {
     c.resurveyTarget?.let { r ->
         Row(pill.padding(start = 10.dp).testTag("resurvey_banner"), verticalAlignment = Alignment.CenterVertically) {
             Text("재측량 중 · ${r.name} — 측점을 누르세요", style = Ty.small.copy(fontSize = 12.sp), color = t.ink, modifier = Modifier.weight(1f, fill = false))
-            Box(Modifier.heightIn(min = 48.dp).clickable { c.cancelResurvey() }.padding(horizontal = 12.dp).testTag("resurvey_cancel"), contentAlignment = Alignment.Center) { Text("취소", style = Ty.label, color = t.accentText) }
+            Box(Modifier.heightIn(min = 48.dp).hClickable { c.cancelResurvey() }.padding(horizontal = 12.dp).testTag("resurvey_cancel"), contentAlignment = Alignment.Center) { Text("취소", style = Ty.label, color = t.accentText) }
         }
     }
     if (a.outlineMode) {

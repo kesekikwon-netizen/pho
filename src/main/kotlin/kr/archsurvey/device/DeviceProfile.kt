@@ -44,6 +44,11 @@ data class DeviceProfile(
      * 다 쓴 뒤에는 NEEDS_USER + 현장 체크리스트. 0이면 치유 없이 바로 안내.
      */
     val nmeaHealAttempts: Int = 2,
+    /**
+     * NMEA 자동 켜기 실패 뒤에도 소켓을 이 시간만큼 유지해 진단(TX/RX·바이트)을 설정에서 볼 수 있게 한다.
+     * 0이면 활성화가 끝나는 즉시(또는 reconnectAfterMs) 끊고 치유 재연결.
+     */
+    val noDataHoldMs: Long = 15_000,
     val verifiedOnRealDevice: Boolean = false,
 ) {
     fun matchesName(name: String?): Boolean {
@@ -92,7 +97,7 @@ object DeviceProfiles {
         requiredSentences = setOf("GGA"),
         recommendedSentences = listOf("GGA", "GST", "GSA", "ZDA"),
         staleAfterMs = 5_000,
-        reconnectAfterMs = 12_000,
+        reconnectAfterMs = 20_000,
         reconnect = ReconnectPolicy(initialDelayMs = 1_000, maxDelayMs = 15_000, settleMs = 500, repairHintAfterFailures = 4),
         rtcmWriteChunk = 512,
         rtcmWriteGapMs = 0,
@@ -100,6 +105,7 @@ object DeviceProfiles {
         allowInsecureFallback = true,
         connectAttemptsPerCycle = 1,
         nmeaHealAttempts = 2,
+        noDataHoldMs = 12_000,
     )
 
     val SP60 = DeviceProfile(
@@ -131,7 +137,8 @@ object DeviceProfiles {
         requiredSentences = setOf("GGA"),
         recommendedSentences = listOf("GGA", "GST", "GSA", "ZDA"),
         staleAfterMs = 6_000,
-        reconnectAfterMs = 15_000,
+        // NMEA 후보 명령(포트 A/B/C) 전부 돌릴 시간 + 여유. 활성화 중 DEAD 금지 가드와 함께 씀
+        reconnectAfterMs = 45_000,
         // 페어링이 풀리는 문제를 피하려고 R10 보다 느리고 완만하게 재시도 (연결 남발 금지)
         reconnect = ReconnectPolicy(
             initialDelayMs = 2_000, maxDelayMs = 20_000, settleMs = 800,
@@ -142,7 +149,8 @@ object DeviceProfiles {
         ggaUploadIntervalMs = 5_000,
         allowInsecureFallback = true,
         connectAttemptsPerCycle = 1,
-        nmeaHealAttempts = 2,
+        nmeaHealAttempts = 4,
+        noDataHoldMs = 20_000,
     )
 
     val all: List<DeviceProfile> = listOf(R10, SP60)

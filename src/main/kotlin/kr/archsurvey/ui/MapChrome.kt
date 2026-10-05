@@ -52,7 +52,7 @@ internal fun MBtn(
         else -> Modifier.border(1.dp, t.outline, shape)
     }
     Column(
-        modifier.alpha(alpha).clip(shape).glossy(bgc).then(bm).combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        modifier.alpha(alpha).clip(shape).glossy(bgc).then(bm).hCombinedClickable(onLongClick = onLongClick, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, content = content,
     )
 }
@@ -98,7 +98,7 @@ private fun RowScope.BarItem(g: Glyph, label: String, tag: String, desc: String,
     Column(
         Modifier.weight(1f).widthIn(min = 48.dp).fillMaxHeight().clip(shape).background(if (selected) t.primaryCont else Color.Transparent)
             .then(if (selected) Modifier.border(1.5.dp, t.ink, shape) else Modifier)
-            .clickable(onClick = onClick).semantics { contentDescription = desc }.testTag(tag),
+            .hClickable(onClick = onClick).semantics { contentDescription = desc }.testTag(tag),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
     ) {
         GlyphIcon(g, t.ink, 22.dp)
@@ -159,7 +159,7 @@ internal fun QuickSheet(c: SurveyController) {
     val t = T
     val close = { c.quickSheetOpen = false }
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().background(t.scrim.copy(alpha = 0.3f)).clickable { close() })
+        Box(Modifier.fillMaxSize().background(t.scrim.copy(alpha = 0.3f)).hClickable { close() })
         val shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().shadow(1.dp, shape).clip(shape).glossy(t.card).border(1.5.dp, t.outline, shape)

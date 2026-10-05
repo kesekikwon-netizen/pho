@@ -75,7 +75,7 @@ fun SkyPlotScreen(c: SurveyController) {
     var mask by remember { mutableIntStateOf(0) }
     val shown = SkyModel.table(sats, hidden, mask)
     val counts = SkyModel.counts(sats)
-    Column(Modifier.fillMaxSize().background(t.bg).clickable(enabled = false) {}.testTag("skyplot")) {
+    Column(Modifier.fillMaxSize().background(t.bg).hClickable(enabled = false) {}.testTag("skyplot")) {
         AppHeader(c, "SkyPlot", onBack = { c.skyPlotOpen = false }, backTag = "skyplot_back")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(t.raised).border(1.dp, t.line.copy(alpha = 0.4f), RoundedCornerShape(20.dp)).padding(12.dp), contentAlignment = Alignment.Center) {
@@ -92,7 +92,7 @@ fun SkyPlotScreen(c: SurveyController) {
                     Row(
                         Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(24.dp)).background(if (on) t.raised else t.chip)
                             .border(if (on) 2.dp else 1.dp, if (on) t.ink else t.line, RoundedCornerShape(24.dp))
-                            .clickable { hidden = if (on) hidden + k else hidden - k }.testTag("skyplot_chip_${k.prefix}"),
+                            .hClickable { hidden = if (on) hidden + k else hidden - k }.testTag("skyplot_chip_${k.prefix}"),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
                     ) {
                         Box(Modifier.size(10.dp).clip(CircleShape).background(if (on) satColor(k) else t.inkSub))

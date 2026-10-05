@@ -52,7 +52,7 @@ fun SurveyMapScreen(
     c: SurveyController, batteryPct: Int?, map: MapSurface = rememberMapSurface(c),
 ) {
     val t = T
-    androidx.compose.runtime.CompositionLocalProvider(LocalSurvey provides c) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalSurvey provides c, LocalTapHaptic provides (c.settingsState?.vibration ?: true)) {
     Box(Modifier.fillMaxSize().background(t.bg).windowInsetsPadding(WindowInsets.systemBars).testTag("screen")) {
         val expanded = SurveyLayout.isResult(c.phase)
         if (c.homeOpen) HomeScreen(c) else Column(Modifier.fillMaxSize()) {
@@ -81,6 +81,7 @@ fun SurveyMapScreen(
         if (c.gnssInfoOpen) GnssInfoDialog(c)
         if (c.skyPlotOpen) SkyPlotScreen(c)
         if (c.phase == Phase.ACQUIRING) MeasureProgress(c)
+        BusyQueueBar(c) // 0.1.14 대기열·진행 게이지
         FeedbackOverlays(c.ui)
     }
     }
@@ -151,7 +152,7 @@ fun NotConnectedCard(c: SurveyController, modifier: Modifier) {
         Text("블루투스로 R10 / SP60을 연결하면 위치가 나타나요. 그 전에는 위치를 표시하지 않고 측점도 할 수 없어요.", style = Ty.small, color = t.inkSub, textAlign = TextAlign.Center)
         Box(
             Modifier.fillMaxWidth().height(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp)).glossy(t.primary)
-                .clickable { c.connection?.openScreen() ?: run { c.message = "연결 화면을 열 수 없어요" } }.testTag("not_connected_open"),
+                .hClickable { c.connection?.openScreen() ?: run { c.message = "연결 화면을 열 수 없어요" } }.testTag("not_connected_open"),
             contentAlignment = Alignment.Center,
         ) { Text("수신기 연결하기", style = Ty.label, color = t.onPrimary) }
     }
@@ -265,7 +266,7 @@ private fun ResultStrip(c: SurveyController) {
     val p = c.lastPoint ?: return
     val (bg, fg) = statusColors(t, p.status)
     Row(
-        Modifier.fillMaxSize().clickable { c.toggleExpand() }.padding(horizontal = 12.dp).testTag("result_strip"),
+        Modifier.fillMaxSize().hClickable { c.toggleExpand() }.padding(horizontal = 12.dp).testTag("result_strip"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Box(Modifier.width(6.dp).height(32.dp).clip(RoundedCornerShape(3.dp)).background(bg))   // 상태색 막대(칩과 같은 색)
@@ -364,7 +365,7 @@ private fun ExpandedExtra(c: SurveyController) {
                 val ph = c.photos.getOrNull(i)
                 Box(
                     Modifier.size(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(12.dp)).background(t.bg)
-                        .clickable { if (ph != null) confirmPhoto = ph else c.addPhotoCamera() }.testTag("photo_slot_$i"),
+                        .hClickable { if (ph != null) confirmPhoto = ph else c.addPhotoCamera() }.testTag("photo_slot_$i"),
                     contentAlignment = Alignment.Center,
                 ) {
                     if (ph != null) PhotoThumb(c, ph) else GlyphIcon(Glyph.CAMERA, t.inkSub, 20.dp)
@@ -375,14 +376,14 @@ private fun ExpandedExtra(c: SurveyController) {
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(
-                Modifier.height(52.dp).clip(RoundedCornerShape(16.dp)).glossy(t.primary).clickable { c.toggleVoice() }.padding(horizontal = 16.dp).testTag("voice_big"),
+                Modifier.height(52.dp).clip(RoundedCornerShape(16.dp)).glossy(t.primary).hClickable { c.toggleVoice() }.padding(horizontal = 16.dp).testTag("voice_big"),
                 contentAlignment = Alignment.Center,
             ) { Row(verticalAlignment = Alignment.CenterVertically) { GlyphIcon(Glyph.MIC, t.onPrimary, 20.dp); Spacer(Modifier.width(8.dp)); Text("음성 남기기", style = Ty.label, color = t.onPrimary) } }
             for (v in c.voices) {
                 val playing = c.playingVoiceId == v.id
                 Box(
                     Modifier.height(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp)).background(if (playing) t.primary.copy(alpha = 0.25f) else t.bg)
-                        .combinedClickable(onClick = { c.playVoice(v) }, onLongClick = { confirmVoice = v }).padding(horizontal = 10.dp).testTag("voice_item_${v.id}"),
+                        .hCombinedClickable(onLongClick = { confirmVoice = v }, onClick = { c.playVoice(v) }).padding(horizontal = 10.dp).testTag("voice_item_${v.id}"),
                     contentAlignment = Alignment.Center,
                 ) { Text((if (playing) "■ " else "▶ ") + "0:%02d".format((v.durationMs / 1000).toInt()), style = Ty.label, color = t.ink) }
             }
@@ -436,7 +437,7 @@ private fun SmallButton(label: String, tag: String, onClick: () -> Unit) {
     val t = T
     Box(
         Modifier.padding(end = 8.dp).height(SurveyDims.MIN_TOUCH_DP.dp).widthIn(min = SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp))
-            .background(t.bg).clickable(onClick = onClick).padding(horizontal = 12.dp).testTag(tag),
+            .background(t.bg).hClickable(onClick = onClick).padding(horizontal = 12.dp).testTag(tag),
         contentAlignment = Alignment.Center,
     ) { Text(label, style = Ty.label, color = t.ink) }
 }
@@ -444,7 +445,7 @@ private fun SmallButton(label: String, tag: String, onClick: () -> Unit) {
 @Composable
 private fun IconBtn(g: Glyph, tag: String, onClick: () -> Unit) {
     val t = T
-    Box(Modifier.size(SurveyDims.MIN_TOUCH_DP.dp).clickable(onClick = onClick).testTag(tag), contentAlignment = Alignment.Center) { GlyphIcon(g, t.accent) }
+    Box(Modifier.size(SurveyDims.MIN_TOUCH_DP.dp).hClickable(onClick = onClick).testTag(tag), contentAlignment = Alignment.Center) { GlyphIcon(g, t.accent) }
 }
 
 // ---------------- 컨트롤 영역 ----------------
@@ -456,7 +457,7 @@ fun DrawerOverlay(c: SurveyController) {
     val t = T
     BoxWithConstraints(Modifier.fillMaxSize()) {
         AnimatedVisibility(c.drawerOpen, enter = fadeIn(), exit = fadeOut()) {
-            Box(Modifier.fillMaxSize().background(t.scrim).clickable { c.drawerOpen = false }.testTag("drawer_scrim"))
+            Box(Modifier.fillMaxSize().background(t.scrim).hClickable { c.drawerOpen = false }.testTag("drawer_scrim"))
         }
         AnimatedVisibility(
             c.drawerOpen,
@@ -479,7 +480,7 @@ fun DrawerOverlay(c: SurveyController) {
                 Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                     Column {
                         Text(c.projectName, style = Ty.title.copy(fontSize = 18.sp), color = t.ink, maxLines = 1)
-                        Text((if (c.antennaModelId == "TRIMBLE_R10") "Trimble R10" else "Spectra SP60") + if (st.reason == StatusReason.NOT_CONNECTED) " · 연결 안 됨" else "", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.testTag("drawer_device"))
+                        Text((c.connection?.profile?.displayName ?: if (c.antennaModelId == "TRIMBLE_R10") "Trimble R10" else "Spectra SP60") + if (st.reason == StatusReason.NOT_CONNECTED) " · 연결 안 됨" else "", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.testTag("drawer_device"))
                         Spacer(Modifier.height(2.dp))
                         Text(
                             "${st.status.labelKo}${st.sigmaHM?.let { " ±${f3(it)} m" } ?: ""}", style = Ty.small.copy(fontSize = 12.sp), color = fg, maxLines = 1,
@@ -505,7 +506,7 @@ private fun runMenu(c: SurveyController, item: MenuItem) {
     when (item.action) {
             MenuAction.OPEN_AREAS -> { c.drawerOpen = false; c.hub.open(ToolScreen.AREAS) }
             MenuAction.OPEN_TYPES -> { c.drawerOpen = false; c.hub.open(ToolScreen.TYPES) }
-            MenuAction.GO_SURVEY -> { c.drawerOpen = false; c.hub.closeAll() }
+            MenuAction.GO_SURVEY -> c.goToSurvey() // 0.1.14: 홈·환경설정 위에서 눌러도 측량으로
             MenuAction.OPEN_BG -> { c.drawerOpen = false; c.bg?.openManage() ?: run { c.message = "배경 레이어는 이 빌드에 없어요" } }
             MenuAction.OPEN_ANTENNA -> { c.drawerOpen = false; c.antennaSheetOpen = true }
             MenuAction.OPEN_TOOL_POINTS -> { c.drawerOpen = false; c.hub.open(ToolScreen.POINTS) }
@@ -551,7 +552,7 @@ private fun DrawerRow(c: SurveyController, item: MenuItem) {
             .background(if (selected) t.primaryCont else Color.Transparent)
             .then(if (selected) Modifier.border(2.dp, t.accent, shape) else Modifier)
             .alpha(if (item.enabled) 1f else 0.5f)
-            .clickable(enabled = item.enabled) { runMenu(c, item) }.padding(horizontal = 12.dp).testTag("menu_${item.id}"),
+            .hClickable(enabled = item.enabled) { runMenu(c, item) }.padding(horizontal = 12.dp).testTag("menu_${item.id}"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         val g = menuGlyph(item.id)
@@ -577,7 +578,7 @@ private fun FavCard(c: SurveyController, item: MenuItem, modifier: Modifier) {
 fun AntennaSheet(c: SurveyController) {
     val t = T
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().background(t.scrim.copy(alpha = 0.25f)).clickable { c.antennaSheetOpen = false })
+        Box(Modifier.fillMaxSize().background(t.scrim.copy(alpha = 0.25f)).hClickable { c.antennaSheetOpen = false })
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = maxHeight * 0.55f)
                 .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)).background(t.bg).verticalScroll(rememberScrollState())
@@ -590,7 +591,7 @@ fun AntennaSheet(c: SurveyController) {
                     val sel = c.antennaModelId == id
                     Box(
                         Modifier.weight(1f).height(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp))
-                            .background(if (sel) t.primary.copy(alpha = 0.2f) else t.card).clickable { c.setAntennaModel(id) }.testTag("model_$id"),
+                            .background(if (sel) t.primary.copy(alpha = 0.2f) else t.card).hClickable { c.setAntennaModel(id) }.testTag("model_$id"),
                         contentAlignment = Alignment.Center,
                     ) { Text(label, style = Ty.label, color = t.ink) }
                 }
@@ -600,7 +601,7 @@ fun AntennaSheet(c: SurveyController) {
                 val sel = c.antenna.refPointId == r.id
                 Row(
                     Modifier.fillMaxWidth().height(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp))
-                        .background(if (sel) t.primary.copy(alpha = 0.2f) else t.card).clickable { c.setRefPoint(r.id) }.padding(horizontal = 12.dp).testTag("ref_${r.id}"),
+                        .background(if (sel) t.primary.copy(alpha = 0.2f) else t.card).hClickable { c.setRefPoint(r.id) }.padding(horizontal = 12.dp).testTag("ref_${r.id}"),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(r.labelKo, style = Ty.body, color = t.ink, modifier = Modifier.weight(1f))
@@ -616,7 +617,7 @@ fun AntennaSheet(c: SurveyController) {
                 for (m in AntennaMath.CHIPS_M) Box(
                     Modifier.weight(1f).height(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp))
                         .background(if (kotlin.math.abs(c.antenna.inputValueM - m) < 1e-6) t.primary.copy(alpha = 0.2f) else t.card)
-                        .clickable { c.setPoleHeight(m) }.testTag("pole_chip_" + String.format(java.util.Locale.US, "%.1f", m)),
+                        .hClickable { c.setPoleHeight(m) }.testTag("pole_chip_" + String.format(java.util.Locale.US, "%.1f", m)),
                     contentAlignment = Alignment.Center,
                 ) { Text(String.format(java.util.Locale.US, "%.1f m", m), style = Ty.label, color = t.ink) }
             }
@@ -627,7 +628,7 @@ fun AntennaSheet(c: SurveyController) {
             AntennaMath.mismatchWarning(c.antenna, c.antennaModel)?.let { Text(it, style = Ty.small, color = t.bad) }
             Text("실기기 실측 전 값 — 현장에서 확인하세요", style = Ty.small, color = t.inkSub)
             Box(
-                Modifier.fillMaxWidth().height(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp)).glossy(t.primary).clickable { c.antennaSheetOpen = false }.testTag("sheet_close"),
+                Modifier.fillMaxWidth().height(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp)).glossy(t.primary).hClickable { c.antennaSheetOpen = false }.testTag("sheet_close"),
                 contentAlignment = Alignment.Center,
             ) { Text("닫기", style = Ty.label, color = t.onPrimary) }
         }
@@ -638,7 +639,7 @@ fun AntennaSheet(c: SurveyController) {
 private fun StepBtn(label: String, tag: String, onClick: () -> Unit) {
     val t = T
     Box(
-        Modifier.size(width = 84.dp, height = SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp)).background(t.card).clickable(onClick = onClick).testTag(tag),
+        Modifier.size(width = 84.dp, height = SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp)).background(t.card).hClickable(onClick = onClick).testTag(tag),
         contentAlignment = Alignment.Center,
     ) { Text(label, style = Ty.label, color = t.ink) }
 }
@@ -674,7 +675,7 @@ fun TiltSheet(c: SurveyController) {
     val a = c.tiltPrompt ?: return
     val tc = c.tilt ?: return
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().background(t.scrim).clickable { c.answerTilt(false) })
+        Box(Modifier.fillMaxSize().background(t.scrim).hClickable { c.answerTilt(false) })
         val shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().clip(shape).background(t.bg).border(1.dp, t.line, shape).padding(20.dp).testTag("tilt_sheet"),

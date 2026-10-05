@@ -143,9 +143,15 @@ class ToolScreensTest {
     @Test fun settingsAndJobs() {
         setup(points = 0) // 0.1.12: 점이 있는 작업은 좌표계를 못 바꾼다 → 빈 작업에서
         rule.runOnUiThread { c.hub.open(ToolScreen.SETTINGS) }; rule.waitForIdle()
+        // 0.1.13: 설정에서 좌표계 줄 → 작업 정보로 이동(즉시저장 경로 제거)
         rule.onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("zone_" + kr.archsurvey.core.KoreanTmZone.entries.indexOfFirst { it.epsg == 5187 }).performClick(); rule.waitForIdle()
+        assertEquals(ToolScreen.JOB_INFO, c.hub.screen)
+        rule.onNodeWithTag("job_zone").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("jobzone_" + kr.archsurvey.core.KoreanTmZone.entries.indexOfFirst { it.epsg == 5187 }).performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("job_info_preview").assertExists()
+        rule.onNodeWithTag("job_apply").performClick(); rule.waitForIdle()
         assertEquals(5187, c.zone.epsg)
+        assertNull(c.hub.screen); assertFalse(c.homeOpen)
         shot("t6_settings")
         rule.runOnUiThread { c.jobs!!.openList() }; rule.waitForIdle()
         rule.onNodeWithTag("job_item_0").assertExists()

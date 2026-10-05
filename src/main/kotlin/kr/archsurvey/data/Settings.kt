@@ -49,7 +49,13 @@ class SettingsStore(private val ctx: Context) {
     fun setPreChecked(deviceId: String, v: Boolean) = sp.edit().putBoolean("pre_ok_$deviceId", v).apply()
 
     fun btStrategy(address: String): String? = sp.getString("bt_strategy_$address", null)
-    fun setBtStrategy(address: String, strategy: String) = sp.edit().putString("bt_strategy_$address", strategy).apply()
+    /** strategy=null 이면 저장을 지운다(BT-130 무음 채널로 판명된 방식 제거) */
+    fun setBtStrategy(address: String, strategy: String?) {
+        val ed = sp.edit()
+        if (strategy == null) ed.remove("bt_strategy_$address") else ed.putString("bt_strategy_$address", strategy)
+        ed.apply()
+    }
+    fun clearBtStrategy(address: String) = setBtStrategy(address, null)
 
     var project: String
         get() = sp.getString("project", "작업1") ?: "작업1"
@@ -67,13 +73,18 @@ class SettingsStore(private val ctx: Context) {
     var idPrefix: String
         get() = sp.getString("id_prefix", "P-") ?: "P-"
         set(v) = sp.edit().putString("id_prefix", v).apply()
+    /**
+     * @deprecated 0.1.13: [epochsPerPoint] 와 같은 키로 통일. 옛 키 "epochs" 는 한 번 읽어 옮긴다.
+     * 작업별 측정 횟수의 진실원은 JobConfig.epochs → 저장 시 epochsPerPoint 미러.
+     */
     var epochs: Int
-        get() = sp.getInt("epochs", 5)
-        set(v) = sp.edit().putInt("epochs", v.coerceIn(1, 60)).apply()
+        get() = epochsPerPoint
+        set(v) { epochsPerPoint = v }
     var requireFixed: Boolean
         get() = sp.getBoolean("require_fixed", false)
         set(v) = sp.edit().putBoolean("require_fixed", v).apply()
-    /** 안테나 높이는 기기(R10/SP60)별로 저장. 내부 값은 미터. 저장된 게 없으면 null */
+    /** @deprecated 0.1.13: 메인 미사용. 폴·모델은 JobConfig. 읽지 말 것. */
+    @Deprecated("JobConfig.poleM / antennaModelId 사용", level = DeprecationLevel.WARNING)
     fun loadAntenna(deviceId: String): AntennaConfig? {
         val k = "ant_$deviceId"
         if (!sp.contains("${k}_val")) return null
@@ -106,9 +117,12 @@ class SettingsStore(private val ctx: Context) {
     var mapDomain: String
         get() = sp.getString("vworld_domain", "") ?: ""
         set(v) = sp.edit().putString("vworld_domain", v.trim()).apply()
-    /** SATELLITE | CADASTRAL | NONE (NONE = 점만 표시하는 평면도) */
+    /**
+     * 배경맵 id 미러(SATELLITE|CADASTRAL|NONE…). 진실원은 작업 JobConfig.mapBase.
+     * 0.1.13: JobConfig 저장 때 같이 맞춰, 옛 코드가 읽어도 화면과 같게.
+     */
     var mapBase: String
-        get() = sp.getString("map_base", "SATELLITE") ?: "SATELLITE"
+        get() = sp.getString("map_base", "NONE") ?: "NONE"
         set(v) = sp.edit().putString("map_base", v).apply()
     /** 0.1.12 지적 스타일: true = *_line(선만) */
     var mapLineOnly: Boolean
@@ -118,9 +132,12 @@ class SettingsStore(private val ctx: Context) {
     /** 0.1.12 작업별 설정(좌표계·지오이드·배경맵·안테나·측정 횟수) 한 줄. 키 값은 들어가지 않는다 */
     fun jobConfigRaw(project: String): String? = sp.getString("job_cfg_$project", null)
     fun setJobConfigRaw(project: String, v: String?) { if (v == null) sp.edit().remove("job_cfg_$project").apply() else sp.edit().putString("job_cfg_$project", v).apply() }
+    /** @deprecated 0.1.13: MapBase.SATELLITE_CADASTRAL 사용. 메인 미읽기 */
+    @Deprecated("MapBase 사용", level = DeprecationLevel.WARNING)
     var cadastralOverlay: Boolean
         get() = sp.getBoolean("map_cad_overlay", false)
         set(v) = sp.edit().putBoolean("map_cad_overlay", v).apply()
+    /** 좌표계 미러. 진실원은 작업 JobConfig.epsg (0.1.13) */
     var tmZone: KoreanTmZone
         get() = KoreanTmZone.fromEpsg(sp.getInt("tm_epsg", 5186))
         set(v) = sp.edit().putInt("tm_epsg", v.epsg).apply()
@@ -143,10 +160,19 @@ class SettingsStore(private val ctx: Context) {
     var tiltReference: String?
         get() = sp.getString("tilt_ref", null)
         set(v) = sp.edit().putString("tilt_ref", v).apply()
-    /** 한 점 측정(에폭) 횟수. 0.1.9 기본 3 */
+    /** 한 점 측정(에폭) 횟수. 0.1.9 기본 3. 작업 JobConfig 의 미러(현재 열린 작업 값) */
     var epochsPerPoint: Int
-        get() = sp.getInt("epochs_per_point", 3)
-        set(v) = sp.edit().putInt("epochs_per_point", v).apply()
+        get() {
+            if (sp.contains("epochs_per_point")) return sp.getInt("epochs_per_point", 3)
+            // 구버전 키 이전
+            if (sp.contains("epochs")) {
+                val old = sp.getInt("epochs", 3).coerceIn(1, 30)
+                sp.edit().putInt("epochs_per_point", old).remove("epochs").apply()
+                return old
+            }
+            return 3
+        }
+        set(v) = sp.edit().putInt("epochs_per_point", v.coerceIn(1, 30)).remove("epochs").apply()
     /** 마지막으로 연결에 성공한 시각(ms). 0 = 아직 없음. 자동 연결은 이 값이 있을 때만 */
     var lastConnectOkAt: Long
         get() = sp.getLong("conn_ok_at", 0L)

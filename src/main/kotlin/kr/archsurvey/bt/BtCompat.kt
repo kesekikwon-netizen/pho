@@ -78,8 +78,16 @@ enum class Strategy { SECURE_SPP, INSECURE_SPP, SDP_UUID, REFLECT_CH1 }
 
 data class Attempt(val strategy: Strategy, val uuid: UUID? = null)
 
-/** RFCOMM(SPP) 전송 계층. 한 인스턴스 = 한 소켓. close() 는 멱등. 4단계 폴백, 성공한 방식을 반환. */
-class BtTransport(private val ctx: Context, private val address: String, private val preferred: Strategy? = null) : kr.archsurvey.engine.LinkTransport {
+/**
+ * RFCOMM(SPP) 전송 계층. 한 인스턴스 = 한 소켓. close() 는 멱등. 4단계 폴백, 성공한 방식을 반환.
+ * [exclude]: BT-130(소켓 OK·무음)으로 판명된 방식은 다음 치유에서 빼고 SECURE/INSECURE SPP 부터 다시 시도한다.
+ */
+class BtTransport(
+    private val ctx: Context,
+    private val address: String,
+    private val preferred: Strategy? = null,
+    private val exclude: Set<Strategy> = emptySet(),
+) : kr.archsurvey.engine.LinkTransport {
     @Volatile private var socket: BluetoothSocket? = null
     @Volatile private var closed = false
     override lateinit var input: InputStream; private set
@@ -89,7 +97,7 @@ class BtTransport(private val ctx: Context, private val address: String, private
 
     override fun connect() = connect(preferred)
 
-    /** 블로킹. IO 스레드에서 호출. preferred: 지난번 성공한 방식(있으면 먼저 시도) */
+    /** 블로킹. IO 스레드에서 호출. preferred: 지난번 *데이터까지* 성공한 방식(있으면 먼저 시도). exclude는 건너뜀. */
     @SuppressLint("MissingPermission")
     fun connect(preferred: Strategy?) {
         if (!ctx.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)) throw BtConnectException(BtError.NO_BLUETOOTH)
@@ -152,7 +160,10 @@ class BtTransport(private val ctx: Context, private val address: String, private
             .map { Attempt(Strategy.SDP_UUID, it) }
         plan += sdp
         plan += Attempt(Strategy.REFLECT_CH1)
-        return if (preferred == null) plan else plan.sortedBy { if (it.strategy == preferred) 0 else 1 }
+        // 무음 채널로 판명된 방식은 제외(모두 제외되면 원본 유지 — 연결 자체는 시도해야 함)
+        val filtered = plan.filter { it.strategy !in exclude }.ifEmpty { plan }
+        val pref = preferred?.takeUnless { it in exclude }
+        return if (pref == null) filtered else filtered.sortedBy { if (it.strategy == pref) 0 else 1 }
     }
 
     override fun close() {

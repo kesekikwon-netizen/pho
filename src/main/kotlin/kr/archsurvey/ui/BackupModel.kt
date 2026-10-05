@@ -32,6 +32,10 @@ class BackupController(private val platform: BackupPlatform, private val scope: 
     var confirmRestore by mutableStateOf<BackupItem?>(null)
     var confirmDelete by mutableStateOf<BackupItem?>(null)
     var restarting by mutableStateOf(false); private set
+    /** 0.1.14 끝 멘트(완료/오류) */
+    var onResult: ((Boolean, String) -> Unit)? = null
+    /** 지금 하는 일 이름(진행 게이지용) */
+    var runningLabel by mutableStateOf(""); private set
 
     fun openScreen() { open = true; notice = null; error = null; refresh() }
     fun close() { if (!restarting) open = false }
@@ -39,12 +43,13 @@ class BackupController(private val platform: BackupPlatform, private val scope: 
 
     private fun <T> guarded(label: String, block: suspend () -> T, ok: (T) -> Unit = {}) {
         if (running || restarting) return
-        running = true; error = null; notice = null
+        running = true; error = null; notice = null; runningLabel = label
         scope.launch {
-            try { ok(block()) }
+            try { ok(block()); notice?.let { onResult?.invoke(true, it) } }
             catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 error = (e as? kr.archsurvey.data.BackupException)?.message ?: "$label 중 문제가 생겼어요 (${e.javaClass.simpleName}). 저장 공간을 확인하세요."
+                onResult?.invoke(false, error!!)
             } finally { running = false }
         }
     }
@@ -74,5 +79,5 @@ class BackupController(private val platform: BackupPlatform, private val scope: 
     }
 
     fun share(item: BackupItem) = platform.share(item)
-    fun saveAs(item: BackupItem) = platform.saveAs(item) { ok -> notice = if (ok) "파일로 저장했어요" else "저장을 취소했거나 실패했어요" }
+    fun saveAs(item: BackupItem) = platform.saveAs(item) { ok -> notice = if (ok) "파일로 저장했어요" else "저장을 취소했거나 실패했어요"; onResult?.invoke(ok, notice!!) }
 }

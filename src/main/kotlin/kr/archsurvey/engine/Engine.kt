@@ -29,7 +29,7 @@ import java.io.IOException
  * 서비스(SurveyConnectionService) 수명 동안 소켓을 소유한다(Activity/ViewModel 아님).
  * 모델별 차이는 DeviceProfile 로만 주입한다.
  */
-class SurveyEngine(private val app: Context, private val settingsStrategy: (String) -> String?, private val saveStrategy: (String, String) -> Unit) : GnssSource {
+class SurveyEngine(private val app: Context, private val settingsStrategy: (String) -> String?, private val saveStrategy: (String, String?) -> Unit) : GnssSource {
     /** 백그라운드 작업의 예외는 앱을 끄지 않고 오류 기록에 남긴다(0.1.9) */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, e -> kr.archsurvey.diag.CrashLog.record("엔진(블루투스·보정) 작업", e) })
 
@@ -93,16 +93,33 @@ class SurveyEngine(private val app: Context, private val settingsStrategy: (Stri
 
     // ---------------- 블루투스 ----------------
 
+    /** BT-130 무음으로 판명된 연결 방식 — 같은 주소 치유 때 exclude. STREAMING 되면 비운다 */
+    private val silentStrategies = java.util.concurrent.ConcurrentHashMap.newKeySet<Strategy>()
+
     private suspend fun gnssLoop(profile: DeviceProfile, address: String) {
+        silentStrategies.clear()
         val sup = LinkSupervisor(
             profile = profile,
-            newTransport = { BtTransport(app, address, settingsStrategy(address)?.let { runCatching { Strategy.valueOf(it) }.getOrNull() }) },
+            newTransport = {
+                val preferred = settingsStrategy(address)?.let { runCatching { Strategy.valueOf(it) }.getOrNull() }
+                    ?.takeUnless { it in silentStrategies }
+                BtTransport(app, address, preferred, exclude = silentStrategies.toSet())
+            },
             clock = { SystemClock.elapsedRealtime() },
             link = link, gnss = gnss, rtcmQueue = rtcmQueue, wake = wake,
             emit = { events.tryEmit(it) },
             onGga = { lastGgaRaw = it; lastGgaEngineAtMs = SystemClock.elapsedRealtime() },
             onQuality = { onQualityMaybeChanged(it) },
-            onStrategyUsed = { saveStrategy(address, it) },
+            // GGA 확인된 방식만 저장. 무음 목록도 비운다
+            onStrategyUsed = { name ->
+                runCatching { Strategy.valueOf(name) }.getOrNull()?.let { silentStrategies.remove(it) }
+                saveStrategy(address, name)
+            },
+            // 소켓 OK·GGA 없음 → 다음 치유에서 이 방식 제외 + 저장된 선호라면 지움
+            onSilentStrategy = { name ->
+                runCatching { Strategy.valueOf(name) }.getOrNull()?.let { silentStrategies.add(it) }
+                if (settingsStrategy(address) == name) saveStrategy(address, null)
+            },
         )
         sup.run()
     }

@@ -243,10 +243,13 @@ class SurveyController(
 
     /** 수신기 연결 화면 상태 (없으면 연결 UI 숨김) */
     var connection: ConnectionController? = null
-    /** 내보내기 화면 상태 */
+        set(v) { field = v; v?.ui = ui } // 0.1.14: 연결 알림도 같은 알림 창(완료/오류 햅틱)
+    /** 내보내기 화면 상태. 0.1.14: 끝 멘트를 완료/오류 알림으로 */
     var exporter: ExportController? = null
+        set(v) { field = v; v?.onResult = { ok, m -> ui.result(ok, m) } }
     /** 백업·복구 화면 상태 */
     var backup: BackupController? = null
+        set(v) { field = v; v?.onResult = { ok, m -> ui.result(ok, m) } }
     /** 배경(도면) 레이어. 앱에서는 SurveyViewModel 이 연결한다 */
     var bg: kr.archsurvey.ui.bg.BackgroundController? = null
     /** 점 목록·찾아가기·계산기·설정·작업 관리 화면 */
@@ -267,7 +270,8 @@ class SurveyController(
     /** 작업 관리 상태 */
     var jobs: JobController? = null
     /** 0.1.12 V월드 키·도메인 설정 (없으면 메모리 기본값 — 시험) */
-    var vworld: VWorldSettingsState = VWorldSettingsState(MemoryMapKeyPlatform(), scope)
+    var vworld: VWorldSettingsState = VWorldSettingsState(MemoryMapKeyPlatform(), scope).also { it.onResult = { ok, m -> ui.result(ok, m) } }
+        set(v) { field = v; v.onResult = { ok, m -> ui.result(ok, m) } }
 
     /** 저장소에서 점을 다시 읽는다 (작업을 바꾼 뒤) */
     private fun anchorTo(lat: Double, lon: Double) { projection = LocalProjection(lat, lon); anchored = true; trail.clear() }
@@ -525,9 +529,40 @@ class SurveyController(
         message = "${upd.name} 재측량 완료 · 이전 값과 ${"%.3f".format(moved)} m 차이 (이전 값은 이력에 보관)" + if (worst == SurveyStatus.CAUTION) " · 주의 상태" else ""
     }
 
+    /**
+     * 0.1.14: 측량(지도) 화면으로 확실히 이동. 도구(hub)만 닫으면 그 밑의 환경설정 목록·서랍·연결 창 등이
+     * 남아 측량 화면이 가려진다(0.1.13 「적용」 버그). 위에 덮이는 창을 모두 닫고 홈도 끈다.
+     */
+    fun goToSurvey() {
+        hub.closeAll()
+        settingsMenuOpen = false; drawerOpen = false
+        gnssInfoOpen = false; skyPlotOpen = false
+        antennaSheetOpen = false; setupOpen = false; quickSheetOpen = false
+        connection?.let { if (it.mountPickerOpen) it.closeMountPicker(); it.close() }
+        exporter?.close(); backup?.close(); bg?.close()
+        homeOpen = false
+    }
+
+    /** 지금 맨 위에 보이는 화면 이름(시험·진단용). 측량 지도가 그대로 보이면 "survey" */
+    fun visibleRoute(): String = when {
+        skyPlotOpen -> "skyplot"
+        gnssInfoOpen -> "gnss_info"
+        drawerOpen -> "drawer"
+        connection?.open == true -> "connection"
+        backup?.open == true -> "backup"
+        exporter?.open == true -> "export"
+        hub.screen != null -> "tool:" + hub.screen!!.name
+        antennaSheetOpen -> "antenna"
+        setupOpen -> "setup"
+        quickSheetOpen -> "quick"
+        settingsMenuOpen -> "settings_menu"
+        homeOpen -> "home"
+        else -> "survey"
+    }
+
     /** 점 상세의 [재측량]: 다음 측점이 이 점의 새 값이 된다 */
     fun startResurvey(p: SavedPoint) {
-        resurveyTarget = p; dupPrompt = null; hub.closeAll(); drawerOpen = false
+        resurveyTarget = p; dupPrompt = null; goToSurvey() // 0.1.14: 홈에서 들어와도 측량 화면으로
         message = "${p.name} 재측량 — 점 위에 서서 측점 버튼을 누르세요"
     }
     fun cancelResurvey() { resurveyTarget = null; message = "재측량을 취소했어요" }

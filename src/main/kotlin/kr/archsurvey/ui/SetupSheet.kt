@@ -34,10 +34,10 @@ fun SetupSheet(c: SurveyController) {
     var link by remember { mutableStateOf(if (!c.arch.outlineMode) Link.POINT else if (c.arch.preferClosed) Link.AREA else Link.LINE) }
     val shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().background(t.scrim).clickable { c.setupOpen = false }.testTag("setup_scrim"))
+        Box(Modifier.fillMaxSize().background(t.scrim).hClickable { c.setupOpen = false }.testTag("setup_scrim"))
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().shadow(1.dp, shape).clip(shape).glossy(t.card).border(1.5.dp, t.outline, shape)
-                .clickable(enabled = false) {}.padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 12.dp).testTag("setup_sheet"),
+                .hClickable(enabled = false) {}.padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 12.dp).testTag("setup_sheet"),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("측량 설정", style = Ty.title, color = t.ink, modifier = Modifier.height(32.dp).testTag("setup_title"))
@@ -69,7 +69,7 @@ fun SetupSheet(c: SurveyController) {
             }
             Row(
                 Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(16.dp)).border(1.5.dp, t.outline, RoundedCornerShape(16.dp)).background(t.bg)
-                    .clickable { c.setupOpen = false; c.antennaSheetOpen = true }.padding(horizontal = 14.dp).testTag("setup_antenna"),
+                    .hClickable { c.setupOpen = false; c.antennaSheetOpen = true }.padding(horizontal = 14.dp).testTag("setup_antenna"),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text("안테나 높이", style = Ty.small, color = t.inkSub, modifier = Modifier.width(72.dp))

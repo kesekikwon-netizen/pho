@@ -131,7 +131,8 @@ class ToolsTests {
             override var zone = KoreanTmZone.EAST; override var poleRight = false; override var sound = true; override var vibration = false; override var keepScreenOn = true
         }
         val st = SettingsState(c, p)
-        assertEquals(KoreanTmZone.EAST, c.zone); assertFalse(c.poleOnRight) // 저장값이 화면에 적용됨
+        // 0.1.13: 좌표계 SSOT=JobConfig — SettingsState.init 은 폴 위치만 Pref에서 싣는다
+        assertEquals(KoreanTmZone.CENTRAL, c.zone); assertFalse(c.poleOnRight)
         st.setZone(KoreanTmZone.EAST_SEA); assertEquals(KoreanTmZone.EAST_SEA, p.zone); assertEquals(KoreanTmZone.EAST_SEA, c.zone)
         st.setPoleRight(true); assertTrue(p.poleRight); assertTrue(c.poleOnRight)
         st.changeSound(false); assertFalse(p.sound); st.changeVibration(true); assertTrue(p.vibration); st.changeKeepScreenOn(false); assertFalse(p.keepScreenOn)

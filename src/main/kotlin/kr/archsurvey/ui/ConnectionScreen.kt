@@ -64,7 +64,9 @@ private fun ConnectionProgress(c: SurveyController, cc: ConnectionController, li
             states[0] == StepState.DONE && states[1] == StepState.FAIL -> "연결됨 · 위치 없음"
             else -> "연결 중"
         }, steps, sec, "conn_progress",
-        note = card?.let { "${it.title} (${it.code}) — ${it.action}" } ?: if (done) "측량할 준비가 됐어요." else "닫아도 연결은 계속돼요. 상태 띠에서 진행을 볼 수 있어요.",
+        note = card?.let { "${it.title} (${it.code}) — ${it.action}" } ?: if (done) "측량할 준비가 됐어요." else "닫아도 연결은 계속돼요. 아래 대기열·상태 띠에서 진행을 볼 수 있어요.",
+        // 0.1.14 진행 게이지: 끝난 단계 / 전체(건너뛴 단계는 끝난 것으로)
+        progress = states.count { it == StepState.DONE || it == StepState.SKIP }.toFloat() / states.size.coerceAtLeast(1),
     ) {
         if (!done) MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_progress_cancel"), MKind.PLAIN, 16.dp, onClick = { cc.disconnect() }) { Text("연결 취소", style = Ty.label, color = T.ink) }
         MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_progress_close"), MKind.PRIMARY, 16.dp, onClick = { cc.showProgress = false; if (done) cc.close() }) {
@@ -78,7 +80,7 @@ private fun ConnectionProgress(c: SurveyController, cc: ConnectionController, li
 private fun MountPicker(cc: ConnectionController) {
     val t = T
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().background(t.scrim).clickable { cc.closeMountPicker() })
+        Box(Modifier.fillMaxSize().background(t.scrim).hClickable { cc.closeMountPicker() })
         val shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.9f).clip(shape).background(t.bg).border(1.dp, t.line, shape)
@@ -103,6 +105,10 @@ private fun MountPicker(cc: ConnectionController) {
                         }
                         Btn("취소", Modifier.testTag("mount_cancel")) { cc.cancelMountLoad() }
                     }
+                    // 0.1.14 게이지(최대 15초 기준)
+                    Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(t.card).testTag("mount_gauge")) {
+                        Box(Modifier.fillMaxWidth((sec / 15f).coerceIn(0.04f, 0.95f)).fillMaxHeight().background(t.accent))
+                    }
                 }
                 MountLoad.FAILED -> Column(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(t.bad.copy(alpha = 0.08f)).border(1.dp, t.bad.copy(alpha = 0.6f), RoundedCornerShape(16.dp)).padding(12.dp).testTag("mount_failed"),
@@ -124,7 +130,7 @@ private fun MountPicker(cc: ConnectionController) {
                     val on = m.mountPoint == cc.form.mount
                     Column(
                         Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(16.dp)).background(if (on) t.primaryCont else t.bg)
-                            .border(if (on) 1.5.dp else 1.dp, if (on) t.accent else t.line, RoundedCornerShape(16.dp)).clickable { cc.pickMount(m.mountPoint) }
+                            .border(if (on) 1.5.dp else 1.dp, if (on) t.accent else t.line, RoundedCornerShape(16.dp)).hClickable { cc.pickMount(m.mountPoint) }
                             .padding(horizontal = 16.dp, vertical = 8.dp).testTag("mount_item_${m.mountPoint}"),
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -162,7 +168,7 @@ private fun AlertStrip(card: ErrorCard, onClick: () -> Unit) {
     Box(Modifier.fillMaxWidth().padding(top = (HeaderDims.FULL_DP + StatusLineDims.FULL_DP + 8).dp, start = 72.dp, end = (SurveyDims.MIN_TOUCH_DP + 8).dp)) {
         Column(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(t.bg.copy(alpha = 0.96f))
-                .border(1.dp, t.bad.copy(alpha = 0.6f), RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(10.dp).testTag("alert_strip"),
+                .border(1.dp, t.bad.copy(alpha = 0.6f), RoundedCornerShape(14.dp)).hClickable(onClick = onClick).padding(10.dp).testTag("alert_strip"),
         ) {
             Text(card.title, style = Ty.label, color = t.ink, maxLines = 2)
             Text(if (card.autoRetry) "자동으로 다시 시도해요 · 눌러서 자세히 (${card.code})" else "눌러서 해결 방법 보기 (${card.code})", style = Ty.small, color = t.inkSub)
@@ -253,7 +259,7 @@ private fun DeviceSection(cc: ConnectionController, link: kr.archsurvey.device.L
             Box(
                 Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(24.dp)).background(if (on) t.raised else Color.Transparent)
                     .then(if (on) Modifier.border(1.dp, t.line.copy(alpha = 0.5f), RoundedCornerShape(24.dp)) else Modifier)
-                    .clickable { cc.selectProfile(d) }.testTag("conn_model_${d.id}"),
+                    .hClickable { cc.selectProfile(d) }.testTag("conn_model_${d.id}"),
                 contentAlignment = Alignment.Center,
             ) { Text(d.displayName.replace("Spectra Precision", "Spectra"), style = Ty.label.copy(fontSize = 15.sp), color = if (on) t.ink else t.inkSub, maxLines = 1) }
         }
@@ -269,7 +275,7 @@ private fun DeviceSection(cc: ConnectionController, link: kr.archsurvey.device.L
         val shape = RoundedCornerShape(16.dp)
         Row(
             Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(shape).background(t.raised).border(if (on) 1.5.dp else 1.dp, if (on) t.ink else t.line.copy(alpha = 0.45f), shape)
-                .clickable { cc.selectAddress(addr) }.padding(horizontal = 14.dp, vertical = 8.dp).testTag("conn_bonded_$addr"),
+                .hClickable { cc.selectAddress(addr) }.padding(horizontal = 14.dp, vertical = 8.dp).testTag("conn_bonded_$addr"),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(t.chip), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.POLE, t.ink, 20.dp) }
@@ -310,7 +316,7 @@ private fun DeviceSection(cc: ConnectionController, link: kr.archsurvey.device.L
     } else Card {
         Text("연결 전 확인", style = Ty.label, color = t.ink)
         for ((i, txt) in p.preConnectChecks.withIndex()) {
-            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { cc.setCheck(i, !cc.checks.getOrElse(i) { false }) }.testTag("conn_check_$i"), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).hClickable { cc.setCheck(i, !cc.checks.getOrElse(i) { false }) }.testTag("conn_check_$i"), verticalAlignment = Alignment.CenterVertically) {
                 androidx.compose.material3.Checkbox(cc.checks.getOrElse(i) { false }, { cc.setCheck(i, it) }, colors = androidx.compose.material3.CheckboxDefaults.colors(checkedColor = t.primary, checkmarkColor = t.onPrimary))
                 Text(txt, style = Ty.body, color = t.ink)
             }
@@ -369,7 +375,7 @@ private fun FormSelect(value: String, tag: String, onClick: () -> Unit) {
     val t = T
     val shape = RoundedCornerShape(12.dp)
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(shape).background(t.raised).border(1.dp, t.outline.copy(alpha = 0.6f), shape).clickable(onClick = onClick).padding(horizontal = 14.dp).testTag(tag),
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(shape).background(t.raised).border(1.dp, t.outline.copy(alpha = 0.6f), shape).hClickable(onClick = onClick).padding(horizontal = 14.dp).testTag(tag),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(value, style = Ty.coord.copy(fontSize = 15.sp), color = t.ink, maxLines = 1, modifier = Modifier.weight(1f))

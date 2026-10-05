@@ -29,6 +29,8 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
     var output by mutableStateOf<ExportOutput?>(null); private set
     var error by mutableStateOf<String?>(null); private set
     var notice by mutableStateOf<String?>(null); private set
+    /** 0.1.14 끝 멘트(완료/오류). SurveyController.exporter 에 넣을 때 연결 */
+    var onResult: ((Boolean, String) -> Unit)? = null
 
     fun openScreen() { open = true; output = null; error = null; notice = null; refresh() }
     fun close() { open = false }
@@ -38,17 +40,25 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
     fun run() {
         if (running) return
         val s = summary
-        if (s != null && s.points == 0) { error = "내보낼 점이 없어요. 먼저 측점을 하세요."; return }
+        if (s != null && s.points == 0) { error = "내보낼 점이 없어요. 먼저 측점을 하세요."; onResult?.invoke(false, error!!); return }
         running = true; error = null; notice = null; output = null
         scope.launch {
-            try { output = platform.export(includePhotos && (s?.photos ?: 1) > 0, includeVoices && (s?.voices ?: 1) > 0) }
-            catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; error = "내보내기에 실패했어요 (${e.javaClass.simpleName}). 저장 공간을 확인하고 다시 시도하세요." }
+            try {
+                val o = platform.export(includePhotos && (s?.photos ?: 1) > 0, includeVoices && (s?.voices ?: 1) > 0)
+                output = o
+                onResult?.invoke(true, "내보내기 파일을 만들었어요 · ${o.fileName} (${sizeText(o.sizeBytes)}) · 공유/저장을 누르세요")
+            }
+            catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                error = "내보내기에 실패했어요 (${e.javaClass.simpleName}). 저장 공간을 확인하고 다시 시도하세요."
+                onResult?.invoke(false, error!!)
+            }
             finally { running = false }
         }
     }
 
     fun share() { output?.let { platform.share(it) } }
-    fun saveAs() { output?.let { o -> platform.saveAs(o) { ok -> notice = if (ok) "파일로 저장했어요" else "저장을 취소했거나 실패했어요" } } }
+    fun saveAs() { output?.let { o -> platform.saveAs(o) { ok -> notice = if (ok) "파일로 저장했어요" else "저장을 취소했거나 실패했어요"; onResult?.invoke(ok, notice!!) } } }
 
     companion object {
         fun sizeText(bytes: Long): String = when {

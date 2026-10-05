@@ -13,7 +13,13 @@ import java.net.URL
 /** 작업별 설정 = SharedPreferences "job_cfg_<작업>" */
 class AndroidJobConfigPlatform(private val s: SettingsStore) : JobConfigPlatform {
     override fun load(job: String) = JobConfig.decode(s.jobConfigRaw(job))
-    override fun save(job: String, cfg: JobConfig) = s.setJobConfigRaw(job, cfg.encode())
+    override fun save(job: String, cfg: JobConfig) {
+        s.setJobConfigRaw(job, cfg.encode())
+        // 전역 Pref 미러 — 설정 화면·구 키가 작업 설정과 어긋나지 않게(0.1.13)
+        s.tmZone = cfg.zone
+        s.epochsPerPoint = cfg.epochs
+        s.mapBase = cfg.mapBase.id
+    }
     override fun delete(job: String) = s.setJobConfigRaw(job, null)
 }
 

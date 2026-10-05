@@ -268,6 +268,8 @@ class ConnectionController(
     val checks = mutableStateListOf<Boolean>()
     var bonded by mutableStateOf<List<Pair<String, String>>>(emptyList()); private set
     var notice by mutableStateOf<ErrorCard?>(null); private set
+    /** 장비 프로필 변경 시(안테나 모델 동기화). SurveyViewModel 이 연결 */
+    var onProfileChanged: ((DeviceProfile) -> Unit)? = null
     var showNmeaSteps by mutableStateOf(false)
     /** 접힌 영역(서버 설정·도움말·연결 전 확인)을 펼쳤는지 */
     var showServer by mutableStateOf(false)
@@ -300,6 +302,7 @@ class ConnectionController(
         if (p.id == profile.id) return
         profile = p; resetChecks(); address = null; notice = null; refresh()
         persist()
+        onProfileChanged?.invoke(p) // JobConfig.antennaModelId 와 맞춤(0.1.13 P0)
         RtcmMountCompat.warnIfIncompatible(profile, form.mount)?.let { ui.toast(it) }
     }
 
@@ -350,7 +353,7 @@ class ConnectionController(
             try {
                 val list = platform.fetchMounts(cfg)
                 if (list.isEmpty()) mountFail("서버가 빈 목록을 보냈어요")
-                else { mounts = list.sortedWith(compareBy<MountInfo> { if (it.isRtcm3) 0 else 1 }.thenBy { it.mountPoint }); mountFromKnown = false; mountLoad = MountLoad.OK }
+                else { mounts = list.sortedWith(compareBy<MountInfo> { if (it.isRtcm3) 0 else 1 }.thenBy { it.mountPoint }); mountFromKnown = false; mountLoad = MountLoad.OK; ui.ok("마운트 목록 ${list.size}개 받음") }
             } catch (e: CancellationException) { throw e } catch (e: Throwable) {
                 mountFail(e.message?.take(120) ?: e.javaClass.simpleName)
             }
@@ -359,6 +362,7 @@ class ConnectionController(
 
     private fun mountFail(why: String) {
         mountError = why
+        ui.fail("마운트 목록을 못 받았어요 · $why · 알려진 목록으로 대신 보여요")
         mounts = KnownMounts.forHost(form.host); mountFromKnown = true
         mountLoad = MountLoad.FAILED
     }
@@ -372,13 +376,13 @@ class ConnectionController(
 
     fun pickMount(name: String) {
         val m = name.trim()
-        if (m.isEmpty()) { ui.toast("마운트 이름을 입력하세요"); return }
+        if (m.isEmpty()) { ui.fail("마운트 이름을 입력하세요"); return }
         val info = mounts.firstOrNull { it.mountPoint.equals(m, true) }
         form = form.copy(mount = m)
         mountPickerOpen = false; mountJob?.cancel()
         persistSafe()
         val warn = RtcmMountCompat.warnIfIncompatible(profile, m, info?.format.orEmpty(), info?.formatDetails.orEmpty())
-        if (warn != null) ui.toast(warn) else ui.toast("마운트 포인트 저장됨 · $m")
+        if (warn != null) ui.toast(warn) else ui.ok("마운트 포인트 저장됨 · $m")
     }
 
     /** 목록 행에 붙일 짧은 경고(호환이면 null) */
@@ -421,7 +425,7 @@ class ConnectionController(
     fun saveOnly() {
         val probs = form.problems()
         persistSafe()
-        ui.toast(if (probs.isEmpty()) "VRS 설정 저장됨 · ${form.host}:${form.port} · ${form.mount}" else "저장됨 · 확인 필요: " + probs.joinToString(" · "))
+        ui.result(probs.isEmpty(), if (probs.isEmpty()) "VRS 설정 저장됨 · ${form.host}:${form.port} · ${form.mount}" else "저장됨 · 확인 필요: " + probs.joinToString(" · "))
     }
 
     fun closeMountPicker() { mountPickerOpen = false; mountJob?.cancel(); if (mountLoad == MountLoad.LOADING) mountLoad = MountLoad.IDLE }
@@ -429,6 +433,7 @@ class ConnectionController(
     // ---------------- 연결 성공 저장·자동 연결 ----------------
     /** 화면이 링크·보정 상태를 볼 때마다 부른다. 위치 데이터가 들어오면(보정 켜짐이면 보정 수신까지) 한 번 저장 */
     fun onStatus(l: LinkStatus, n: NtripStatus) {
+        reportFailure(l, n)
         if (!connectRequested || savedThisRun) return
         val ok = l.state == LinkState.STREAMING && (!form.enabled || n.state == NtripState.RECEIVING)
         if (!ok) return
@@ -436,7 +441,20 @@ class ConnectionController(
         persistSafe()
         runCatching { platform.markSuccess(form) }
         val dev = bonded.firstOrNull { it.second == address }?.first ?: address.orEmpty()
-        ui.toast("연결 설정 저장됨 · $dev" + if (form.enabled) " · ${form.mount} · ${form.user}" else "")
+        ui.ok("연결 설정 저장됨 · $dev" + if (form.enabled) " · ${form.mount} · ${form.user}" else "")
+    }
+
+    /** 0.1.14 연결 실패 멘트: 같은 실패는 한 번만(상태가 바뀌면 다시) */
+    private var lastFailKey: String? = null
+    private fun reportFailure(l: LinkStatus, n: NtripStatus) {
+        if (!connectRequested) { lastFailKey = null; return }
+        val card = ErrorCards.from(l, n, form.enabled).firstOrNull()
+        val failing = l.state == LinkState.NEEDS_USER || (form.enabled && (n.state == NtripState.AUTH_FAILED || n.state == NtripState.ERROR))
+        if (!failing || card == null) { if (l.state == LinkState.STREAMING) lastFailKey = null; return }
+        val key = "${l.state}/${n.state}/${card.code}"
+        if (key == lastFailKey) return
+        lastFailKey = key
+        ui.fail("${card.title} (${card.code}) — ${card.action}")
     }
 
     fun changeAutoConnect(v: Boolean) { autoConnect = v; platform.autoConnect = v; ui.toast(if (v) "다음 실행 때 자동 연결: 켬" else "다음 실행 때 자동 연결: 끔") }

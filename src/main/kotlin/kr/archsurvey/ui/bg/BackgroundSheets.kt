@@ -1,5 +1,6 @@
 package kr.archsurvey.ui.bg
 
+import kr.archsurvey.ui.hClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -54,7 +55,7 @@ const val SHEET_MAX_FRACTION = 0.5f
 private fun SheetFrame(tag: String, scrim: Boolean, onDismiss: () -> Unit, fixedBottom: (@Composable ColumnScope.() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     val t = T
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        if (scrim) Box(Modifier.fillMaxSize().background(t.scrim.copy(alpha = 0.2f)).clickable(onClick = onDismiss).testTag("${tag}_scrim"))
+        if (scrim) Box(Modifier.fillMaxSize().background(t.scrim.copy(alpha = 0.2f)).hClickable(onClick = onDismiss).testTag("${tag}_scrim"))
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = maxHeight * SHEET_MAX_FRACTION)
                 .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)).background(t.bg).pointerInput(Unit) { detectTapGestures { } }.testTag(tag),
@@ -76,7 +77,7 @@ private fun BigBtn(label: String, tag: String, kind: BtnKind = BtnKind.NORMAL, s
     Column(
         modifier.fillMaxWidth().heightIn(min = minHeight.coerceAtLeast(SurveyDims.MIN_TOUCH_DP.dp)).clip(RoundedCornerShape(14.dp)).background(bgc)
             .then(if (kind == BtnKind.NORMAL) Modifier.border(1.dp, t.outline.copy(alpha = 0.35f), RoundedCornerShape(14.dp)) else Modifier)
-            .alpha(if (enabled) 1f else 0.45f).clickable(enabled = enabled, onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp).testTag(tag),
+            .alpha(if (enabled) 1f else 0.45f).hClickable(enabled = enabled, onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp).testTag(tag),
         verticalArrangement = Arrangement.Center,
     ) {
         Text(label, style = Ty.label.copy(fontSize = 16.sp), color = fg)
@@ -97,8 +98,9 @@ private fun HeaderRow(title: String, tag: String, right: @Composable RowScope.()
 @Composable
 private fun Toggle(checked: Boolean, tag: String, onChange: (Boolean) -> Unit) {
     val t = T
+    val view = androidx.compose.ui.platform.LocalView.current; val hap = kr.archsurvey.ui.LocalTapHaptic.current
     Box(
-        Modifier.size(width = 64.dp, height = SurveyDims.MIN_TOUCH_DP.dp).toggleable(value = checked, role = Role.Switch, onValueChange = onChange).testTag(tag),
+        Modifier.size(width = 64.dp, height = SurveyDims.MIN_TOUCH_DP.dp).toggleable(value = checked, role = Role.Switch, onValueChange = { if (hap) kr.archsurvey.ui.TapHaptics.tap(view); onChange(it) }).testTag(tag),
         contentAlignment = Alignment.Center,
     ) {
         Switch(
@@ -112,7 +114,7 @@ private fun Toggle(checked: Boolean, tag: String, onChange: (Boolean) -> Unit) {
 private fun SmallPillBtn(label: String, tag: String, onClick: () -> Unit) {
     val t = T
     Row(
-        Modifier.height(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(24.dp)).background(t.card).clickable(onClick = onClick).padding(horizontal = 14.dp).testTag(tag),
+        Modifier.height(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(24.dp)).background(t.card).hClickable(onClick = onClick).padding(horizontal = 14.dp).testTag(tag),
         verticalAlignment = Alignment.CenterVertically,
     ) { Text(label, style = Ty.label, color = t.ink) }
 }
@@ -120,7 +122,7 @@ private fun SmallPillBtn(label: String, tag: String, onClick: () -> Unit) {
 @Composable
 private fun CloseX(tag: String, onClick: () -> Unit) {
     val t = T
-    Box(Modifier.size(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp)).clickable(onClickLabel = "닫기", onClick = onClick).testTag(tag), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp)).hClickable(onClickLabel = "닫기", onClick = onClick).testTag(tag), contentAlignment = Alignment.Center) {
         GlyphIcon(Glyph.CLOSE, t.ink)
     }
 }
@@ -199,7 +201,7 @@ private fun ManageSheet(bg: BackgroundController) {
                 run {
                     val armed = bg.deleteArmedId == r.id
                     Box(
-                        Modifier.heightIn(min = SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(12.dp)).clickable { bg.requestDelete(r.id) }.padding(horizontal = 10.dp).testTag("delete_${r.id}"),
+                        Modifier.heightIn(min = SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(12.dp)).hClickable { bg.requestDelete(r.id) }.padding(horizontal = 10.dp).testTag("delete_${r.id}"),
                         contentAlignment = Alignment.Center,
                     ) { Text(if (armed) "정말 지울까요?" else "삭제", style = Ty.label, color = t.bad) }
                 }

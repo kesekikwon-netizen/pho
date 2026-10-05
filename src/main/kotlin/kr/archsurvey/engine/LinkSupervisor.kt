@@ -18,6 +18,9 @@ import kr.archsurvey.feedback.FeedbackEvent
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 
 /** 수신기 쪽 바이트 통로 하나(= 소켓 하나). 블루투스는 [kr.archsurvey.bt.BtTransport], 시험에서는 가짜 스트림. close() 는 멱등이어야 한다. */
 interface LinkTransport {
@@ -32,12 +35,11 @@ interface LinkTransport {
 /**
  * 수신기 연결 감독: 연결 → NMEA 읽기 / 워치독 / RTCM 쓰기 → 끊김 분류 → 재연결(지수 백오프). Android 의존 없음.
  *
- * 개선점(이전 Engine.gnssLoop 대비)
- * - 연결 시도(블로킹 connect, 최대 수십 초)도 취소하면 소켓을 닫아 즉시 깬다.
- * - 데이터가 한 번 왔다고 백오프를 초기화하지 않는다. [stableAfterMs] 이상 **계속** 받은 뒤 끊겼을 때만 초기화
- *   (수신기가 2~3초 붙었다 끊기기를 반복하면 이전에는 대기 없이 매번 재연결했다).
- * - 쓰기가 [writeStallMs] 넘게 막히면(수신기가 보정 입력을 안 읽음) 완료를 기다리지 않고 워치독이 잡는다.
- * - 끊김 원인 구분: 소켓이 닫힘(EOF/예외)=상대가 끊음, 무수신(워치독)=전원/범위 이탈 추정, 연속 실패=[BtError.POWER_OR_RANGE].
+ * 0.1.13 BT-130 치유:
+ * - NMEA 활성화가 끝날 때까지 DEAD로 소켓을 끊지 않는다(후보 명령이 reconnectAfterMs 보다 길 수 있음).
+ * - 활성화 실패 뒤 [DeviceProfile.noDataHoldMs] 동안 소켓을 유지해 진단(TX/RX·바이트)을 설정에서 볼 수 있게 한다.
+ * - 소켓만 되고 GGA가 없으면 [onSilentStrategy]로 알려 다음 치유에서 그 연결 방식을 뺀다.
+ * - [onStrategyUsed]는 **GGA 수신(STREAMING)** 때만 호출 — 무음 SDP_UUID 를 선호값으로 저장하지 않는다.
  */
 class LinkSupervisor(
     private val profile: DeviceProfile,
@@ -51,6 +53,8 @@ class LinkSupervisor(
     private val onGga: (String) -> Unit,
     private val onQuality: (kr.archsurvey.core.FixQuality) -> Unit = {},
     private val onStrategyUsed: (String) -> Unit = {},
+    /** BT-130(소켓 OK·GGA 없음)일 때 이번 연결 방식 이름. Engine 이 다음 시도에서 exclude 한다 */
+    private val onSilentStrategy: (String) -> Unit = {},
     private val io: CoroutineDispatcher = Dispatchers.IO,
     private val watchdogPeriodMs: Long = 1_000,
     private val writeStallMs: Long = 3_000,
@@ -62,6 +66,8 @@ class LinkSupervisor(
     @Volatile private var linkLostAnnounced = false
     @Volatile private var streamingSince = 0L
     @Volatile private var writeStartedAt = 0L
+    /** 직전 세션 진단 요약(TX/RX·바이트·명령). BT-130 CrashLog 에 붙인다 */
+    private val lastDiag = AtomicReference("")
 
     /** 지금까지 연속으로 실패한 횟수(안정적으로 받은 뒤 끊기면 0 부터 다시) */
     @Volatile var failures = 0; private set
@@ -88,9 +94,10 @@ class LinkSupervisor(
                 val transport = newTransport()
                 var err: BtError? = null
                 streamingSince = 0L
+                lastDiag.set("")
                 try {
                     connectCancellable(transport)
-                    transport.strategyName?.let { onStrategyUsed(it) }
+                    // 소켓만 붙은 시점에 전략을 저장하지 않는다 — STREAMING 에서 onStrategyUsed
                     val driver = NmeaDriver(profile).also { it.reset(clock()) }
                     setLink(LinkState.CONNECTED_NO_DATA, attempt, failures, msg = "연결됨 — 데이터를 기다리는 중", strategy = transport.strategyName)
                     if (wasConnectedOnce && linkLostAnnounced) { emit(FeedbackEvent.LINK_RESTORED); linkLostAnnounced = false }
@@ -111,22 +118,26 @@ class LinkSupervisor(
                 if (err == null) err = BtError.LINK_LOST
                 err = BtError.refineAfterLoss(err, wasConnectedOnce, failures)
                 if (wasConnectedOnce && !linkLostAnnounced && err != BtError.NO_DATA) { emit(FeedbackEvent.LINK_LOST); linkLostAnnounced = true }
-                // BT-130: 소켓은 됨·GGA만 없음 → 자동 NMEA 치유를 몇 번 더(백오프) 한 뒤 현장 체크리스트
-                if (err == BtError.NO_DATA && nmeaHeals < profile.nmeaHealAttempts) {
-                    nmeaHeals++
-                    val wait = profile.reconnect.delayBeforeAttempt(nmeaHeals + 1).coerceAtLeast(1_000)
-                    setLink(LinkState.RECONNECTING, attempt, failures, err,
-                        "위치(GGA) 없음 — NMEA 치유 ${nmeaHeals}/${profile.nmeaHealAttempts} (${wait / 1000}초 후 다시)", false,
-                        strategy = link.value.strategy)
+                // BT-130: 소켓은 됨·GGA만 없음 → 이 연결 방식을 무음으로 표시 후 치유 재연결
+                if (err == BtError.NO_DATA) {
+                    transport.strategyName?.let { onSilentStrategy(it) }
+                    val detail = lastDiag.get().ifBlank { "세션 진단 없음" }
                     CrashLog.record(
-                        "진단 BT-130 치유 ${nmeaHeals}/${profile.nmeaHealAttempts} 연결방식=${link.value.strategy} 수신기=${profile.id}",
+                        "진단 BT-130 치유예정=${nmeaHeals + 1}/${profile.nmeaHealAttempts} 연결방식=${transport.strategyName} 수신기=${profile.id} · $detail",
                         IllegalStateException(profile.noDataHint),
                     )
-                    sleepOrWake(wait)
+                }
+                if (err == BtError.NO_DATA && nmeaHeals < profile.nmeaHealAttempts) {
+                    nmeaHeals++
+                    val waitHeal = profile.reconnect.delayBeforeAttempt(nmeaHeals + 1).coerceAtLeast(1_000)
+                    setLink(LinkState.RECONNECTING, attempt, failures, err,
+                        "위치(GGA) 없음 — NMEA 치유 ${nmeaHeals}/${profile.nmeaHealAttempts} · 다른 연결방식 시도 (${waitHeal / 1000}초 후)", false,
+                        strategy = link.value.strategy)
+                    sleepOrWake(waitHeal)
                     continue
                 }
                 if (err.needsUserAction) {
-                    val msg = if (err == BtError.NO_DATA) "${err.title} (오류 ${err.code}) · ${NmeaActivation.fieldChecklist(profile)}"
+                    val msg = if (err == BtError.NO_DATA) "${err.title} (오류 ${err.code}) · ${NmeaActivation.fieldChecklist(profile)} · 진단은 설정·장비연결에서 확인"
                     else "${err.title} (오류 ${err.code})"
                     setLink(LinkState.NEEDS_USER, attempt, failures, err, msg, false)
                     wake.receive()
@@ -144,7 +155,7 @@ class LinkSupervisor(
 
     /** 블로킹 connect 를 IO 스레드에서 돌리되, 취소되면 소켓을 닫아 즉시 깨운다 */
     private suspend fun connectCancellable(t: LinkTransport) = withContext(io) {
-        val connected = java.util.concurrent.atomic.AtomicBoolean(false)
+        val connected = AtomicBoolean(false)
         val closer = launch(start = CoroutineStart.UNDISPATCHED) {
             try { awaitCancellation() } catch (e: CancellationException) { if (!connected.get()) t.close(); throw e }
         }
@@ -156,10 +167,13 @@ class LinkSupervisor(
         var gotData = false
         writeStartedAt = 0L
         val outLock = Any()
-        val ackSeen = java.util.concurrent.atomic.AtomicBoolean(false)
-        val bytesIn = java.util.concurrent.atomic.AtomicLong(0)
-        val bytesOutCmd = java.util.concurrent.atomic.AtomicLong(0)
+        val ackSeen = AtomicBoolean(false)
+        val bytesIn = AtomicLong(0)
+        val bytesOutCmd = AtomicLong(0)
         val cmdLog = java.util.concurrent.CopyOnWriteArrayList<String>()
+        val actRunning = AtomicBoolean(true)
+        val actEndedAt = AtomicLong(0)
+        var actSummary = ""
         fun safeWrite(b: ByteArray, off: Int = 0, len: Int = b.size) {
             synchronized(outLock) {
                 writeStartedAt = clock()
@@ -172,6 +186,19 @@ class LinkSupervisor(
             safeWrite(b); bytesOutCmd.addAndGet(b.size.toLong())
             val line = b.toString(Charsets.US_ASCII).trim().take(80)
             if (line.isNotEmpty()) cmdLog.add("TX $line")
+        }
+        fun diagSnapshot(extra: String = ""): String {
+            val rxHint = when {
+                bytesIn.get() == 0L -> "수신0B"
+                ackSeen.get() -> "수신${bytesIn.get()}B·ACK있음"
+                else -> "수신${bytesIn.get()}B·ACK없음"
+            }
+            val cmds = cmdLog.takeLast(12).joinToString(" | ")
+            val s = "방식=${t.strategyName} $rxHint 명령송신${bytesOutCmd.get()}B 문장=${driver.snapshot.sentencesTotal}" +
+                (if (extra.isNotEmpty()) " $extra" else "") +
+                if (cmds.isNotEmpty()) " · $cmds" else ""
+            lastDiag.set(s)
+            return s
         }
         // 취소 시 블로킹 read/write 를 깨우기 위해 소켓 close
         launch { try { awaitCancellation() } finally { t.close() } }
@@ -186,11 +213,14 @@ class LinkSupervisor(
                     if (n == 0) { if (++zeros > 100) throw SessionLost(BtError.LINK_LOST, "read returned 0 repeatedly"); continue }
                     zeros = 0
                     bytesIn.addAndGet(n.toLong())
-                    // Spectra ACK ($PASHR,ACK) — 파서가 P* 를 무시하므로 원문으로 본다
                     if (!ackSeen.get() && containsAscii(buf, n, "PASHR,ACK")) {
                         ackSeen.set(true); cmdLog.add("RX PASHR,ACK")
                     }
                     if (containsAscii(buf, n, "PASHR,NAK")) cmdLog.add("RX PASHR,NAK")
+                    if (containsAscii(buf, n, "PASHR,PRT") || containsAscii(buf, n, "PASHR,NMO")) {
+                        val snip = buf.copyOf(n).toString(Charsets.US_ASCII).replace("\r", " ").replace("\n", " ").take(100)
+                        cmdLog.add("RX $snip")
+                    }
                     val now = clock()
                     val msgs = driver.onBytes(buf, n, now)
                     if (msgs.isNotEmpty()) {
@@ -200,6 +230,7 @@ class LinkSupervisor(
                         gnss.value = snap
                         if (!gotData && snap.gga != null) {
                             gotData = true; streamingSince = now; nmeaHeals = 0
+                            t.strategyName?.let { onStrategyUsed(it) } // GGA 확인된 방식만 저장
                             setLink(LinkState.STREAMING, attempt, link.value.failures, msg = "수신 중", strategy = t.strategyName)
                         } else if (link.value.state == LinkState.STALE) {
                             setLink(LinkState.STREAMING, attempt, link.value.failures, msg = "수신 중", strategy = t.strategyName)
@@ -212,7 +243,7 @@ class LinkSupervisor(
                 throw SessionLost(BtError.classify(e).let { if (it == BtError.UNKNOWN) BtError.LINK_LOST else it }, e.message ?: "read")
             }
         }
-        // NMEA 자동 활성화(연결 직후·GGA 없을 때). SP60은 후보 명령, R10은 대기·감시만
+        // NMEA 자동 활성화
         launch(io) {
             try {
                 val cmds = NmeaActivation.candidates(profile)
@@ -221,9 +252,10 @@ class LinkSupervisor(
                     write = { writeCmd(it) },
                     hasGga = { driver.snapshot.gga != null },
                     clock = clock,
-                    naturalWaitMs = if (cmds.isEmpty()) 3_000 else 2_000,
-                    perCmdWaitMs = 1_200,
-                    afterAllWaitMs = 1_500,
+                    // R10(명령 없음): 짧게 감시만. SP60: 후보 전부 돌릴 시간
+                    naturalWaitMs = if (cmds.isEmpty()) 800L else 3_000L,
+                    perCmdWaitMs = 1_400L,
+                    afterAllWaitMs = if (cmds.isEmpty()) 400L else 2_500L,
                     onStatus = { msg ->
                         if (link.value.state == LinkState.CONNECTED_NO_DATA)
                             setLink(LinkState.CONNECTED_NO_DATA, attempt, link.value.failures, msg = msg, strategy = t.strategyName)
@@ -231,20 +263,31 @@ class LinkSupervisor(
                     sawAck = { ackSeen.get() },
                     clearAck = { ackSeen.set(false) },
                 )
-                val summary = "NMEA 활성화 ${profile.id}: ${result.outcome} · ${result.elapsedMs}ms · 시도 ${result.tried.size} · ${result.log.takeLast(4).joinToString(" | ")}"
-                CrashLog.record(summary, RuntimeException(result.log.joinToString("\n")))
+                actSummary = "NMEA ${result.outcome} ${result.elapsedMs}ms 시도${result.tried.size}개"
+                val detail = diagSnapshot(actSummary) + " · " + result.log.takeLast(8).joinToString(" | ")
+                CrashLog.record(
+                    "NMEA 활성화 ${profile.id}: ${result.outcome} · ${result.elapsedMs}ms · 시도 ${result.tried.size}",
+                    RuntimeException(detail + "\n" + result.log.joinToString("\n")),
+                )
                 if (result.outcome == NmeaActOutcome.GGA_SEEN || result.outcome == NmeaActOutcome.NATURAL_GGA) {
                     // 읽기 루프가 STREAMING 으로 올린다
-                } else if (link.value.state == LinkState.CONNECTED_NO_DATA) {
-                    setLink(LinkState.CONNECTED_NO_DATA, attempt, link.value.failures,
-                        msg = "연결됨 · 위치(GGA) 없음 — ${NmeaActivation.fieldChecklist(profile)}", strategy = t.strategyName)
+                } else if (link.value.state == LinkState.CONNECTED_NO_DATA || link.value.state == LinkState.STALE) {
+                    val holdSec = (profile.noDataHoldMs / 1000).coerceAtLeast(0)
+                    setLink(LinkState.CONNECTED_NO_DATA, attempt, link.value.failures, BtError.NO_DATA,
+                        "연결됨 · 위치(GGA) 없음 — ${NmeaActivation.fieldChecklist(profile)}" +
+                            if (holdSec > 0) " · ${holdSec}초간 소켓 유지(진단 확인 가능)" else "",
+                        strategy = t.strategyName)
                 }
             } catch (_: CancellationException) {
             } catch (e: Exception) {
                 CrashLog.record("NMEA 활성화 실패", e)
+            } finally {
+                actRunning.set(false)
+                actEndedAt.set(clock())
+                diagSnapshot(actSummary)
             }
         }
-        // 워치독: 무수신 → STALE → 재연결 / 쓰기 막힘
+        // 워치독
         launch {
             while (isActive) {
                 delay(watchdogPeriodMs)
@@ -252,7 +295,7 @@ class LinkSupervisor(
                 val ws = writeStartedAt
                 if (ws != 0L && now - ws > writeStallMs) throw SessionLost(BtError.WRITE_STALLED, "write stalled ${now - ws}ms")
                 when (driver.health(now)) {
-                    DataHealth.STALE -> if (link.value.state != LinkState.STALE) {
+                    DataHealth.STALE -> if (link.value.state != LinkState.STALE && !actRunning.get()) {
                         val s = driver.snapshot
                         val miss = driver.missingRequired().isNotEmpty() && s.sentencesTotal == 0L
                         val badRate = driver.parserStats.checksumErrorRate > 0.2
@@ -260,13 +303,27 @@ class LinkSupervisor(
                             if (miss) BtError.NO_DATA else if (badRate || s.checksumErrors > 5) BtError.BAD_CHECKSUM else null,
                             if (miss) profile.noDataHint else "데이터가 잠시 끊겼어요", strategy = t.strategyName)
                     }
-                    // 소켓 오류 없이 데이터만 끊김: 전원 꺼짐/범위 이탈 추정(구분 불가), 처음부터 한 문장도 없으면 NMEA 설정 문제
-                    DataHealth.DEAD -> throw SessionLost(if (driver.snapshot.sentencesTotal == 0L) BtError.NO_DATA else BtError.POWER_OR_RANGE, "no data")
+                    DataHealth.DEAD -> {
+                        if (actRunning.get()) continue
+                        val ended = actEndedAt.get()
+                        val hold = profile.noDataHoldMs
+                        if (driver.snapshot.sentencesTotal == 0L && ended > 0L && hold > 0L && now - ended < hold) {
+                            if (link.value.state != LinkState.CONNECTED_NO_DATA) {
+                                setLink(LinkState.CONNECTED_NO_DATA, attempt, link.value.failures, BtError.NO_DATA,
+                                    "연결 유지 중 · 진단 기록 확인 (${diagSnapshot()})", strategy = t.strategyName)
+                            }
+                            continue
+                        }
+                        throw SessionLost(
+                            if (driver.snapshot.sentencesTotal == 0L) BtError.NO_DATA else BtError.POWER_OR_RANGE,
+                            "no data · ${diagSnapshot(actSummary)}",
+                        )
+                    }
                     else -> {}
                 }
             }
         }
-        // 쓰기: RTCM 큐 직렬화, 청크 단위
+        // RTCM 쓰기
         launch(io) {
             try {
                 for (frame in rtcmQueue) {

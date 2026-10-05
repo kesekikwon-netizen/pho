@@ -71,7 +71,7 @@ private fun BigSurveyCard(onClick: () -> Unit) {
     val t = T
     val shape = RoundedCornerShape(24.dp)
     Column(
-        Modifier.fillMaxWidth().height(152.dp).clip(shape).background(t.primary).clickable(onClick = onClick)
+        Modifier.fillMaxWidth().height(152.dp).clip(shape).background(t.primary).hClickable(onClick = onClick)
             .semantics { contentDescription = "일반 측량 시작" }.padding(20.dp).testTag("home_survey"),
     ) {
         Row(Modifier.fillMaxWidth()) {
@@ -90,7 +90,7 @@ private fun HomeTile(g: Glyph?, title: String, sub: String, tag: String, modifie
     val t = T
     val shape = RoundedCornerShape(20.dp)
     Column(
-        modifier.height(116.dp).clip(shape).background(t.raised).border(1.dp, t.line.copy(alpha = 0.35f), shape).clickable(onClick = onClick).padding(16.dp).testTag(tag),
+        modifier.height(116.dp).clip(shape).background(t.raised).border(1.dp, t.line.copy(alpha = 0.35f), shape).hClickable(onClick = onClick).padding(16.dp).testTag(tag),
     ) {
         Row(Modifier.fillMaxWidth()) {
             if (g != null) GlyphIcon(g, t.ink, 26.dp) else GearIcon(t.ink, 26.dp)
@@ -127,7 +127,7 @@ private fun HomeConnBar(c: SurveyController) {
     val shape = RoundedCornerShape(16.dp)
     Row(
         Modifier.padding(16.dp).fillMaxWidth().heightIn(min = 56.dp).clip(shape).background(t.raised).border(1.dp, t.line.copy(alpha = 0.45f), shape)
-            .clickable { cc?.openScreen() ?: run { c.message = "연결 화면을 열 수 없어요" } }.padding(horizontal = 16.dp).testTag("home_conn_bar"),
+            .hClickable { cc?.openScreen() ?: run { c.message = "연결 화면을 열 수 없어요" } }.padding(horizontal = 16.dp).testTag("home_conn_bar"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         GlyphIcon(Glyph.BT, t.ink, 20.dp)
@@ -180,7 +180,7 @@ private fun SettingsRow(g: Glyph?, title: String, sub: String, tag: String, onCl
     val t = T
     Column {
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 64.dp).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(vertical = 8.dp).testTag(tag),
+            Modifier.fillMaxWidth().heightIn(min = 64.dp).then(if (onClick != null) Modifier.hClickable(onClick = onClick) else Modifier).padding(vertical = 8.dp).testTag(tag),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(t.chip), contentAlignment = Alignment.Center) { if (g != null) GlyphIcon(g, t.ink, 20.dp) }

@@ -71,7 +71,7 @@ class LinkSupervisorTests {
     @After fun tearDown() { scope.cancel() }
 
     private fun profile(stale: Long = 300, dead: Long = 700, initial: Long = 100, max: Long = 400) = DeviceProfiles.R10.copy(
-        staleAfterMs = stale, reconnectAfterMs = dead, rtcmWriteChunk = 64,
+        staleAfterMs = stale, reconnectAfterMs = dead, rtcmWriteChunk = 64, noDataHoldMs = 0, nmeaHealAttempts = 0,
         reconnect = ReconnectPolicy(initialDelayMs = initial, maxDelayMs = max, settleMs = 0, repairHintAfterFailures = 3),
     )
 
@@ -176,16 +176,62 @@ class LinkSupervisorTests {
     }
 
     @Test fun noGgaTriggersNmeaHealThenNeedsUser() {
-        val r = Rig(profile(dead = 350, initial = 80, max = 200).copy(nmeaHealAttempts = 2), scope) { MockSocket() }
-        r.waitFor(ms = 8000, what = "needs user after heals") { r.link.value.state == LinkState.NEEDS_USER }
+        val r = Rig(profile(dead = 350, initial = 80, max = 200).copy(nmeaHealAttempts = 2, noDataHoldMs = 0), scope) { MockSocket() }
+        r.waitFor(ms = 12_000, what = "needs user after heals") { r.link.value.state == LinkState.NEEDS_USER }
         assertEquals(BtError.NO_DATA, r.link.value.error)
         assertTrue("치유 재연결로 소켓이 늘어야 함: ${r.sockets.size}", r.sockets.size >= 3)
         assertEquals(2, r.sup.nmeaHeals)
     }
 
+    @Test fun strategySavedOnlyAfterGga_silentReportedOnNoData() {
+        val used = CopyOnWriteArrayList<String>()
+        val silent = CopyOnWriteArrayList<String>()
+        val r = Rig(profile(dead = 400).copy(nmeaHealAttempts = 0, noDataHoldMs = 0), scope) { MockSocket() }
+        // re-build with callbacks — Rig doesn't expose them, so manual supervisor
+        r.job.cancel()
+        val link = MutableStateFlow(LinkStatus())
+        val gnss = MutableStateFlow(GnssSnapshot())
+        val rtcm = Channel<ByteArray>(64, kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
+        val wake = Channel<Unit>(Channel.CONFLATED)
+        val sockets = CopyOnWriteArrayList<MockSocket>()
+        val p = profile(dead = 400).copy(nmeaHealAttempts = 0, noDataHoldMs = 0)
+        val sup = LinkSupervisor(p, { MockSocket().also { sockets.add(it) } },
+            { System.nanoTime() / 1_000_000 }, link, gnss, rtcm, wake, {}, {},
+            onStrategyUsed = { used.add(it) }, onSilentStrategy = { silent.add(it) },
+            watchdogPeriodMs = 50)
+        val job = scope.launch { sup.run() }
+        val end = System.currentTimeMillis() + 6_000
+        while (System.currentTimeMillis() < end && link.value.state != LinkState.NEEDS_USER) Thread.sleep(20)
+        assertEquals(LinkState.NEEDS_USER, link.value.state)
+        assertTrue("무음이면 저장 안 함: $used", used.isEmpty())
+        assertTrue("무음 방식 보고: $silent", silent.contains("SECURE_SPP"))
+        job.cancel()
+
+        val used2 = CopyOnWriteArrayList<String>()
+        val silent2 = CopyOnWriteArrayList<String>()
+        val link2 = MutableStateFlow(LinkStatus())
+        val gnss2 = MutableStateFlow(GnssSnapshot())
+        val sockets2 = CopyOnWriteArrayList<MockSocket>()
+        val sup2 = LinkSupervisor(p, { MockSocket().also { sockets2.add(it) } },
+            { System.nanoTime() / 1_000_000 }, link2, gnss2, rtcm, wake, {}, {},
+            onStrategyUsed = { used2.add(it) }, onSilentStrategy = { silent2.add(it) },
+            watchdogPeriodMs = 50)
+        val job2 = scope.launch { sup2.run() }
+        val end2 = System.currentTimeMillis() + 3_000
+        while (System.currentTimeMillis() < end2 && sockets2.isEmpty()) Thread.sleep(10)
+        assertTrue(sockets2.isNotEmpty())
+        sockets2[0].push(gga())
+        val end3 = System.currentTimeMillis() + 3_000
+        while (System.currentTimeMillis() < end3 && link2.value.state != LinkState.STREAMING) Thread.sleep(10)
+        assertEquals(LinkState.STREAMING, link2.value.state)
+        assertTrue(used2.contains("SECURE_SPP"))
+        assertTrue(silent2.isEmpty())
+        job2.cancel()
+    }
+
     @Test fun sp60ActivationSendsPashesCandidatesAndSeesGga() {
         val ack = kr.archsurvey.core.NmeaParser.build("PASHR,ACK")
-        val r = Rig(DeviceProfiles.SP60.copy(staleAfterMs = 5_000, reconnectAfterMs = 12_000, nmeaHealAttempts = 0,
+        val r = Rig(DeviceProfiles.SP60.copy(staleAfterMs = 5_000, reconnectAfterMs = 60_000, nmeaHealAttempts = 0, noDataHoldMs = 0,
             reconnect = ReconnectPolicy(initialDelayMs = 100, maxDelayMs = 400, settleMs = 0, repairHintAfterFailures = 3, firstConnectDelayMs = 0)),
             scope) { MockSocket() }
         r.waitFor { r.sockets.size == 1 && r.link.value.state == LinkState.CONNECTED_NO_DATA }
