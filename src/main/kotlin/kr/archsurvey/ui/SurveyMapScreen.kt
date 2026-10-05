@@ -80,7 +80,7 @@ private fun cm1(m: Double) = String.format(java.util.Locale.US, "%.1f", m * 100.
 /** 상태 띠 셋째 줄: 위성 수 · 수평/수직 정확도(cm). 값이 없으면 "—" */
 internal fun bandDetail(c: SurveyController): String {
     val g = c.gv
-    return "위성 ${g.satellites}" + " · H " + (g.status.sigmaHM?.let { "±${cm1(it)}cm" } ?: "—") + " · V " + (g.sigmaVM?.let { "±${cm1(it)}cm" } ?: "—")
+    return g.quality.labelKo.removePrefix("RTK ") + " · 위성 ${g.satellites}" + " · H " + (g.status.sigmaHM?.let { "±${cm1(it)}cm" } ?: "—") + " · V " + (g.sigmaVM?.let { "±${cm1(it)}cm" } ?: "—")
 }
 
 /** 수신기가 연결되지 않았을 때 지도 가운데에 뜨는 안내 카드 */

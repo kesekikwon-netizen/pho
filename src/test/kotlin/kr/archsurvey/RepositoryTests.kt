@@ -45,6 +45,16 @@ class RepositoryTests {
         assertEquals(0.1991, p.antennaPcoV, 0.0); assertEquals(0.015, p.sigmaH!!, 0.0); assertNull(p.deletedAtUtcMs)
     }
 
+    @Test fun averagingMetaIsStoredAndOldRowsDefaultToEmpty() = runBlocking {
+        val a = repo.savePoint(pt("P-0001").copy(avgStartedAtUtcMs = 1000L, avgEndedAtUtcMs = 3500L, maxCorrectionAgeSec = 2.0, minCorrectionAgeSec = 1.0, fixedEpochs = 4, floatEpochs = 1))
+        val p = db.dao().getPoint(a)!!
+        assertEquals(1000L, p.avgStartedAtUtcMs); assertEquals(3500L, p.avgEndedAtUtcMs)
+        assertEquals(2.0, p.maxCorrectionAgeSec!!, 0.0); assertEquals(1.0, p.minCorrectionAgeSec!!, 0.0)
+        assertEquals(4, p.fixedEpochs); assertEquals(1, p.floatEpochs); assertEquals(5, p.epochs)
+        val b = db.dao().getPoint(repo.savePoint(pt("P-0002")))!!
+        assertNull(b.avgStartedAtUtcMs); assertNull(b.maxCorrectionAgeSec); assertEquals(0, b.fixedEpochs)
+    }
+
     @Test fun fifthPhotoIsRejected() = runBlocking {
         val id = repo.savePoint(pt("P-0001"))
         repeat(4) { assertTrue(repo.addPhoto(photo(id, it)) is PhotoAddResult.Added) }

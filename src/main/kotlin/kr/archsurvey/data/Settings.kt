@@ -41,6 +41,9 @@ class SettingsStore(private val ctx: Context) {
     fun btAddressFor(deviceId: String): String? = sp.getString("bt_addr_$deviceId", null)
     fun setBtAddress(deviceId: String, addr: String?) = sp.edit().putString("bt_addr_$deviceId", addr).apply()
 
+    fun preChecked(deviceId: String): Boolean = sp.getBoolean("pre_ok_$deviceId", false)
+    fun setPreChecked(deviceId: String, v: Boolean) = sp.edit().putBoolean("pre_ok_$deviceId", v).apply()
+
     fun btStrategy(address: String): String? = sp.getString("bt_strategy_$address", null)
     fun setBtStrategy(address: String, strategy: String) = sp.edit().putString("bt_strategy_$address", strategy).apply()
 

@@ -100,6 +100,22 @@ class ConnectionTests {
         return c to p
     }
 
+    @Test fun preChecksAreRememberedAfterFirstSuccessfulConnect() {
+        val (c, p) = real()
+        c.selectAddress("AA:BB")
+        for (i in c.checks.indices) c.setCheck(i, true)
+        c.updateForm(c.form.copy(user = "u", password = "pw"))
+        c.connect()
+        assertTrue(p.saved!!.preChecked)
+        // 다음 실행: 저장된 값으로 체크가 이미 켜져 있어 다시 누를 필요가 없다
+        p.initial = p.saved!!
+        val c2 = ConnectionController(p)
+        assertTrue(c2.checks.isNotEmpty() && c2.checks.all { it })
+        // 처음 쓰는 기기는 그대로 미체크
+        val c3 = ConnectionController(FakePlatform())
+        assertTrue(c3.checks.none { it })
+    }
+
     @Test fun connectPreflightOrder() {
         val (c, p) = real()
         // 권한 거부

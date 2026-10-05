@@ -94,7 +94,8 @@ interface ConnectionPlatform {
     fun save(s: SavedConnection)
 }
 
-data class SavedConnection(val deviceId: String?, val address: String?, val ntrip: NtripForm)
+/** [preChecked]: 이 수신기에서 “연결 전 확인”을 한 번 마쳤는지(수신기 설정은 수신기에 남으므로 다음부터 묻지 않음) */
+data class SavedConnection(val deviceId: String?, val address: String?, val ntrip: NtripForm, val preChecked: Boolean = false)
 
 /**
  * 연결 화면 상태·동작. Android 의존 없음.
@@ -125,6 +126,7 @@ class ConnectionController(
         address = s.address
         form = s.ntrip
         resetChecks()
+        if (s.preChecked) for (i in checks.indices) checks[i] = true
     }
 
     private fun resetChecks() { checks.clear(); repeat(profile.preConnectChecks.size) { checks.add(false) } }
@@ -145,7 +147,7 @@ class ConnectionController(
     fun updateForm(f: NtripForm) { form = f }
     fun setCheck(i: Int, v: Boolean) { if (i in checks.indices) checks[i] = v }
 
-    private fun persist() = platform.save(SavedConnection(profile.id, address, form))
+    private fun persist() = platform.save(SavedConnection(profile.id, address, form, checks.isNotEmpty() && checks.all { it }))
 
     /** 사전 점검 순서: 권한 → 블루투스 켜짐 → 기기 선택 → 사전 확인 → VRS 입력. 막히면 notice 에 오류 카드 */
     fun connect() {

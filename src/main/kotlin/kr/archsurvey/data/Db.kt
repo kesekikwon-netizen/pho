@@ -35,6 +35,13 @@ data class PointEntity(
     val correctionAgeSec: Double?,
     val baseStationId: String?,
     val epochs: Int,
+    /** 평균 측정 메타(DB v4): 평균 시작·종료 시각(UTC ms), 보정 연령 최대·최소(초), 고정·Float 표본 수. 옛 행은 null/0 */
+    val avgStartedAtUtcMs: Long? = null,
+    val avgEndedAtUtcMs: Long? = null,
+    val maxCorrectionAgeSec: Double? = null,
+    val minCorrectionAgeSec: Double? = null,
+    @ColumnInfo(defaultValue = "0") val fixedEpochs: Int = 0,
+    @ColumnInfo(defaultValue = "0") val floatEpochs: Int = 0,
     /** 지면→안테나 위상중심(APC) 총 높이(m) = 직고(+사선환산) + 기준점→APC 오프셋. 내부 저장은 미터 */
     val antennaHeight: Double,
     /** 안테나 모델(DB id), 기준점 종류, 입력 방식, 입력 원값, 기준점→APC 오프셋(수직/수평) */
@@ -225,8 +232,8 @@ object VoiceLimit { const val MAX = 3 }
         PointEntity::class, PhotoEntity::class, VoiceEntity::class,
         AreaEntity::class, GridEntity::class, OutlineEntity::class, OutlinePointEntity::class, PointRevisionEntity::class,
     ],
-    version = 3, exportSchema = true,
-    autoMigrations = [androidx.room.AutoMigration(from = 1, to = 2), androidx.room.AutoMigration(from = 2, to = 3)],
+    version = 4, exportSchema = true,
+    autoMigrations = [androidx.room.AutoMigration(from = 1, to = 2), androidx.room.AutoMigration(from = 2, to = 3), androidx.room.AutoMigration(from = 3, to = 4)],
 )
 abstract class SurveyDb : RoomDatabase() {
     abstract fun dao(): SurveyDao

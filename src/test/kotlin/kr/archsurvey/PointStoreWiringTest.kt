@@ -32,6 +32,16 @@ class PointStoreWiringTest {
         assertEquals("P-0001", p.name); assertEquals(12345L, p.measuredAtMs); assertEquals(4, p.fixQuality)
         assertEquals(1L, c.points.single().rowId)
     }
+    @Test fun measuredPointKeepsAveragingMeta() {
+        val f = FakeGnssSource(FakeScenarios.allFixed()); val st = MemStore()
+        var t = 1000L
+        val c = SurveyController(f, db, scope(), store = st, clock = { t += 500L; t })
+        measure(c, f)
+        val p = st.saved.single()
+        assertNotNull(p.avgStartedAtMs); assertNotNull(p.avgEndedAtMs); assertTrue(p.avgEndedAtMs!! >= p.avgStartedAtMs!!)
+        assertEquals(p.epochs, p.fixedEpochs + p.floatEpochs)
+        assertTrue(p.fixedEpochs > 0)
+    }
     @Test fun undoHidesInStoreAndNumberKeepsCounting() {
         val f = FakeGnssSource(FakeScenarios.allFixed()); val st = MemStore()
         val c = SurveyController(f, db, scope(), store = st)

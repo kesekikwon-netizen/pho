@@ -70,6 +70,13 @@ data class SavedPoint(
     val sigmaU: Double? = null,
     val correctionAgeSec: Double? = null,
     val baseStationId: String? = null,
+    /** 평균 측정 메타(0.1.7): 평균 시작·종료 벽시계(ms), 보정 연령 최대·최소(초), 고정·Float 표본 수. 옛 점은 null/0 = 기록 없음 */
+    val avgStartedAtMs: Long? = null,
+    val avgEndedAtMs: Long? = null,
+    val maxCorrectionAgeSec: Double? = null,
+    val minCorrectionAgeSec: Double? = null,
+    val fixedEpochs: Int = 0,
+    val floatEpochs: Int = 0,
     /** 고고학: 발굴 구역·그리드·칸 이름(예: "A-3", "A-3 / B-3 경계 근처", "그리드 밖")·칸 안 위치(m) */
     val areaId: Long? = null,
     val gridId: Long? = null,
@@ -295,11 +302,12 @@ class SurveyController(
             val avg = PointAverager(epochsPerPoint)
             var worst = st.status
             var aborted: StatusReason? = null
+            var avgStart: Long? = null; var avgEnd: Long? = null
             combine(source.gnss, source.link) { g, l -> g to l }.first { (g, l) ->
                 val r = StatusJudge.judge(g, l.state, source.clockMs())
                 if (r.status == SurveyStatus.UNAVAILABLE) { aborted = r.reason; return@first true }
                 if (r.status == SurveyStatus.CAUTION) worst = SurveyStatus.CAUTION
-                g.gga?.let { avg.add(it, g.gst) }
+                g.gga?.let { if (avg.add(it, g.gst)) { val now = clock(); if (avgStart == null) avgStart = now; avgEnd = now } }
                 progress = avg.progress
                 avg.done
             }
@@ -321,6 +329,8 @@ class SurveyController(
                 worst, worst == SurveyStatus.CAUTION, p.epochs, rec, gv.quality.code, gv.satellites, clock(),
                 apcEllipsoidalM = p.ellipsoidalHeight, apcMslM = p.altitudeMsl, geoidSepM = p.geoidSeparation, groundMslM = groundMsl,
                 hdop = p.hdop, sigmaE = p.sigmaE, sigmaN = p.sigmaN, sigmaU = p.sigmaU, correctionAgeSec = p.correctionAgeSec, baseStationId = p.baseStationId,
+                avgStartedAtMs = avgStart, avgEndedAtMs = avgEnd, maxCorrectionAgeSec = p.maxCorrectionAgeSec, minCorrectionAgeSec = p.minCorrectionAgeSec,
+                fixedEpochs = p.fixedEpochs, floatEpochs = p.floatEpochs,
                 areaId = arch.activeAreaId, gridId = if (cell.kind == CellKind.NO_GRID) null else arch.activeGrid?.id, cellName = cellName,
                 cellU = cell.inCellU, cellV = cell.inCellV)
             val target = resurveyTarget

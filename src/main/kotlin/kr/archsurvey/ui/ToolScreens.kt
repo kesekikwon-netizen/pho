@@ -131,7 +131,7 @@ fun PointDetailScreen(c: SurveyController) {
         Text("좌표·높이는 바꿀 수 없어요. 잘못 쟀다면 다시 측점하세요.", style = Ty.small, color = t.inkSub)
         Text(
             "${if (p.status == SurveyStatus.FIXED) "고정" else "주의"}${p.sigmaHM?.let { " ±${f3(it)} m" } ?: ""} · 위성 ${p.satellites} · ${p.epochs}회 평균 · EPSG:${p.crsEpsg}" +
-                (p.groundMslM?.let { " · 표고 ${f3(it)} m" } ?: "") + if (p.measuredAtMs > 0) "\n" + SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(p.measuredAtMs)) else "",
+                (p.groundMslM?.let { " · 표고 ${f3(it)} m" } ?: "") + (if (p.measuredAtMs > 0) "\n" + SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(p.measuredAtMs)) else "") + averagingLine(p),
             style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("detail_info"),
         )
         PointHistoryCards(c, p)
@@ -410,4 +410,20 @@ fun JobScreen(c: SurveyController) {
             )
         }
     }
+}
+
+/** 평균 측정 메타 한 줄: 평균 시각·표본 수(고정/Float)·보정 연령. 기록 없는 옛 점은 빈 문자열 */
+internal fun averagingLine(p: SavedPoint): String {
+    val s = p.avgStartedAtMs; val e = p.avgEndedAtMs
+    val parts = ArrayList<String>()
+    if (s != null && e != null) {
+        val f = SimpleDateFormat("HH:mm:ss", Locale.KOREA)
+        parts += "평균 ${f.format(Date(s))}–${f.format(Date(e))}"
+    }
+    if (p.fixedEpochs + p.floatEpochs > 0) parts += "표본 ${p.epochs} (고정 ${p.fixedEpochs}·Float ${p.floatEpochs})"
+    p.correctionAgeSec?.let { last ->
+        val mx = p.maxCorrectionAgeSec
+        parts += "보정 연령 ${String.format(Locale.US, "%.1f", last)}초" + (if (mx != null && mx > last) " (최대 ${String.format(Locale.US, "%.1f", mx)}초)" else "")
+    }
+    return if (parts.isEmpty()) "" else "\n" + parts.joinToString(" · ")
 }

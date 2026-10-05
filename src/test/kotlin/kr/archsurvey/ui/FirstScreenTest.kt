@@ -77,7 +77,7 @@ class FirstScreenTest {
         rule.onNodeWithTag("status_detail").assertTextContains("위성 21", substring = true)
         rule.onNodeWithTag("status_detail").assertTextContains("H ±0.8cm", substring = true)
         rule.onNodeWithTag("status_detail").assertTextContains("V ±1.2cm", substring = true)
-        rule.onNodeWithTag("status_detail").assertTextContains("RTK 고정", substring = true)
+        rule.onNodeWithTag("status_detail").assertTextContains("고정", substring = true)
         shot("r3_streaming")
     }
 

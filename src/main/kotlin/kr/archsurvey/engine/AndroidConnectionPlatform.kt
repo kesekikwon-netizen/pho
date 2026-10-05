@@ -38,11 +38,11 @@ class AndroidConnectionPlatform(private val app: App) : ConnectionPlatform {
     override fun loadSaved(): SavedConnection {
         val s = app.settings
         val id = s.deviceId
-        return SavedConnection(id, id?.let { s.btAddressFor(it) }, NtripForm.from(s.loadNtrip(), s.ntripEnabled))
+        return SavedConnection(id, id?.let { s.btAddressFor(it) }, NtripForm.from(s.loadNtrip(), s.ntripEnabled), id?.let { s.preChecked(it) } ?: false)
     }
     override fun save(s: SavedConnection) {
         val st = app.settings
-        s.deviceId?.let { st.deviceId = it; st.setBtAddress(it, s.address) }
+        s.deviceId?.let { st.deviceId = it; st.setBtAddress(it, s.address); st.setPreChecked(it, s.preChecked) }
         st.saveNtrip(s.ntrip.toConfig()); st.ntripEnabled = s.ntrip.enabled
     }
 }
