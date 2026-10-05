@@ -6,6 +6,8 @@ enum class Phase { IDLE, ACQUIRING, RESULT, RESULT_EXPANDED, RECORDING }
 /** MASTER-PLAN §4 UI 원칙의 치수. 화면 코드와 레이아웃 시험이 같은 상수를 쓴다. 모두 dp. */
 object SurveyDims {
     const val MEASURE_BUTTON_DP = 72
+    /** 0.1.11 「측량하기」 버튼 폭(목업 15) */
+    const val MEASURE_WIDTH_DP = 112
     const val MIN_TOUCH_DP = 48
     const val STATUS_BAND_DP = 64
     const val COORD_LINE_DP = 36
@@ -20,7 +22,7 @@ object SurveyDims {
     const val MAP_TOOL_GAP_DP = 8
 }
 
-/** 세 영역(상태 띠 / 지도 / 컨트롤)이 겹치지 않는 고정 높이 합산. 지도는 남는 높이 전부. */
+/** 영역(머리글·판정 줄 / 지도 / 정보 / 컨트롤)이 겹치지 않는 고정 높이 합산. 지도는 남는 높이 전부. */
 object SurveyLayout {
     fun infoHeightDp(phase: Phase): Int = when (phase) {
         Phase.IDLE -> 0
@@ -30,7 +32,9 @@ object SurveyLayout {
     }
     /** 펼친 결과 패널이 컨트롤 영역을 대신하는 단계(사진·음성·메모를 볼 때만) */
     fun isResult(phase: Phase) = phase == Phase.RESULT_EXPANDED
-    fun fixedHeightDp(phase: Phase): Int = when (phase) {
+    /** 0.1.11: 지도 위 머리글(목업 상단) + 판정 줄. 결과 패널을 펼치면 둘 다 한 줄로 줄인다 */
+    fun topHeightDp(phase: Phase): Int = if (isResult(phase)) HeaderDims.COMPACT_DP + StatusLineDims.COMPACT_DP else HeaderDims.FULL_DP + StatusLineDims.FULL_DP
+    fun fixedHeightDp(phase: Phase): Int = topHeightDp(phase) + when (phase) {
         Phase.RESULT_EXPANDED -> SurveyDims.RESULT_PANEL_DP + SurveyDims.EXPANDED_EXTRA_DP
         else -> infoHeightDp(phase) + SurveyDims.CONTROL_AREA_DP
     }

@@ -52,12 +52,18 @@ fun SurveyMapScreen(
     c: SurveyController, batteryPct: Int?, map: MapSurface = rememberMapSurface(c),
 ) {
     val t = T
+    androidx.compose.runtime.CompositionLocalProvider(LocalSurvey provides c) {
     Box(Modifier.fillMaxSize().background(t.bg).windowInsetsPadding(WindowInsets.systemBars).testTag("screen")) {
-        Column(Modifier.fillMaxSize()) {
+        val expanded = SurveyLayout.isResult(c.phase)
+        if (c.homeOpen) HomeScreen(c) else Column(Modifier.fillMaxSize()) {
+            AppHeader(c, "측량", onBack = { c.homeOpen = true }, compact = expanded, backTag = "survey_back", menuTag = "gear")
+            StatusBand(c, compact = expanded)
             MapArea(c, map, Modifier.weight(1f))
-            if (SurveyLayout.isResult(c.phase)) ResultPanel(c) else { InfoZone(c); ControlArea(c) }
+            if (expanded) ResultPanel(c) else { InfoZone(c); ControlArea(c) }
         }
-        DrawerOverlay(c)
+        if (c.settingsMenuOpen) SettingsMenuScreen(c)
+        // 시스템 뒤로: 열린 창부터 닫고, 지도면 홈으로
+        androidx.activity.compose.BackHandler(enabled = backTarget(c) != null) { backTarget(c)?.invoke() }
         if (c.quickSheetOpen) QuickSheet(c)
         if (c.dupPrompt != null) DupSheet(c)
         if (c.tiltPrompt != null) TiltSheet(c)
@@ -71,8 +77,33 @@ fun SurveyMapScreen(
         c.exporter?.let { if (it.open) ExportScreen(it) }
         c.backup?.let { if (it.open) BackupScreen(it) }
         c.connection?.let { ConnectionHost(c, it) }
+        DrawerOverlay(c)
+        if (c.gnssInfoOpen) GnssInfoDialog(c)
+        if (c.skyPlotOpen) SkyPlotScreen(c)
         if (c.phase == Phase.ACQUIRING) MeasureProgress(c)
         FeedbackOverlays(c.ui)
+    }
+    }
+}
+
+/** 시스템 뒤로 단추가 할 일. 없으면 null(앱 기본 동작 = 나가기) */
+internal fun backTarget(c: SurveyController): (() -> Unit)? {
+    val cc = c.connection
+    return when {
+        c.skyPlotOpen -> { { c.skyPlotOpen = false } }
+        c.gnssInfoOpen -> { { c.gnssInfoOpen = false } }
+        c.drawerOpen -> { { c.drawerOpen = false } }
+        cc != null && cc.open && cc.mountPickerOpen -> { { cc.closeMountPicker() } }
+        cc != null && cc.open -> { { cc.close() } }
+        c.exporter?.open == true -> { { c.exporter?.close() } }
+        c.backup?.open == true -> { { c.backup?.close() } }
+        c.hub.screen != null -> { { c.hub.back() } }
+        c.antennaSheetOpen -> { { c.antennaSheetOpen = false } }
+        c.setupOpen -> { { c.setupOpen = false } }
+        c.quickSheetOpen -> { { c.quickSheetOpen = false } }
+        c.settingsMenuOpen -> { { c.settingsMenuOpen = false } }
+        !c.homeOpen && c.phase != Phase.ACQUIRING -> { { c.homeOpen = true } }
+        else -> null
     }
 }
 
@@ -141,27 +172,31 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
         },
     ) {
         map.Draw(ms, Modifier.fillMaxSize())
-        // 위: 상태 카드 + 탭 (목업 s1)
-        Column(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            StatusBand(c)
-        }
-        // 왼쪽: 현재 좌표 + 지도 도구
-        Column(Modifier.align(Alignment.TopStart).padding(start = 10.dp, top = 84.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // 왼쪽(목업 15): 현재 좌표 X/Y/Z + 내 위치 · 전체 보기 · 확대 · 축소
+        Column(Modifier.align(Alignment.TopStart).padding(start = 10.dp, top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!SurveyLayout.isResult(c.phase)) CoordBox(c)
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ToolBtn(Glyph.LOCATE, "내 위치 고정/해제", "tool_locate", if (c.follow) MKind.PRIMARY else MKind.PLAIN) { if (c.follow) c.follow = false else c.recenter() }
+                ToolBtn(Glyph.EXTENT, "전체 보기", "tool_fit") { c.fitAll() }
                 ToolBtn(Glyph.PLUS, "확대", "tool_zoom_in") { c.zoomIn() }
                 ToolBtn(Glyph.MINUS, "축소", "tool_zoom_out") { c.zoomOut() }
             }
         }
-        // 오른쪽: 퀵 메뉴 · 안테나 높이 (점 목록·전체 보기·레이어는 퀵 메뉴로 접음)
-        Column(Modifier.align(Alignment.TopEnd).padding(end = 10.dp, top = 84.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // 오른쪽(목업 15): 배경지도 · 레이어 · 점 목록 / 아래로 기포 · 안테나 높이 · 더보기
+        Column(Modifier.align(Alignment.TopEnd).padding(end = 10.dp, top = 10.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                MBtn(Modifier.height(48.dp).testTag("tool_bgmap"), MKind.PLAIN, 24.dp, onClick = { c.bg?.toggle() ?: run { c.message = "배경 레이어는 이 빌드에 없어요" } }) {
+                    Text("배경지도", style = Ty.label.copy(fontSize = 13.sp), color = t.ink, maxLines = 1, modifier = Modifier.padding(horizontal = 12.dp))
+                }
+                ToolBtn(Glyph.LAYERS, "레이어 관리", "tool_layers") { c.bg?.openManage() ?: run { c.message = "배경 레이어는 이 빌드에 없어요" } }
+                ToolBtn(Glyph.LIST, "점 목록", "tool_points") { c.hub.open(ToolScreen.POINTS) }
+            }
             c.tilt?.let { TiltBubble(it) }
-            ToolBtn(Glyph.CHEVRON_UP, "퀵 메뉴", "tool_quick") { c.quickSheetOpen = true }
             MBtn(Modifier.size(48.dp).testTag("antenna_chip"), MKind.PLAIN, 16.dp, onClick = { c.antennaSheetOpen = true }) {
                 GlyphIcon(Glyph.RULER, t.accent, 18.dp)
                 Text(f3(c.antenna.inputValueM), style = Ty.coord.copy(fontSize = 12.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("antenna_input"))
             }
+            ToolBtn(Glyph.MENU, "더보기", "tool_quick") { c.quickSheetOpen = true }
         }
         c.bg?.mapCaption()?.let {
             Text(it, style = Ty.small, color = t.ink, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 6.dp).background(t.raised.copy(alpha = 0.85f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp).testTag("map_caption"))
@@ -236,7 +271,7 @@ private fun ResultStrip(c: SurveyController) {
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             StatusIcon(p.status, fg, 14.dp)
-            Text(if (p.status == SurveyStatus.FIXED) "FIXED 고정" else "주의", style = Ty.label.copy(fontSize = 12.sp), color = fg, maxLines = 1)
+            Text(if (p.status == SurveyStatus.FIXED) "고정" else "주의", style = Ty.label.copy(fontSize = 12.sp), color = fg, maxLines = 1)
         }
         GlyphIcon(Glyph.CHEVRON_UP, t.accent, 20.dp)
     }
@@ -265,14 +300,14 @@ private fun ResultPanel(c: SurveyController) {
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     StatusIcon(p.status, fg, 14.dp)
-                    Text(if (p.status == SurveyStatus.FIXED) "FIXED 고정" else "주의", style = Ty.label.copy(fontSize = 12.sp), color = fg, maxLines = 1)
+                    Text(if (p.status == SurveyStatus.FIXED) "고정" else "주의", style = Ty.label.copy(fontSize = 12.sp), color = fg, maxLines = 1)
                 }
             }
             Spacer(Modifier.height(2.dp))
             Column(Modifier.fillMaxWidth().height(40.dp), verticalArrangement = Arrangement.Center) {
                 val m = Ty.coord.copy(fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Light)
-                Text("N ${grp3(p.northing)}  E ${grp3(p.easting)}", style = m, color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_coord"))
-                Text("H ${p.groundHeightM?.let { grp3(it) } ?: "—"}  ±${p.sigmaHM?.let { f3(it) } ?: "—"} m", style = m, color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_h"))
+                Text("X(N) ${grp3(p.northing)}  Y(E) ${grp3(p.easting)}", style = m, color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_coord"))
+                Text("Z(H) ${p.groundHeightM?.let { grp3(it) } ?: "—"}  수평 ±${p.sigmaHM?.let { f3(it) } ?: "—"} m", style = m, color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_h"))
             }
         }
         Spacer(Modifier.height(4.dp))
@@ -285,7 +320,7 @@ private fun ResultPanel(c: SurveyController) {
                 }
             }
             Spacer(Modifier.weight(1f))
-            MBtn(Modifier.size(52.dp).testTag("voice_btn"), MKind.PRIMARY, 26.dp, onClick = { c.toggleVoice() }) { GlyphIcon(Glyph.MIC, t.ink, 22.dp) }
+            MBtn(Modifier.size(52.dp).testTag("voice_btn"), MKind.PRIMARY, 26.dp, onClick = { c.toggleVoice() }) { GlyphIcon(Glyph.MIC, t.onPrimary, 22.dp) }
             MBtn(Modifier.size(48.dp).testTag("expand_btn"), MKind.PLAIN, 16.dp, onClick = { c.toggleExpand() }) {
                 GlyphIcon(if (expanded) Glyph.CHEVRON_DOWN else Glyph.CHEVRON_UP, t.accent, 22.dp)
             }
@@ -294,7 +329,7 @@ private fun ResultPanel(c: SurveyController) {
         Row(Modifier.fillMaxWidth().height(72.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             MBtn(Modifier.weight(1f, fill = false).widthIn(max = 224.dp).fillMaxWidth().height(72.dp).testTag("next_point"), MKind.PRIMARY, 22.dp, onClick = { c.nextPoint() }) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Box(Modifier.rotate(90f)) { GlyphIcon(Glyph.CHEVRON_UP, t.ink, 30.dp) }
+                    Box(Modifier.rotate(90f)) { GlyphIcon(Glyph.CHEVRON_UP, t.onPrimary, 30.dp) }
                     Column {
                         Text("다음 점", style = Ty.button.copy(fontSize = 35.sp, letterSpacing = 3.sp, lineHeight = 38.sp), color = t.onPrimary, maxLines = 1)
                         Text(c.nextName, style = Ty.small.copy(fontSize = 14.sp), color = t.onPrimary, maxLines = 1)
@@ -618,6 +653,7 @@ fun TiltSheet(c: SurveyController) {
         ) {
             Text("폴이 기울었어요 · ${tc.f1(a)}°", style = Ty.title, color = t.ink)
             Text("허용 ${tc.f1(tc.limitDeg)}°를 넘었어요. 폴을 세운 뒤 측점하는 것이 좋아요. 기울기 값은 점과 함께 기록돼요.", style = Ty.body, color = t.inkSub)
+            Text(TiltCopy.offsetLine(a) + " · " + TiltCopy.SHORT, style = Ty.small, color = t.inkSub)
             MBtn(Modifier.fillMaxWidth().height(56.dp).testTag("tilt_cancel"), MKind.PRIMARY, 18.dp, onClick = { c.answerTilt(false) }) { Text("취소 (폴 세우기)", style = Ty.label, color = t.onPrimary) }
             MBtn(Modifier.fillMaxWidth().height(56.dp).testTag("tilt_go"), MKind.PLAIN, 18.dp, onClick = { c.answerTilt(true) }) { Text("그래도 측점", style = Ty.label, color = t.ink) }
         }

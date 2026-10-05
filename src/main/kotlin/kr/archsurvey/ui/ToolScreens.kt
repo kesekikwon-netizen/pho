@@ -367,9 +367,10 @@ private fun TiltSettings(tc: TiltController) {
         return
     }
     val summary = if (tc.enabled) "켜짐 · 허용 ${tc.f1(tc.limitDeg)}° · ${tc.policy.labelKo}" else "꺼짐"
-    SelectRow("전자 기포", summary, open, "tilt_toggle") { open = !open }
+    SelectRow("전자 기포 (폰 센서)", summary, open, "tilt_toggle") { open = !open }
     if (!open) return
     Card {
+        Text(TiltCopy.NOTE, style = Ty.small, color = t.ink, modifier = Modifier.testTag("tilt_copy"))
         ToggleRow("폴 기울기 보기 (폰 센서)", tc.enabled, "tilt_enabled") { tc.changeEnabled(it) }
         if (tc.enabled) {
             Text("허용 각도", style = Ty.label, color = t.ink)
@@ -378,6 +379,7 @@ private fun TiltSettings(tc: TiltController) {
                 Text("${tc.f1(tc.limitDeg)}°", style = Ty.coord.copy(fontSize = 24.sp), color = t.ink, modifier = Modifier.testTag("tilt_limit"))
                 MBtn(Modifier.size(56.dp).testTag("tilt_plus"), MKind.PLAIN, 16.dp, onClick = { tc.stepLimit(true) }) { GlyphIcon(Glyph.PLUS, t.accent, 22.dp) }
             }
+            Text(TiltCopy.offsetLine(tc.limitDeg), style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("tilt_offset"))
             Text("넘으면", style = Ty.label, color = t.ink)
             for (pol in kr.archsurvey.core.TiltPolicy.entries) Choice(pol.labelKo, tc.policy == pol, Modifier.fillMaxWidth().testTag("tilt_policy_${pol.id}")) { tc.changePolicy(pol) }
             Btn("폴 세우고 영점 잡기", Modifier.fillMaxWidth().testTag("tilt_calibrate")) { tc.calibrate() }

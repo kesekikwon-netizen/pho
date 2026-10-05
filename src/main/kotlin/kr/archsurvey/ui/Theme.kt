@@ -19,7 +19,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-/** 0.1.7 테마: 흰색에 가까운 바탕, 얇은 중립 회색 선, 단일 강조색(테라코타), 얇은 글꼴 300/400. 색은 이 파일 한 곳에서만 정한다(지도 데이터색 제외). 굵기 Bold 이상은 쓰지 않는다. */
+/** 테마 토큰(0.1.11 목업: 아이보리·흰 카드·검정 주 버튼). 얇은 글꼴 300/400. 색은 이 파일 한 곳에서만 정한다(지도 데이터색 제외). 굵기 Bold 이상은 쓰지 않는다. */
 data class Tokens(
     val bg: Color, val card: Color, val line: Color, val outline: Color,
     val ink: Color, val inkSub: Color,
@@ -31,22 +31,35 @@ data class Tokens(
     val raised: Color = Color(0xFFFFFFFF), val primaryCont: Color = Color(0xFFFBEDE7),
     /** 지도 바탕(격자 뒤) */
     val mapBg: Color = Color(0xFFF5F5F5),
+    /** 정상(연결됨·수신 중) 초록 — 점·글자 표시용 */
+    val ok: Color = Color(0xFF1E7A46),
+    /** 상태 알약·세그먼트 바탕(연한 회색) */
+    val chip: Color = Color(0xFFEDECE7),
+    /** 0.1.11 SkyPlot 위성계 점 색(GPS·GLONASS·Galileo·BeiDou·QZSS). 상태색과 겹치지 않게 짙은 계열 */
+    val satGps: Color = Color(0xFF1E7A46),
+    val satGlo: Color = Color(0xFF1F4FA8),
+    val satGal: Color = Color(0xFFB07A00),
+    val satBds: Color = Color(0xFF8A2BA0),
+    val satOther: Color = Color(0xFF5C5B57),
 )
 
 private fun c(h: Long) = Color(0xFF000000 or h)
 
 /**
- * 0.1.9 흰색 고대비: 본문 7:1 이상(ink 18.9:1, inkSub 8.9:1, accentText 7.4:1 — 흰/FAFAFA 바탕 기준),
- * 경계선·입력 테두리 3:1 이상(line 3.5:1, outline 4.4:1). 시스템 다크 모드와 무관하게 항상 이 토큰을 쓴다.
+ * 0.1.11 목업 테마(강제 라이트 고대비): 아이보리 바탕 + 흰 카드 + 검정 글자 + 검정 주 버튼.
+ * 상태색은 고정=파랑, 유동(주의)=노랑, 정상=초록, 불가·파괴=빨강. 본문 7:1 이상, 경계선·입력 테두리 3:1 이상.
+ * 시스템 다크 모드와 무관하게 항상 이 토큰을 쓴다.
  */
 val LightTokens = Tokens(
-    bg = c(0xFFFFFF), card = c(0xFAFAFA), line = c(0x858585), outline = c(0x767676),
-    ink = c(0x111111), inkSub = c(0x474747),
-    primary = c(0xD97757), onPrimary = c(0x111111), accent = c(0xB4532F), accentText = c(0x8A3A1F),
+    bg = c(0xF7F6F2), card = c(0xFFFFFF), line = c(0x8A8A86), outline = c(0x767672),
+    ink = c(0x111111), inkSub = c(0x474744),
+    primary = c(0x111111), onPrimary = c(0xFFFFFF), accent = c(0x111111), accentText = c(0x111111),
     fixed = c(0x155A96), onFixed = c(0xFFFFFF),
     caution = c(0xF2B600), onCaution = c(0x141413),
     bad = c(0xA3123A), onBad = c(0xFFFFFF),
     scrim = Color(0x66111111),
+    raised = c(0xFFFFFF), primaryCont = c(0xECEBE6), mapBg = c(0xEDECE8),
+    ok = c(0x1E7A46), chip = c(0xEDECE7),
 )
 
 val DarkTokens = Tokens(
@@ -56,7 +69,7 @@ val DarkTokens = Tokens(
     fixed = c(0x6DB6F5), onFixed = c(0x141413),
     caution = c(0xF2C14B), onCaution = c(0x141413),
     bad = c(0xFF7D96), onBad = c(0x141413),
-    scrim = Color(0x99000000), raised = c(0x33322E), primaryCont = c(0x4A2E24), mapBg = Color(0xFF26251F),
+    scrim = Color(0x99000000), raised = c(0x33322E), primaryCont = c(0x4A2E24), mapBg = Color(0xFF26251F), chip = c(0x33322E), ok = c(0x5BC48A),
 )
 
 val LocalTokens = staticCompositionLocalOf { LightTokens }

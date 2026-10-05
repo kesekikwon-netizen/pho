@@ -135,7 +135,7 @@ class StatusJudgeTest {
             C(FixQuality.RTK_FLOAT, 0.005, SurveyStatus.CAUTION, StatusReason.FLOAT),       // Float 는 σ가 작아도 주의
             C(FixQuality.RTK_FLOAT, 0.3, SurveyStatus.CAUTION, StatusReason.FLOAT),
             C(FixQuality.RTK_FLOAT, null, SurveyStatus.CAUTION, StatusReason.FLOAT),
-            C(FixQuality.DGPS, 0.01, SurveyStatus.UNAVAILABLE, StatusReason.SINGLE_OR_DGPS),
+            C(FixQuality.DGPS, 0.01, SurveyStatus.UNAVAILABLE, StatusReason.CODE_CORRECTED),
             C(FixQuality.SINGLE, 0.01, SurveyStatus.UNAVAILABLE, StatusReason.SINGLE_OR_DGPS),
             C(FixQuality.PPS, null, SurveyStatus.UNAVAILABLE, StatusReason.SINGLE_OR_DGPS),
             C(FixQuality.DEAD_RECKONING, 0.01, SurveyStatus.UNAVAILABLE, StatusReason.SINGLE_OR_DGPS),

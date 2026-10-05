@@ -32,6 +32,7 @@ class AndroidConnectionPlatform(private val app: App) : ConnectionPlatform {
         val s = app.settings
         s.deviceId = profile.id; s.setBtAddress(profile.id, address)
         s.saveNtrip(ntrip); s.ntripEnabled = ntripEnabled
+        app.engine.setNtripOptions(s.ntripSendGga, s.ntripAutoRetry)
         SurveyConnectionService.start(app, profile.id, address)
     }
     override fun stopReal() { SurveyConnectionService.stop(app); app.engine.stop() }
@@ -59,7 +60,19 @@ class AndroidConnectionPlatform(private val app: App) : ConnectionPlatform {
         if (form.enabled) s.saveHostProfile(form.toConfig())
     }
     override fun hadSuccess() = app.settings.lastConnectOkAt > 0L
+    override fun ntripOptions() = app.settings.ntripSendGga to app.settings.ntripAutoRetry
+    override fun applyNtripOptions(sendGga: Boolean, autoRetry: Boolean) {
+        app.settings.ntripSendGga = sendGga; app.settings.ntripAutoRetry = autoRetry
+        app.engine.setNtripOptions(sendGga, autoRetry)
+    }
+    override fun diagnostics(): String = diagnosticsFrom(kr.archsurvey.diag.CrashLog.read())
+    override fun retryNtrip() = app.engine.retryNtripNow()
     override var autoConnect: Boolean
         get() = app.settings.autoConnect
         set(v) { app.settings.autoConnect = v }
 }
+
+/** 오류 기록에서 연결 진단(NMEA 활성화·블루투스·보정) 블록만 최근 4건 골라 짧게 돌려준다 */
+internal fun diagnosticsFrom(log: String): String =
+    log.split(Regex("(?m)^(?==== )")).filter { b -> listOf("NMEA", "블루투스", "보정", "연결").any { it in b } }
+        .takeLast(4).joinToString("\n") { it.trim().lines().take(8).joinToString("\n") }.takeLast(3000)

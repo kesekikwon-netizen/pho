@@ -22,22 +22,20 @@ import androidx.compose.ui.unit.sp
 fun ToolScaffold(title: String, tag: String, onBack: () -> Unit, bottom: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     val t = T
     Column(Modifier.fillMaxSize().background(t.bg).testTag(tag)) {
-        Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            MBtn(Modifier.size(48.dp).testTag("tool_back"), MKind.PLAIN, 20.dp, onClick = onBack) { Box(Modifier.rotate(-90f)) { GlyphIcon(Glyph.CHEVRON_UP, t.accent, 20.dp) } }
-            Text(title, style = Ty.title.copy(fontSize = 20.sp), color = t.ink, modifier = Modifier.padding(start = 8.dp))
-        }
+        // 0.1.11: 목업 공통 머리글(← 제목 · 상태 알약 · ≡ / 작업명 · PDOP·H·V · Ant.H)
+        AppHeader(LocalSurvey.current, title, onBack = onBack, backTag = "tool_back")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
         bottom?.invoke()
     }
 }
 
-/** 하단 주 버튼 (테라코타) */
+/** 하단 주 버튼 (검정) */
 @Composable
 fun PrimaryBar(label: String, tag: String, enabled: Boolean = true, onClick: () -> Unit) {
     val t = T
     Box(Modifier.fillMaxWidth().padding(16.dp)) {
         Box(
-            Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(18.dp)).glossy(if (enabled) t.primary else t.line, enabled)
+            Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(28.dp)).glossy(if (enabled) t.primary else t.chip, enabled)
                 .clickable(enabled = enabled, onClick = onClick).testTag(tag),
             contentAlignment = Alignment.Center,
         ) { Text(label, style = Ty.button.copy(fontSize = 18.sp), color = if (enabled) t.onPrimary else t.inkSub) }

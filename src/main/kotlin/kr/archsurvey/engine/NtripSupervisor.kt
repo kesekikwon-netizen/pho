@@ -61,6 +61,11 @@ class NtripSupervisor(
 
     val active: Boolean get() = job?.isActive == true
 
+    /** 0.1.11 VRS 설정 「GGA 전송」. 끄면 서버에 내 위치(GGA)를 보내지 않는다(VRS 마운트는 보정이 오지 않을 수 있음) */
+    @Volatile var sendGga: Boolean = true
+    /** 0.1.11 VRS 설정 「자동 재접속」. 끄면 끊겼을 때 기다리지 않고 사용자 「다시 시도」를 기다린다(인증·마운트 오류는 원래도 수동) */
+    @Volatile var autoRetry: Boolean = true
+
     /** 설정이 바뀌었거나 처음 시작할 때. 이전 접속은 닫는다. */
     fun start(cfg: NtripConfig?, enabled: Boolean, ggaIntervalMs: Long) {
         job?.cancel(); job = null
@@ -169,7 +174,13 @@ class NtripSupervisor(
                     attempt = 0
                     kick.receive()
                 }
-                else -> {
+                else -> if (!autoRetry) {
+                    status.update { NtripStatus(NtripState.ERROR,
+                        "보정 연결이 끊겼어요 — 자동 재접속이 꺼져 있어 기다려요. ‘다시 시도’를 누르세요 [${kind.tag}] ${failure.message ?: ""}",
+                        it.rtcmBytes, it.lastRtcmAtMs, attempt, framesOk = it.framesOk, crcErrors = it.crcErrors, failure = kind) }
+                    attempt = 0
+                    kick.receive()
+                } else {
                     val d = kind.delayMs(attempt)
                     val retryAt = clock() + d
                     status.update { NtripStatus(NtripState.RECONNECTING,
@@ -181,5 +192,5 @@ class NtripSupervisor(
         }
     }
 
-    private fun freshGga(): String? = ggaProvider()
+    private fun freshGga(): String? = if (sendGga) ggaProvider() else null
 }

@@ -14,6 +14,8 @@ data class GnssSnapshot(
     val seenTypes: Set<String> = emptySet(),
     /** 위성군별 보이는 위성 수(GSV) */
     val inViewByTalker: Map<String, Int> = emptyMap(),
+    /** 0.1.11 GSV 위성 상세(최근 10초 안에 본 것). GSV 를 받지 못하면 빈 목록 */
+    val satsDetail: List<SatInfo> = emptyList(),
 ) {
     /** 보이는 위성 수 합계. GSV 를 받지 못했으면 null */
     val satsInView: Int? get() = if (inViewByTalker.isEmpty()) null else inViewByTalker.values.sum()
@@ -49,6 +51,10 @@ class NmeaDriver(val profile: DeviceProfile) {
         startedAtMs = nowMs
     }
 
+    /** GSV 위성 상세: 키 "talker:PRN" → (위성, 마지막 본 시각) */
+    private val satSeen = LinkedHashMap<String, Pair<SatInfo, Long>>()
+    private companion object { const val SAT_KEEP_MS = 10_000L }
+
     /**
      * 수신 바이트를 처리하고 새로 파싱된 메시지를 반환.
      * 스냅샷은 호출당 한 번만 복사한다(문장마다 copy/Set 복사를 하던 이전 방식은 GSV 가 많은 출력에서 초당 수십 번 객체를 만들었다).
@@ -64,12 +70,14 @@ class NmeaDriver(val profile: DeviceProfile) {
         var lastGgaAt = s0.lastGgaAtMs
         var types: MutableSet<String>? = null
         var inView: MutableMap<String, Int>? = null
+        var satsChanged = false
         for (m in msgs) {
             when (m) {
                 is GgaMessage -> { gga = m; lastGgaAt = nowMs }
                 is GstMessage -> gst = m
                 is GsaMessage -> gsa = m
                 is GsvMessage -> {
+                    if (m.sats.isNotEmpty()) { for (q in m.sats) satSeen[m.talker + ":" + q.prn] = q to nowMs; satsChanged = true }
                     val v = m.satsInView ?: 0
                     if (s0.inViewByTalker[m.talker] != v || inView != null) {
                         if (inView == null) inView = HashMap(s0.inViewByTalker)
@@ -89,6 +97,7 @@ class NmeaDriver(val profile: DeviceProfile) {
             lastAnyAtMs = nowMs, sentencesTotal = s0.sentencesTotal + msgs.size,
             seenTypes = types ?: s0.seenTypes,
             inViewByTalker = inView ?: s0.inViewByTalker,
+            satsDetail = if (satsChanged) { satSeen.entries.removeAll { nowMs - it.value.second > SAT_KEEP_MS }; satSeen.values.map { it.first } } else s0.satsDetail,
             checksumErrors = parser.stats.checksumErrors,
         )
         return msgs

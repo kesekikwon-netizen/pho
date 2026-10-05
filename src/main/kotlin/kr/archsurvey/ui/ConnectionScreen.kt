@@ -3,6 +3,7 @@ package kr.archsurvey.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +31,7 @@ import kr.archsurvey.device.DeviceProfiles
 import kr.archsurvey.device.LinkState
 import kr.archsurvey.ntrip.NtripPresets
 import kr.archsurvey.ntrip.NtripState
+import kr.archsurvey.ntrip.RtcmMountCompat
 
 /** 지도 화면 위에 얹는 연결 UI: 오류 알림 줄(항상) + 전체 화면 연결 설정(열었을 때). */
 @Composable
@@ -156,7 +159,7 @@ private fun mountLine(m: kr.archsurvey.ntrip.MountInfo, known: Boolean): String 
 @Composable
 private fun AlertStrip(card: ErrorCard, onClick: () -> Unit) {
     val t = T
-    Box(Modifier.fillMaxWidth().padding(top = (SurveyDims.STATUS_BAND_DP + 6).dp, start = 72.dp, end = (SurveyDims.MIN_TOUCH_DP + 8).dp)) {
+    Box(Modifier.fillMaxWidth().padding(top = (HeaderDims.FULL_DP + StatusLineDims.FULL_DP + 8).dp, start = 72.dp, end = (SurveyDims.MIN_TOUCH_DP + 8).dp)) {
         Column(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(t.bg.copy(alpha = 0.96f))
                 .border(1.dp, t.bad.copy(alpha = 0.6f), RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(10.dp).testTag("alert_strip"),
@@ -174,125 +177,278 @@ fun ConnectionScreen(cc: ConnectionController) {
     val ntrip by cc.ntrip.collectAsState()
     val cards = ErrorCards.from(link, ntrip, cc.form.enabled)
     val p = cc.profile
+    val vrsOnly = cc.section == ConnSection.VRS
     Column(Modifier.fillMaxSize().background(t.bg).testTag("connection_screen")) {
-        Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            MBtn(Modifier.size(48.dp).testTag("conn_back"), MKind.PLAIN, 20.dp, onClick = { cc.close() }) { Box(Modifier.rotate(-90f)) { GlyphIcon(Glyph.CHEVRON_UP, t.accent, 20.dp) } }
-            Text("수신기 연결 · VRS", style = Ty.title.copy(fontSize = 20.sp), color = t.ink, modifier = Modifier.padding(start = 8.dp))
-        }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            // 맨 위: 지금 상태 한 줄(색·글자) — 오류 카드는 아래에 둔다
+        AppHeader(LocalSurvey.current, if (vrsOnly) "VRS 설정" else "장비 연결", onBack = { cc.close() }, backTag = "conn_back")
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // 맨 위: 지금 상태 한 줄(색 점·글자) — 오류 카드는 아래에 둔다
             val live = link.state == LinkState.STREAMING
+            val dot = when (link.state) { LinkState.STREAMING -> t.ok; LinkState.IDLE -> t.line; LinkState.NEEDS_USER -> t.bad; else -> t.caution }
             Row(
-                Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(16.dp)).background(if (live) t.fixed.copy(alpha = 0.14f) else t.card).padding(horizontal = 16.dp, vertical = 8.dp),
+                Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(16.dp)).background(t.raised).border(1.dp, t.line.copy(alpha = 0.4f), RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                GlyphIcon(if (live) Glyph.CHECK else Glyph.BT, if (live) t.fixed else t.inkSub, 24.dp)
+                Box(Modifier.size(10.dp).clip(androidx.compose.foundation.shape.CircleShape).background(dot))
                 Column(Modifier.weight(1f)) {
                     Text(linkText(link.state) + (if (link.attempt > 0) " · 시도 ${link.attempt}회" else ""), style = Ty.label, color = t.ink, modifier = Modifier.testTag("conn_link_state"))
                     if (cc.form.enabled) Text("보정: " + ntripText(ntrip.state), style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("conn_ntrip_state"))
                     if (link.message.isNotBlank()) Text(link.message, style = Ty.small, color = t.inkSub)
                 }
+                if (live) GlyphIcon(Glyph.CHECK, t.ok, 22.dp)
             }
             cc.notice?.let { ErrorCardView(it, "conn_notice") }
             for (card in cards) ErrorCardView(card, "conn_card_${card.code}")
 
-            // 1. 수신기: 모델 + 폰에 등록된 기기
-            Card {
-                Text("수신기", style = Ty.label, color = t.ink)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (d in DeviceProfiles.all) Choice(d.displayName, d.id == p.id, Modifier.weight(1f).testTag("conn_model_${d.id}")) { cc.selectProfile(d) }
-                }
-                if (cc.bonded.isEmpty()) {
-                    Text("등록된 기기가 없어요. 먼저 폰의 블루투스 설정에서 수신기를 등록하세요.", style = Ty.small, color = t.inkSub)
-                    for ((i, st) in p.pairingSteps.withIndex()) Text("${i + 1}. $st", style = Ty.small, color = t.inkSub)
-                }
-                for ((name, addr) in cc.bonded) {
-                    val on = addr == cc.address
-                    val isLive = on && (link.state == LinkState.STREAMING || link.state == LinkState.CONNECTED_NO_DATA)
-                    MBtn(Modifier.fillMaxWidth().heightIn(min = 64.dp).testTag("conn_bonded_$addr"), if (on) MKind.SELECTED else MKind.PLAIN, 16.dp, onClick = { cc.selectAddress(addr) }) {
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Column(Modifier.weight(1f)) {
-                                Text(name, style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, maxLines = 1)
-                                Text(addr, style = Ty.small, color = t.inkSub, maxLines = 1)
-                            }
-                            if (isLive) Row(
-                                Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).background(t.fixed.copy(alpha = 0.14f)).border(1.5.dp, t.fixed, RoundedCornerShape(16.dp)).padding(start = 8.dp, end = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            ) { GlyphIcon(Glyph.CHECK, t.fixed, 16.dp); Text("연결됨", style = Ty.label.copy(fontSize = 12.sp), color = t.ink) }
-                            else Text(if (on) "선택됨" else "선택", style = Ty.label, color = t.accentText)
-                        }
-                    }
-                }
-                Btn("목록 새로고침", Modifier.fillMaxWidth().testTag("conn_refresh")) { cc.refresh() }
-                FoldRow("처음 연결 도움말", cc.showHelp, "conn_help_toggle") { cc.showHelp = !cc.showHelp }
-                if (cc.showHelp) {
-                    Btn("블루투스 설정 열기", Modifier.fillMaxWidth().testTag("conn_bt_settings")) { cc.openBluetoothSettings() }
-                    Text(p.pinNote, style = Ty.small, color = t.inkSub)
-                    Text(p.portNote, style = Ty.small, color = t.inkSub)
-                }
-            }
+            if (!vrsOnly) DeviceSection(cc, link)
+            VrsSection(cc, ntrip, vrsOnly)
 
-            // 2. 연결 전 확인: 모두 체크했으면 한 줄로 접는다
-            val allChecked = cc.checks.isNotEmpty() && cc.checks.all { it }
-            if (allChecked && !cc.showPre) {
-                FoldRow("연결 전 확인 ✓ 완료", false, "conn_pre_toggle") { cc.showPre = true }
-            } else Card {
-                Text("연결 전 확인", style = Ty.label, color = t.ink)
-                for ((i, txt) in p.preConnectChecks.withIndex()) {
-                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { cc.setCheck(i, !cc.checks.getOrElse(i) { false }) }.testTag("conn_check_$i"), verticalAlignment = Alignment.CenterVertically) {
-                        androidx.compose.material3.Checkbox(cc.checks.getOrElse(i) { false }, { cc.setCheck(i, it) })
-                        Text(txt, style = Ty.body, color = t.ink)
-                    }
-                }
-                FoldRow(p.nmeaSetupTitle, cc.showNmeaSteps, "conn_nmea_toggle") { cc.showNmeaSteps = !cc.showNmeaSteps }
-                if (cc.showNmeaSteps) for ((i, st) in p.nmeaSetupSteps.withIndex()) Text("${i + 1}. $st", style = Ty.small, color = t.inkSub)
-            }
-
-            // 3. VRS: 아이디·비밀번호만 앞에, 서버 설정은 접음
-            Card {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("VRS(NTRIP) 보정", style = Ty.label, color = t.ink, modifier = Modifier.weight(1f))
-                    Switch(cc.form.enabled, { cc.updateForm(cc.form.copy(enabled = it)) }, modifier = Modifier.testTag("conn_ntrip_switch"))
-                }
-                if (cc.form.enabled) {
-                    // SmartTopo 흐름: 보정 서비스 → 계정 → 마운트(목록 받기·검색·선택)
-                    SelectRow("보정 서비스", cc.currentService().short, false, "conn_service") { cc.askService() }
-                    Field("아이디 (통합회원 ID)", cc.form.user, "conn_user") { cc.updateForm(cc.form.copy(user = it)) }
-                    Field("비밀번호", cc.form.password, "conn_pw", KeyboardType.Password, hide = true) { cc.updateForm(cc.form.copy(password = it)) }
-                    SelectRow("마운트 포인트", cc.form.mount.ifBlank { "눌러서 목록 받기" }, false, "conn_mount_pick") { cc.openMountPicker() }
-                    Text("마운트 줄을 누르면 서버에서 전체 목록을 받아 고를 수 있어요(아이디·비밀번호를 먼저 넣으세요). 국토지리정보원 VRS는 2025년 8월부터 ‘측위보정정보 통합회원 ID’를 쓴다고 알려져 있어요 — 공식 공지 원문은 확인하지 못했어요.", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("conn_id_help"))
-                    FoldRow("고급 · 서버 주소·포트 직접 입력 · ${cc.form.host}:${cc.form.port}", cc.showServer, "conn_server_toggle") { cc.showServer = !cc.showServer }
-                    if (cc.showServer) {
-                        Field("서버 주소", cc.form.host, "conn_host") { cc.updateForm(cc.form.copy(host = it)) }
-                        Field("포트", cc.form.port, "conn_port", KeyboardType.Number) { cc.updateForm(cc.form.copy(port = it.filter { ch -> ch.isDigit() }.take(5))) }
-                        Field("마운트 포인트", cc.form.mount, "conn_mount") { cc.updateForm(cc.form.copy(mount = it)) }
-                        Btn("이 서버의 마지막 성공 설정 불러오기", Modifier.fillMaxWidth().testTag("conn_recall")) { cc.recallHost() }
-                        Text("서버·마운트 기본값은 국토지리정보원 공개 안내(2022-05) 기준이에요. 현행 정책은 첫 접속 때 확인이 필요해요.", style = Ty.small, color = t.inkSub)
-                    }
-                }
-            }
-            // 4. 다음 실행 때 자동 연결
+            // 앱을 열 때 자동 연결
             Row(
-                Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(16.dp)).background(t.raised).border(1.dp, t.outline, RoundedCornerShape(16.dp)).padding(horizontal = 16.dp),
+                Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(16.dp)).background(t.raised).border(1.dp, t.line.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+                    .toggleable(cc.autoConnect, role = androidx.compose.ui.semantics.Role.Switch) { cc.changeAutoConnect(it) }.padding(horizontal = 16.dp, vertical = 8.dp).testTag("conn_auto_row"),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("다음 실행 때 자동 연결", style = Ty.label, color = t.ink)
+                    Text("앱 시작 때 자동 연결", style = Ty.label, color = t.ink)
                     Text("한 번 연결에 성공하면 수신기·VRS 설정을 저장하고, 앱을 열 때 바로 연결해요", style = Ty.small, color = t.inkSub)
                 }
-                Switch(cc.autoConnect, { cc.changeAutoConnect(it) }, modifier = Modifier.testTag("conn_auto"))
+                Switch(cc.autoConnect, null, modifier = Modifier.testTag("conn_auto"), colors = blackSwitch())
             }
             Spacer(Modifier.height(8.dp))
         }
-        run {
-            Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                val running = cc.connectRequested && link.state != LinkState.IDLE
-                if (running) Btn("연결 종료", Modifier.weight(1f).height(56.dp).testTag("conn_disconnect")) { cc.disconnect() }
-                Box(
-                    Modifier.weight(2f).height(56.dp).clip(RoundedCornerShape(16.dp)).glossy(t.primary).clickable { cc.connect() }.testTag("conn_connect"),
-                    contentAlignment = Alignment.Center,
-                ) { Text(if (running) "다시 연결" else "연결", style = Ty.button.copy(fontSize = 18.sp), color = t.onPrimary) }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.35f)))
+        Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val running = cc.connectRequested && link.state != LinkState.IDLE
+            if (running) MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_disconnect"), MKind.PLAIN, 28.dp, onClick = { cc.disconnect() }) {
+                Text(if (vrsOnly) "접속 끊기" else "연결 종료", style = Ty.label.copy(fontSize = 16.sp), color = t.ink)
+            } else MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_cancel"), MKind.PLAIN, 28.dp, onClick = { cc.close() }) {
+                Text("취소", style = Ty.label.copy(fontSize = 16.sp), color = t.ink)
             }
+            if (vrsOnly) MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_save"), MKind.PRIMARY, 28.dp, onClick = { cc.saveOnly(); if (running) cc.connect() }) {
+                Text(if (running) "저장 후 재접속" else "저장", style = Ty.label.copy(fontSize = 16.sp), color = t.onPrimary)
+            } else MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_connect"), MKind.PRIMARY, 28.dp, onClick = { cc.connect() }) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    GlyphIcon(Glyph.BT, t.onPrimary, 18.dp)
+                    Text(if (running) "다시 연결" else "연결", style = Ty.label.copy(fontSize = 16.sp), color = t.onPrimary)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun blackSwitch() = androidx.compose.material3.SwitchDefaults.colors(
+    checkedThumbColor = T.onPrimary, checkedTrackColor = T.primary, checkedBorderColor = T.primary,
+    uncheckedThumbColor = T.outline, uncheckedTrackColor = T.raised, uncheckedBorderColor = T.outline,
+)
+
+/** 목업 04: 수신기 탭(세그먼트) + 폰에 등록된 장비 카드 + 연결 전 확인 */
+@Composable
+private fun DeviceSection(cc: ConnectionController, link: kr.archsurvey.device.LinkStatus) {
+    val t = T
+    val p = cc.profile
+    Row(Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(28.dp)).background(t.chip).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        for (d in DeviceProfiles.all) {
+            val on = d.id == p.id
+            Box(
+                Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(24.dp)).background(if (on) t.raised else Color.Transparent)
+                    .then(if (on) Modifier.border(1.dp, t.line.copy(alpha = 0.5f), RoundedCornerShape(24.dp)) else Modifier)
+                    .clickable { cc.selectProfile(d) }.testTag("conn_model_${d.id}"),
+                contentAlignment = Alignment.Center,
+            ) { Text(d.displayName.replace("Spectra Precision", "Spectra"), style = Ty.label.copy(fontSize = 15.sp), color = if (on) t.ink else t.inkSub, maxLines = 1) }
+        }
+    }
+    Text("폰에 등록된 장비", style = Ty.small.copy(fontSize = 13.sp), color = t.inkSub, modifier = Modifier.padding(top = 4.dp))
+    if (cc.bonded.isEmpty()) {
+        Text("등록된 기기가 없어요. 먼저 폰의 블루투스 설정에서 수신기를 등록하세요.", style = Ty.small, color = t.inkSub)
+        for ((i, st) in p.pairingSteps.withIndex()) Text("${i + 1}. $st", style = Ty.small, color = t.inkSub)
+    }
+    for ((name, addr) in cc.bonded) {
+        val on = addr == cc.address
+        val isLive = on && (link.state == LinkState.STREAMING || link.state == LinkState.CONNECTED_NO_DATA)
+        val shape = RoundedCornerShape(16.dp)
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(shape).background(t.raised).border(if (on) 1.5.dp else 1.dp, if (on) t.ink else t.line.copy(alpha = 0.45f), shape)
+                .clickable { cc.selectAddress(addr) }.padding(horizontal = 14.dp, vertical = 8.dp).testTag("conn_bonded_$addr"),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(t.chip), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.POLE, t.ink, 20.dp) }
+            Column(Modifier.weight(1f)) {
+                Text(name, style = Ty.label.copy(fontSize = 16.sp), color = t.ink, maxLines = 1)
+                Text(addr + if (isLive) " · 연결됨" else if (on) " · 선택됨" else "", style = Ty.coord.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1)
+            }
+            if (isLive) Row(
+                Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).background(t.ok.copy(alpha = 0.12f)).border(1.5.dp, t.ok, RoundedCornerShape(16.dp)).padding(start = 8.dp, end = 12.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) { GlyphIcon(Glyph.CHECK, t.ok, 16.dp); Text("연결됨", style = Ty.label.copy(fontSize = 12.sp), color = t.ink) }
+            else if (on) GlyphIcon(Glyph.CHECK, t.ink, 22.dp)
+        }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Btn("목록 새로고침", Modifier.weight(1f).testTag("conn_refresh")) { cc.refresh() }
+        Btn("새 장비 등록", Modifier.weight(1f).testTag("conn_bt_settings_top")) { cc.openBluetoothSettings() }
+    }
+    Text("새 수신기는 폰의 블루투스 설정에서 먼저 등록(페어링)해요. 앱은 등록된 장비에만 연결해요(주변 검색 목록은 아직 없음).", style = Ty.small, color = t.inkSub)
+    FoldRow("처음 연결 도움말", cc.showHelp, "conn_help_toggle") { cc.showHelp = !cc.showHelp }
+    if (cc.showHelp) {
+        Btn("블루투스 설정 열기", Modifier.fillMaxWidth().testTag("conn_bt_settings")) { cc.openBluetoothSettings() }
+        Text(p.pinNote, style = Ty.small, color = t.inkSub)
+        Text(p.portNote, style = Ty.small, color = t.inkSub)
+    }
+    // 0.1.11 P0(통신): 진단 기록 — 연결 방식·오류 코드·NMEA 자동 켜기 시도와 ACK
+    FoldRow("진단 기록 · 연결 방식 · NMEA 자동 켜기", cc.showDiag, "conn_diag_toggle") { cc.showDiag = !cc.showDiag }
+    if (cc.showDiag) Card {
+        Text("연결 방식 " + (link.strategy ?: "—") + " · 상태 " + linkText(link.state) + (link.error?.let { " · 오류 ${it.code}" } ?: "") + " · 시도 ${link.attempt}회", style = Ty.small, color = t.ink, modifier = Modifier.testTag("conn_diag_link"))
+        val d = remember(link, cc.showDiag) { cc.diagnostics() }
+        Text(d.ifBlank { "아직 기록된 진단이 없어요. 연결을 시도하면 SP60 NMEA 자동 켜기 명령·응답(ACK)이 여기에 남아요." }, style = Ty.coord.copy(fontSize = 11.sp, lineHeight = 15.sp), color = t.inkSub, modifier = Modifier.testTag("conn_diag_text"))
+        Text("전체 기록 공유: 환경설정 › 좌표계 · 측량 설정 › 오류 기록", style = Ty.small, color = t.inkSub)
+    }
+    // 연결 전 확인: 모두 체크했으면 한 줄로 접는다
+    val allChecked = cc.checks.isNotEmpty() && cc.checks.all { it }
+    if (allChecked && !cc.showPre) {
+        FoldRow("연결 전 확인 ✓ 완료", false, "conn_pre_toggle") { cc.showPre = true }
+    } else Card {
+        Text("연결 전 확인", style = Ty.label, color = t.ink)
+        for ((i, txt) in p.preConnectChecks.withIndex()) {
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { cc.setCheck(i, !cc.checks.getOrElse(i) { false }) }.testTag("conn_check_$i"), verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.Checkbox(cc.checks.getOrElse(i) { false }, { cc.setCheck(i, it) }, colors = androidx.compose.material3.CheckboxDefaults.colors(checkedColor = t.primary, checkmarkColor = t.onPrimary))
+                Text(txt, style = Ty.body, color = t.ink)
+            }
+        }
+        FoldRow(p.nmeaSetupTitle, cc.showNmeaSteps, "conn_nmea_toggle") { cc.showNmeaSteps = !cc.showNmeaSteps }
+        if (cc.showNmeaSteps) for ((i, st) in p.nmeaSetupSteps.withIndex()) Text("${i + 1}. $st", style = Ty.small, color = t.inkSub)
+    }
+}
+
+/** 목업 07 스위치 줄: 줄 전체가 눌림(48dp 이상), 오른쪽 검정 스위치 */
+@Composable
+private fun ToggleLine(label: String, sub: String, on: Boolean, tag: String, warn: Boolean = false, onChange: (Boolean) -> Unit) {
+    val t = T
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 60.dp).toggleable(on, role = androidx.compose.ui.semantics.Role.Switch) { onChange(it) }.padding(vertical = 6.dp).testTag(tag + "_row"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(label, style = Ty.body.copy(fontSize = 15.sp), color = t.ink)
+            Text(sub, style = Ty.small, color = if (warn) t.bad else t.inkSub, modifier = Modifier.testTag(tag + "_note"))
+        }
+        Switch(on, null, modifier = Modifier.testTag(tag), colors = blackSwitch())
+    }
+}
+
+/** 목업 07의 줄: 왼쪽 이름(고정 폭) + 오른쪽 입력 상자(48dp) + 아래 얇은 선 */
+@Composable
+private fun FormRow(label: String, content: @Composable BoxScope.() -> Unit) {
+    val t = T
+    Column {
+        Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = Ty.body.copy(fontSize = 15.sp), color = t.ink, modifier = Modifier.width(100.dp))
+            Box(Modifier.weight(1f), content = content)
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.25f)))
+    }
+}
+
+@Composable
+private fun FormInput(value: String, tag: String, placeholder: String = "", kb: KeyboardType = KeyboardType.Text, hide: Boolean = false, onChange: (String) -> Unit) {
+    val t = T
+    val shape = RoundedCornerShape(12.dp)
+    Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(shape).background(t.raised).border(1.dp, t.outline.copy(alpha = 0.6f), shape).padding(horizontal = 14.dp), contentAlignment = Alignment.CenterStart) {
+        androidx.compose.foundation.text.BasicTextField(
+            value, onChange, singleLine = true, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag(tag),
+            textStyle = Ty.coord.copy(fontSize = 15.sp, color = t.ink), cursorBrush = androidx.compose.ui.graphics.SolidColor(t.ink),
+            keyboardOptions = KeyboardOptions(keyboardType = kb),
+            visualTransformation = if (hide) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+            decorationBox = { inner -> Box(Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.CenterStart) { if (value.isEmpty() && placeholder.isNotEmpty()) Text(placeholder, style = Ty.body, color = t.inkSub); inner() } },
+        )
+    }
+}
+
+@Composable
+private fun FormSelect(value: String, tag: String, onClick: () -> Unit) {
+    val t = T
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(shape).background(t.raised).border(1.dp, t.outline.copy(alpha = 0.6f), shape).clickable(onClick = onClick).padding(horizontal = 14.dp).testTag(tag),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(value, style = Ty.coord.copy(fontSize = 15.sp), color = t.ink, maxLines = 1, modifier = Modifier.weight(1f))
+        GlyphIcon(Glyph.CHEVRON_DOWN, t.ink, 18.dp)
+    }
+}
+
+/** 목업 07: 서버 주소 · 포트 · 마운트포인트 · 아이디 · 비밀번호 · GGA 전송 + 접속 상태 카드 */
+@Composable
+private fun VrsSection(cc: ConnectionController, ntrip: kr.archsurvey.engine.NtripStatus, vrsOnly: Boolean) {
+    val t = T
+    if (!vrsOnly) Text("VRS(NTRIP) 보정", style = Ty.small.copy(fontSize = 13.sp), color = t.inkSub, modifier = Modifier.padding(top = 8.dp))
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(t.raised).border(1.dp, t.line.copy(alpha = 0.4f), RoundedCornerShape(18.dp)).padding(horizontal = 16.dp, vertical = 4.dp)) {
+        Column {
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 60.dp).toggleable(cc.form.enabled, role = androidx.compose.ui.semantics.Role.Switch) { cc.updateForm(cc.form.copy(enabled = it)) }.testTag("conn_ntrip_row"),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("VRS 사용", style = Ty.body.copy(fontSize = 15.sp), color = t.ink, modifier = Modifier.weight(1f))
+                Switch(cc.form.enabled, null, modifier = Modifier.testTag("conn_ntrip_switch"), colors = blackSwitch())
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.25f)))
+        }
+        if (cc.form.enabled) {
+            // SmartTopo 흐름: 보정 서비스 → 서버·포트 → 마운트(목록 받기·검색·선택) → 계정
+            FormRow("보정 서비스") { FormSelect(cc.currentService().short, "conn_service") { cc.askService() } }
+            FormRow("서버 주소") { FormInput(cc.form.host, "conn_host") { cc.updateForm(cc.form.copy(host = it)) } }
+            FormRow("포트") { FormInput(cc.form.port, "conn_port", kb = KeyboardType.Number) { cc.updateForm(cc.form.copy(port = it.filter { ch -> ch.isDigit() }.take(5))) } }
+            FormRow("마운트포인트") { FormSelect(cc.form.mount.ifBlank { "눌러서 목록 받기" }, "conn_mount_pick") { cc.openMountPicker() } }
+            FormRow("아이디") { FormInput(cc.form.user, "conn_user", placeholder = "통합회원 ID") { cc.updateForm(cc.form.copy(user = it)) } }
+            FormRow("비밀번호") { FormInput(cc.form.password, "conn_pw", kb = KeyboardType.Password, hide = true) { cc.updateForm(cc.form.copy(password = it)) } }
+            ToggleLine("GGA 전송", if (cc.sendGga) "내 위치(GGA)를 서버에 보내요 · VRS에 필요" else "꺼짐 — VRS 마운트는 보정이 오지 않을 수 있어요", cc.sendGga, "conn_gga", warn = !cc.sendGga) { cc.changeSendGga(it) }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.25f)))
+            ToggleLine("자동 재접속", if (cc.autoRetry) "끊기면 알아서 다시 접속해요(인증 오류 제외)" else "꺼짐 — 끊기면 ‘다시 시도’를 눌러요", cc.autoRetry, "conn_autoretry") { cc.changeAutoRetry(it) }
+        }
+    }
+    if (cc.form.enabled) {
+        // 0.1.11 P0(통신): 수신기에 맞지 않는 RTCM 버전 마운트면 권장 마운트로 바꾸는 단추
+        val compat = RtcmMountCompat.warnIfIncompatible(cc.profile, cc.form.mount)
+        if (compat != null) Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(t.caution.copy(alpha = 0.16f)).border(1.5.dp, t.caution, RoundedCornerShape(16.dp)).padding(14.dp).testTag("conn_rtcm_warn"),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("보정 형식 확인", style = Ty.label, color = t.ink)
+            Text(compat, style = Ty.small, color = t.ink)
+            val rec = cc.recommendedMount()
+            if (rec != null) MBtn(Modifier.fillMaxWidth().height(48.dp).testTag("conn_rtcm_fix"), MKind.PRIMARY, 24.dp, onClick = { cc.applyRecommendedMount() }) {
+                Text("권장 마운트로 바꾸기 · $rec", style = Ty.label, color = t.onPrimary, maxLines = 1)
+            }
+        }
+        // 접속 상태 카드(목업 07 아래)
+        val dot = when (ntrip.state) { NtripState.RECEIVING -> t.ok; NtripState.AUTH_FAILED, NtripState.ERROR -> t.bad; NtripState.IDLE -> t.line; else -> t.caution }
+        val tick = rememberTick(true)
+        val now = remember(ntrip, tick) { android.os.SystemClock.elapsedRealtime() }
+        val meterLine = remember(ntrip, tick) { cc.meter.update(ntrip, now); cc.meter.line(ntrip, now) }
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(t.raised).border(1.dp, t.line.copy(alpha = 0.4f), RoundedCornerShape(16.dp)).padding(16.dp).testTag("conn_vrs_status"),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.size(10.dp).clip(androidx.compose.foundation.shape.CircleShape).background(dot))
+                Text(ntripText(ntrip.state), style = Ty.label, color = t.ink)
+            }
+            Text(meterLine, style = Ty.coord.copy(fontSize = 12.sp), color = t.ink, modifier = Modifier.testTag("conn_vrs_meter"))
+            Text(
+                "누적 " + String.format(java.util.Locale.US, "%.1f", ntrip.rtcmBytes / 1024.0) + " kB · 프레임 ${ntrip.framesOk}" + (if (ntrip.crcErrors > 0) " · CRC 오류 ${ntrip.crcErrors}" else "") + if (ntrip.paused) " · 수신기 위치 대기" else "",
+                style = Ty.coord.copy(fontSize = 12.sp), color = t.inkSub,
+            )
+            if (ntrip.message.isNotBlank() && ntrip.state != NtripState.RECEIVING) Text(ntrip.message, style = Ty.small, color = t.inkSub, maxLines = 3)
+            if (ntrip.state == NtripState.ERROR || ntrip.state == NtripState.AUTH_FAILED || ntrip.state == NtripState.RECONNECTING)
+                Btn("보정 다시 시도", Modifier.fillMaxWidth().testTag("conn_ntrip_retry")) { cc.retryNtrip() }
+        }
+        Text("마운트 줄을 누르면 서버에서 전체 목록을 받아 고를 수 있어요(아이디·비밀번호를 먼저 넣으세요). 국토지리정보원 VRS는 2025년 8월부터 ‘측위보정정보 통합회원 ID’를 쓴다고 알려져 있어요 — 공식 공지 원문은 확인하지 못했어요.", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("conn_id_help"))
+        FoldRow("고급 · 마운트 이름 직접 입력 · 마지막 성공 설정", cc.showServer, "conn_server_toggle") { cc.showServer = !cc.showServer }
+        if (cc.showServer) {
+            Field("마운트 포인트", cc.form.mount, "conn_mount") { cc.updateForm(cc.form.copy(mount = it)) }
+            ToggleLine("NTRIP v2", "국토지리정보원은 보통 v1 · 다른 서버에서 v2가 필요할 때만", cc.form.useV2, "conn_v2") { cc.changeUseV2(it) }
+            Btn("이 서버의 마지막 성공 설정 불러오기", Modifier.fillMaxWidth().testTag("conn_recall")) { cc.recallHost() }
+            Text("서버·마운트 기본값은 국토지리정보원 공개 안내(2022-05) 기준이에요. 현행 정책은 첫 접속 때 확인이 필요해요.", style = Ty.small, color = t.inkSub)
         }
     }
 }
@@ -356,10 +512,11 @@ internal fun Field(label: String, value: String, tag: String, kb: KeyboardType =
     ) {
         Text(label, style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.widthIn(min = 72.dp, max = 110.dp))
         androidx.compose.foundation.text.BasicTextField(
-            value, onChange, singleLine = true, modifier = Modifier.weight(1f).padding(vertical = 12.dp).testTag(tag),
+            value, onChange, singleLine = true, modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag(tag),
             textStyle = Ty.body.copy(color = t.ink), cursorBrush = androidx.compose.ui.graphics.SolidColor(t.accent),
             keyboardOptions = KeyboardOptions(keyboardType = kb),
             visualTransformation = if (hide) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+            decorationBox = { inner -> Box(Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.CenterStart) { inner() } },
         )
     }
 }

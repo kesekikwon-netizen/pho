@@ -48,7 +48,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             SurveyTheme { SurveyMapScreen(vm.controller, batteryPercent()) }
         }
-        if (savedInstanceState == null) vm.autoConnectOnLaunch()
+        // 0.1.11: 목업처럼 홈(메인 메뉴)에서 시작. 회전 등으로 다시 만들어질 땐 보던 화면 유지
+        if (savedInstanceState == null) { vm.controller.homeOpen = true; vm.autoConnectOnLaunch() }
     }
 
     override fun onResume() { super.onResume(); vm.controller.tilt?.resume() }

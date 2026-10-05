@@ -68,7 +68,14 @@ data class GsaMessage(
 ) : NmeaMessage
 
 /** 보이는 위성 수(GSV). [talker] 는 위성군(GP=GPS, GL=GLONASS, GA=Galileo, GB/BD=BeiDou, GQ=QZSS) */
-data class GsvMessage(override val raw: String, val talker: String, val satsInView: Int?) : NmeaMessage
+data class GsvMessage(
+    override val raw: String, val talker: String, val satsInView: Int?,
+    /** 0.1.11: 문장 묶음 총수·이 문장 번호, 위성 상세(PRN·고도·방위·SNR). SkyPlot 용 */
+    val totalMsgs: Int? = null, val msgNum: Int? = null, val sats: List<SatInfo> = emptyList(),
+) : NmeaMessage
+
+/** GSV 위성 한 개. 값이 비어 있으면 null */
+data class SatInfo(val talker: String, val prn: Int, val elevDeg: Int?, val azDeg: Int?, val snr: Int?)
 
 data class ZdaMessage(override val raw: String, val utcTime: String, val day: Int?, val month: Int?, val year: Int?) : NmeaMessage
 
@@ -221,7 +228,15 @@ class NmeaParser(private val maxLine: Int = 512) {
 
         private fun parseGsv(raw: String, f: List<String>, talker: String): GsvMessage? {
             if (f.size < 4) return null
-            return GsvMessage(raw.trim(), talker, n(f, 3))
+            // 4번째 필드부터 위성마다 PRN·고도·방위·SNR 4개. NMEA 4.10 은 끝에 신호 ID 1개가 더 붙을 수 있다
+            val sats = ArrayList<SatInfo>(4)
+            var i = 4
+            while (i + 3 < f.size) {
+                val prn = n(f, i)
+                if (prn != null) sats.add(SatInfo(talker, prn, n(f, i + 1), n(f, i + 2), n(f, i + 3)))
+                i += 4
+            }
+            return GsvMessage(raw.trim(), talker, n(f, 3), n(f, 1), n(f, 2), sats)
         }
 
         private fun parseZda(raw: String, f: List<String>): ZdaMessage? {

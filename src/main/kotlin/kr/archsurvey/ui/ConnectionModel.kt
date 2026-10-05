@@ -110,6 +110,13 @@ interface ConnectionPlatform {
     fun markSuccess(form: NtripForm) {}
     /** 한 번이라도 연결에 성공했는지 */
     fun hadSuccess(): Boolean = false
+    /** 0.1.11 VRS 옵션(GGA 전송·자동 재접속) 읽기/적용. 기본 = 둘 다 켬 */
+    fun ntripOptions(): Pair<Boolean, Boolean> = true to true
+    fun applyNtripOptions(sendGga: Boolean, autoRetry: Boolean) {}
+    /** 0.1.11 진단 기록(NMEA 치유 시도·연결 방식) 최근 몇 건. 없으면 빈 문자열 */
+    fun diagnostics(): String = ""
+    /** 보정 「다시 시도」(자동 재접속 끔·인증 보류 해제) */
+    fun retryNtrip() {}
     var autoConnect: Boolean
         get() = false
         set(_) {}
@@ -222,6 +229,9 @@ object ConnectSteps {
 }
 
 /** [preChecked]: 이 수신기에서 “연결 전 확인”을 한 번 마쳤는지(수신기 설정은 수신기에 남으므로 다음부터 묻지 않음) */
+/** 연결 화면 구역 */
+enum class ConnSection { ALL, VRS }
+
 data class SavedConnection(val deviceId: String?, val address: String?, val ntrip: NtripForm, val preChecked: Boolean = false)
 
 /**
@@ -280,7 +290,10 @@ class ConnectionController(
 
     fun refresh() { bonded = profile.sortByRelevance(platform.bondedDevices()) { it.first } }
 
-    fun openScreen() { refresh(); open = true }
+    /** 0.1.11: 목업처럼 「장비 연결」(수신기+VRS 한 화면)과 「VRS 설정」(VRS만) 두 입구 */
+    var section by mutableStateOf(ConnSection.ALL)
+    fun openScreen() { refresh(); section = ConnSection.ALL; open = true }
+    fun openVrs() { refresh(); section = ConnSection.VRS; open = true }
     fun close() { open = false }
 
     fun selectProfile(p: DeviceProfile) {
@@ -370,7 +383,46 @@ class ConnectionController(
 
     /** 목록 행에 붙일 짧은 경고(호환이면 null) */
     fun mountCompatNote(m: MountInfo): String? =
-        RtcmMountCompat.warnIfIncompatible(profile, m.mountPoint, m.format, m.formatDetails)?.let { "SP60 비호환 · 3.1/3.2 권장" }
+        RtcmMountCompat.warnIfIncompatible(profile, m.mountPoint, m.format, m.formatDetails)?.let { compatShort(profile) }
+
+    /** 0.1.11 짧은 호환 문구: 수신기 이름 + 최대 RTCM 버전 + 권장 */
+    private fun compatShort(p: DeviceProfile): String {
+        val max = RtcmMountCompat.maxMinor(p)
+        val name = p.displayName.substringAfterLast(' ')
+        return "$name 비호환 · 최대 RTCM 3.$max" + if (max <= 2) " · 3.1/3.2 권장" else ""
+    }
+
+    /** 0.1.11 지금 마운트가 이 수신기에 너무 새 형식이면 같은 서버의 권장 마운트(없으면 null) */
+    fun recommendedMount(): String? {
+        val info = mounts.firstOrNull { it.mountPoint.equals(form.mount.trim(), true) }
+        if (!RtcmMountCompat.isTooNew(profile, form.mount, info?.format.orEmpty(), info?.formatDetails.orEmpty())) return null
+        return RecommendedMount.pick(profile, if (mounts.isNotEmpty()) mounts else KnownMounts.forHost(form.host), form.mount)
+    }
+    fun applyRecommendedMount() { recommendedMount()?.let { pickMount(it) } }
+
+    // ---------------- 0.1.11 VRS 옵션 · 접속 계측 ----------------
+    var sendGga by mutableStateOf(runCatching { platform.ntripOptions().first }.getOrDefault(true)); private set
+    var autoRetry by mutableStateOf(runCatching { platform.ntripOptions().second }.getOrDefault(true)); private set
+    var showUseV2 by mutableStateOf(false)
+    var showDiag by mutableStateOf(false)
+    val meter = NtripMeter()
+    fun changeSendGga(v: Boolean) {
+        sendGga = v; platform.applyNtripOptions(sendGga, autoRetry)
+        ui.toast(if (v) "GGA 전송: 켬" else "GGA 전송: 끔 — VRS 마운트는 내 위치가 없으면 보정이 오지 않을 수 있어요")
+    }
+    fun changeAutoRetry(v: Boolean) {
+        autoRetry = v; platform.applyNtripOptions(sendGga, autoRetry)
+        ui.toast(if (v) "자동 재접속: 켬" else "자동 재접속: 끔 — 끊기면 ‘다시 시도’를 눌러야 해요")
+    }
+    fun changeUseV2(v: Boolean) { form = form.copy(useV2 = v); persistSafe() }
+    fun retryNtrip() = platform.retryNtrip()
+    fun diagnostics(): String = runCatching { platform.diagnostics() }.getOrDefault("")
+    /** 「저장」만(접속하지 않음) — 목업 07 하단 */
+    fun saveOnly() {
+        val probs = form.problems()
+        persistSafe()
+        ui.toast(if (probs.isEmpty()) "VRS 설정 저장됨 · ${form.host}:${form.port} · ${form.mount}" else "저장됨 · 확인 필요: " + probs.joinToString(" · "))
+    }
 
     fun closeMountPicker() { mountPickerOpen = false; mountJob?.cancel(); if (mountLoad == MountLoad.LOADING) mountLoad = MountLoad.IDLE }
 
@@ -422,14 +474,19 @@ class ConnectionController(
         if (checks.any { !it }) { notice = ErrorCard("-", "연결 전 확인을 모두 체크해 주세요", "수신기의 NMEA 출력을 켜지 않으면 연결돼도 위치가 오지 않아요.", false); return }
         val probs = form.problems()
         if (probs.isNotEmpty()) { notice = ErrorCard("-", "VRS 입력을 확인해 주세요", probs.joinToString(" · "), false); return }
-        RtcmMountCompat.warnIfIncompatible(profile, form.mount)?.let { w ->
-            notice = ErrorCard("RTCM", "이 수신기에 맞지 않는 보정 형식일 수 있어요", w, false)
-            // 막지 않고 안내만 — 사용자가 다시 누르면 진행(알림은 유지)
+        // 0.1.11: 비호환 마운트는 첫 누름에 경고만(연결 안 함), 같은 설정으로 한 번 더 누르면 진행
+        val w = if (form.enabled) RtcmMountCompat.warnIfIncompatible(profile, form.mount) else null
+        if (w != null) {
+            val key = profile.id + "|" + form.mount.trim()
+            notice = ErrorCard("RTCM", "이 수신기에 맞지 않는 보정 형식일 수 있어요", w + " 그래도 쓰려면 ‘연결’을 한 번 더 누르세요.", false)
+            if (rtcmWarnedFor != key) { rtcmWarnedFor = key; return }
         }
         persistSafe()
         startNow(addr)
         showProgress = true
     }
+
+    private var rtcmWarnedFor: String? = null
 
     private fun startNow(addr: String) {
         savedThisRun = false
@@ -447,4 +504,51 @@ class ConnectionController(
     fun cards(): List<ErrorCard> = ErrorCards.from(link.value, ntrip.value, form.enabled)
 
     private fun card(e: BtError) = ErrorCard(e.code, e.title, e.action, !e.needsUserAction)
+}
+
+/** 0.1.11 권장 마운트: 수신기 최대 RTCM 버전 이하 중 VRS(위치 필요)·가장 높은 버전. 없으면 null */
+object RecommendedMount {
+    fun pick(profile: DeviceProfile, list: List<MountInfo>, current: String): String? {
+        val max = RtcmMountCompat.maxMinor(profile)
+        val ok = list.mapNotNull { m -> RtcmMountCompat.detectMinor(m.mountPoint, m.format, m.formatDetails)?.takeIf { it <= max }?.let { m to it } }
+            .filter { !it.first.mountPoint.equals(current.trim(), true) }
+        return ok.sortedWith(compareByDescending<Pair<MountInfo, Int>> { it.first.needsNmea && it.first.mountPoint.startsWith("VRS", true) }.thenByDescending { it.second })
+            .firstOrNull()?.first?.mountPoint
+    }
+}
+
+/**
+ * 0.1.11 VRS 상태 카드 계측(목업 07: 수신 kB/s · 지연 · 경과). 화면이 1초마다 [update] 를 부른다.
+ * 경과 = 접속(CONNECTED/RECEIVING)을 처음 본 뒤 시간, kB/s = 직전 1초 이상 구간의 수신량, 지연 = 마지막 유효 RTCM 이후 초.
+ */
+class NtripMeter {
+    var sessionStartMs: Long? = null; private set
+    var kbps: Double? = null; private set
+    private var prevBytes = 0L
+    private var prevAt = 0L
+
+    fun update(st: NtripStatus, nowMs: Long) {
+        val live = st.state == NtripState.CONNECTED || st.state == NtripState.RECEIVING
+        if (!live) { sessionStartMs = null; kbps = null; prevAt = 0L; return }
+        if (sessionStartMs == null) sessionStartMs = nowMs
+        if (prevAt == 0L || st.rtcmBytes < prevBytes) { prevBytes = st.rtcmBytes; prevAt = nowMs; return }
+        val dt = nowMs - prevAt
+        if (dt >= 1_000) {
+            kbps = (st.rtcmBytes - prevBytes) / 1024.0 / (dt / 1000.0)
+            prevBytes = st.rtcmBytes; prevAt = nowMs
+        }
+    }
+
+    fun elapsedText(nowMs: Long): String? = sessionStartMs?.let { start ->
+        val s = ((nowMs - start).coerceAtLeast(0) / 1000).toInt()
+        String.format(java.util.Locale.US, "%02d:%02d:%02d", s / 3600, (s / 60) % 60, s % 60)
+    }
+
+    fun line(st: NtripStatus, nowMs: Long): String {
+        val parts = mutableListOf<String>()
+        parts += "수신 " + (kbps?.let { String.format(java.util.Locale.US, "%.1f kB/s", it) } ?: "— kB/s")
+        parts += "지연 " + (st.rtcmAgeMs(nowMs)?.let { String.format(java.util.Locale.US, "%.1f s", it / 1000.0) } ?: "—")
+        parts += "경과 " + (elapsedText(nowMs) ?: "—")
+        return parts.joinToString(" · ")
+    }
 }

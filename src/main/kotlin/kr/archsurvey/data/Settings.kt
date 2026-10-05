@@ -160,6 +160,14 @@ class SettingsStore(private val ctx: Context) {
     var keepScreenOn: Boolean
         get() = sp.getBoolean("keep_screen", true)
         set(v) = sp.edit().putBoolean("keep_screen", v).apply()
+    /** 0.1.11 VRS 「GGA 전송」(기본 켬) */
+    var ntripSendGga: Boolean
+        get() = sp.getBoolean("ntrip_send_gga", true)
+        set(v) = sp.edit().putBoolean("ntrip_send_gga", v).apply()
+    /** 0.1.11 VRS 「자동 재접속」(기본 켬) */
+    var ntripAutoRetry: Boolean
+        get() = sp.getBoolean("ntrip_auto_retry", true)
+        set(v) = sp.edit().putBoolean("ntrip_auto_retry", v).apply()
     var ntripEnabled: Boolean
         get() = sp.getBoolean("ntrip_enabled", true)
         set(v) = sp.edit().putBoolean("ntrip_enabled", v).apply()

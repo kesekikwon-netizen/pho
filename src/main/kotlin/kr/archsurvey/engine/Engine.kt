@@ -146,6 +146,14 @@ class SurveyEngine(private val app: Context, private val settingsStrategy: (Stri
     /** 사용자가 "다시 시도"를 눌렀을 때(인증 실패 보류도 푼다) */
     fun retryNtripNow() { if (!ntripSupervisor.active) restartNtrip() else ntripSupervisor.retryNow() }
 
+    /** 0.1.11 VRS 「GGA 전송」·「자동 재접속」 스위치. 접속을 다시 맺지 않고 다음 송신/재시도부터 적용 */
+    fun setNtripOptions(sendGga: Boolean, autoRetry: Boolean) {
+        ntripSupervisor.sendGga = sendGga
+        val was = ntripSupervisor.autoRetry
+        ntripSupervisor.autoRetry = autoRetry
+        if (autoRetry && !was && running) ntripSupervisor.retryNow()
+    }
+
     /** GGA 업로드 주기(ms). 1~10초로 제한된다. 값을 바꾸면 보정 접속을 다시 맺는다 */
     @Volatile var ntripGgaIntervalMs: Long = 5_000
         private set

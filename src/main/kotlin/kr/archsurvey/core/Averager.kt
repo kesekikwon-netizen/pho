@@ -74,7 +74,7 @@ class PointAverager(private val targetEpochs: Int) {
 
     private fun rank(q: FixQuality) = when (q) {
         FixQuality.RTK_FIXED -> 5; FixQuality.RTK_FLOAT -> 4; FixQuality.DGPS -> 3
-        FixQuality.PPS -> 3; FixQuality.SINGLE -> 2; else -> 1
+        FixQuality.PPS -> 3; FixQuality.SBAS -> 3; FixQuality.SINGLE -> 2; else -> 1  // 0.1.11: SBAS = DGPS 급(전문가 GNSS P1)
     }
 }
 

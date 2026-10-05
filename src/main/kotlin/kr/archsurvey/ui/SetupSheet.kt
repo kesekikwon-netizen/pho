@@ -99,7 +99,7 @@ fun SetupSheet(c: SurveyController) {
                     c.setupOpen = false
                 }) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        GlyphIcon(Glyph.CHECK, t.ink, 22.dp); Text("적용", style = Ty.button, color = t.onPrimary)
+                        GlyphIcon(Glyph.CHECK, t.onPrimary, 22.dp); Text("적용", style = Ty.button, color = t.onPrimary)
                     }
                 }
                 MBtn(Modifier.width(64.dp).height(48.dp).testTag("setup_cancel"), MKind.PLAIN, 14.dp, onClick = { c.setupOpen = false }) {

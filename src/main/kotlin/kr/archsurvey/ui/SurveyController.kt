@@ -38,7 +38,20 @@ data class GnssView(
     val altM: Double? = null,
     /** 마지막 GGA 받은 시각(수신 시계 ms). 0 = 없음. 위성 수가 오래됐는지 판단 */
     val ggaAtMs: Long = 0L,
-)
+    /** GSA 의 PDOP. 없으면 null (0.1.11 상단 머리글) */
+    val pdop: Double? = null,
+    /** GGA 보정 연령(초, 받은 순간 값). 없으면 null */
+    val correctionAgeSec: Double? = null,
+    /** 0.1.11 GNSS 정보: VDOP(GSA)·지오이드 분리(GGA, 타원체고 = 고도 + 분리)·기준국 ID */
+    val vdop: Double? = null,
+    val geoidSepM: Double? = null,
+    val baseId: String? = null,
+    /** 0.1.11 SkyPlot: GSV 위성 상세(받지 못하면 빈 목록) */
+    val sats: List<kr.archsurvey.core.SatInfo> = emptyList(),
+) {
+    /** 타원체고(m) = 정표고(MSL) + 지오이드 분리. 둘 중 하나라도 없으면 null */
+    val ellipsoidalM: Double? get() = if (altM != null && geoidSepM != null) altM + geoidSepM else null
+}
 
 /** 화면이 보는 측점. 저장소([PointStore])가 있으면 디스크에도 남는다. */
 data class SavedPoint(
@@ -255,6 +268,14 @@ class SurveyController(
     var typeIndex by mutableIntStateOf(0)
     var poleOnRight by mutableStateOf(true)
     var drawerOpen by mutableStateOf(false)
+    /** 0.1.11 홈(메인 메뉴). 앱 시작 때 MainActivity 가 켠다. 기본 false(시험·기존 화면은 바로 지도) */
+    var homeOpen by mutableStateOf(false)
+    /** 0.1.11 환경설정 목록 화면(목업 03) */
+    var settingsMenuOpen by mutableStateOf(false)
+    /** 0.1.11 GNSS 정보 창(목업 05) — 상단 상태 알약을 누르면 열린다 */
+    var gnssInfoOpen by mutableStateOf(false)
+    /** 0.1.11 SkyPlot(목업 06). GSV 위성 상세가 있을 때만 점을 그린다 */
+    var skyPlotOpen by mutableStateOf(false)
     var antennaSheetOpen by mutableStateOf(false)
     /** 측량 설정(s15) 시트: 측점 버튼을 길게 누르면 열린다 */
     var setupOpen by mutableStateOf(false)
@@ -300,7 +321,10 @@ class SurveyController(
                 // 연결이 없으면 마지막 위치도 지도에 남기지 않는다
                 val shown = st.reason != StatusReason.NOT_CONNECTED && st.reason != StatusReason.LINK_DOWN
                 gv = GnssView(st, g.quality, if (shown) gga?.satellites ?: 0 else 0, if (shown) gga?.lat else null, if (shown) gga?.lon else null,
-                    if (shown) g.gst?.sigmaAlt else null, if (shown) gga?.hdop else null, if (shown) g.satsInView else null, if (shown) gga?.altitudeMsl else null, if (shown && gga != null) g.lastGgaAtMs else 0L)
+                    if (shown) g.gst?.sigmaAlt else null, if (shown) gga?.hdop else null, if (shown) g.satsInView else null, if (shown) gga?.altitudeMsl else null, if (shown && gga != null) g.lastGgaAtMs else 0L,
+                    pdop = if (shown) g.gsa?.pdop else null, correctionAgeSec = if (shown) gga?.correctionAgeSec else null,
+                    vdop = if (shown) g.gsa?.vdop else null, geoidSepM = if (shown) gga?.geoidSeparation else null,
+                    baseId = if (shown) gga?.baseStationId else null, sats = if (shown) g.satsDetail else emptyList())
                 if (shown && gga != null && gga.hasPosition && g.lastGgaAtMs != lastGgaStamp) {
                     lastGgaStamp = g.lastGgaAtMs
                     if (anchorOnFirstFix && !anchored) anchorTo(gga.lat!!, gga.lon!!)
@@ -655,6 +679,13 @@ class SurveyController(
         if (arch.outlineMode) { val i = types.indexOf(ArchTypes.OUTLINE_POINT); if (i >= 0) typeIndex = i else message = "위치 종류에 ‘유구 경계점’이 없어 외곽을 이을 수 없어요" }
     }
     fun cycleType() { typeIndex = (typeIndex + 1) % types.size }
+
+    /** 0.1.11 하단 도구 「선으로 연결」·「면으로 연결」: 외곽 취득을 켜고 닫힘 여부를 정한다. 같은 쪽을 다시 누르면 끈다 */
+    fun setLinkMode(closed: Boolean) {
+        if (arch.outlineMode && arch.preferClosed == closed) { toggleOutlineMode(); return }
+        arch.preferClosed = closed
+        if (!arch.outlineMode) toggleOutlineMode()
+    }
 
     // ---------------- 지도 ----------------
 

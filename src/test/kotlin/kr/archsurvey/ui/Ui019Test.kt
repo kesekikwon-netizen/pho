@@ -97,11 +97,12 @@ class Ui019Test {
         rule.runOnUiThread { cc.openScreen() }; rule.waitForIdle()
         rule.onNodeWithTag("conn_service").assertExists()
         rule.onNodeWithTag("conn_mount_pick").assertExists()
-        rule.onNodeWithTag("conn_auto").assertExists()
+        rule.onNodeWithTag("conn_auto_row").assertExists()
         val b = bitmap()
         val px = b.getPixel(4, b.height / 2)
-        assertEquals("가장자리 배경 흰색(빨강)", 255, android.graphics.Color.red(px))
-        assertEquals(255, android.graphics.Color.green(px)); assertEquals(255, android.graphics.Color.blue(px))
+        // 0.1.11: 아이보리/오프화이트 바탕(F7F6F2) — 시스템 다크여도 밝은 바탕
+        assertTrue("가장자리 배경 밝음(빨강 ${android.graphics.Color.red(px)})", android.graphics.Color.red(px) >= 240)
+        assertTrue(android.graphics.Color.green(px) >= 240); assertTrue(android.graphics.Color.blue(px) >= 235)
         shot("01_conn_white")
     }
 

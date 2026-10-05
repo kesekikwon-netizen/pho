@@ -14,18 +14,20 @@ class ThemeTokensTest {
     private val t = LightTokens
 
     @Test fun backgroundIsNearWhiteAndTextContrastIsAtLeast4_5() {
-        assertTrue("바탕은 흰색에 가깝다", t.bg.red >= 0.97f && t.bg.green >= 0.97f && t.bg.blue >= 0.97f)
+        assertTrue("바탕은 아이보리/오프화이트(0.1.11 목업)", t.bg.red >= 0.94f && t.bg.green >= 0.94f && t.bg.blue >= 0.92f)
         for ((name, fg, bg) in listOf(
             Triple("본문/바탕", t.ink, t.bg), Triple("보조글자/바탕", t.inkSub, t.bg), Triple("보조글자/카드", t.inkSub, t.card),
             Triple("강조글자/바탕", t.accentText, t.bg), Triple("주 버튼 글자/주 버튼", t.onPrimary, t.primary),
             Triple("고정 띠", t.onFixed, t.fixed), Triple("불가 띠", t.onBad, t.bad), Triple("주의 띠", t.onCaution, t.caution),
             Triple("본문/지도바탕", t.ink, t.mapBg), Triple("본문/선택면", t.ink, t.primaryCont),
+            Triple("정상 표시", t.onFixed, t.ok), Triple("보조글자/알약", t.inkSub, t.chip),
         )) assertTrue("$name 대비 ${"%.2f".format(ratio(fg, bg))}", ratio(fg, bg) >= 4.5)
     }
 
-    /** 0.1.9 고대비 흰 테마: 본문 7:1, 경계·테두리 3:1 이상(0.1.7 경계선 1.7:1 문제) */
+    /** 0.1.9 고대비 유지 + 0.1.11 목업: 흰 카드, 본문 7:1, 경계·테두리 3:1 이상(0.1.7 경계선 1.7:1 문제) */
     @Test fun highContrastWhite_0_1_9() {
-        assertEquals(1f, t.bg.red); assertEquals(1f, t.bg.green); assertEquals(1f, t.bg.blue)
+        assertEquals(1f, t.card.red); assertEquals(1f, t.card.green); assertEquals(1f, t.card.blue)
+        assertEquals(1f, t.raised.red); assertEquals(1f, t.raised.green); assertEquals(1f, t.raised.blue)
         for ((name, fg) in listOf("본문" to t.ink, "보조글자" to t.inkSub, "강조글자" to t.accentText))
             assertTrue("$name 7:1 (${"%.2f".format(ratio(fg, t.bg))})", ratio(fg, t.bg) >= 7.0)
         assertTrue("보조글자/카드 7:1", ratio(t.inkSub, t.card) >= 7.0)
@@ -40,8 +42,10 @@ class ThemeTokensTest {
         assertTrue(File("src/main/res/values-v29/themes.xml").readText().contains("forceDarkAllowed"))
     }
 
-    @Test fun accentIsSingleTerracotta() {
-        assertEquals(0xFFD97757.toInt(), t.primary.toArgb())
+    /** 0.1.11 목업: 주 버튼은 검정(글자 흰색). 테라코타 강조색은 쓰지 않는다 */
+    @Test fun primaryIsBlackMockup_0_1_11() {
+        assertEquals(0xFF111111.toInt(), t.primary.toArgb())
+        assertEquals(0xFFFFFFFF.toInt(), t.onPrimary.toArgb())
     }
 
     private fun Color.toArgb() = ((alpha * 255).toInt() shl 24) or ((red * 255 + 0.5f).toInt() shl 16) or ((green * 255 + 0.5f).toInt() shl 8) or (blue * 255 + 0.5f).toInt()

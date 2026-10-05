@@ -101,3 +101,12 @@ class TiltController(private val p: TiltPlatform, private val clock: () -> Long 
 
     fun f1(v: Double) = String.format(java.util.Locale.US, "%.1f", v)
 }
+
+/** 0.1.11 전자 기포 문구(전문가 GNSS P3): 목업 23 「IMU 측량」과 다름을 분명히 */
+object TiltCopy {
+    const val SHORT = "폰 센서 · 좌표 미보정"
+    const val NOTE = "폰 가속도 센서로 보는 전자 기포예요. 좌표를 보정하지 않고, 수신기 IMU(R10 SurePoint) 기울기 보정도 아니에요. 각도는 경고·기록용이에요."
+    /** 폴 2 m 기준 수평 어긋남(cm) = 2 m × sin(각도) */
+    fun offsetCm(deg: Double, poleM: Double = 2.0): Double = poleM * kotlin.math.sin(Math.toRadians(deg)) * 100.0
+    fun offsetLine(deg: Double): String = String.format(java.util.Locale.US, "%.1f°면 폴 2 m에서 수평 약 %.1f cm 어긋나요", deg, offsetCm(deg))
+}

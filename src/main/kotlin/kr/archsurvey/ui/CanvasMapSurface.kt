@@ -69,7 +69,7 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
             }
             for (lb in state.gridLabels) {
                 val r = tm.measure(lb.text, TextStyle(fontSize = 12.sp, color = areaCol, fontWeight = FontWeight.Normal))
-                drawText(tm, lb.text, Offset(sx(lb.at.x) - r.size.width / 2f, sy(lb.at.y) - r.size.height / 2f), TextStyle(fontSize = 12.sp, color = areaCol, fontWeight = FontWeight.Normal))
+                safeText(tm, lb.text, Offset(sx(lb.at.x) - r.size.width / 2f, sy(lb.at.y) - r.size.height / 2f), TextStyle(fontSize = 12.sp, color = areaCol, fontWeight = FontWeight.Normal))
             }
             // 유구 외곽: 선/면 + 꼭짓점 번호
             for (o in state.outlines) {
@@ -81,9 +81,9 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
                 drawPath(path, col, style = Stroke(2.5f * density, pathEffect = if (o.active) PathEffect.dashPathEffect(floatArrayOf(10f * density, 6f * density)) else null))
                 o.pts.forEachIndexed { i, q ->
                     drawCircle(col, 4.5f * density, Offset(sx(q.x), sy(q.y)))
-                    drawText(tm, "${i + 1}", Offset(sx(q.x) + 6f * density, sy(q.y) + 2f * density), TextStyle(fontSize = 12.sp, color = col, fontWeight = FontWeight.Normal))
+                    safeText(tm, "${i + 1}", Offset(sx(q.x) + 6f * density, sy(q.y) + 2f * density), TextStyle(fontSize = 12.sp, color = col, fontWeight = FontWeight.Normal))
                 }
-                if (o.pts.size >= 2) drawText(tm, o.label, Offset(sx(o.pts[0].x) - 4f * density, sy(o.pts[0].y) - 24f * density), TextStyle(fontSize = 12.sp, color = col, fontWeight = FontWeight.Normal))
+                if (o.pts.size >= 2) safeText(tm, o.label, Offset(sx(o.pts[0].x) - 4f * density, sy(o.pts[0].y) - 24f * density), TextStyle(fontSize = 12.sp, color = col, fontWeight = FontWeight.Normal))
             }
             // 이동 꼬리
             if (state.trail.size >= 2) {
@@ -102,8 +102,10 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
                 val o = Offset(sx(m.at.x), sy(m.at.y))
                 drawCircle(if (m.flagged) t.caution else t.fixed, 7f * density, o)
                 drawCircle(t.bg, 7f * density, o, style = Stroke(2f * density))
-                drawText(tm, m.name, Offset(o.x + 10f * density, o.y - 22f * density),
-                    TextStyle(fontSize = 12.sp, color = t.ink, fontWeight = FontWeight.Normal))
+                // 0.1.11: 화면 밖(특히 위쪽 멀리) 점의 이름을 그리면 drawText 제약 높이가 수백만 px 가 되어 앱이 죽는다 → 보이는 범위만 그린다
+                val lt = Offset(o.x + 10f * density, o.y - 22f * density)
+                if (lt.x >= -200f * density && lt.y >= -40f * density && lt.x < size.width && lt.y < size.height)
+                    drawText(tm, m.name, lt, TextStyle(fontSize = 12.sp, color = t.ink, fontWeight = FontWeight.Normal))
             }
             // 현재 위치 (정확도 원 + 방향 삼각형)
             state.current?.let { c ->
@@ -134,4 +136,9 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
         var gy = floor((s.center.y - halfH) / step) * step
         while (gy <= s.center.y + halfH) { drawLine(color, Offset(0f, sy(gy)), Offset(size.width, sy(gy)), 1f); gy += step }
     }
+}
+
+/** 화면 안(여유 포함)에 있을 때만 글자를 그린다. 멀리 벗어난 좌표로 drawText 를 부르면 제약 크기 초과로 앱이 죽는다(0.1.11 발견) */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.safeText(tm: androidx.compose.ui.text.TextMeasurer, text: String, at: Offset, style: TextStyle) {
+    if (at.x >= -400f && at.y >= -100f && at.x < size.width && at.y < size.height) drawText(tm, text, at, style)
 }

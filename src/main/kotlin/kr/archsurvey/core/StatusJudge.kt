@@ -15,6 +15,8 @@ enum class StatusReason(val textKo: String) {
     NO_SIGMA("정밀도 값을 받지 못했어요"),
     OLD_CORRECTION("보정 데이터가 오래됐어요"),
     SINGLE_OR_DGPS("보정 없이 단독 측위"),
+    /** 0.1.11: DGPS·SBAS(품질 2·9) — 코드 보정은 있으나 RTK 아님(측점 불가는 그대로) */
+    CODE_CORRECTED("코드 보정(DGPS·SBAS) — RTK 아님"),
     NO_POSITION("위치를 아직 못 찾았어요"),
     NO_DATA("수신기 데이터가 없어요"),
     STALE("수신 데이터가 잠시 끊겼어요"),
@@ -59,6 +61,7 @@ object StatusJudge {
             }
             FixQuality.RTK_FLOAT -> StatusResult(SurveyStatus.CAUTION, StatusReason.FLOAT, sigma)
             FixQuality.NONE -> StatusResult(SurveyStatus.UNAVAILABLE, StatusReason.NO_POSITION, sigma)
+            FixQuality.DGPS, FixQuality.SBAS -> StatusResult(SurveyStatus.UNAVAILABLE, StatusReason.CODE_CORRECTED, sigma)
             else -> StatusResult(SurveyStatus.UNAVAILABLE, StatusReason.SINGLE_OR_DGPS, sigma)
         }
     }
