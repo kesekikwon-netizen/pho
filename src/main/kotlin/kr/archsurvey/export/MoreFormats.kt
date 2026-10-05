@@ -20,7 +20,9 @@ enum class ExportFormat(val id: String, val labelKo: String, val ext: String) {
     SHP("shp", "Shape 파일 (hgis·QGIS)", ".shp"),
     GEOJSON("geojson", "GeoJSON", ".geojson"),
     /** hgis(Strata) 「CSV 기준점」 불러오기 양식 */
-    HGIS_CSV("hgis_csv", "hgis 기준점 CSV", ".csv");
+    HGIS_CSV("hgis_csv", "hgis 기준점 CSV", ".csv"),
+    /** iTwin Capture Modeler(Flex) 기준점 SurveysData XML(사진 실측 3D 모델 기준점) */
+    ITWIN_XML("itwin_xml", "iTwin Capture XML (사진 실측 기준점)", ".xml");
 
     companion object {
         /** 0.1.13 까지 늘 만들던 세 가지 = 기본값 */

@@ -58,7 +58,10 @@ class ExportService(
     private val ctx: Context, private val dao: SurveyDao, private val photos: PhotoStore,
     private val voices: kr.archsurvey.voice.VoiceStore? = null,
 ) {
-    suspend fun export(project: String, includePhotos: Boolean, includeVoices: Boolean = false, formats: Set<ExportFormat> = ExportFormat.DEFAULT): ExportResult {
+    suspend fun export(project: String, includePhotos: Boolean, includeVoices: Boolean = false, formats: Set<ExportFormat> = ExportFormat.DEFAULT,
+        /** iTwin XML 에서 「1호」 → 「Target #1」 로 바꾸지 않고 현장 이름 그대로 */
+        itwinKeepNames: Boolean = false,
+    ): ExportResult {
         val pts = dao.pointsOf(project)
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val base = File(ctx.getExternalFilesDir("Documents") ?: ctx.filesDir, "exports").also { it.mkdirs() }
@@ -116,6 +119,13 @@ class ExportService(
             for ((epsg, group) in pts.groupBy { it.crsEpsg })
                 File(dir, "hgis_control_points_$epsg.csv").writeText(MoreFormats.hgisControlCsv(group), Charsets.UTF_8)
         }
+        // iTwin Capture: 좌표계마다 itwin_capture_<EPSG>.xml(표본과 같은 꼴) + 이름 대조표 CSV
+        if (ExportFormat.ITWIN_XML in formats) {
+            for ((epsg, group) in pts.groupBy { it.crsEpsg }) {
+                File(dir, "itwin_capture_$epsg.xml").writeText(ItwinCaptureXml.write(group, epsg, itwinKeepNames), Charsets.UTF_8)
+                File(dir, "itwin_capture_names_$epsg.csv").writeText(ItwinCaptureXml.namesCsv(group, itwinKeepNames), Charsets.UTF_8)
+            }
+        }
         File(dir, "README.txt").writeText(readme(project, pts.size, shpEpsgs), Charsets.UTF_8)
 
         val zip = File(base, "${safe}_$stamp.zip")
@@ -149,6 +159,8 @@ class ExportService(
         points.kml      구글어스(경위도+지면 타원체고)
         points_<EPSG>.shp/.shx/.dbf/.prj/.cpg  점 Shapefile(작업 좌표계, X=동 Y=북, Z=지면 표고, 속성 UTF-8)
         hgis_control_points_<EPSG>.csv  hgis 「CSV 기준점」 양식(point_id,x,y,z,datum,ellipsoid,projection,origin,accuracy_m,pdop,fix_type)
+        itwin_capture_<EPSG>.xml  iTwin Capture Modeler 기준점(SurveysData XML, x=동 y=북 z=지면 표고, 이름 「1호」→「Target #1」)
+        itwin_capture_names_<EPSG>.csv  iTwin 이름 ↔ 현장 점 번호 대조표
         (고른 양식만 들어 있어요)
         photos.csv, photos/  점별 사진(최대 4장)
         voice.csv, voices/   점별 음성 메모(m4a, AAC 16kHz 모노). 내보낼 때 '음성 포함'을 켠 경우만

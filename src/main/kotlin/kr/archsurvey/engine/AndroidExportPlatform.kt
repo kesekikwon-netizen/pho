@@ -32,8 +32,11 @@ class AndroidExportPlatform(
 
     override suspend fun export(includePhotos: Boolean, includeVoices: Boolean): ExportOutput = exportFormats(kr.archsurvey.export.ExportFormat.DEFAULT, includePhotos, includeVoices)
 
-    override suspend fun exportFormats(formats: Set<kr.archsurvey.export.ExportFormat>, includePhotos: Boolean, includeVoices: Boolean): ExportOutput {
-        val r: ExportResult = svc.export(project(), includePhotos, includeVoices, formats)
+    override suspend fun exportFormats(formats: Set<kr.archsurvey.export.ExportFormat>, includePhotos: Boolean, includeVoices: Boolean): ExportOutput =
+        exportFormats(formats, includePhotos, includeVoices, false)
+
+    override suspend fun exportFormats(formats: Set<kr.archsurvey.export.ExportFormat>, includePhotos: Boolean, includeVoices: Boolean, itwinKeepNames: Boolean): ExportOutput {
+        val r: ExportResult = svc.export(project(), includePhotos, includeVoices, formats, itwinKeepNames)
         lastZip = r.zip
         return ExportOutput(r.zip.name, r.zip.length(), r.zip.path, r.pointCount, r.photoCount, r.voiceCount, r.publicFolder)
     }

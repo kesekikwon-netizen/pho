@@ -170,4 +170,20 @@ class ExportControllerTest {
         assertEquals("Documents/ExcavationSurvey/hgis/작업1_t", e.output!!.publicFolder)
         assertTrue(e.notice!!.contains("Documents/ExcavationSurvey/hgis/작업1_t"))
     }
+    @Test fun itwinKeepNamesIsPassedThrough() {
+        val p = object : ExportPlatform {
+            var keep: Boolean? = null
+            override suspend fun summary() = ExportSummary("작업1", 2, 0, 0, 0)
+            override suspend fun export(includePhotos: Boolean, includeVoices: Boolean) = error("no")
+            override suspend fun exportFormats(formats: Set<kr.archsurvey.export.ExportFormat>, includePhotos: Boolean, includeVoices: Boolean, itwinKeepNames: Boolean): ExportOutput {
+                keep = itwinKeepNames; return ExportOutput("a.zip", 100, "/x/a.zip", 2, 0, 0)
+            }
+            override fun share(out: ExportOutput) {}
+            override fun saveAs(out: ExportOutput, onDone: (Boolean) -> Unit) = onDone(true)
+        }
+        val e = ExportController(p, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        e.openScreen(); e.toggleFormat(kr.archsurvey.export.ExportFormat.ITWIN_XML)
+        assertFalse(e.itwinKeepNames); e.run(); assertEquals(false, p.keep)
+        e.itwinKeepNames = true; e.run(); assertEquals(true, p.keep)
+    }
 }

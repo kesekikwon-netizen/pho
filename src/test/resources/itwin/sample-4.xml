@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SurveysData>
+	<SpatialReferenceSystems>
+		<SRS>
+			<Id>1</Id>
+			<Name>Korea 2000 / Central Belt 2010 (EPSG:5186)</Name>
+			<Definition>EPSG:5186</Definition>
+		</SRS>
+	</SpatialReferenceSystems>
+	<ControlPoints>
+		<ControlPoint>
+			<Id>0</Id>
+			<SRSId>1</SRSId>
+			<Name>Target #1</Name>
+			<Category>Full</Category>
+			<Position>
+				<x>148090.061</x>
+				<y>98118.275</y>
+				<z>57.15</z>
+			</Position>
+			<HorizontalAccuracy>0.01</HorizontalAccuracy>
+			<VerticalAccuracy>0.01</VerticalAccuracy>
+			<CheckPoint>false</CheckPoint>
+		</ControlPoint>
+		<ControlPoint>
+			<Id>1</Id>
+			<SRSId>1</SRSId>
+			<Name>Target #2</Name>
+			<Category>Full</Category>
+			<Position>
+				<x>148090.164</x>
+				<y>98119.226</y>
+				<z>57.027</z>
+			</Position>
+			<HorizontalAccuracy>0.01</HorizontalAccuracy>
+			<VerticalAccuracy>0.01</VerticalAccuracy>
+			<CheckPoint>false</CheckPoint>
+		</ControlPoint>
+		<ControlPoint>
+			<Id>2</Id>
+			<SRSId>1</SRSId>
+			<Name>Target #3</Name>
+			<Category>Full</Category>
+			<Position>
+				<x>148089.864</x>
+				<y>98119.952</y>
+				<z>57.167</z>
+			</Position>
+			<HorizontalAccuracy>0.01</HorizontalAccuracy>
+			<VerticalAccuracy>0.01</VerticalAccuracy>
+			<CheckPoint>false</CheckPoint>
+		</ControlPoint>
+	</ControlPoints>
+</SurveysData>
