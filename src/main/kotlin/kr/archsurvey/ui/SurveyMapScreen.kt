@@ -98,7 +98,7 @@ fun SurveyMapScreen(
 /** 0.1.29 T22-4: 중복 점 창에서 뒤로를 눌렀을 때 안내 */
 internal const val DUP_BACK_HINT = "방금 측정값을 어떻게 할지 골라 주세요"
 
-/** 시스템 뒤로 단추가 할 일. 없으면 null(앱 기본 동작 = 나가기) */
+/** 시스템 뒤로 단추가 할 일. 0.1.31: 맨 끝(홈)은 종료 확인 창 — null 을 돌려주지 않는다 */
 internal fun backTarget(c: SurveyController): (() -> Unit)? {
     val cc = c.connection
     return when {
@@ -128,7 +128,8 @@ internal fun backTarget(c: SurveyController): (() -> Unit)? {
         c.quickSheetOpen -> { { c.quickSheetOpen = false } }
         c.settingsMenuOpen -> { { c.settingsMenuOpen = false } }
         !c.homeOpen && c.phase != Phase.ACQUIRING -> { { c.homeOpen = true } }
-        else -> null
+        // 0.1.31: 홈에서 뒤로 = 앱 종료 확인 창(예 → 수신기·VRS 연결 끊고 완전 종료). 예전 null = 연결 서비스가 남은 채 화면만 닫혔다
+        else -> { { c.requestExit() } }
     }
 }
 
@@ -323,7 +324,7 @@ private fun ResultStrip(c: SurveyController) {
         Box(Modifier.width(6.dp).height(32.dp).clip(RoundedCornerShape(3.dp)).background(bg))   // 상태색 막대(칩과 같은 색)
         Text(p.name, style = Ty.coord.copy(fontSize = 20.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_name"))
         val tiltOver = p.tiltMaxDeg != null && c.tilt != null && p.tiltMaxDeg > c.tilt!!.limitDeg
-        Text("${p.type} · 저장됨 ±${p.sigmaHM?.let { f3(it) } ?: "—"} m" + if (tiltOver) " · 기울기 ${String.format(java.util.Locale.US, "%.1f", p.tiltMaxDeg)}°" else "", style = Ty.small, color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("result_h"))
+        Text("${p.type} · 저장됨 · ${PointCaution.hv(p)}" + if (tiltOver) " · 기울기 ${String.format(java.util.Locale.US, "%.1f", p.tiltMaxDeg)}°" else "", style = Ty.small, color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("result_h"))
         Row(
             Modifier.height(28.dp).clip(RoundedCornerShape(14.dp)).glossy(bg).padding(start = 6.dp, end = 9.dp).testTag("result_chip"),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -514,7 +515,8 @@ fun DrawerOverlay(c: SurveyController) {
                     .verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 10.dp, top = 8.dp, bottom = 16.dp).testTag("drawer"),
             ) {
                 val st = c.gv.status
-                val (bg, fg) = statusColors(t, st.status)
+                val shownSt = c.gv.displayStatus // 0.1.31: 띠·알약과 같은 표시 상태(σ 없음 고정 = 초록)
+                val (bg, fg) = statusColors(t, shownSt)
                 Row(Modifier.height(34.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     androidx.compose.foundation.Image(
                         androidx.compose.ui.res.painterResource(kr.archsurvey.R.drawable.ic_logo_mark_terracotta),
@@ -528,7 +530,7 @@ fun DrawerOverlay(c: SurveyController) {
                         Text((c.connection?.profile?.displayName ?: if (c.antennaModelId == "TRIMBLE_R10") "Trimble R10" else "Spectra SP60") + if (st.reason == StatusReason.NOT_CONNECTED) " · 연결 안 됨" else "", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.testTag("drawer_device"))
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            "${st.status.labelKo}${st.sigmaHM?.let { " ±${f3(it)} m" } ?: ""}", style = Ty.small.copy(fontSize = 12.sp), color = fg, maxLines = 1,
+                            "${shownSt.labelKo}${st.sigmaHM?.let { " ±${f3(it)} m" } ?: ""}", style = Ty.small.copy(fontSize = 12.sp), color = fg, maxLines = 1,
                             modifier = Modifier.background(bg, RoundedCornerShape(11.dp)).padding(horizontal = 9.dp, vertical = 3.dp).testTag("drawer_status"),
                         )
                     }
@@ -541,6 +543,11 @@ fun DrawerOverlay(c: SurveyController) {
                     } else for (it in sec.items) DrawerRow(c, it)
                 }
                 Spacer(Modifier.height(16.dp))
+                // 0.1.31: 앱 종료(수신기 연결을 끊고 완전히 닫기 — 확인 창)
+                MBtn(Modifier.fillMaxWidth().height(48.dp).testTag("drawer_exit"), MKind.PLAIN, 16.dp, onClick = { c.drawerOpen = false; c.requestExit() }) {
+                    Text(AppExit.MENU_LABEL, style = Ty.label, color = t.ink)
+                }
+                Spacer(Modifier.height(8.dp))
                 Text(rememberAppVersionLabel(), style = Ty.small, color = t.inkSub, modifier = Modifier.padding(start = 6.dp).testTag("drawer_version"))
             }
         }

@@ -733,6 +733,10 @@ class ConnectionController(
     /** 연결 시도를 멈춘다(HTML 64 「연결 취소」 — 연결 중일 때만) */
     fun cancelConnect() { stopAll(); ui.toast(CANCELLED_MSG) }
     private fun stopAll() { platform.stopReal(); connectRequested = false; showProgress = false }
+    /** 0.1.31 T27 앱 종료: 알림·소리 없이 보정(VRS)·블루투스를 끊고 연결 서비스를 멈춘다 */
+    fun stopForExit() = stopAll()
+    /** 0.1.31 T27: 수신기 연결이 살아 있거나 연결 중이면 true(종료 창 문구) */
+    fun linkActive(): Boolean = connectRequested || link.value.state != kr.archsurvey.device.LinkState.IDLE
 
     /** 연결 화면 주 단추 문구(HTML 63): 실패·사전 점검 막힘 = 「다시 시도」, 비호환 마운트 경고 뒤 = 「그래도 연결」 */
     fun connectLabel(): String = when {

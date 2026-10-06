@@ -7,6 +7,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import kr.archsurvey.ui.SurveyMapScreen
 import kr.archsurvey.ui.SurveyTheme
 import kr.archsurvey.ui.SurveyViewModel
@@ -53,8 +55,16 @@ class MainActivity : ComponentActivity() {
         }
         applyKeepScreen((application as App).settings.keepScreenOn)
         vm.onKeepScreen = { applyKeepScreen(it) }
+        // 0.1.31 T27: 종료 확인 창 「예」 → 연결은 컨트롤러가 끊고, 여기서 앱 작업을 완전히 닫는다(최근 앱 목록에서도 빠짐)
+        vm.controller.onExitApp = { exitRequested = true; finishAndRemoveTask() }
+        val firstLaunch = savedInstanceState == null
         setContent {
-            SurveyTheme { SurveyMapScreen(vm.controller, batteryPercent()) }
+            SurveyTheme {
+                // 0.1.31: 처음 켤 때만 3초 시작 모션(그동안 작업 복원·자동 연결은 뒤에서 그대로 진행). 회전 등 재생성 땐 건너뜀
+                var splash by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(firstLaunch) }
+                if (splash) kr.archsurvey.ui.SplashScreen(kr.archsurvey.ui.versionShort(kr.archsurvey.ui.rememberAppVersionLabel())) { splash = false }
+                else SurveyMapScreen(vm.controller, batteryPercent())
+            }
         }
         // 0.1.12: 직전 작업이 있으면 그 작업(설정 포함)을 연 측량 화면에서 시작 — 「새 작업」을 누르기 전까지 항상 이어서.
         // 처음 설치면 0.1.11 처럼 홈. 회전 등으로 다시 만들어질 땐 보던 화면 유지. 수신기는 지난 성공 설정으로 자동 연결(설정에서 끌 수 있음)
@@ -63,6 +73,18 @@ class MainActivity : ComponentActivity() {
             vm.controller.homeOpen = !vm.resumeJob
             if (vm.resumeJob) vm.controller.ui.toast(vm.resumeNotice())
             vm.autoConnectOnLaunch()
+        }
+    }
+
+    /** 0.1.31 T27: 종료 창에서 「예」를 눌러 닫는 중 */
+    private var exitRequested = false
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // 0.1.31 T27 완전 종료: 연결 서비스 멈춤(ACTION_STOP → 알림 제거·소켓 닫기)이 먼저 처리되도록 잠깐 뒤 프로세스를 끝낸다.
+        // 측점은 저장 때 이미 디스크(Room)에 있다. 화면 작업(viewModelScope)은 Activity 가 끝나며 어차피 취소된다
+        if (exitRequested && isFinishing) {
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ android.os.Process.killProcess(android.os.Process.myPid()) }, EXIT_KILL_DELAY_MS)
         }
     }
 
@@ -79,6 +101,8 @@ class MainActivity : ComponentActivity() {
         }
         return super.onKeyDown(keyCode, event)
     }
+
+    companion object { const val EXIT_KILL_DELAY_MS = 700L }
 
     private fun applyKeepScreen(on: Boolean) {
         if (on) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

@@ -153,9 +153,10 @@ internal fun StatusBand(c: SurveyController, compact: Boolean = false, modifier:
     val notConnected = st.reason == StatusReason.NOT_CONNECTED
     val shown = c.gv.displayStatus // 0.1.30 T23-c: 색·제목은 표시 상태, 부제는 저장 판정(st)
     val main = if (notConnected) "불가 · ${HeaderModel.NO_RECEIVER}"
-    else if (c.gv.sigmaMissingOnFix) (if (c.gv.strictMode) SigmaText.STRICT_BAND_MAIN else SigmaText.FIX_NO_SIGMA)
+    // 0.1.31: 고정·보정 양호면 σ 가 없어도 「측량 가능 · 양호」(초록). σ 없음은 오른쪽 작은 표시로만. 엄격+σ 없음은 막힘 그대로
+    else if (c.gv.sigmaMissingOnFix && c.gv.strictMode) SigmaText.STRICT_BAND_MAIN
     else when (shown) {
-        SurveyStatus.FIXED -> "측량 가능"
+        SurveyStatus.FIXED -> SigmaText.READY_MAIN
         SurveyStatus.CAUTION -> "주의"
         SurveyStatus.UNAVAILABLE -> "불가"
     }
@@ -164,7 +165,7 @@ internal fun StatusBand(c: SurveyController, compact: Boolean = false, modifier:
     val detail = if (notConnected) null else { tick; bandDetail(c) }
     val sigma = if (notConnected) null else st.sigmaHM
     val dot = when (shown) { SurveyStatus.FIXED -> t.fixed; SurveyStatus.CAUTION -> t.caution; SurveyStatus.UNAVAILABLE -> t.bad }
-    val tint = when (shown) { SurveyStatus.FIXED -> t.card; SurveyStatus.CAUTION -> t.caution.copy(alpha = 0.14f); SurveyStatus.UNAVAILABLE -> t.bad.copy(alpha = 0.08f) }
+    val tint = when (shown) { SurveyStatus.FIXED -> t.fixed.copy(alpha = 0.12f); SurveyStatus.CAUTION -> t.caution.copy(alpha = 0.14f); SurveyStatus.UNAVAILABLE -> t.bad.copy(alpha = 0.08f) }
     Row(
         modifier.fillMaxWidth().height((if (compact) StatusLineDims.COMPACT_DP else StatusLineDims.FULL_DP).dp).background(tint).padding(horizontal = 16.dp).testTag("status_band"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),

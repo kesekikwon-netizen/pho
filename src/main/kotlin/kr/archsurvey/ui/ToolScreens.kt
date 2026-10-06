@@ -109,6 +109,8 @@ private fun PointRow(p: SavedPoint, onLong: () -> Unit, onClick: () -> Unit) {
             }
             // 0.1.30 T23: 주의 이유(「σ 없음(고정)」·Float·보정 나이 초과 …) — 목록 표시만
             PointCaution.rowReason(p)?.let { Text(it, style = Ty.small.copy(fontSize = 10.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("point_reason_${p.name}")) }
+            // 0.1.31: 점마다 오차(H/V 1σ). 없으면 —
+            Text(PointCaution.hv(p), style = Ty.coord.copy(fontSize = 10.sp), color = t.inkSub, maxLines = 1, softWrap = false, modifier = Modifier.testTag("point_hv_${p.name}"))
         }
         val m = Ty.coord.copy(fontSize = 11.sp)
         Text(grp3(p.northing), style = m, color = t.ink, maxLines = 1, modifier = Modifier.weight(1.5f))
@@ -158,6 +160,8 @@ fun PointDetailScreen(c: SurveyController) {
                 if (i < rows.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(t.line))
             }
         }
+        // 0.1.31: 이 점의 오차(수평 H · 수직 V, 1σ). 수신기가 GST 를 안 보낸 점은 —
+        Text(PointCaution.hvLine(p), style = Ty.coord.copy(fontSize = 15.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("detail_hv"))
         Text("좌표·높이는 바꿀 수 없어요. 잘못 쟀다면 다시 측점하세요.", style = Ty.small, color = t.inkSub)
         Text(
             "${PointCaution.label(p)}${p.sigmaHM?.let { " ±${f3(it)} m" } ?: ""} · 위성 ${p.satellites} · ${p.epochs}회 평균 · EPSG:${p.crsEpsg}" +

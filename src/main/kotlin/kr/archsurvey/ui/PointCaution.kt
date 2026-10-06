@@ -40,6 +40,14 @@ object PointCaution {
     fun displayStatus(p: SavedPoint): SurveyStatus = if (reason(p) == NO_SIGMA_FIXED) SurveyStatus.FIXED else p.status
     /** 0.1.30 UX-0130-1 점 목록 이유 줄: σ 없음(고정)은 「고정 · σ 없음」, 그 밖(Float·보정 나이 …)은 이유 그대로 */
     fun rowReason(p: SavedPoint): String? = reason(p)?.let { if (it == NO_SIGMA_FIXED) label(p) else it }
+    /** 0.1.31 점마다 오차(1σ, m): 「H 0.012 · V 0.020 m」, 없으면 「H — · V —」. V = 수직 σ(sigmaU) */
+    fun hv(p: SavedPoint): String {
+        fun f(v: Double?) = v?.let { String.format(java.util.Locale.US, "%.3f", it) } ?: "—"
+        val unit = if (p.sigmaHM != null || p.sigmaU != null) " m" else ""
+        return "H ${f(p.sigmaHM)} · V ${f(p.sigmaU)}$unit"
+    }
+    /** 0.1.31 상세·점 메뉴 한 줄: 「오차 H 0.012 · V 0.020 m」 */
+    fun hvLine(p: SavedPoint): String = "오차 " + hv(p)
     /** 결과 칩 문구 */
     fun chip(p: SavedPoint): String = when {
         reason(p) == NO_SIGMA_FIXED -> SigmaText.FIX_NO_SIGMA
@@ -54,6 +62,8 @@ object PointCaution {
  */
 object SigmaText {
     const val FIX_NO_SIGMA = "고정 · σ 없음"
+    /** 0.1.31 상태 띠 제목: 측량 가능(RTK 고정 + 보정 양호) — σ 가 없어도 같은 초록. σ 없음은 H/V 옆 작은 표시 */
+    const val READY_MAIN = "측량 가능 · 양호"
     /** 기본 모드 띠 부제 */
     const val BAND_SUB_NORMAL = "H·V — · 저장하면 점에 「σ 없음(고정)」 표시"
     const val CONFIRM_TITLE = "고정 · σ 없음 — 측점할까요?"

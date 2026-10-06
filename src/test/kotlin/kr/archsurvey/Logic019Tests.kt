@@ -100,7 +100,7 @@ class Logic019Tests {
         assertTrue("본문 7:1", ratio(0x111111, white) >= 7.0)
         assertTrue("보조 글자 7:1", ratio(0x474747, white) >= 7.0)
         assertTrue("강조 글자 7:1", ratio(0x8A3A1F, white) >= 7.0)
-        assertTrue("고정색 위 흰 글자 7:1", ratio(0x155A96, white) >= 7.0)
+        assertTrue("고정색(0.1.31 초록) 위 흰 글자 7:1", ratio(0x146536, white) >= 7.0)
         assertTrue("경계선 3:1", ratio(0x858585, white) >= 3.0)
         assertTrue("입력 테두리 3:1", ratio(0x767676, white) >= 3.0)
     }

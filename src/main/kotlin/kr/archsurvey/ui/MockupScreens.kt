@@ -340,6 +340,7 @@ fun PointMenuSheet(c: SurveyController, p: SavedPoint) {
         ) {
             Box(Modifier.align(Alignment.CenterHorizontally).width(40.dp).height(4.dp).clip(CircleShape).background(t.line))
             Text(p.name, style = Ty.title, color = t.ink, modifier = Modifier.testTag("point_menu_title"))
+            Text(PointCaution.label(p) + " · " + PointCaution.hvLine(p), style = Ty.small, color = t.inkSub, maxLines = 1, modifier = Modifier.testTag("point_menu_hv")) // 0.1.31
             MenuRow(Glyph.RULER, "안테나 높이 다시 재기 (재측량)", "높이를 잘못 넣었다면 그 자리에서 다시 측량 · 이전 값은 이력에 보관", "pm_resurvey") { close(); c.startResurvey(p) }
             MenuRow(Glyph.INFO, "편집 (위치 종류 · 비고)", "점 상세에서 고쳐 저장", "pm_edit") { close(); c.hub.openDetail(p) }
             MenuRow(Glyph.PIN, "여기로 찾아가기", null, "pm_goto") { close(); c.hub.startGoto(p) }

@@ -850,6 +850,22 @@ class SurveyController(
         }
     }
 
+    // ---------------- 0.1.31 T27 앱 종료 ----------------
+    /** MainActivity 가 채운다: 앱 작업을 완전히 닫기(finishAndRemoveTask). 시험에서는 기록만 */
+    var onExitApp: (() -> Unit)? = null
+    /** 종료 확인 창을 띄운다. 측정 중이면 먼저 측정만 멈추고(저장 안 함), 중복 점 선택 중이면 고르라고 알린다 */
+    fun requestExit() {
+        if (dupPrompt != null) { ui.toast(DUP_BACK_HINT); return }
+        if (phase == Phase.ACQUIRING) { cancelAcquire(); return }
+        if (ui.confirm != null) return
+        ui.ask(AppExit.request(connection?.linkActive() == true) { exitApp() })
+    }
+    /** 확인 창 「예」: 보정·블루투스 끊기 + 연결 서비스(알림) 멈춤 → 앱 닫기(음성·기울기는 ViewModel.onCleared 가 정리) */
+    fun exitApp() {
+        runCatching { connection?.stopForExit() }.onFailure { kr.archsurvey.diag.CrashLog.record("앱 종료 연결 끊기", it) }
+        onExitApp?.invoke()
+    }
+
     fun cancelAcquire() {
         if (phase != Phase.ACQUIRING) return
         acquireJob?.cancel(); phase = Phase.IDLE; progress = 0f; message = "취득을 취소했어요"

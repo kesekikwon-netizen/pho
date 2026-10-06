@@ -190,7 +190,8 @@ class Ui0111Test {
         // 시스템 뒤로 = 연결 화면 닫기 → 환경설정 닫기 → (홈)
         rule.runOnUiThread { backTarget(c)!!.invoke() }; rule.waitForIdle(); assertFalse(cc.open)
         rule.runOnUiThread { backTarget(c)!!.invoke() }; rule.waitForIdle(); assertFalse(c.settingsMenuOpen)
-        assertNull("홈에서는 앱 기본 뒤로(나가기)", backTarget(c))
+        // 0.1.31 T27: 홈에서 뒤로 = 종료 확인 창(예전: null = 앱 기본 나가기 → 연결 서비스가 남았다)
+        assertNotNull("홈에서는 종료 확인 창", backTarget(c))
     }
 
     @Test fun d_gnssInfoFromPill() {

@@ -1,5 +1,5 @@
 <resources>
-    <!-- Android 12+ 스플래시: 흰 바탕 + 테라코타 마크. 0.1.9: 항상 흰 테마(다크·강제 다크 끔). 실제 기기 표시는 확인 못 함 -->
+    <!-- Android 12+ 스플래시: 아이보리 바탕(0.1.31, 이어지는 시작 모션과 같은 색) + 테라코타 마크. 0.1.9: 항상 흰 테마(다크·강제 다크 끔). 실제 기기 표시는 확인 못 함 -->
     <style name="Theme.Survey" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/bg</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
@@ -7,7 +7,7 @@
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
         <item name="android:forceDarkAllowed">false</item>
-        <item name="android:windowSplashScreenBackground">#FFFFFF</item>
+        <item name="android:windowSplashScreenBackground">#FAF9F5</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_logo_mark_terracotta</item>
     </style>
 </resources>

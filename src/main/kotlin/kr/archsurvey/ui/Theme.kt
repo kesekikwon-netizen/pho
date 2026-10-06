@@ -45,20 +45,25 @@ data class Tokens(
     val satGal: Color = Color(0xFFB07A00),
     val satBds: Color = Color(0xFF8A2BA0),
     val satOther: Color = Color(0xFF5C5B57),
+    /** 0.1.31 시작 화면(모션 로딩): 아이보리 바탕·검정 글자·테라코타 선 두 단계 */
+    val splashBg: Color = Color(0xFFFAF9F5),
+    val splashInk: Color = Color(0xFF141413),
+    val splashLine: Color = Color(0xFFD97757),
+    val splashLineDeep: Color = Color(0xFFC6613F),
 )
 
 private fun c(h: Long) = Color(0xFF000000 or h)
 
 /**
  * 0.1.11 목업 테마(강제 라이트 고대비): 아이보리 바탕 + 흰 카드 + 검정 글자 + 검정 주 버튼.
- * 상태색은 고정=파랑, 유동(주의)=노랑, 정상=초록, 불가·파괴=빨강. 본문 7:1 이상, 경계선·입력 테두리 3:1 이상.
+ * 상태색은 고정(측량 가능)=초록(0.1.31, 예전 파랑), 유동(주의)=노랑, 정상=초록, 불가·파괴=빨강. 본문 7:1 이상, 경계선·입력 테두리 3:1 이상.
  * 시스템 다크 모드와 무관하게 항상 이 토큰을 쓴다.
  */
 val LightTokens = Tokens(
     bg = c(0xF7F6F2), card = c(0xFFFFFF), line = c(0x8A8A86), outline = c(0x767672),
     ink = c(0x111111), inkSub = c(0x474744),
     primary = c(0x111111), onPrimary = c(0xFFFFFF), accent = c(0x111111), accentText = c(0x111111),
-    fixed = c(0x155A96), onFixed = c(0xFFFFFF),
+    fixed = c(0x146536), onFixed = c(0xFFFFFF), // 0.1.31: 측량 가능 = 초록(흰 글자 7.1:1)
     caution = c(0xF2B600), onCaution = c(0x141413),
     bad = c(0xA3123A), onBad = c(0xFFFFFF),
     scrim = Color(0x66111111),
@@ -70,7 +75,7 @@ val DarkTokens = Tokens(
     bg = c(0x1F1E1D), card = c(0x2B2A27), line = c(0x3A3935), outline = c(0x8F8C81),
     ink = c(0xF0EEE6), inkSub = c(0xB7B4A9),
     primary = c(0xD97757), onPrimary = c(0x141413), accent = c(0xD97757), accentText = c(0xEDA98F),
-    fixed = c(0x6DB6F5), onFixed = c(0x141413),
+    fixed = c(0x5BC48A), onFixed = c(0x141413),
     caution = c(0xF2C14B), onCaution = c(0x141413),
     bad = c(0xFF7D96), onBad = c(0x141413),
     scrim = Color(0x99000000), raised = c(0x33322E), primaryCont = c(0x4A2E24), mapBg = Color(0xFF26251F), chip = c(0x33322E), ok = c(0x5BC48A),
