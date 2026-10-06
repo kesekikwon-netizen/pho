@@ -1,3 +1,6 @@
+# 깨끗한 트리 출시 빌드 (2026-10-06~)
+- 출시 APK는 커밋된 깨끗한 트리에서만 빌드한다. V월드 내장키 파일은 git 밖: `cp src/main/kotlin/kr/archsurvey/map/VWorldDefaults.kt.template src/main/kotlin/kr/archsurvey/map/VWorldDefaults.kt` 후 실키를 `BUILTIN_API_KEY`에 넣거나(또는 보관본 VWorldDefaults.kt를 복사), `keystore.properties`·`local.properties`도 git 밖에서 복사해 빌드한다. 실키는 어느 ref에도 커밋 금지(.gitignore 등록).
+
 # BUILD_STATUS (2026-10-04 18:40 KST, 1차 라운드: WP-0~5 일부)
 
 ## 빌드·시험 결과 (박스에서 실제 실행)
