@@ -77,3 +77,4 @@ internal fun diagnosticsFrom(log: String): String =
     log.split(Regex("(?m)^(?==== )")).filter { b ->
         listOf("NMEA", "블루투스", "보정", "연결", "진단", "BT-130", "치유", "PASH").any { it in b }
     }.takeLast(6).joinToString("\n") { it.trim().lines().take(16).joinToString("\n") }.takeLast(5000)
+        .let { kr.archsurvey.diag.CrashLog.redact(it) } // 0.1.18: 진단 화면에도 비밀번호가 나오지 않게

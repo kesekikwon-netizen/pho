@@ -115,8 +115,13 @@ private fun RowScope.BarItem(g: Glyph, label: String, tag: String, desc: String,
 internal fun ControlArea(c: SurveyController) {
     val t = T
     val busy = c.phase == Phase.ACQUIRING
-    val blocked = c.gv.status.status == SurveyStatus.UNAVAILABLE
-    val notConn = c.gv.status.reason == StatusReason.NOT_CONNECTED
+    val status = c.gv.status.status
+    val reason = c.gv.status.reason
+    val blocked = status == SurveyStatus.UNAVAILABLE
+    val caution = status == SurveyStatus.CAUTION
+    val notConn = reason == StatusReason.NOT_CONNECTED
+    val strict = c.settingsState?.requireFixed == true
+    val strictBlock = strict && caution
     val sel = c.typeIndex.coerceIn(0, (c.types.size - 1).coerceAtLeast(0))
     val a = c.arch
     Column(Modifier.fillMaxWidth().height(SurveyDims.CONTROL_AREA_DP.dp).background(t.card).testTag("control_area")) {
@@ -133,17 +138,42 @@ internal fun ControlArea(c: SurveyController) {
                 BarItem(Glyph.PLUS, "새 연결\n시작", "tool_new_link", "외곽 마무리하고 새 연결 시작") { c.startNewLink() }
             }
             val measure: @Composable RowScope.() -> Unit = {
+                // 0.1.26: 미연결→연결 유도(활성), 엄격·주의=흐리게, 주의(기본)=확인 후 측점
+                val dim = busy || (blocked && !notConn) || strictBlock
                 MBtn(
                     Modifier.width(SurveyDims.MEASURE_WIDTH_DP.dp).height(SurveyDims.MEASURE_BUTTON_DP.dp).testTag("measure_button"),
-                    MKind.PRIMARY, 22.dp, alpha = if (busy || blocked) 0.5f else 1f, onLongClick = { if (!busy) c.setupOpen = true }, onClick = { c.onMeasure() },
+                    MKind.PRIMARY, 22.dp, alpha = if (dim) 0.5f else 1f, onLongClick = { if (!busy) c.setupOpen = true },
+                    onClick = {
+                        when {
+                            busy -> {}
+                            notConn -> c.connection?.openScreen() ?: run { c.message = "연결 화면을 열 수 없어요" }
+                            else -> c.onMeasure()
+                        }
+                    },
                 ) {
-                    if (notConn) {
-                        Text("측점 불가", style = Ty.button.copy(fontSize = 18.sp, lineHeight = 22.sp), color = t.onPrimary)
-                        Text("수신기 연결 안 됨", style = Ty.small.copy(fontSize = 11.sp, lineHeight = 13.sp), color = t.onPrimary, maxLines = 1, modifier = Modifier.testTag("measure_disabled_reason"))
-                    } else {
-                        GlyphIcon(Glyph.POLE, t.onPrimary, 24.dp)
-                        Text("측량하기", style = Ty.button.copy(fontSize = 18.sp, lineHeight = 22.sp), color = t.onPrimary, maxLines = 1)
-                        Text(c.nextName, style = Ty.coord.copy(fontSize = 11.sp, lineHeight = 13.sp), color = t.onPrimary, maxLines = 1)
+                    when {
+                        notConn -> {
+                            Text("수신기 연결", style = Ty.button.copy(fontSize = 18.sp, lineHeight = 22.sp), color = t.onPrimary)
+                            Text("연결 화면 열기", style = Ty.small.copy(fontSize = 11.sp, lineHeight = 13.sp), color = t.onPrimary, maxLines = 1, modifier = Modifier.testTag("measure_disabled_reason"))
+                        }
+                        strictBlock -> {
+                            Text("측점 불가", style = Ty.button.copy(fontSize = 18.sp, lineHeight = 22.sp), color = t.onPrimary)
+                            Text("엄격 · FIX 필요", style = Ty.small.copy(fontSize = 11.sp, lineHeight = 13.sp), color = t.onPrimary, maxLines = 1, modifier = Modifier.testTag("measure_disabled_reason"))
+                        }
+                        blocked -> {
+                            Text("측점 불가", style = Ty.button.copy(fontSize = 18.sp, lineHeight = 22.sp), color = t.onPrimary)
+                            Text(reason.textKo, style = Ty.small.copy(fontSize = 11.sp, lineHeight = 13.sp), color = t.onPrimary, maxLines = 1, modifier = Modifier.testTag("measure_disabled_reason"))
+                        }
+                        caution -> {
+                            GlyphIcon(Glyph.POLE, t.onPrimary, 24.dp)
+                            Text("주의 측점", style = Ty.button.copy(fontSize = 18.sp, lineHeight = 22.sp), color = t.onPrimary, maxLines = 1)
+                            Text(c.nextName + " · 확인 후", style = Ty.coord.copy(fontSize = 11.sp, lineHeight = 13.sp), color = t.onPrimary, maxLines = 1, modifier = Modifier.testTag("measure_caution_hint"))
+                        }
+                        else -> {
+                            GlyphIcon(Glyph.POLE, t.onPrimary, 24.dp)
+                            Text("측량하기", style = Ty.button.copy(fontSize = 18.sp, lineHeight = 22.sp), color = t.onPrimary, maxLines = 1)
+                            Text(c.nextName, style = Ty.coord.copy(fontSize = 11.sp, lineHeight = 13.sp), color = t.onPrimary, maxLines = 1)
+                        }
                     }
                 }
             }

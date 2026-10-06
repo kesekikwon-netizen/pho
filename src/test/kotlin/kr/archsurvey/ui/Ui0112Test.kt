@@ -114,13 +114,14 @@ class Ui0112Test {
         rule.runOnUiThread { c.homeOpen = false; c.mapBase = MapBase.CADASTRAL }; rule.waitForIdle()
         shot("05_map_no_key")
         rule.runOnUiThread { c.vworld.load(); c.hub.open(ToolScreen.VWORLD) }; rule.waitForIdle()
-        rule.onNodeWithTag("vworld_key_state").assertTextContains("아직 키가 없어요", substring = true)
+        rule.onNodeWithTag("vworld_key_state").assertTextContains("아직 키가 없어요", substring = true) // MemoryMapKeyPlatform: 시드 없음
         rule.onNodeWithTag("vworld_key").performTextInput("TESTKEY0-1234-5678-ABCD")
         rule.onNodeWithTag("vworld_domain").performTextInput("http://localhost")
         shot("06_vworld_settings")
         rule.onNodeWithTag("vworld_save").performClick(); rule.waitForIdle()
         assertEquals("TESTKEY0-1234-5678-ABCD", keys.key); assertEquals("http://localhost", keys.domain)
-        rule.onNodeWithTag("vworld_key_state").assertTextContains("저장된 키가 있어요", substring = true)
+        rule.onNodeWithTag("vworld_key_state").assertTextContains("저장 인증키 사용 중", substring = true)
+        rule.onNodeWithTag("vworld_key_state").assertTextContains("…ABCD", substring = true)
         // 화면 어디에도 키 값이 그대로 보이지 않는다
         assertTrue(rule.onAllNodesWithText("TESTKEY0-1234-5678-ABCD", substring = true).fetchSemanticsNodes().isEmpty())
         assertEquals(2, c.mapTiles().size)

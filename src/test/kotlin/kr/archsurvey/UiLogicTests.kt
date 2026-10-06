@@ -28,10 +28,10 @@ class LayoutMathTest {
             val f = SurveyLayout.mapFraction(800, p)
             assertTrue("$p $f", f >= SurveyDims.MIN_MAP_FRACTION)
         }
-        // 0.1.11: 머리글(97) + 판정 줄(36)이 지도 위에 붙는다
-        assertEquals(133, SurveyLayout.topHeightDp(Phase.IDLE))
-        assertEquals(573, SurveyLayout.mapHeightDp(800, Phase.IDLE))
-        assertEquals("결과 띠는 측점 영역 위에 얹힌다(133+56+94)", 517, SurveyLayout.mapHeightDp(800, Phase.RESULT))
+        // 0.1.24 UX-0124-2: 머리글(97) + 판정 줄 FULL(64)=STATUS_BAND
+        assertEquals(161, SurveyLayout.topHeightDp(Phase.IDLE))
+        assertEquals(545, SurveyLayout.mapHeightDp(800, Phase.IDLE))
+        assertEquals("결과 띠는 측점 영역 위에 얹힌다(161+56+94)", 489, SurveyLayout.mapHeightDp(800, Phase.RESULT))
     }
     @Test fun expandedSheetIsUnderHalfScreenAndMapStillVisible() {
         // 펼치면 머리글·판정 줄을 한 줄씩(57+30)으로 줄여 지도 40% 이상을 지킨다
@@ -40,11 +40,15 @@ class LayoutMathTest {
         assertTrue(SurveyLayout.mapFraction(800, Phase.RESULT_EXPANDED) >= 0.4)
         assertTrue("펼침 중엔 60% 미만(의도된 예외)", SurveyLayout.mapFraction(800, Phase.RESULT_EXPANDED) < 0.6)
     }
-    @Test fun minimumScreenHeightFor60PercentIs708dpForResultStrip() {
-        // 0.1.11: 머리글 133 + 결과 띠 56 + 측점 영역 94 = 283dp → 708dp 높이부터 지도 60% 이상(대기 화면은 588dp부터)
-        assertTrue(SurveyLayout.mapFraction(708, Phase.RESULT) >= 0.6)
-        assertTrue(SurveyLayout.mapFraction(700, Phase.RESULT) < 0.6)
-        assertTrue(SurveyLayout.mapFraction(588, Phase.IDLE) >= 0.6)
+    @Test fun minimumScreenHeightFor60PercentIs778dpForResultStrip() {
+        // UX-0124-2: 머리글 161 + 결과 띠 56 + 측점 영역 94 = 311dp → 778dp부터 지도 60%(대기 638dp)
+        assertTrue(SurveyLayout.mapFraction(778, Phase.RESULT) >= 0.6)
+        assertTrue(SurveyLayout.mapFraction(777, Phase.RESULT) < 0.6)
+        assertTrue(SurveyLayout.mapFraction(638, Phase.IDLE) >= 0.6)
+    }
+
+    @Test fun statusLineFullMatchesStatusBand() {
+        assertEquals("StatusBand 두 줄 높이 = STATUS_BAND", SurveyDims.STATUS_BAND_DP, StatusLineDims.FULL_DP)
     }
 }
 
@@ -148,7 +152,10 @@ class SurveyControllerTest {
         val f = FakeGnssSource(FakeScenarios.fieldWalk()); val c = ctrl(f)
         repeat(2) { f.emitNext() }; f.skipToNextSegment(); f.emitNext()
         assertEquals(SurveyStatus.CAUTION, c.gv.status.status)
-        c.onMeasure(); repeat(6) { f.emitNext() }
+        c.onMeasure()
+        assertNotNull(c.ui.confirm) // 0.1.26: 주의는 확인 후 저장
+        c.ui.answer(true)
+        repeat(6) { f.emitNext() }
         assertTrue(c.points.single().cautionFlag); assertEquals(SurveyStatus.CAUTION, c.points.single().status)
     }
     @Test fun acquisitionAbortsWhenSignalBecomesUnavailable() {
@@ -179,5 +186,23 @@ class SurveyControllerTest {
         c.panBy(5.0, -3.0, c0); assertFalse(c.follow)
         assertEquals(c0.x + 5.0, c.mapState().center.x, 1e-9)
         c.recenter(); assertTrue(c.follow)
+    }
+
+    /** 0.1.21: 핀치 줌 scaleBy — 배율·클램프·초점 보정(지도 제스처 로직) */
+    @Test fun scaleByZoomsAndKeepsFocus() {
+        val f = FakeGnssSource(FakeScenarios.allFixed()); val c = ctrl(f)
+        repeat(3) { f.emitNext() }
+        val before = c.dpPerM
+        val c0 = c.mapState().center
+        c.scaleBy(2.0, focusXM = 10.0, focusYM = -4.0)
+        assertFalse(c.follow)
+        assertEquals(before * 2.0, c.dpPerM, 1e-9)
+        // focus stays: center moves by focus * (1 - 1/factor)
+        assertEquals(c0.x + 10.0 * 0.5, c.mapState().center.x, 1e-9)
+        assertEquals(c0.y + (-4.0) * 0.5, c.mapState().center.y, 1e-9)
+        c.scaleBy(1000.0) // clamp at DP_PER_M_MAX
+        assertEquals(kr.archsurvey.ui.SurveyController.DP_PER_M_MAX, c.dpPerM, 1e-9)
+        c.scaleBy(1e-9) // clamp at DP_PER_M_MIN
+        assertEquals(kr.archsurvey.ui.SurveyController.DP_PER_M_MIN, c.dpPerM, 1e-9)
     }
 }

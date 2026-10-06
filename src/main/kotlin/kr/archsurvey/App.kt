@@ -16,5 +16,7 @@ class App : Application() {
         super.onCreate()
         val ver = runCatching { packageManager.getPackageInfo(packageName, 0).versionName ?: "" }.getOrDefault("")
         kr.archsurvey.diag.CrashLog.install(filesDir, ver)
+        // V월드: Pref 비어 있으면 내장 키를 secure 에 심어 업데이트·UI 에서 "키 없음"처럼 보이지 않게
+        runCatching { settings.ensureBuiltinMapKey() }
     }
 }

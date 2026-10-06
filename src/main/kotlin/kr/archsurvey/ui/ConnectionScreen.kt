@@ -57,19 +57,22 @@ private fun ConnectionProgress(c: SurveyController, cc: ConnectionController, li
     }
     val sec = rememberElapsedSec(cc.progressStartMs)
     val card = ErrorCards.from(link, ntrip, cc.form.enabled).firstOrNull()
-    val done = states.last() == StepState.DONE
+    val done = cc.progressDone(c.gv.quality.code)
+    // 0.1.17: 시스템 뒤로 = 「닫기(계속 연결)」/「확인」과 같음 (뒤 화면이 대신 뒤로 가지 않게)
+    // 0.1.18: 단추·BackHandler·backTarget 모두 cc.dismissProgress 하나로(완료 판정 기준도 하나)
+    androidx.activity.compose.BackHandler { cc.dismissProgress(done) }
     ProgressWindow(
         when {
             done -> "연결 완료 · 고정됨"
             states[0] == StepState.DONE && states[1] == StepState.FAIL -> "연결됨 · 위치 없음"
             else -> "연결 중"
         }, steps, sec, "conn_progress",
-        note = card?.let { "${it.title} (${it.code}) — ${it.action}" } ?: if (done) "측량할 준비가 됐어요." else "닫아도 연결은 계속돼요. 아래 대기열·상태 띠에서 진행을 볼 수 있어요.",
+        note = card?.let { "${it.title} (${it.code}) — ${it.action}" } ?: if (done) "측량할 준비가 됐어요." else "닫아도 연결은 계속돼요. 아래 대기열에서 진행을 볼 수 있어요.",
         // 0.1.14 진행 게이지: 끝난 단계 / 전체(건너뛴 단계는 끝난 것으로)
         progress = states.count { it == StepState.DONE || it == StepState.SKIP }.toFloat() / states.size.coerceAtLeast(1),
     ) {
-        if (!done) MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_progress_cancel"), MKind.PLAIN, 16.dp, onClick = { cc.disconnect() }) { Text("연결 취소", style = Ty.label, color = T.ink) }
-        MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_progress_close"), MKind.PRIMARY, 16.dp, onClick = { cc.showProgress = false; if (done) cc.close() }) {
+        if (!done) MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_progress_cancel"), MKind.PLAIN, 16.dp, onClick = { cc.cancelConnect() }) { Text("연결 취소", style = Ty.label, color = T.ink) }
+        MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_progress_close"), MKind.PRIMARY, 16.dp, onClick = { cc.dismissProgress(done) }) {
             Text(if (done) "확인" else "닫기(계속 연결)", style = Ty.label, color = T.onPrimary)
         }
     }
@@ -124,6 +127,23 @@ private fun MountPicker(cc: ConnectionController) {
                 MountLoad.IDLE -> {}
             }
             if (cc.mounts.isNotEmpty()) Field("검색", cc.mountQuery, "mount_search") { cc.mountQuery = it }
+            // 0.1.18 호환 필터: 이 수신기 최대 RTCM 버전을 넘는 마운트 숨기기(SP60 = 3.2, R10 = 3.4)
+            if (cc.mounts.isNotEmpty()) Row(
+                Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(cc.mountCompatOnly, role = androidx.compose.ui.semantics.Role.Switch) { cc.mountCompatOnly = it }.testTag("mount_compat_row"),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("${cc.profile.displayName.substringAfterLast(' ')}에 맞는 것만 (최대 RTCM 3.${RtcmMountCompat.maxMinor(cc.profile)})", style = Ty.label, color = t.ink)
+                    val hid = cc.hiddenIncompatibleCount()
+                    Text(if (hid > 0) "비호환 ${hid}개 숨김 · 끄면 모두 보여요" else "숨긴 마운트 없음", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("mount_compat_note"))
+                }
+                Switch(cc.mountCompatOnly, null, modifier = Modifier.testTag("mount_compat"), colors = blackSwitch())
+            }
+            // 0.1.19: 고른 마운트가 호환 필터로 목록에서 빠졌으면 안내
+            if (cc.selectedMountHiddenByFilter()) Text(
+                "지금 선택(${cc.form.mount})은 이 수신기에 맞지 않아 목록에서 숨겼어요 · 필터를 끄거나 권장 마운트로 바꾸세요",
+                style = Ty.small, color = t.bad, modifier = Modifier.testTag("mount_selected_hidden"),
+            )
             val list = cc.filteredMounts()
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (m in list) {
@@ -135,6 +155,7 @@ private fun MountPicker(cc: ConnectionController) {
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(m.mountPoint, style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.weight(1f))
+                            cc.mountGoodNote(m)?.let { Text(it, style = Ty.label.copy(fontSize = 12.sp), color = t.ink, modifier = Modifier.padding(end = 6.dp).testTag("mount_good_${m.mountPoint}")) }
                             if (on) Text("선택됨", style = Ty.label.copy(fontSize = 12.sp), color = t.accentText)
                         }
                         Text(mountLine(m, cc.mountFromKnown), style = Ty.small, color = t.inkSub, maxLines = 2)
@@ -185,7 +206,7 @@ fun ConnectionScreen(cc: ConnectionController) {
     val p = cc.profile
     val vrsOnly = cc.section == ConnSection.VRS
     Column(Modifier.fillMaxSize().background(t.bg).testTag("connection_screen")) {
-        AppHeader(LocalSurvey.current, if (vrsOnly) "VRS 설정" else "장비 연결", onBack = { cc.close() }, backTag = "conn_back")
+        AppHeader(LocalSurvey.current, if (vrsOnly) "VRS 설정" else "장비 연결", onBack = { cc.leaveScreen() }, backTag = "conn_back")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             // 맨 위: 지금 상태 한 줄(색 점·글자) — 오류 카드는 아래에 둔다
             val live = link.state == LinkState.STREAMING
@@ -202,6 +223,10 @@ fun ConnectionScreen(cc: ConnectionController) {
                 }
                 if (live) GlyphIcon(Glyph.CHECK, t.ok, 22.dp)
             }
+            // 0.1.18 HTML: 연결 단계(블루투스 → … → 고정) 대기/진행 중/완료/실패를 화면 안에서도 보여 줌
+            if (!vrsOnly) ConnStepsInline(cc, link, ntrip)
+            // 0.1.18 HTML 실패 카드: 원인과 해결 방법(블루투스 단계 실패일 때). BT-130(위치 없음)은 아래 기존 카드
+            ConnectFailCopy.headline(p, link)?.takeIf { cc.connectRequested }?.let { ErrorCardView(it, "conn_fail_card") }
             cc.notice?.let { ErrorCardView(it, "conn_notice") }
             for (card in cards) ErrorCardView(card, "conn_card_${card.code}")
 
@@ -225,18 +250,59 @@ fun ConnectionScreen(cc: ConnectionController) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.35f)))
         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val running = cc.connectRequested && link.state != LinkState.IDLE
-            if (running) MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_disconnect"), MKind.PLAIN, 28.dp, onClick = { cc.disconnect() }) {
-                Text(if (vrsOnly) "접속 끊기" else "연결 종료", style = Ty.label.copy(fontSize = 16.sp), color = t.ink)
-            } else MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_cancel"), MKind.PLAIN, 28.dp, onClick = { cc.close() }) {
-                Text("취소", style = Ty.label.copy(fontSize = 16.sp), color = t.ink)
-            }
-            if (vrsOnly) MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_save"), MKind.PRIMARY, 28.dp, onClick = { cc.saveOnly(); if (running) cc.connect() }) {
-                Text(if (running) "저장 후 재접속" else "저장", style = Ty.label.copy(fontSize = 16.sp), color = t.onPrimary)
-            } else MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_connect"), MKind.PRIMARY, 28.dp, onClick = { cc.connect() }) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    GlyphIcon(Glyph.BT, t.onPrimary, 18.dp)
-                    Text(if (running) "다시 연결" else "연결", style = Ty.label.copy(fontSize = 16.sp), color = t.onPrimary)
+            if (vrsOnly) {
+                if (running) MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_disconnect"), MKind.PLAIN, 28.dp, onClick = { cc.disconnect() }) {
+                    Text("접속 끊기", style = Ty.label.copy(fontSize = 16.sp), color = t.bad)
+                } else MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_cancel"), MKind.PLAIN, 28.dp, onClick = { cc.close() }) {
+                    Text("취소", style = Ty.label.copy(fontSize = 16.sp), color = t.ink)
                 }
+                MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_save"), MKind.PRIMARY, 28.dp, onClick = { cc.saveOnly(); if (running) cc.connect() }) {
+                    Text(if (running) "저장 후 재접속" else "저장", style = Ty.label.copy(fontSize = 16.sp), color = t.onPrimary)
+                }
+            } else when (ConnPhases.of(cc.connectRequested, link)) {
+                // 0.1.18 HTML 63~66: 연결 중 = 「연결 취소」만 / 연결됨 = 「연결 해제」(심홍 글자) + 「지도로 가기」 / 그 밖 = 「연결」·「다시 시도」
+                ConnPhase.CONNECTING -> MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_cancel_connect"), MKind.PLAIN, 28.dp, onClick = { cc.cancelConnect() }) {
+                    Text("연결 취소", style = Ty.label.copy(fontSize = 16.sp), color = t.ink)
+                }
+                ConnPhase.CONNECTED -> {
+                    MBtn(Modifier.weight(0.39f).height(56.dp).testTag("conn_disconnect"), MKind.PLAIN, 28.dp, onClick = { cc.disconnect() }) {
+                        Text("연결 해제", style = Ty.label.copy(fontSize = 16.sp), color = t.bad)
+                    }
+                    MBtn(Modifier.weight(0.61f).height(56.dp).testTag("conn_go_map"), MKind.PRIMARY, 28.dp, onClick = { cc.close() }) {
+                        Text("지도로 가기", style = Ty.label.copy(fontSize = 16.sp), color = t.onPrimary)
+                    }
+                }
+                ConnPhase.IDLE, ConnPhase.FAILED -> MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_connect"), MKind.PRIMARY, 28.dp, onClick = { cc.connect() }) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        GlyphIcon(Glyph.BT, t.onPrimary, 18.dp)
+                        Text(cc.connectLabel(), style = Ty.label.copy(fontSize = 16.sp), color = t.onPrimary, modifier = Modifier.testTag("conn_connect_label"))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 0.1.18 HTML 연결 단계 목록(번호 원 + 이름 + 대기/진행 중/완료/실패). 진행 창과 같은 계산(ConnectSteps) */
+@Composable
+private fun ConnStepsInline(cc: ConnectionController, link: kr.archsurvey.device.LinkStatus, ntrip: kr.archsurvey.engine.NtripStatus) {
+    val t = T
+    val q = LocalSurvey.current?.gv?.quality?.code ?: 0
+    val states = ConnectSteps.compute(link, ntrip, cc.form.enabled, q)
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(t.raised).border(1.dp, t.line.copy(alpha = 0.4f), RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 10.dp).testTag("conn_steps"),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        for ((i, label) in ConnectSteps.labels.withIndex()) {
+            val st = states[i]
+            val bg = when (st) { StepState.FAIL -> t.bad; StepState.DONE -> t.ink; StepState.ACTIVE -> t.fixed; else -> t.chip }
+            val fg = when (st) { StepState.FAIL, StepState.DONE, StepState.ACTIVE -> t.onPrimary; else -> t.inkSub }
+            Row(Modifier.fillMaxWidth().heightIn(min = 32.dp).testTag("conn_step_$i"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.size(24.dp).clip(androidx.compose.foundation.shape.CircleShape).background(bg), contentAlignment = Alignment.Center) {
+                    Text(if (st == StepState.DONE) "✓" else "${i + 1}", style = Ty.small.copy(fontSize = 12.sp), color = fg)
+                }
+                Text(label, style = Ty.body, color = t.ink, modifier = Modifier.weight(1f))
+                Text(ConnPhases.stateKo(st), style = Ty.small, color = if (st == StepState.FAIL) t.bad else t.inkSub, modifier = Modifier.testTag("conn_step_state_$i"))
             }
         }
     }
@@ -518,7 +584,7 @@ internal fun Btn(label: String, modifier: Modifier = Modifier, onClick: () -> Un
 
 /** 목업의 입력 줄: 48dp, 왼쪽 작은 이름 + 오른쪽 값 */
 @Composable
-internal fun Field(label: String, value: String, tag: String, kb: KeyboardType = KeyboardType.Text, hide: Boolean = false, onChange: (String) -> Unit) {
+internal fun Field(label: String, value: String, tag: String, kb: KeyboardType = KeyboardType.Text, hide: Boolean = false, placeholder: String = "", onChange: (String) -> Unit) {
     val t = T
     val shape = RoundedCornerShape(16.dp)
     Row(
@@ -531,7 +597,12 @@ internal fun Field(label: String, value: String, tag: String, kb: KeyboardType =
             textStyle = Ty.body.copy(color = t.ink), cursorBrush = androidx.compose.ui.graphics.SolidColor(t.accent),
             keyboardOptions = KeyboardOptions(keyboardType = kb),
             visualTransformation = if (hide) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-            decorationBox = { inner -> Box(Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.CenterStart) { inner() } },
+            decorationBox = { inner ->
+                Box(Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.CenterStart) {
+                    if (value.isEmpty() && placeholder.isNotEmpty()) Text(placeholder, style = Ty.body, color = t.inkSub)
+                    inner()
+                }
+            },
         )
     }
 }

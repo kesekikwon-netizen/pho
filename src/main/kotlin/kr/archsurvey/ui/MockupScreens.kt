@@ -124,7 +124,7 @@ fun BackupQuickDialog(c: SurveyController) {
                     Text("이전 버전 데이터 복구", style = Ty.label, color = t.ink)
                 }
             }
-            Text("백업 파일은 앱 폴더(Documents/Backup)에 쌓여요. 폰을 바꾸거나 지울 때는 백업 화면의 공유/파일로 저장으로 밖에 두세요. 복구 전에는 지금 상태를 ‘복구 직전’ 백업으로 자동 보관해요.", style = Ty.small, color = t.inkSub)
+            Text("백업 파일은 앱 폴더에 쌓여요. Google Drive 자동 백업·측점 업로드는 백업 화면에서 계정을 연결하세요. 복구 전에는 지금 상태를 ‘복구 직전’ 백업으로 자동 보관해요.", style = Ty.small, color = t.inkSub)
             MBtn(Modifier.fillMaxWidth().height(56.dp).testTag("backup_quick_close"), MKind.PLAIN, 28.dp, onClick = close) { Text("닫기", style = Ty.label, color = t.ink) }
         }
     }

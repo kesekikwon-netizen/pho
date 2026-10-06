@@ -79,6 +79,7 @@ class SurveyEngine(private val app: Context, private val settingsStrategy: (Stri
         link.value = LinkStatus()
         gnss.value = GnssSnapshot()
         lastQuality = FixQuality.NONE
+        fixGate.reset()
         while (rtcmQueue.tryReceive().isSuccess) { /* 비움 */ }
     }
 
@@ -126,12 +127,16 @@ class SurveyEngine(private val app: Context, private val settingsStrategy: (Stri
 
     @Volatile private var lastGgaEngineAtMs = 0L
 
-    private fun onQualityMaybeChanged(q: FixQuality) {
+    private val fixGate = FixSoundGate(scope) { events.tryEmit(it) }
+
+    @androidx.annotation.VisibleForTesting
+    internal fun onQualityMaybeChanged(q: FixQuality) {
         if (q == lastQuality) return
         val prev = lastQuality
         lastQuality = q
-        if (q == FixQuality.RTK_FIXED) events.tryEmit(FeedbackEvent.FIX_ACQUIRED)
-        else if (prev == FixQuality.RTK_FIXED) events.tryEmit(FeedbackEvent.FIX_LOST)
+        // SFX-0119-1: 소리·진동은 FixSoundGate 가 유지 시간으로 거름(화면 품질 표시는 gnss 로 즉시)
+        val fixed = q == FixQuality.RTK_FIXED
+        if (fixed != (prev == FixQuality.RTK_FIXED)) fixGate.onFixedChanged(fixed)
     }
 
     // ---------------- NTRIP ----------------

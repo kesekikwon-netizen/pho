@@ -124,8 +124,20 @@ fun AppHeader(
     }
 }
 
-/** 측량 화면 머리글 아래 판정 줄: 측량 가능/주의/불가 + 이유 + 위성·정밀도. 높이 고정(지도 비율 계산용) */
-object StatusLineDims { const val FULL_DP = 36; const val COMPACT_DP = 30 }
+
+/** StatusBand 부제 문구. 엄격+CAUTION은 측점 버튼「엄격 · FIX 필요」와 맞춘다 (UX-0126-1). */
+internal fun statusBandSub(status: SurveyStatus, reason: StatusReason, notConnected: Boolean, requireFixed: Boolean): String? {
+    if (notConnected) return "블루투스로 R10 / SP60 을 연결하세요"
+    return when (status) {
+        SurveyStatus.CAUTION -> if (requireFixed) "엄격 모드 · FIX만 측점 · ${reason.textKo}"
+            else "저장 시 표시 기록 · ${reason.textKo}"
+        SurveyStatus.UNAVAILABLE -> "측점 막힘 · ${reason.textKo}"
+        SurveyStatus.FIXED -> null
+    }
+}
+
+/** 측량 화면 머리글 아래 판정 줄: 측량 가능/주의/불가 + 이유 + 위성·정밀도. FULL=STATUS_BAND(두 줄 주의·불가), COMPACT=결과 펼침 */
+object StatusLineDims { const val FULL_DP = SurveyDims.STATUS_BAND_DP; const val COMPACT_DP = 30 }
 
 @Composable
 internal fun StatusBand(c: SurveyController, compact: Boolean = false, modifier: Modifier = Modifier) {
@@ -137,11 +149,7 @@ internal fun StatusBand(c: SurveyController, compact: Boolean = false, modifier:
         SurveyStatus.CAUTION -> "주의"
         SurveyStatus.UNAVAILABLE -> "불가"
     }
-    val sub = if (notConnected) "블루투스로 R10 / SP60 을 연결하세요" else when (st.status) {
-        SurveyStatus.CAUTION -> "저장 시 표시 기록 · ${st.reason.textKo}"
-        SurveyStatus.UNAVAILABLE -> "측점 막힘 · ${st.reason.textKo}"
-        SurveyStatus.FIXED -> null
-    }
+    val sub = statusBandSub(st.status, st.reason, notConnected, c.settingsState?.requireFixed == true)
     val tick = rememberTick(!notConnected)
     val detail = if (notConnected) null else { tick; bandDetail(c) }
     val sigma = if (notConnected) null else st.sigmaHM
@@ -198,7 +206,11 @@ fun GnssInfoDialog(c: SurveyController) {
                 "타원체고" to (g.ellipsoidalM?.let { f3(it) + " m" } ?: "—"),
                 "X(N)" to (p?.northing?.let { grp3(it) } ?: "—"),
                 "Y(E)" to (p?.easting?.let { grp3(it) } ?: "—"),
-                "해 품질" to (if (g.status.reason == StatusReason.NOT_CONNECTED) "미연결" else g.quality.labelKo),
+                "해 품질" to when {
+                    g.status.reason == StatusReason.NOT_CONNECTED -> "미연결"
+                    g.fromPhone || g.status.reason == StatusReason.PHONE_GPS -> "폰GPS (저정밀)"
+                    else -> g.quality.labelKo
+                },
                 "위성 사용/보임" to ("${g.satellites}" + (g.satsInView?.let { " / $it" } ?: "")),
                 "PDOP / HDOP / VDOP" to listOf(g.pdop, g.hdop, g.vdop).joinToString(" / ") { v -> v?.let { String.format(java.util.Locale.US, "%.1f", it) } ?: "—" },
                 "보정 연령" to (g.correctionAgeSec?.let { String.format(java.util.Locale.US, "%.1f 초", it) } ?: "—") + (g.baseId?.let { " · 기준국 $it" } ?: ""),

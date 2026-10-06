@@ -32,4 +32,7 @@ class AndroidSettingsPlatform(private val s: SettingsStore, private val onKeepSc
     override var keepScreenOn: Boolean
         get() = s.keepScreenOn
         set(v) { s.keepScreenOn = v; onKeepScreenChanged(v) }
+    override var requireFixed: Boolean
+        get() = s.requireFixed
+        set(v) { s.requireFixed = v }
 }

@@ -68,16 +68,31 @@ class Feature0112Test {
     // ---------- V월드 ----------
     @Test fun vworldUrlsAndRedaction() {
         val key = "ABCD1234-TEST-KEY"
-        val u = VWorldUrls.cadastral(key, "http://localhost", 17, 111757, 50743)
-        assertTrue(u.startsWith("https://api.vworld.kr/req/wms?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0"))
-        assertTrue(u.contains("LAYERS=lp_pa_cbnd_bubun,lp_pa_cbnd_bonbun&STYLES=lp_pa_cbnd_bubun,lp_pa_cbnd_bonbun"))
-        assertTrue(u.contains("CRS=EPSG:900913")); assertTrue(u.contains("TRANSPARENT=TRUE")); assertTrue(u.contains("DOMAIN=http%3A%2F%2Flocalhost"))
-        assertTrue(VWorldUrls.cadastral(key, "", 17, 1, 1, lineOnly = true).contains("STYLES=lp_pa_cbnd_bubun_line,lp_pa_cbnd_bonbun_line"))
-        assertFalse(VWorldUrls.cadastral(key, "", 17, 1, 1).contains("DOMAIN="))
+        // 0.1.24 주 경로 = 레거시 2DCache (대문자 레이어, 면 스타일)
+        val u = VWorldUrls.cadastral(key, "http://localhost", 17, 111757, 50743, lineOnly = false)
+        assertTrue(u.startsWith("http://2d.vworld.kr:8895/2DCache/gis/map/WMS2?"))
+        assertTrue(u.contains("LAYERS=LP_PA_CBND_BUBUN,LP_PA_CBND_BONBUN"))
+        assertTrue(u.contains("STYLES=LP_PA_CBND_BUBUN,LP_PA_CBND_BONBUN"))
+        assertTrue(u.contains("SRS=EPSG:900913")); assertTrue(u.contains("TRANSPARENT=TRUE")); assertTrue(u.contains("APIKEY="))
+        assertFalse(u.contains("DOMAIN="))
+        // 선만 → STYLES 비움
+        assertTrue(VWorldUrls.cadastral(key, "", 17, 1, 1, lineOnly = true).contains("STYLES=&"))
+        // 공식 폴백: DOMAIN 빈칸→DEFAULT, 면 스타일
+        val off = VWorldUrls.cadastralOfficial(key, "http://localhost", 17, 1, 1, lineOnly = false)
+        assertTrue(off.startsWith("https://api.vworld.kr/req/wms?"))
+        assertTrue(off.contains("LAYERS=lp_pa_cbnd_bonbun,lp_pa_cbnd_bubun&STYLES=lp_pa_cbnd_bonbun,lp_pa_cbnd_bubun"))
+        assertTrue(off.contains("DOMAIN=http%3A%2F%2Flocalhost"))
+        assertTrue(VWorldUrls.cadastralOfficial(key, "", 17, 1, 1).contains("DOMAIN=DEFAULT"))
+        assertTrue(VWorldUrls.cadastralOfficial(key, "DEFAULT", 17, 1, 1).contains("DOMAIN=DEFAULT"))
+        assertTrue(VWorldUrls.cadastralOfficial(key, "", 17, 1, 1, lineOnly = true).contains("STYLES=lp_pa_cbnd_bonbun_line,lp_pa_cbnd_bubun_line"))
+        val alt = VWorldUrls.cadastralAlternate(u)
+        assertNotNull(alt); assertTrue(alt!!.contains("api.vworld.kr/req/wms")); assertTrue(alt.contains("DOMAIN=DEFAULT"))
+        assertNull(VWorldUrls.cadastralAlternate(off))
         assertEquals("https://api.vworld.kr/req/wmts/1.0.0/$key/Satellite/18/3/5.jpeg", VWorldUrls.satellite(key, 18, 5, 3))
         assertEquals("https://api.vworld.kr/req/wmts/1.0.0/$key/Base/18/3/5.png", VWorldUrls.base(key, 18, 5, 3))
-        assertFalse(VWorldUrls.redact(u, key).contains(key)); assertTrue(VWorldUrls.redact(u, "").contains("KEY=****"))
+        assertFalse(VWorldUrls.redact(u, key).contains(key)); assertTrue(VWorldUrls.redact(u, "").contains("APIKEY=****"))
         assertFalse(VWorldAccess(key, "d").toString().contains(key))
+        assertFalse(VWorldAccess(key, "d").lineOnly) // 0.1.24 기본 = 면
     }
     @Test fun layersNeedKeyAndFollowBase() {
         assertTrue(MapLayers.resolve(MapBase.CADASTRAL, VWorldAccess("", "")).isEmpty())
@@ -157,7 +172,7 @@ class Feature0112Test {
         assertEquals(5187, cfgs.load("동부-1")!!.epsg)
         // 직전 작업으로 돌아가면 그 작업 설정이 복원
         jc.open("작업1")
-        assertEquals(5186, c.zone.epsg); assertEquals(MapBase.NONE, c.mapBase); assertEquals(GeoidModel.RECEIVER, c.geoid); assertEquals(1.9, c.antenna.inputValueM, 1e-9)
+        assertEquals(5186, c.zone.epsg); assertEquals(MapBase.SATELLITE_CADASTRAL, c.mapBase); assertEquals(GeoidModel.RECEIVER, c.geoid); assertEquals(1.9, c.antenna.inputValueM, 1e-9)
         jc.open("동부-1"); assertEquals(5187, c.zone.epsg); assertEquals(GeoidModel.EGM96, c.geoid)
         // 앱 재시작 흉내: 새 컨트롤러가 저장된 설정을 적용
         val c2 = SurveyController(FakeGnssSource(FakeScenarios.allFixed()), db, scope())

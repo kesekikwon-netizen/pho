@@ -16,6 +16,8 @@ data class GnssSnapshot(
     val inViewByTalker: Map<String, Int> = emptyMap(),
     /** 0.1.11 GSV 위성 상세(최근 10초 안에 본 것). GSV 를 받지 못하면 빈 목록 */
     val satsDetail: List<SatInfo> = emptyList(),
+    /** 폰 내장 GPS(수신기 NMEA 아님). StatusJudge 가 RTK 가 아닌 「폰GPS」주의로 판정 */
+    val fromPhone: Boolean = false,
 ) {
     /** 보이는 위성 수 합계. GSV 를 받지 못했으면 null */
     val satsInView: Int? get() = if (inViewByTalker.isEmpty()) null else inViewByTalker.values.sum()

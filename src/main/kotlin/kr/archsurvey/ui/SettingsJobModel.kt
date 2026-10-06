@@ -14,6 +14,8 @@ interface SettingsPlatform {
     var sound: Boolean
     var vibration: Boolean
     var keepScreenOn: Boolean
+    /** 0.1.26 엄격 모드: FIX만 저장. 기본 false */
+    var requireFixed: Boolean get() = false; set(_) {}
     /** 한 점 측정 횟수(0.1.9). 기본 3 */
     var epochs: Int get() = 3; set(_) {}
     /** 오류 기록(앱 내부 파일) 읽기·공유·지우기 */
@@ -27,6 +29,8 @@ class SettingsState(private val c: SurveyController, private val p: SettingsPlat
     var sound by mutableStateOf(p.sound); private set
     var vibration by mutableStateOf(p.vibration); private set
     var keepScreenOn by mutableStateOf(p.keepScreenOn); private set
+    /** 0.1.26 엄격 품질 게이트(FIX만 저장). 기본 끔 */
+    var requireFixed by mutableStateOf(p.requireFixed); private set
 
     var crashText by mutableStateOf(""); private set
     var showCrash by mutableStateOf(false)
@@ -59,6 +63,10 @@ class SettingsState(private val c: SurveyController, private val p: SettingsPlat
     fun changeSound(v: Boolean) { sound = v; p.sound = v; c.ui.ok("소리: " + if (v) "켬" else "끔") }
     fun changeVibration(v: Boolean) { vibration = v; p.vibration = v; c.ui.ok("진동(버튼 햅틱 포함): " + if (v) "켬" else "끔") }
     fun changeKeepScreenOn(v: Boolean) { keepScreenOn = v; p.keepScreenOn = v; c.ui.ok("화면 켜두기: " + if (v) "켬" else "끔") }
+    fun changeRequireFixed(v: Boolean) {
+        requireFixed = v; p.requireFixed = v
+        c.ui.ok(if (v) "엄격 모드 켬 · FIX(고정)만 저장" else "엄격 모드 끔 · 주의는 경고 후 저장 가능")
+    }
 }
 
 data class JobInfo(val name: String, val points: Int, val photos: Int, val voices: Int, val firstAtMs: Long?, val lastAtMs: Long?, val fakePoints: Int = 0)

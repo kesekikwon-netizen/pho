@@ -176,6 +176,10 @@ class StatusJudgeTest {
         assertEquals(SavePolicy.ALLOW, StatusJudge.savePolicy(SurveyStatus.FIXED))
         assertEquals(SavePolicy.ALLOW_WITH_WARNING, StatusJudge.savePolicy(SurveyStatus.CAUTION))
         assertEquals(SavePolicy.BLOCK, StatusJudge.savePolicy(SurveyStatus.UNAVAILABLE))
+        // 0.1.26 엄격 모드: 주의도 차단
+        assertEquals(SavePolicy.ALLOW, StatusJudge.savePolicy(SurveyStatus.FIXED, strictMode = true))
+        assertEquals(SavePolicy.BLOCK, StatusJudge.savePolicy(SurveyStatus.CAUTION, strictMode = true))
+        assertEquals(SavePolicy.BLOCK, StatusJudge.savePolicy(SurveyStatus.UNAVAILABLE, strictMode = true))
     }
     @Test fun labels() {
         assertEquals(listOf("고정", "주의", "불가"), SurveyStatus.entries.map { it.labelKo })

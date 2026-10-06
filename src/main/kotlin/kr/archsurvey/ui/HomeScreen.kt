@@ -176,7 +176,7 @@ fun SettingsMenuScreen(c: SurveyController) {
                 Triple(Glyph.LIST to "위치 종류", "발굴 위치 종류 추가 · 순서", "set_row_types" to { c.hub.open(ToolScreen.TYPES) }),
                 Triple(Glyph.LAYERS to "V월드 지적도 · 배경맵", "API 인증키 · 도메인 · 지적선 · 연결 시험", "set_row_vworld" to { c.vworld.load(); c.hub.open(ToolScreen.VWORLD) }),
                 Triple(Glyph.LAYERS to "배경 레이어", "도면 · 정사영상 올리기", "set_row_bg" to { c.bg?.openManage() ?: run { c.message = "배경 레이어는 이 빌드에 없어요" } }),
-                Triple(Glyph.FOLDER to "백업 · 복구", "작업 데이터 ZIP 백업", "set_row_backup" to { c.backup?.openScreen() ?: run { c.message = "백업은 이 빌드에 없어요" } }),
+                Triple(Glyph.FOLDER to "백업 · 복구", "ZIP · Google Drive 자동 백업·측점 업로드", "set_row_backup" to { c.backup?.openScreen() ?: run { c.message = "백업은 이 빌드에 없어요" } }),
             )
             for ((head, sub, act) in more) SettingsRow(head.first, head.second, sub, act.first, act.second)
             c.message?.let { Text(it, style = Ty.body, color = t.ink, modifier = Modifier.padding(top = 12.dp).testTag("settings_menu_message")) }

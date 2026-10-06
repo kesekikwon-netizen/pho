@@ -259,7 +259,7 @@ class Ui0111Test {
         rule.runOnUiThread { c.hub.closeAll(); s.link.value = LinkStatus(state = LinkState.IDLE); s.gnss.value = GnssSnapshot() }
         rule.waitForIdle()
         rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("미연결")
-        rule.onNodeWithText("측점 불가").assertExists()
+        rule.onNodeWithText("수신기 연결").assertExists()
         shot("09_not_connected")
     }
 }

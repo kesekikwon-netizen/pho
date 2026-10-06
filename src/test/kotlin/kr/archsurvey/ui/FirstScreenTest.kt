@@ -53,7 +53,7 @@ class FirstScreenTest {
         rule.waitForIdle()
         rule.onNodeWithText("불가 · 수신기 연결 안 됨").assertExists()
         rule.onNodeWithTag("not_connected_card").assertExists()
-        rule.onNodeWithText("측점 불가").assertExists()
+        rule.onNodeWithText("수신기 연결").assertExists()
         rule.onNodeWithTag("measure_disabled_reason", useUnmergedTree = true).assertExists()
         shot("r1_not_connected")
         rule.onNodeWithTag("measure_button").performClick()

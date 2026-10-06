@@ -3,6 +3,7 @@ package kr.archsurvey.engine
 import kr.archsurvey.data.SettingsStore
 import kr.archsurvey.map.TileMath
 import kr.archsurvey.map.VWorldAccess
+import kr.archsurvey.map.VWorldTileResponse
 import kr.archsurvey.map.VWorldUrls
 import kr.archsurvey.ui.JobConfig
 import kr.archsurvey.ui.JobConfigPlatform
@@ -25,7 +26,7 @@ class AndroidJobConfigPlatform(private val s: SettingsStore) : JobConfigPlatform
 
 /**
  * V월드 키 저장(암호화 SharedPreferences, API 21~22 는 일반 SharedPreferences) + 연결 시험.
- * 키 값은 로그·오류 기록·화면 문구에 넣지 않는다(문구는 [VWorldUrls.redact] 로 가림).
+ * 저장이 비면 SettingsStore 가 제품 기본 키로 폴백. 원문은 로그·화면에 넣지 않는다([VWorldUrls.redact]).
  */
 class AndroidMapPlatform(private val s: SettingsStore) : MapKeyPlatform {
     override var key: String
@@ -40,17 +41,26 @@ class AndroidMapPlatform(private val s: SettingsStore) : MapKeyPlatform {
 
     override fun access() = VWorldAccess(s.mapKey, s.mapDomain, s.mapLineOnly)
 
-    /** 서울 시청 부근 타일 하나씩(배경 WMTS z=16, 지적 WMS z=17)을 받아 본다. 이미지면 성공 */
+    override fun ensureBuiltinKey() { s.ensureBuiltinMapKey() }
+
+    /** 서울 시청 부근 타일 하나씩(배경 WMTS z=16, 지적 레거시 WMS2 z=17 → 실패 시 공식 WMS) */
     override fun test(a: VWorldAccess): String {
         if (a.key.isBlank()) return "키를 먼저 넣으세요"
         fun tx(z: Int) = TileMath.tileIndex(TileMath.lonToX(126.9780, z))
         fun ty(z: Int) = TileMath.tileIndex(TileMath.latToY(37.5665, z))
-        val base = probe(VWorldUrls.base(a.key, 16, tx(16), ty(16)), a.key)
-        val cad = probe(VWorldUrls.cadastral(a.key, a.domain, 17, tx(17), ty(17), a.lineOnly), a.key)
+        val base = probe(VWorldUrls.base(a.key, 16, tx(16), ty(16)), a.key, cadastral = false)
+        val leg = VWorldUrls.cadastralLegacy2dCache(a.key, 17, tx(17), ty(17))
+        val cadPrimary = probe(leg, a.key, cadastral = true)
+        val cad = if (cadPrimary.startsWith("성공")) cadPrimary else {
+            val off = VWorldUrls.cadastralOfficial(a.key, a.domain, 17, tx(17), ty(17), a.lineOnly)
+            val cadAlt = probe(off, a.key, cadastral = true)
+            if (cadAlt.startsWith("성공")) "폴백 성공(공식) $cadAlt"
+            else "레거시: $cadPrimary / 공식: $cadAlt"
+        }
         return "배경지도(WMTS): $base\n지적도(WMS): $cad"
     }
 
-    private fun probe(url: String, key: String): String = try {
+    private fun probe(url: String, key: String, cadastral: Boolean): String = try {
         val c = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 8000; readTimeout = 8000; setRequestProperty("User-Agent", "kr.archsurvey.field")
         }
@@ -59,11 +69,16 @@ class AndroidMapPlatform(private val s: SettingsStore) : MapKeyPlatform {
             val type = c.contentType ?: ""
             val body = (if (code in 200..299) c.inputStream else c.errorStream)?.use { it.readBytes() } ?: ByteArray(0)
             when {
-                code in 200..299 && type.startsWith("image") -> "성공 (그림 ${body.size} B)"
+                code in 200..299 && VWorldTileResponse.acceptAsImage(type, body) -> "성공 (그림 ${body.size} B)"
                 else -> {
-                    val txt = String(body, Charsets.UTF_8).take(300)
-                    val msg = Regex("<(?:ServiceException|ows:ExceptionText|text|message)[^>]*>([^<]+)<").find(txt)?.groupValues?.get(1)?.trim()
-                    "실패 HTTP $code ${VWorldUrls.redact(msg ?: type, key)}"
+                    val txt = String(body, Charsets.UTF_8).take(800)
+                    val ex = VWorldTileResponse.parseServiceException(txt)
+                    val codePart = ex.code?.let { "[$it] " }.orEmpty()
+                    val detail = VWorldUrls.redact(ex.text ?: type, key)
+                    if (cadastral)
+                        "실패 HTTP $code $codePart$detail — 요청 주소·레이어(2DCache LP_PA_CBND_*)·도메인을 확인하세요"
+                    else
+                        "실패 HTTP $code $codePart$detail"
                 }
             }
         } finally { c.disconnect() }

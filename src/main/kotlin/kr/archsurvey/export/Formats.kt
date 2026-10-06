@@ -30,7 +30,7 @@ object Formats {
         "height_apc_ellipsoidal", "height_ground_ellipsoidal", "height_apc_msl", "height_ground_msl",
         "antenna_height_m", "antenna_model", "antenna_ref_point", "antenna_input_mode", "antenna_input_m", "pco_v_m", "pco_h_m", "extra_parts_m", "base_ext_m", "antenna_receiver_applied",
         "lat", "lon", "fix", "all_epochs_fixed", "sats", "hdop", "sigma_e", "sigma_n", "sigma_h", "sigma_u",
-        "corr_age_s", "base_id", "epochs", "time_utc", "time_local", "photo_count", "photo_files", "device", "project", "height_model",
+        "corr_age_s", "max_corr_age_s", "base_id", "epochs", "time_utc", "time_local", "photo_count", "photo_files", "device", "project", "height_model",
     )
 
     fun fixLabel(q: Int) = when (q) { 4 -> "RTK_FIXED"; 5 -> "RTK_FLOAT"; 2 -> "DGPS"; 1 -> "SINGLE"; 0 -> "NONE"; else -> "OTHER_$q" }
@@ -48,7 +48,7 @@ object Formats {
                 f(p.antennaHeight, 3), csvEscape(p.antennaModel), csvEscape(p.antennaRefPoint), p.antennaInputMode, f(p.antennaInputValue, 3), f(p.antennaPcoV, 4), f(p.antennaPcoH, 4), f(p.antennaExtraPartsM, 3), f(p.antennaBaseExtM, 3), p.antennaReceiverApplied.toString(),
                 f(p.lat, 9), f(p.lon, 9), fixLabel(p.fixQuality), p.allEpochsFixed.toString(), p.satellites.toString(), f(p.hdop, 1),
                 f(p.sigmaE, 4), f(p.sigmaN, 4), f(p.sigmaH, 4), f(p.sigmaU, 4),
-                f(p.correctionAgeSec, 1), csvEscape(p.baseStationId ?: ""), p.epochs.toString(),
+                f(p.correctionAgeSec, 1), f(p.maxCorrectionAgeSec, 1), csvEscape(p.baseStationId ?: ""), p.epochs.toString(),
                 utc(p.measuredAtUtcMs), local(p.measuredAtUtcMs, tz), photos.size.toString(),
                 csvEscape(photos.joinToString(";")), csvEscape(p.device), csvEscape(p.project), p.heightModel.ifEmpty { "RECEIVER" },
             )
@@ -107,6 +107,7 @@ object Formats {
             sb.append(",\"fix\":").append(jsonStr(fixLabel(p.fixQuality)))
             sb.append(",\"sats\":").append(p.satellites)
             sb.append(",\"sigma_h\":").append(jnum(p.sigmaH, 4)).append(",\"sigma_u\":").append(jnum(p.sigmaU, 4))
+            sb.append(",\"corr_age_s\":").append(jnum(p.correctionAgeSec, 1)).append(",\"max_corr_age_s\":").append(jnum(p.maxCorrectionAgeSec, 1))
             sb.append(",\"epochs\":").append(p.epochs)
             sb.append(",\"time_utc\":").append(jsonStr(utc(p.measuredAtUtcMs)))
             sb.append(",\"device\":").append(jsonStr(p.device))

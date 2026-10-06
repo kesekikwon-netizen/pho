@@ -13,7 +13,7 @@ import kr.archsurvey.map.MapBase
 data class JobConfig(
     val epsg: Int = KoreanTmZone.CENTRAL.epsg,
     val geoid: GeoidModel = GeoidModel.RECEIVER,
-    val mapBase: MapBase = MapBase.NONE,
+    val mapBase: MapBase = MapBase.SATELLITE_CADASTRAL,
     val antennaModelId: String = "TRIMBLE_R10",
     val poleM: Double = 2.0,
     val refPointId: String = "",

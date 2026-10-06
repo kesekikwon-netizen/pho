@@ -161,11 +161,12 @@ class NtripSupervisor(
             if (failure is LinkPause) { continue } // 맨 위에서 수신기 위치를 기다린다
             val kind = NtripFailureKind.classify(failure)
             val hadData = status.value.lastRtcmAtMs != 0L
-            if (hadData && !lostAnnounced && kind != NtripFailureKind.AUTH && kind != NtripFailureKind.MOUNT) { emit(FeedbackEvent.NTRIP_LOST); lostAnnounced = true }
+            // 0.1.19 QA-0119-1: 보정을 한 번이라도 받은 뒤(hadData)의 끊김만 NTRIP_LOST. 첫 수신 전 실패(비번 틀림 401 등)는
+            // ConnectionController.reportFailure 의 CONNECT_FAIL 한 번만 울린다(이중 실패음 방지). AUTH 도 같은 규칙.
+            if (hadData && !lostAnnounced && kind != NtripFailureKind.MOUNT) { emit(FeedbackEvent.NTRIP_LOST); lostAnnounced = true }
             when (kind) {
                 NtripFailureKind.AUTH -> {
                     status.update { NtripStatus(NtripState.AUTH_FAILED, failure.message ?: "인증 실패", it.rtcmBytes, it.lastRtcmAtMs, attempt, failure = kind) }
-                    emit(FeedbackEvent.NTRIP_LOST); lostAnnounced = true
                     attempt = 0
                     kick.receive() // 사용자가 직접 다시 시도할 때까지 대기. 네트워크 신호로는 풀리지 않음
                 }

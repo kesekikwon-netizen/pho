@@ -63,6 +63,8 @@ class LinkSupervisor(
     class SessionLost(val error: BtError, msg: String) : IOException(msg)
 
     @Volatile private var wasConnectedOnce = false
+    /** 0.1.19 QA-0119-2: GGA 까지 받은(STREAMING) 세션이 한 번이라도 있었는지. 소켓만 붙은 것은 「성공」이 아니다 */
+    @Volatile private var streamedOnce = false
     @Volatile private var linkLostAnnounced = false
     @Volatile private var streamingSince = 0L
     @Volatile private var writeStartedAt = 0L
@@ -117,7 +119,8 @@ class LinkSupervisor(
                 failures++
                 if (err == null) err = BtError.LINK_LOST
                 err = BtError.refineAfterLoss(err, wasConnectedOnce, failures)
-                if (wasConnectedOnce && !linkLostAnnounced && err != BtError.NO_DATA) { emit(FeedbackEvent.LINK_LOST); linkLostAnnounced = true }
+                // 성공(STREAMING) 뒤 끊김만 LINK_LOST. 소켓만 붙고 실패하면 ConnectionController 의 CONNECT_FAIL 한 번만(이중 실패음 방지)
+                if (streamedOnce && !linkLostAnnounced && err != BtError.NO_DATA) { emit(FeedbackEvent.LINK_LOST); linkLostAnnounced = true }
                 // BT-130: 소켓은 됨·GGA만 없음 → 이 연결 방식을 무음으로 표시 후 치유 재연결
                 if (err == BtError.NO_DATA) {
                     transport.strategyName?.let { onSilentStrategy(it) }
@@ -229,7 +232,7 @@ class LinkSupervisor(
                         onQuality(snap.quality)
                         gnss.value = snap
                         if (!gotData && snap.gga != null) {
-                            gotData = true; streamingSince = now; nmeaHeals = 0
+                            gotData = true; streamingSince = now; nmeaHeals = 0; streamedOnce = true
                             t.strategyName?.let { onStrategyUsed(it) } // GGA 확인된 방식만 저장
                             setLink(LinkState.STREAMING, attempt, link.value.failures, msg = "수신 중", strategy = t.strategyName)
                         } else if (link.value.state == LinkState.STALE) {

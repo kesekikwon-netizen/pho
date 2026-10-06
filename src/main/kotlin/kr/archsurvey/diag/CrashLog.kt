@@ -43,12 +43,14 @@ object CrashLog {
         }
     }
 
-    fun read(): String = runCatching { file?.takeIf { it.exists() }?.readText() }.getOrNull().orEmpty()
+    /** 보기·공유용 읽기. 0.1.18: 예전 버전이 남긴 기록에도 비밀번호가 섞여 있을 수 있어 읽을 때 한 번 더 가린다 */
+    fun read(): String = redact(runCatching { file?.takeIf { it.exists() }?.readText() }.getOrNull().orEmpty())
     fun count(): Int = Regex("^=== ", RegexOption.MULTILINE).findAll(read()).count()
     fun clear() { runCatching { file?.delete() } }
 
     /** 혹시 메시지에 비밀번호 같은 값이 섞이지 않도록 'password=…', 'Authorization: …' 꼴을 가린다 */
-    internal fun redact(s: String): String = s
-        .replace(Regex("(?i)(authorization:\\s*basic\\s+)[A-Za-z0-9+/=]+"), "$1***")
-        .replace(Regex("(?i)(password|pw|passwd)=\\S+"), "$1=***")
+    fun redact(s: String): String = s
+        .replace(Regex("(?i)(authorization:\\s*(?:basic|digest)\\s+)[^\\r\\n]+"), "$1***")
+        // 0.1.18: password=x · password: x · "password":"x" · 비밀번호=x 꼴(공백·쉼표·괄호·따옴표 전까지)
+        .replace(Regex("(?i)(\"?(?:password|passwd|pwd|pw|ntrip_pw|비밀번호)\"?\\s*[=:]\\s*\"?)[^\\s,)\"]+"), "$1***")
 }

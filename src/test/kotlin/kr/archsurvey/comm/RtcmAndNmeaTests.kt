@@ -137,7 +137,11 @@ class NmeaCommTests {
         val stale = StatusJudge.judge(snap("2.0"), LinkState.STREAMING, 1000 + 8_000)
         assertEquals(StatusReason.STALE, stale.reason)
         val noAge = StatusJudge.judge(snap(""), LinkState.STREAMING, 1500)
-        assertEquals(SurveyStatus.FIXED, noAge.status) // 값이 없으면 판정에 쓰지 않는다(수신기가 안 주는 경우)
+        // 0.1.26: age null ≠ 신선 → UNKNOWN_AGE(주의). 엄격 모드면 저장 차단
+        assertEquals(SurveyStatus.CAUTION, noAge.status)
+        assertEquals(StatusReason.UNKNOWN_AGE, noAge.reason)
+        assertEquals(SavePolicy.ALLOW_WITH_WARNING, StatusJudge.savePolicy(noAge.status, false))
+        assertEquals(SavePolicy.BLOCK, StatusJudge.savePolicy(noAge.status, true))
     }
 
     @Test fun ggaRelayRejectsNoPositionAndNormalizesTalker() {

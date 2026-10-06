@@ -22,6 +22,7 @@ import kr.archsurvey.engine.NtripStatus
 import kr.archsurvey.ntrip.NtripConfig
 import kr.archsurvey.ntrip.NtripPresets
 import kr.archsurvey.ntrip.NtripState
+import kr.archsurvey.feedback.FeedbackEvent
 
 /** VRS(NTRIP) 입력 폼. 문자열로 들고 있다가 검증 후 [NtripConfig] 로 바꾼다. 비밀번호는 로그/화면에 노출하지 않는다. */
 data class NtripForm(
@@ -44,6 +45,9 @@ data class NtripForm(
     }
 
     fun toConfig() = NtripConfig(host.trim(), port.trim().toIntOrNull() ?: 2101, mount.trim(), user.trim(), password, useV2)
+
+    /** 0.1.18 보안: 로그·예외·진단에 찍혀도 비밀번호가 나오지 않게(data class 기본 toString 은 비밀번호를 그대로 찍음) */
+    override fun toString(): String = "NtripForm(host=$host, port=$port, mount=$mount, user=$user, password=${if (password.isEmpty()) "" else "***"}, useV2=$useV2, enabled=$enabled)"
 
     companion object {
         fun from(c: NtripConfig, enabled: Boolean) = NtripForm(c.host, c.port.toString(), c.mountPoint, c.username, c.password, c.useV2, enabled)
@@ -228,6 +232,42 @@ object ConnectSteps {
     }
 }
 
+/**
+ * 0.1.18 연결 상호작용 단계(HTML 「수신기 · VRS 연결」: none / connecting / on / fail).
+ * 아래 단추가 이 값으로 바뀐다: 대기·실패 = 「연결」/「다시 시도」, 연결 중 = 「연결 취소」, 연결됨 = 「연결 해제」+「지도로 가기」.
+ * 연결됨 = 수신기 위치(GGA)가 들어옴(STREAMING) 또는 잠시 끊김(STALE). 소켓만 붙고 위치가 없으면(BT-130 치유 중) 아직 「연결 중」.
+ */
+enum class ConnPhase { IDLE, CONNECTING, CONNECTED, FAILED }
+
+object ConnPhases {
+    fun of(requested: Boolean, link: LinkStatus): ConnPhase = when {
+        !requested -> ConnPhase.IDLE
+        link.state == LinkState.NEEDS_USER -> ConnPhase.FAILED
+        link.state == LinkState.STREAMING || link.state == LinkState.STALE -> ConnPhase.CONNECTED
+        else -> ConnPhase.CONNECTING
+    }
+
+    /** 단계 상태 한국어(HTML: 대기 / 진행 중 / 완료 / 실패) + VRS 끔일 때 건너뜀 */
+    fun stateKo(s: StepState): String = when (s) {
+        StepState.WAIT -> "대기"; StepState.ACTIVE -> "진행 중"; StepState.DONE -> "완료"; StepState.FAIL -> "실패"; StepState.SKIP -> "건너뜀"
+    }
+}
+
+/**
+ * 0.1.18 블루투스 단계 실패 머리 카드(HTML 문구) + 조사 보완(field-learning §1.2·§1.3: SP60 위성 추적 후 연결, 콜렉터 2대 제한·도난경보).
+ * 소켓은 붙었는데 위치만 없는 BT-130(NMEA 문제)은 여기서 다루지 않는다 — 기존 BT-130 카드·치유 흐름 그대로.
+ */
+object ConnectFailCopy {
+    const val TITLE = "수신기에 연결하지 못했어요"
+    const val BASE = "수신기 전원이 켜져 있는지, 폰의 블루투스가 켜져 있는지 확인한 뒤 다시 시도하세요. 다른 폰에 연결되어 있으면 그 연결을 먼저 끊어야 해요."
+    fun headline(profile: DeviceProfile, link: LinkStatus): ErrorCard? {
+        if (link.state != LinkState.NEEDS_USER) return null
+        if (kr.archsurvey.bt.NmeaActivation.isNmeaIssue(link.error)) return null
+        val extra = if (profile.id == DeviceProfiles.SP60_ID) " SP60은 전원을 켜고 위성을 잡은 뒤(LED 확인) 연결하세요 — 먼저 연결하면 등록이 풀릴 수 있어요. 도난경보·시작잠금이 켜져 있으면 먼저 해제하세요." else ""
+        return ErrorCard(link.error?.code ?: "-", TITLE, BASE + extra, false)
+    }
+}
+
 /** [preChecked]: 이 수신기에서 “연결 전 확인”을 한 번 마쳤는지(수신기 설정은 수신기에 남으므로 다음부터 묻지 않음) */
 /** 연결 화면 구역 */
 enum class ConnSection { ALL, VRS }
@@ -270,6 +310,8 @@ class ConnectionController(
     var notice by mutableStateOf<ErrorCard?>(null); private set
     /** 장비 프로필 변경 시(안테나 모델 동기화). SurveyViewModel 이 연결 */
     var onProfileChanged: ((DeviceProfile) -> Unit)? = null
+    /** 0.1.19 연결 전용 효과음·진동(CONNECT_OK/FAIL/DISCONNECT). VM 이 FeedbackPlayer 에 연결 */
+    var onFeedback: ((FeedbackEvent) -> Unit)? = null
     var showNmeaSteps by mutableStateOf(false)
     /** 접힌 영역(서버 설정·도움말·연결 전 확인)을 펼쳤는지 */
     var showServer by mutableStateOf(false)
@@ -278,6 +320,35 @@ class ConnectionController(
     val link: StateFlow<LinkStatus> get() = platform.link
     val ntrip: StateFlow<NtripStatus> get() = platform.ntrip
     var connectRequested by mutableStateOf(false); private set
+
+    // ---------------- 0.1.18 연결 상호작용 ----------------
+    /** 지금 연결 단계(아래 단추·잠금 판단) */
+    fun phase(): ConnPhase = ConnPhases.of(connectRequested, link.value)
+    /** 연결 중·연결됨이면 모델·수신기를 바꾸지 못하게 막는다(HTML 60·61: 「먼저 연결을 해제하세요」) */
+    private fun lockedForChange(): Boolean {
+        val ph = phase()
+        if (ph != ConnPhase.CONNECTING && ph != ConnPhase.CONNECTED) return false
+        ui.fail(LOCKED_MSG); return true
+    }
+    /** 「닫아도 연결은 계속돼요」 안내를 이번 실행에서 이미 보였는지(처음 1회만) */
+    var keepHintShown by mutableStateOf(false); private set
+    private fun keepHintOnce() { if (!keepHintShown) { keepHintShown = true; ui.toast(KEEP_HINT) } }
+    /** 진행 창 「완료」 판정. 진행 창 단계 계산(ConnectSteps 마지막 단계 = GGA 품질 4)과 같은 기준 */
+    fun progressDone(fixQuality: Int): Boolean = fixQuality == 4
+    /**
+     * 진행 창 닫기 — 「닫기(계속 연결)」 단추 · 시스템 뒤로(BackHandler) · backTarget 이 모두 이 함수 하나를 부른다(0.1.17 비차단 AND-0117-1 정리).
+     * 완료 상태면 「확인」 = 진행 창 + 연결 화면 함께 닫고 지도로. 진행 중이면 창만 닫고 연결은 계속 + 첫 1회 안내.
+     */
+    fun dismissProgress(done: Boolean) {
+        showProgress = false
+        if (done) { close(); return }
+        if (connectRequested) keepHintOnce()
+    }
+    /** 연결 화면 머리글 뒤로(HTML 59: 지도로 돌아간다 · 연결은 유지). 연결 중이면 첫 1회 안내 */
+    fun leaveScreen() {
+        close()
+        if (phase() == ConnPhase.CONNECTING) keepHintOnce()
+    }
 
     init {
         val s = platform.loadSaved()
@@ -300,13 +371,14 @@ class ConnectionController(
 
     fun selectProfile(p: DeviceProfile) {
         if (p.id == profile.id) return
+        if (lockedForChange()) return
         profile = p; resetChecks(); address = null; notice = null; refresh()
         persist()
         onProfileChanged?.invoke(p) // JobConfig.antennaModelId 와 맞춤(0.1.13 P0)
         RtcmMountCompat.warnIfIncompatible(profile, form.mount)?.let { ui.toast(it) }
     }
 
-    fun selectAddress(a: String) { address = a; notice = null; persist() }
+    fun selectAddress(a: String) { if (a != address && lockedForChange()) return; address = a; notice = null; persist() }
 
     fun updateForm(f: NtripForm) { form = f }
 
@@ -369,9 +441,37 @@ class ConnectionController(
 
     fun cancelMountLoad() { mountJob?.cancel(); mountJob = null; if (mountLoad == MountLoad.LOADING) mountFail("받기를 취소했어요") }
 
+    /** 0.1.18 「이 수신기에 맞는 것만」: 수신기 최대 RTCM 버전을 넘는 마운트(SP60의 3.4 등)를 목록에서 뺀다. 버전을 알 수 없는 마운트는 남긴다 */
+    var mountCompatOnly by mutableStateOf(true)
+
     fun filteredMounts(): List<MountInfo> {
         val q = mountQuery.trim()
-        return if (q.isEmpty()) mounts else mounts.filter { it.mountPoint.contains(q, true) || it.format.contains(q, true) || it.identifier.contains(q, true) || it.navSystem.contains(q, true) }
+        val base = if (mountCompatOnly) mounts.filter { !RtcmMountCompat.isTooNew(profile, it.mountPoint, it.format, it.formatDetails) } else mounts
+        return if (q.isEmpty()) base else base.filter { it.mountPoint.contains(q, true) || it.format.contains(q, true) || it.identifier.contains(q, true) || it.navSystem.contains(q, true) }
+    }
+    /** 필터로 숨긴 비호환 마운트 수 */
+    fun hiddenIncompatibleCount(): Int = if (!mountCompatOnly) 0 else mounts.count { RtcmMountCompat.isTooNew(profile, it.mountPoint, it.format, it.formatDetails) }
+
+    /** 0.1.19: 지금 고른 마운트가 호환 필터 때문에 목록에서 빠져 있는지(예: SP60 + VRS-RTCM34) */
+    fun selectedMountHiddenByFilter(): Boolean {
+        if (!mountCompatOnly) return false
+        val m = form.mount.trim()
+        if (m.isEmpty() || mounts.isEmpty()) return false
+        val inList = mounts.any { it.mountPoint.equals(m, true) }
+        if (!inList) return false
+        return filteredMounts().none { it.mountPoint.equals(m, true) }
+    }
+
+    /** 0.1.18 목록 행 오른쪽 짧은 표시: 권장(이 수신기 최대 버전 이하 중 가장 알맞은 VRS) / R10 의 RTCM 3.4 허용 */
+    fun mountGoodNote(m: MountInfo): String? {
+        if (RtcmMountCompat.isTooNew(profile, m.mountPoint, m.format, m.formatDetails)) return null
+        val minor = RtcmMountCompat.detectMinor(m.mountPoint, m.format, m.formatDetails) ?: return null
+        val rec = RecommendedMount.pick(profile, mounts, "")
+        return when {
+            rec != null && rec.equals(m.mountPoint, true) -> if (minor == 4 && profile.id == DeviceProfiles.R10_ID) "권장 · R10 3.4 사용 가능" else "권장"
+            minor == 4 && profile.id == DeviceProfiles.R10_ID -> "R10 3.4 사용 가능"
+            else -> null
+        }
     }
 
     fun pickMount(name: String) {
@@ -442,6 +542,7 @@ class ConnectionController(
         runCatching { platform.markSuccess(form) }
         val dev = bonded.firstOrNull { it.second == address }?.first ?: address.orEmpty()
         ui.ok("연결 설정 저장됨 · $dev" + if (form.enabled) " · ${form.mount} · ${form.user}" else "")
+        onFeedback?.invoke(FeedbackEvent.CONNECT_OK) // 최초 STREAMING(+VRS) 성공 — LINK_RESTORED 와 별 경로
     }
 
     /** 0.1.14 연결 실패 멘트: 같은 실패는 한 번만(상태가 바뀌면 다시) */
@@ -455,6 +556,8 @@ class ConnectionController(
         if (key == lastFailKey) return
         lastFailKey = key
         ui.fail("${card.title} (${card.code}) — ${card.action}")
+        // 이번 연결에서 아직 성공 전 실패만 CONNECT_FAIL (성공 뒤 끊김은 LINK_LOST 한 경로)
+        if (!savedThisRun) onFeedback?.invoke(FeedbackEvent.CONNECT_FAIL)
     }
 
     fun changeAutoConnect(v: Boolean) { autoConnect = v; platform.autoConnect = v; ui.toast(if (v) "다음 실행 때 자동 연결: 켬" else "다음 실행 때 자동 연결: 끔") }
@@ -507,6 +610,7 @@ class ConnectionController(
     private var rtcmWarnedFor: String? = null
 
     private fun startNow(addr: String) {
+        notice = null // 0.1.19: 연결 시작 뒤 사전 점검/경고 카드 지움(남은 notice 가 「다시 시도」로 남는 것 방지)
         savedThisRun = false
         progressStartMs = platform.nowMs()
         platform.startReal(profile, addr, form.toConfig(), form.enabled)
@@ -516,7 +620,25 @@ class ConnectionController(
     fun openBluetoothSettings() = platform.openBluetoothSettings()
     fun openAppSettings() = platform.openAppSettings()
 
-    fun disconnect() { platform.stopReal(); connectRequested = false; showProgress = false }
+    /** 수신기 연결을 끊는다(HTML 65 「연결 해제」). 지도의 위치·좌표는 「—」로 */
+    fun disconnect() { stopAll(); ui.toast(DISCONNECTED_MSG); onFeedback?.invoke(FeedbackEvent.DISCONNECT) }
+    /** 연결 시도를 멈춘다(HTML 64 「연결 취소」 — 연결 중일 때만) */
+    fun cancelConnect() { stopAll(); ui.toast(CANCELLED_MSG) }
+    private fun stopAll() { platform.stopReal(); connectRequested = false; showProgress = false }
+
+    /** 연결 화면 주 단추 문구(HTML 63): 실패·사전 점검 막힘 = 「다시 시도」, 비호환 마운트 경고 뒤 = 「그래도 연결」 */
+    fun connectLabel(): String = when {
+        notice?.code == "RTCM" -> "그래도 연결"
+        notice != null || phase() == ConnPhase.FAILED -> "다시 시도"
+        else -> "연결"
+    }
+
+    companion object {
+        const val KEEP_HINT = "연결은 계속돼요 · 아래 대기열에서 진행 상황을 볼 수 있어요"
+        const val LOCKED_MSG = "먼저 연결을 해제하세요"
+        const val DISCONNECTED_MSG = "수신기 연결을 해제했어요 · 지도의 위치·좌표가 사라져요"
+        const val CANCELLED_MSG = "연결을 취소했어요"
+    }
 
     /** 현재 연결 상태에서 보여 줄 오류 카드 */
     fun cards(): List<ErrorCard> = ErrorCards.from(link.value, ntrip.value, form.enabled)

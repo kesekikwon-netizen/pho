@@ -25,13 +25,14 @@ object HeaderModel {
     private fun f3(x: Double) = String.format(Locale.US, "%.3f", x)
     private fun f1(x: Double) = String.format(Locale.US, "%.1f", x)
 
-    fun fixLabel(q: FixQuality): String = when (q) {
-        FixQuality.RTK_FIXED -> "고정"
-        FixQuality.RTK_FLOAT -> "유동"
-        FixQuality.SINGLE -> "단독"
-        FixQuality.DGPS -> "DGPS"
-        FixQuality.SBAS -> "SBAS"
-        FixQuality.NONE -> "위치 없음"
+    fun fixLabel(q: FixQuality, fromPhone: Boolean = false): String = when {
+        fromPhone -> "폰GPS"
+        q == FixQuality.RTK_FIXED -> "고정"
+        q == FixQuality.RTK_FLOAT -> "유동"
+        q == FixQuality.SINGLE -> "단독"
+        q == FixQuality.DGPS -> "DGPS"
+        q == FixQuality.SBAS -> "SBAS"
+        q == FixQuality.NONE -> "위치 없음"
         else -> q.short
     }
 
@@ -41,7 +42,8 @@ object HeaderModel {
         if (reason == StatusReason.LINK_DOWN) return HeaderPill("0", "보정 —", Tone.NONE, "끊김", Tone.BAD)
         val fixTone = when (gv.status.status) { SurveyStatus.FIXED -> Tone.FIXED; SurveyStatus.CAUTION -> Tone.CAUTION; SurveyStatus.UNAVAILABLE -> Tone.BAD }
         val (corr, corrTone) = correction(gv, ntrip, ntripEnabled, nowMs)
-        return HeaderPill(gv.satellites.toString(), corr, corrTone, fixLabel(gv.quality), fixTone)
+        val fix = if (reason == StatusReason.PHONE_GPS || gv.fromPhone) "폰GPS" else fixLabel(gv.quality)
+        return HeaderPill(gv.satellites.toString(), corr, corrTone, fix, fixTone)
     }
 
     fun correction(gv: GnssView, ntrip: NtripStatus?, ntripEnabled: Boolean, nowMs: Long): Pair<String, Tone> {

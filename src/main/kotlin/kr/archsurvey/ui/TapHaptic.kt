@@ -1,7 +1,10 @@
 package kr.archsurvey.ui
 
+import android.content.Context
 import android.os.Build
-import android.view.HapticFeedbackConstants
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.view.View
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -13,26 +16,52 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 
 /**
- * 0.1.14 버튼 탭 햅틱. 앱 설정「진동」을 따르고(LocalTapHaptic), 폰의 시스템「터치 진동」설정도 존중한다
- * (View.performHapticFeedback 은 시스템 설정이 꺼져 있으면 울리지 않음). 진동기가 없어도 조용히 넘어간다.
+ * 버튼 탭 햅틱. 앱 설정「진동」을 따른다(LocalTapHaptic, SharedPreferences 기본 ON).
+ *
+ * 0.1.16: 시스템「터치 진동」과 무관하게 Vibrator one-shot 으로 울린다.
+ * (0.1.14~0.1.15 는 View.performHapticFeedback 만 써서 시스템 OFF 시 현장 무반응)
  */
 object TapHaptics {
-    /** 시험용 카운터: 탭 / 길게 / 완료 / 오류 햅틱이 몇 번 요청됐나 */
+    /** 시험용 카운터: 탭 / 길게 / 완료 / 오류 / 직접 진동기 호출 */
     @Volatile var taps = 0
     @Volatile var longs = 0
     @Volatile var oks = 0
     @Volatile var errors = 0
-    fun reset() { taps = 0; longs = 0; oks = 0; errors = 0 }
+    @Volatile var directPulses = 0
+    fun reset() { taps = 0; longs = 0; oks = 0; errors = 0; directPulses = 0 }
 
-    fun tap(v: View) { taps++; runCatching { v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) } }
-    fun long(v: View) { longs++; runCatching { v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) } }
-    /** 완료(저장·적용·내보내기 끝) — API 30+ CONFIRM, 이하 짧은 탭 */
-    fun ok(v: View) { oks++; runCatching { v.performHapticFeedback(if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.VIRTUAL_KEY) } }
-    /** 오류 — API 30+ REJECT, 이하 길게 */
-    fun error(v: View) { errors++; runCatching { v.performHapticFeedback(if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.REJECT else HapticFeedbackConstants.LONG_PRESS) } }
+    fun tap(v: View) { taps++; vibrateMs(v.context, 18L) }
+    fun long(v: View) { longs++; vibrateMs(v.context, 40L) }
+    fun ok(v: View) { oks++; vibrateMs(v.context, 25L) }
+    fun error(v: View) { errors++; vibrateMs(v.context, 55L) }
+
+    /** 요청 횟수(directPulses)는 하드웨어 유무와 무관하게 센다 — 단위시험·진단용. */
+    @Suppress("DEPRECATION")
+    internal fun vibrateMs(ctx: Context, ms: Long) {
+        directPulses++
+        try {
+            val vib = vibrator(ctx) ?: return
+            if (!vib.hasVibrator()) return
+            val d = ms.coerceAtLeast(1L)
+            if (Build.VERSION.SDK_INT >= 26) {
+                vib.vibrate(VibrationEffect.createOneShot(d, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                vib.vibrate(d)
+            }
+        } catch (_: Exception) { }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun vibrator(ctx: Context): Vibrator? = try {
+        if (Build.VERSION.SDK_INT >= 31) {
+            ctx.getSystemService(VibratorManager::class.java)?.defaultVibrator
+        } else {
+            ctx.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
+    } catch (_: Exception) { null }
 }
 
-/** 탭 햅틱 켜짐 여부(설정「진동」). SurveyMapScreen 이 c.settingsState?.vibration 으로 제공 */
+/** 탭 햅틱 켜짐 여부(설정「진동」, 기본 true). SurveyMapScreen 이 c.settingsState?.vibration 으로 제공 */
 val LocalTapHaptic = staticCompositionLocalOf { true }
 
 /** clickable 과 같지만 누를 때 짧은 햅틱 */

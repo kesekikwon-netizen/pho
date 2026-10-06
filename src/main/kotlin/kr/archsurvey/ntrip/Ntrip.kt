@@ -33,6 +33,9 @@ data class NtripConfig(
     val useV2: Boolean = false,
 ) {
     val isUsable: Boolean get() = host.isNotBlank() && port in 1..65535 && mountPoint.isNotBlank() && username.isNotBlank()
+
+    /** 0.1.18 보안: 기본 data class toString 은 비밀번호를 그대로 찍는다 → 가린다(로그·예외·진단 공유 대비) */
+    override fun toString(): String = "NtripConfig(host=$host, port=$port, mountPoint=$mountPoint, username=$username, password=${if (password.isEmpty()) "" else "***"}, useV2=$useV2)"
 }
 
 /** NGII 공개 안내(2022-05) 기준 프리셋. 서버·포트·마운트는 사용자가 수정 가능 [확인 필요: 현행 정책] */
