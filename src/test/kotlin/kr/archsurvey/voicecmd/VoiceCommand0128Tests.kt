@@ -446,6 +446,47 @@ class VoiceGatePath0128Tests {
         r.c.ui.answer(false); r.advance(200); assertTrue(r.eng.running)
         r.c.playingVoiceId = 3L; r.advance(200); assertFalse(r.eng.running)
         r.c.playingVoiceId = null; r.advance(200); assertTrue(r.eng.running)
+        // UX-0128-1: 「배경맵 설정」 시트가 지도를 덮음 → 멈춤, 그때 온 「저장」 버림
+        val bg = kr.archsurvey.ui.bg.BackgroundController({ r.c.projection },
+            kr.archsurvey.georef.JsonFileBgLayerStore(java.nio.file.Files.createTempDirectory("bg0128").toFile()))
+        r.c.bg = bg
+        r.advance(200); assertTrue("시트 닫힘 = 듣기 그대로", r.eng.running)
+        bg.openOpacity(); r.advance(200)
+        assertFalse("배경맵 시트 = 듣기 멈춤", r.eng.running)
+        r.eng.emitLate("저장"); r.advance(200)
+        assertTrue("시트 뒤 저장 없음", r.c.points.isEmpty()); assertEquals(Phase.IDLE, r.c.phase)
+        bg.openManage(); r.advance(200); assertFalse(r.eng.running)
+        bg.close(); r.advance(200); assertTrue(r.eng.running)
+        assertTrue("닫은 뒤 늦은 실행 없음", r.c.points.isEmpty()); assertEquals(Phase.IDLE, r.c.phase)
+        // UX-0128-1: 연결 진행 창(showProgress && connectRequested) → 멈춤, 그때 온 「저장」 버림
+        val cc = ConnectionController(ProgressConn(), CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        r.c.connection = cc
+        r.advance(200); assertTrue("연결 창 없음 = 듣기 그대로", r.eng.running)
+        cc.connect()
+        assertTrue(cc.connectRequested); assertTrue(cc.showProgress); assertFalse(cc.open)
+        r.advance(200)
+        assertFalse("연결 진행 창 = 듣기 멈춤", r.eng.running)
+        r.eng.emitLate("저장"); r.advance(200)
+        assertTrue("진행 창 뒤 저장 없음", r.c.points.isEmpty()); assertEquals(Phase.IDLE, r.c.phase)
+        cc.dismissProgress(false); r.advance(200)
+        assertTrue("창 닫힘(연결은 계속) = 다시 듣기", r.eng.running); assertTrue(cc.connectRequested)
+        assertTrue("닫은 뒤 늦은 실행 없음", r.c.points.isEmpty()); assertEquals(Phase.IDLE, r.c.phase)
+    }
+
+    /** 연결 진행 창 시험용: 사전 확인 끝난 SP60 저장 설정 */
+    private class ProgressConn : ConnectionPlatform {
+        override val link = kotlinx.coroutines.flow.MutableStateFlow(LinkStatus())
+        override val ntrip = kotlinx.coroutines.flow.MutableStateFlow(kr.archsurvey.engine.NtripStatus())
+        override fun bondedDevices() = listOf("SP60_221060" to "00:11:22:33:44:55")
+        override fun hasBluetoothPermission() = true
+        override fun requestBluetoothPermission(onResult: (Boolean) -> Unit) = onResult(true)
+        override fun bluetoothEnabled() = true
+        override fun openBluetoothSettings() {}
+        override fun openAppSettings() {}
+        override fun startReal(profile: DeviceProfile, address: String, ntrip: kr.archsurvey.ntrip.NtripConfig, ntripEnabled: Boolean) {}
+        override fun stopReal() {}
+        override fun loadSaved() = SavedConnection(DeviceProfiles.SP60_ID, "00:11:22:33:44:55", NtripForm(user = "u", password = "p"), true)
+        override fun save(s: SavedConnection) {}
     }
 
     @Test fun repeatedUndoAfterVoiceSavePausesFiveMinutes() {

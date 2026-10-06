@@ -286,7 +286,10 @@ class SurveyController(
         override fun screenReady(): Boolean {
             val conf = ui.confirm
             return visibleRoute() == "survey" && playingVoiceId == null && ui.choice == null &&
-                (conf == null || conf === qualityConfirm) && !setupOpen
+                (conf == null || conf === qualityConfirm) && !setupOpen &&
+                // UX-0128-1: 「배경맵 설정」 시트·연결 진행 창이 지도를 덮으면 듣지 않음(시트 뒤 저장 방지)
+                (bg?.screen ?: kr.archsurvey.ui.bg.BgScreen.NONE) == kr.archsurvey.ui.bg.BgScreen.NONE &&
+                !(connection?.showProgress == true && connection?.connectRequested == true)
         }
         override fun linkUp(): Boolean {
             val r = gv.status.reason

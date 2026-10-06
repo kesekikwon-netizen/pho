@@ -1,6 +1,14 @@
 # 0.1.28 릴리스 빌드 (versionCode 29) — T14 음성 「저장」 측점 · 출시 게이트 판정 전
 
-작성 2026-10-06 08:5x KST · 측량앱 안드로이드(구현 담당). **기기 설치·Drive 업로드 안 함** (게이트 판정 전).
+작성 2026-10-06 08:5x KST · 갱신 09:0x KST(게이트 차단 UX-0128-1 수정 재빌드) · 측량앱 안드로이드(구현 담당). **기기 설치·Drive 업로드 안 함** (게이트 판정 전).
+
+## 0. 게이트 차단 UX-0128-1 수정 (재빌드 · 0.1.28 / vc29 그대로)
+- **문제:** 음성 저장 켬 + 측량 화면 위에 「배경맵 설정」 시트(`bg.screen != BgScreen.NONE`) 또는 연결 진행 창(`ConnectionScreen.kt:47` `showProgress && connectRequested`)이 떠서 듣는 중 알약이 가려져도 「저장」을 받아 시트 뒤에서 측점이 저장됨. 원인: `SurveyController.voiceHost.screenReady()`가 두 경우를 안 봄.
+- **수정(이것만):** `screenReady()`에 `(bg?.screen ?: BgScreen.NONE) == BgScreen.NONE && !(connection?.showProgress == true && connection?.connectRequested == true)` 추가(`ui/SurveyController.kt` +4/−1). 다른 동작 변경 없음 — UX 비차단 항목은 다음 버전.
+- **시험:** `VoiceGatePath0128Tests.unrelatedDialogOrPlaybackPausesListening` 확장 — ① 배경맵 시트(투명도·관리) 열림 → 듣기 멈춤, 그때 늦게 온 「저장」 버림(점 0·IDLE), 닫으면 다시 듣고 늦은 실행 없음 ② `ConnectionController.connect()`로 진행 창(showProgress && connectRequested, 연결 화면은 닫힘) → 멈춤·「저장」 버림, 진행 창 닫기(연결은 계속) → 다시 듣기·늦은 실행 없음.
+- **수정 전 실패 확인:** 수정 빼고 돌림 → `VoiceCommand0128Tests.kt:455`(배경맵 시트 = 듣기 멈춤) 실패 · 배경맵 조건만 넣고 돌림 → `:468`(연결 진행 창 = 듣기 멈춤) 실패 · 둘 다 넣으면 통과.
+- 이전 APK SHA `dbd671929c9341b8720542ea282ac373fa4b89e3a06b4d43f5020183324a3424` **폐기** — 아래 §5 새 SHA.
+
 근거 문서: `plan/research-voice-command-save.md` §7(통신)·§9(게이트)·§14(UX 확정). 사용자 지시 2026-10-06 08:32(작업 관리 경유) — 보류 해제·구현 허용.
 
 ## 1. 엔진 결정 + 오프라인 확인
@@ -59,20 +67,23 @@
 - `AndroidManifest.xml`: `<queries>` RecognitionService·TTS_SERVICE (API 30+ 패키지 가시성). 권한 추가 없음(RECORD_AUDIO 기존), FGS 타입 변경 없음
 - `build.gradle.kts`: 28/0.1.27 → **29 / 0.1.28**
 - 시험: 새 `voicecmd/VoiceCommand0128Tests.kt`(29), `ui/Ui0128VoiceTest.kt`(4, Robolectric 렌더) · 버전 고정 2개 갱신(`HeaderModelTest`, `PhoneGps0120Tests`)
+- UX-0128-1 재빌드: `ui/SurveyController.kt`(screenReady 조건 1줄), `voicecmd/VoiceCommand0128Tests.kt`(시험 확장 + 연결 가짜 플랫폼)
 - **안 건드림:** BT-130 / RtcmMountCompat / LinkSupervisor / NMEA·Ntrip / StatusJudge / 내보내기(T16) / 유구면·그리드 / Drive
 
 ## 4. 시험
-- 명령(최종, 그 뒤 단일 시험 안 돌림): `gradle --offline cleanTestDebugUnitTest testDebugUnitTest` BUILD SUCCESSFUL, 끝 **08:46:56 KST**
-- 디스크 `app/build/test-results/testDebugUnitTest/*.xml` **94개** 합산: **tests 659 · 통과 659 · 실패 0 · 오류 0 · 건너뜀 0** (0.1.27 626 + 새 33)
+- **UX-0128-1 재빌드 후(최종, 그 뒤 시험 안 돌림):** `gradle --offline cleanTestDebugUnitTest testDebugUnitTest` BUILD SUCCESSFUL, 끝 **09:01:40 KST**
+- 디스크 `app/build/test-results/testDebugUnitTest/*.xml` **94개** 합산: **tests 659 · 통과 659 · 실패 0 · 오류 0 · 건너뜀 0** (기존 시험 확장이라 개수 같음)
+- (이전, 폐기 빌드) 끝 08:46:56 KST, 94개 · 659/0/0/0 (0.1.27 626 + 새 33)
 - 새 시험 주요: 매처(단독 일치·첫 후보만·예/네), 중재자(메모 선점·복귀, 실제 `toggleVoice`), **게이트 동등성**(FIX 음성=버튼 같은 점·같은 저장음 / **엄격+주의 = 버튼과 같은 메시지·확인창 없음·실패음 1회** / **기본+주의 = 같은 확인창, 「저장」·「네」로 승인 안 됨, 「예」로만**), 10초 시간 초과 취소, 「취소」·미디어키 취소, 미디어키 요청 경로, 주의→기울기 하나씩, 화면 탭 답변, 중복 시간 초과=저장 안 함·「예」=새 점, **쿨다운(연속 저장 없음)**, **화면 떠남·링크 끊김 시 멈춤 + 늦은 「저장」/「예」 버림·지연 실행 없음**, TTS 자기 트리거, 연속 오인식 쿨다운, 다른 창·재생 중 멈춤, 되돌리기 반복 5분 쉼, TTS 없음, 기본 끔·켤 때만 권한, 온라인 동의·표시, 미지원 폰
 - lint: `assembleRelease`(lintVitalRelease 통과) + `lintDebug` 오류 0 (NewApi/InlinedApi 오류 없음; 경고 SwitchIntDef 2건 = API 31 오류 코드 10~13 을 숫자로 씀, 의도)
 
 ## 5. APK
-- `dist/ExcavationSurvey-0.1.28-release-signed.apk` 10,059,886 B, 08:45 KST (`gradle --offline assembleRelease`)
-- **SHA-256 `dbd671929c9341b8720542ea282ac373fa4b89e3a06b4d43f5020183324a3424`**
+- `dist/ExcavationSurvey-0.1.28-release-signed.apk` **10,059,965 B**, 08:59 KST (`gradle --offline assembleRelease`, lintVitalRelease 통과) — UX-0128-1 수정 재빌드
+- **SHA-256 `9dd957dd9198704d0228e8103bc475f32e888c4cde7d57374157b0000719cdef`** (`dist/SHA256SUMS.txt` 에 추가)
+- ~~이전 `dbd671929c9341b8720542ea282ac373fa4b89e3a06b4d43f5020183324a3424` (10,059,886 B)~~ 폐기
 - aapt: `kr.archsurvey.field` versionCode='29' versionName='0.1.28', sdk 21 / target 35 (`dist/aapt-0.1.28.txt`)
 - apksigner: v1/v2/v3 true, cert SHA-1 **`9dac6ce35f6bde0b75832fa8ac12aed750d173a8`** = 0.1.27과 같은 키 (`dist/apksigner-0.1.28.txt`)
-- APK 크기 +29 KB (0.1.27 10,030,831 B)
+- APK 크기 +29 KB (0.1.27 10,030,831 B) · 폐기 빌드 대비 +79 B
 
 ## 6. 릴리스 노트 (사용자용 초안)
 **0.1.28 — 음성으로 측점**
