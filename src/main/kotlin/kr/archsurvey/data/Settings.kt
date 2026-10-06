@@ -209,6 +209,10 @@ class SettingsStore(private val ctx: Context) {
     var autoConnect: Boolean
         get() = sp.getBoolean("auto_connect", true)
         set(v) = sp.edit().putBoolean("auto_connect", v).apply()
+    /** 0.1.29 T19: 사용자가 보정 서비스·서버·마운트를 직접 바꾼 적 있음(기기 기본값을 넣지 않음) */
+    var correctionUserSet: Boolean
+        get() = sp.getBoolean("corr_user_set", false)
+        set(v) = sp.edit().putBoolean("corr_user_set", v).apply()
     /** 서버(주소)별 마지막 성공 아이디·포트·마운트. 비밀번호는 암호화 저장소에만 */
     fun hostProfile(host: String): Triple<String, Int, String>? {
         val k = host.trim().lowercase(); val u = sp.getString("hp_user_$k", null) ?: return null

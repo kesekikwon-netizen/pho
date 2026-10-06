@@ -58,21 +58,24 @@ data class NtripForm(
 data class ErrorCard(val code: String, val title: String, val action: String, val autoRetry: Boolean)
 
 object ErrorCards {
-    fun from(link: LinkStatus, ntrip: NtripStatus?, ntripEnabled: Boolean): List<ErrorCard> = buildList {
+    /** [host] = 지금 VRS 서버 주소(0.1.29 T17: RTS3 인증 실패 안내용). 모르면 "" */
+    fun from(link: LinkStatus, ntrip: NtripStatus?, ntripEnabled: Boolean, host: String = ""): List<ErrorCard> = buildList {
         link.error?.let { e ->
             if (link.state == LinkState.NEEDS_USER || link.state == LinkState.RECONNECTING || link.state == LinkState.CONNECTING || link.state == LinkState.CONNECTED_NO_DATA || link.state == LinkState.STALE)
                 add(ErrorCard(e.code, e.title, e.action, !e.needsUserAction))
         }
         if (link.repairHint && link.error == null) add(ErrorCard("BT-124", BtError.ALL_FAILED.title, BtError.ALL_FAILED.action, false))
-        if (ntripEnabled && ntrip != null) ntripCard(ntrip)?.let { add(it) }
+        if (ntripEnabled && ntrip != null) ntripCard(ntrip, host)?.let { add(it) }
     }
 
     /** VRS(NTRIP) 오류를 원인별 문구로. 서버가 준 문구([NtripStatus.message])와 예외 종류로 가른다 */
-    fun ntripCard(ntrip: NtripStatus): ErrorCard? {
+    fun ntripCard(ntrip: NtripStatus, host: String = ""): ErrorCard? {
         val m = ntrip.message
+        val gvrs = Gvrs.isHost(host)
         return when (ntrip.state) {
             NtripState.AUTH_FAILED ->
-                if ("403" in m) ErrorCard("NT-403", "VRS 접속이 거부됐어요 (403)", "같은 아이디가 다른 폰·컨트롤러에서 접속 중일 수 있어요. 그쪽을 끊고 다시 시도하세요. 계약(사용 기간·권한)도 확인하세요. 자동 재시도는 하지 않아요.", false)
+                if ("403" in m) ErrorCard("NT-403", "VRS 접속이 거부됐어요 (403)", "같은 아이디가 다른 폰·컨트롤러에서 접속 중일 수 있어요. 그쪽을 끊고 다시 시도하세요. 계약(사용 기간·권한)도 확인하세요." + (if (gvrs) " G-VRS(RTS3): ${Gvrs.AUTH_HINT}하세요." else "") + " 자동 재시도는 하지 않아요.", false)
+                else if (gvrs) ErrorCard("NT-401", "VRS 아이디/비밀번호가 맞지 않아요 (401)", "G-VRS(RTS3): ${Gvrs.AUTH_HINT}하세요(대소문자 구분). 자동 재시도는 하지 않아요.", false)
                 else ErrorCard("NT-401", "VRS 아이디/비밀번호가 맞지 않아요 (401)", "통합회원 ID와 비밀번호를 다시 입력하세요(대소문자 구분). 2025년 8월부터 국토지리정보원 VRS는 ‘측위보정정보 통합회원 ID’(지각변동감시시스템에서 등록)가 필요하다고 해요 — 공식 공지 원문은 확인하지 못했어요. 자동 재시도는 하지 않아요.", false)
             NtripState.ERROR ->
                 if ("마운트" in m || "404" in m) ErrorCard("NT-404", "마운트 포인트를 찾을 수 없어요", "마운트 포인트 이름이 맞는지 확인하세요(서비스 안내문의 이름, 예: VRS-RTCM31). 서버는 응답했으니 주소·포트·계정은 맞아요.", false)
@@ -124,6 +127,10 @@ interface ConnectionPlatform {
     var autoConnect: Boolean
         get() = false
         set(_) {}
+    /** 0.1.29 T19: 사용자가 보정 서비스·서버·마운트를 직접 바꾼 적 있는지(있으면 기기 기본값을 넣지 않음) */
+    var correctionUserSet: Boolean
+        get() = false
+        set(_) {}
     fun nowMs(): Long = System.currentTimeMillis()
 }
 
@@ -140,6 +147,8 @@ object KnownMounts {
         CorrectionService("rts1", "국토지리정보원 VRS (RTS1)", "RTS1.ngii.go.kr", 2101, "VRS-RTCM31", "가상기준점 방식 · 내 위치(GGA) 필요", "RTS1 · VRS"),
         CorrectionService("rts2", "국토지리정보원 VRS·FKP (RTS2)", "RTS2.ngii.go.kr", 2101, "VRS-RTCM32", "VRS·FKP·SSR", "RTS2 · VRS"),
         CorrectionService("fkp", "국토지리정보원 FKP (RTS2)", "RTS2.ngii.go.kr", 2101, "FKP-RTCM31", "면보정 방식", "RTS2 · FKP"),
+        // 0.1.29 T17: 선택 항목(기본값 아님). 출처 국토지리정보원 G-VRS 사용자 가이드(2025-10)
+        CorrectionService(Gvrs.ID, "국토지리정보원 G-VRS (RTS3, 시범)", Gvrs.HOST, Gvrs.PORT, Gvrs.MOUNT, "시범 · GVRS는 내 위치(GGA) 필요 · 공공측량 불가", "RTS3 · G-VRS"),
         CorrectionService("custom", "직접 입력", "", 2101, "", "다른 캐스터 서버"),
     )
     private fun m(mp: String, fmt: String, nmea: Boolean, note: String) = MountInfo(mp, note, fmt, "GPS+GLO+GAL+BDS", nmea)
@@ -159,6 +168,8 @@ object KnownMounts {
             m("FKP-RTCM31", "RTCM 3.1", true, "FKP 면보정 · 미확인"),
             m("SSR-SSRG", "SSR", false, "SSR 보정 · 미확인"),
         )
+        // 0.1.29 T17: 가이드에 적힌 고정 이름은 GVRS 뿐. 지역명 마운트는 실제 소스테이블에서만(이름을 지어내지 않음)
+        "rts3.ngii.go.kr" -> listOf(m(Gvrs.MOUNT, "미확인", true, "서버가 가까운 격자 자동 선택 · GGA 필요 · RTCM 버전 미확인"))
         else -> emptyList()
     }
 }
@@ -350,6 +361,17 @@ class ConnectionController(
         if (phase() == ConnPhase.CONNECTING) keepHintOnce()
     }
 
+    /** 0.1.29 T19: 사용자가 보정 설정을 직접 바꿨는지(저장됨). 바꿨으면 기기 기본값을 넣지 않는다 */
+    private var correctionUserSet: Boolean = runCatching { platform.correctionUserSet }.getOrDefault(false)
+    /** 기기 기본값으로 넣은 마운트 이름(사용자가 바꾸면 null). 목록에 없으면 알림 */
+    var defaultMountApplied by mutableStateOf<String?>(null); private set
+    /** 받은 목록에 기본 마운트 이름이 없었는지 [현장확인] */
+    var defaultMountMissing by mutableStateOf(false); private set
+    /** 0.1.29 T17: RTS3 고를 때 비밀번호 ngii 를 채우기 전 값(메모리만). 다른 서비스로 돌아갈 때 되돌린다 */
+    private var passwordBeforeGvrs: String? = null
+    /** 0.1.29 T17-2: 고정해 σH 기준(m). 지금은 설정에서 바꿀 수 없다 = 20 mm */
+    var sigmaThresholdM by mutableStateOf(kr.archsurvey.core.StatusThresholds().fixedMaxSigmaHM)
+
     init {
         val s = platform.loadSaved()
         DeviceProfiles.byId(s.deviceId)?.let { profile = it }
@@ -357,7 +379,46 @@ class ConnectionController(
         form = s.ntrip
         resetChecks()
         if (s.preChecked) for (i in checks.indices) checks[i] = true
+        // 0.1.29 T19: 새로 설치(기기를 고른 적 없음)면 기본 기기(R10)의 보정 기본값
+        if (s.deviceId == null && applyDeviceCorrectionDefault(profile)) persistSafe()
     }
+
+    /**
+     * 0.1.29 T19 기기별 보정 기본값(R10 → RTS1 + VRS-RTCM34, SP60 → RTS2 + VRS-RTCM32). RTS3 는 기본값이 아님.
+     * 사용자가 바꾼 적 있거나 연결 성공 이력이 있거나 지금 값이 손댄 값이면 아무것도 하지 않는다(사용자 값 보존).
+     */
+    private fun applyDeviceCorrectionDefault(p: DeviceProfile): Boolean {
+        if (correctionUserSet || runCatching { platform.hadSuccess() }.getOrDefault(false)) return false
+        if (!DeviceCorrectionDefaults.looksUnset(form)) return false
+        val d = DeviceCorrectionDefaults.forProfile(p.id) ?: return false
+        defaultMountApplied = d.mount; defaultMountMissing = false
+        if (form.host.trim().equals(d.host, true) && form.mount.trim().equals(d.mount, true) && form.port.trim() == d.port.toString()) return false
+        form = form.copy(host = d.host, port = d.port.toString(), mount = d.mount)
+        return true
+    }
+
+    private fun markCorrectionUserSet() {
+        defaultMountApplied = null; defaultMountMissing = false
+        if (correctionUserSet) return
+        correctionUserSet = true
+        runCatching { platform.correctionUserSet = true }
+    }
+
+    /** GVRS 마운트면 GGA 전송을 켠다(끄지 못함). 켰으면 true */
+    private fun ensureGgaForGvrs(): Boolean {
+        if (!Gvrs.requiresGga(form) || sendGga) return false
+        sendGga = true; runCatching { platform.applyNtripOptions(sendGga, autoRetry) }
+        return true
+    }
+
+    /** 0.1.29 T17 연결 화면 안내: RTS3 를 골랐을 때만 */
+    fun gvrsNotice(): String? = if (form.enabled && Gvrs.isHost(form.host)) Gvrs.NOTICE else null
+    /** RTS3 + SP60: RTCM 버전 미확인 안내 [현장확인] */
+    fun gvrsSp60Line(): String? = if (gvrsNotice() != null && profile.id == DeviceProfiles.SP60_ID) Gvrs.SP60_RTCM_LINE else null
+    /** 0.1.29 T17-2: σH 기준 11 mm 미만 + SP60 → 펌웨어 5.26 안내(막지 않음) */
+    fun firmwareNotice(): String? = Sp60Firmware.notice(profile, sigmaThresholdM)
+    /** 연결·저장·자동 연결을 막는 입력 문제(폼 + GVRS 인데 GGA 끔) */
+    fun connectProblems(): List<String> = form.problems() + if (Gvrs.requiresGga(form) && !sendGga) listOf(Gvrs.GGA_REQUIRED) else emptyList()
 
     private fun resetChecks() { checks.clear(); repeat(profile.preConnectChecks.size) { checks.add(false) } }
 
@@ -373,40 +434,64 @@ class ConnectionController(
         if (p.id == profile.id) return
         if (lockedForChange()) return
         profile = p; resetChecks(); address = null; notice = null; refresh()
+        val defaulted = applyDeviceCorrectionDefault(p) // 0.1.29 T19: 처음 고를 때·값이 비었을 때만
         persist()
+        if (defaulted) ui.toast("${p.displayName.substringAfterLast(' ')} 기본 보정: ${currentService().short} · ${form.mount} (서버 목록에서 이름 확인)")
         onProfileChanged?.invoke(p) // JobConfig.antennaModelId 와 맞춤(0.1.13 P0)
         RtcmMountCompat.warnIfIncompatible(profile, form.mount)?.let { ui.toast(it) }
     }
 
     fun selectAddress(a: String) { if (a != address && lockedForChange()) return; address = a; notice = null; persist() }
 
-    fun updateForm(f: NtripForm) { form = f }
+    fun updateForm(f: NtripForm) {
+        val corrChanged = f.host.trim() != form.host.trim() || f.port.trim() != form.port.trim() || f.mount.trim() != form.mount.trim()
+        form = f
+        if (corrChanged) { markCorrectionUserSet(); if (ensureGgaForGvrs()) ui.toast(Gvrs.GGA_REQUIRED) }
+    }
 
     // ---------------- 보정 서비스·마운트 (SmartTopo 흐름: 서비스 → 목록 받기 → 검색·선택) ----------------
     fun currentService(): CorrectionService {
-        val h = form.host.trim().lowercase(); val sv = KnownMounts.services
+        // 0.1.29: 목록 순서(sv[0..3])가 아니라 id 로 찾는다(RTS3 를 넣어도 FKP·직접 입력이 밀리지 않게)
+        val h = form.host.trim().lowercase()
+        fun byId(id: String) = KnownMounts.services.first { it.id == id }
         return when {
-            h == "rts2.ngii.go.kr" && form.mount.trim().startsWith("FKP", true) -> sv[2]
-            h == "rts1.ngii.go.kr" -> sv[0]
-            h == "rts2.ngii.go.kr" -> sv[1]
-            else -> sv[3]
+            h == "rts2.ngii.go.kr" && form.mount.trim().startsWith("FKP", true) -> byId("fkp")
+            h == "rts1.ngii.go.kr" -> byId("rts1")
+            h == "rts2.ngii.go.kr" -> byId("rts2")
+            h == "rts3.ngii.go.kr" -> byId(Gvrs.ID)
+            else -> byId("custom")
         }
     }
 
     fun askService() = ui.choose("보정 서비스", KnownMounts.services.map { it.label + " · " + it.note }, KnownMounts.services.indexOf(currentService()), "service", KnownMounts.SOURCE) { i ->
         val sv = KnownMounts.services[i]
+        markCorrectionUserSet()
         if (sv.id == "custom") { showServer = true; return@choose }
         val prof = platform.hostProfile(sv.host)
-        form = if (prof != null) form.copy(host = sv.host, port = prof.port, mount = if (sv.id == "fkp") sv.mount else prof.mount, user = prof.user.ifBlank { form.user }, password = prof.password.ifEmpty { form.password })
-        else form.copy(host = sv.host, port = sv.port.toString(), mount = sv.mount)
+        val toGvrs = sv.id == Gvrs.ID
+        // RTS3 에서 나갈 때: 미리 채운 ngii 를 그대로 두었으면 이전 비밀번호로 되돌린다(다른 서버로 새지 않게)
+        var basePw = form.password
+        if (!toGvrs && passwordBeforeGvrs != null) {
+            if (basePw == Gvrs.GUIDE_PASSWORD) basePw = passwordBeforeGvrs.orEmpty()
+            passwordBeforeGvrs = null
+        }
+        form = if (prof != null) form.copy(host = sv.host, port = prof.port, mount = if (sv.id == "fkp") sv.mount else prof.mount.ifBlank { sv.mount }, user = prof.user.ifBlank { form.user }, password = prof.password.ifEmpty { if (toGvrs) Gvrs.GUIDE_PASSWORD else basePw })
+        else if (toGvrs) {
+            // 0.1.29 T17: 아이디는 그대로, 비밀번호는 가이드 값 ngii 를 미리 채움(수정 가능), 마운트 GVRS
+            if (passwordBeforeGvrs == null && !Gvrs.isHost(form.host)) passwordBeforeGvrs = form.password
+            form.copy(host = sv.host, port = sv.port.toString(), mount = sv.mount, password = if (Gvrs.isHost(form.host) && form.password.isNotEmpty()) form.password else Gvrs.GUIDE_PASSWORD)
+        } else form.copy(host = sv.host, port = sv.port.toString(), mount = sv.mount, password = basePw)
+        val ggaOn = ensureGgaForGvrs()
         persistSafe()
-        ui.toast("보정 서비스: ${sv.label} · 마운트 ${form.mount}" + if (prof != null) " · 이 서버의 마지막 성공 설정을 불러왔어요" else "")
+        ui.toast("보정 서비스: ${sv.label} · 마운트 ${form.mount}" + (if (prof != null) " · 이 서버의 마지막 성공 설정을 불러왔어요" else "") + (if (toGvrs) " · ${Gvrs.NOTICE}" else "") + if (ggaOn) " · GGA 전송 켬" else "")
     }
 
     /** 서버 주소를 직접 바꾼 뒤(입력 끝) 그 서버의 마지막 성공 설정을 채운다 */
     fun recallHost() {
         val prof = platform.hostProfile(form.host) ?: return
+        markCorrectionUserSet()
         form = form.copy(port = prof.port, mount = prof.mount, user = prof.user.ifBlank { form.user }, password = prof.password.ifEmpty { form.password })
+        ensureGgaForGvrs()
         ui.toast("${form.host}의 마지막 성공 설정(아이디·포트·마운트)을 불러왔어요")
     }
 
@@ -425,7 +510,14 @@ class ConnectionController(
             try {
                 val list = platform.fetchMounts(cfg)
                 if (list.isEmpty()) mountFail("서버가 빈 목록을 보냈어요")
-                else { mounts = list.sortedWith(compareBy<MountInfo> { if (it.isRtcm3) 0 else 1 }.thenBy { it.mountPoint }); mountFromKnown = false; mountLoad = MountLoad.OK; ui.ok("마운트 목록 ${list.size}개 받음") }
+                else {
+                    mounts = list.sortedWith(compareBy<MountInfo> { if (it.isRtcm3) 0 else 1 }.thenBy { it.mountPoint }); mountFromKnown = false; mountLoad = MountLoad.OK
+                    // 0.1.29 T19: 기기 기본 마운트 이름이 실제 목록에 없으면 알리고 직접 고르게 한다 [현장확인]
+                    val dm = defaultMountApplied
+                    defaultMountMissing = dm != null && form.mount.trim().equals(dm, true) && list.none { it.mountPoint.equals(dm, true) }
+                    if (defaultMountMissing) ui.fail("기본 마운트 $dm 이(가) 이 서버 목록에 없어요 — 목록에서 직접 고르세요")
+                    else ui.ok("마운트 목록 ${list.size}개 받음")
+                }
             } catch (e: CancellationException) { throw e } catch (e: Throwable) {
                 mountFail(e.message?.take(120) ?: e.javaClass.simpleName)
             }
@@ -465,6 +557,12 @@ class ConnectionController(
     /** 0.1.18 목록 행 오른쪽 짧은 표시: 권장(이 수신기 최대 버전 이하 중 가장 알맞은 VRS) / R10 의 RTCM 3.4 허용 */
     fun mountGoodNote(m: MountInfo): String? {
         if (RtcmMountCompat.isTooNew(profile, m.mountPoint, m.format, m.formatDetails)) return null
+        // 0.1.29 T17: RTS3 — GVRS(이동 측량) / 지역명 마운트(정지 측량)
+        if (Gvrs.isHost(form.host)) return when {
+            Gvrs.isGvrsMount(m.mountPoint) -> Gvrs.GVRS_NOTE
+            REGION_MOUNT.matches(m.mountPoint.trim()) -> Gvrs.REGION_NOTE
+            else -> null
+        }
         val minor = RtcmMountCompat.detectMinor(m.mountPoint, m.format, m.formatDetails) ?: return null
         val rec = RecommendedMount.pick(profile, mounts, "")
         return when {
@@ -479,7 +577,9 @@ class ConnectionController(
         if (m.isEmpty()) { ui.fail("마운트 이름을 입력하세요"); return }
         val info = mounts.firstOrNull { it.mountPoint.equals(m, true) }
         form = form.copy(mount = m)
+        markCorrectionUserSet()
         mountPickerOpen = false; mountJob?.cancel()
+        if (ensureGgaForGvrs()) ui.toast(Gvrs.GGA_REQUIRED)
         persistSafe()
         val warn = RtcmMountCompat.warnIfIncompatible(profile, m, info?.format.orEmpty(), info?.formatDetails.orEmpty())
         if (warn != null) ui.toast(warn) else ui.ok("마운트 포인트 저장됨 · $m")
@@ -511,6 +611,8 @@ class ConnectionController(
     var showDiag by mutableStateOf(false)
     val meter = NtripMeter()
     fun changeSendGga(v: Boolean) {
+        // 0.1.29 T17: GVRS 마운트는 GGA 가 없으면 보정이 오지 않는다 — 끄지 못하게 경고하고 켠 채로 둔다
+        if (!v && Gvrs.requiresGga(form)) { if (!sendGga) { sendGga = true; platform.applyNtripOptions(sendGga, autoRetry) }; ui.fail(Gvrs.GGA_REQUIRED); return }
         sendGga = v; platform.applyNtripOptions(sendGga, autoRetry)
         ui.toast(if (v) "GGA 전송: 켬" else "GGA 전송: 끔 — VRS 마운트는 내 위치가 없으면 보정이 오지 않을 수 있어요")
     }
@@ -523,7 +625,7 @@ class ConnectionController(
     fun diagnostics(): String = runCatching { platform.diagnostics() }.getOrDefault("")
     /** 「저장」만(접속하지 않음) — 목업 07 하단 */
     fun saveOnly() {
-        val probs = form.problems()
+        val probs = connectProblems()
         persistSafe()
         ui.result(probs.isEmpty(), if (probs.isEmpty()) "VRS 설정 저장됨 · ${form.host}:${form.port} · ${form.mount}" else "저장됨 · 확인 필요: " + probs.joinToString(" · "))
     }
@@ -549,7 +651,7 @@ class ConnectionController(
     private var lastFailKey: String? = null
     private fun reportFailure(l: LinkStatus, n: NtripStatus) {
         if (!connectRequested) { lastFailKey = null; return }
-        val card = ErrorCards.from(l, n, form.enabled).firstOrNull()
+        val card = ErrorCards.from(l, n, form.enabled, form.host).firstOrNull()
         val failing = l.state == LinkState.NEEDS_USER || (form.enabled && (n.state == NtripState.AUTH_FAILED || n.state == NtripState.ERROR))
         if (!failing || card == null) { if (l.state == LinkState.STREAMING) lastFailKey = null; return }
         val key = "${l.state}/${n.state}/${card.code}"
@@ -568,7 +670,7 @@ class ConnectionController(
         if (!platform.hasBluetoothPermission() || !platform.bluetoothEnabled()) return false
         val addr = address ?: return false
         if (runCatching { platform.bondedDevices() }.getOrDefault(emptyList()).none { it.second == addr }) return false
-        if (form.problems().isNotEmpty()) return false
+        if (connectProblems().isNotEmpty()) return false
         startNow(addr)
         ui.toast("지난번 설정으로 자동 연결 중이에요")
         return true
@@ -593,7 +695,7 @@ class ConnectionController(
         if (addr == null) { notice = card(BtError.NO_DEVICE_SELECTED); return }
         if (platform.bondedDevices().none { it.second == addr }) { notice = card(BtError.NOT_PAIRED); return }
         if (checks.any { !it }) { notice = ErrorCard("-", "연결 전 확인을 모두 체크해 주세요", "수신기의 NMEA 출력을 켜지 않으면 연결돼도 위치가 오지 않아요.", false); return }
-        val probs = form.problems()
+        val probs = connectProblems()
         if (probs.isNotEmpty()) { notice = ErrorCard("-", "VRS 입력을 확인해 주세요", probs.joinToString(" · "), false); return }
         // 0.1.11: 비호환 마운트는 첫 누름에 경고만(연결 안 함), 같은 설정으로 한 번 더 누르면 진행
         val w = if (form.enabled) RtcmMountCompat.warnIfIncompatible(profile, form.mount) else null
@@ -638,10 +740,12 @@ class ConnectionController(
         const val LOCKED_MSG = "먼저 연결을 해제하세요"
         const val DISCONNECTED_MSG = "수신기 연결을 해제했어요 · 지도의 위치·좌표가 사라져요"
         const val CANCELLED_MSG = "연결을 취소했어요"
+        /** RTS3 지역명 마운트 모양(가이드 예: Seoul-Gangseo-Gaehwa, Yechon-Gaepo) */
+        private val REGION_MOUNT = Regex("^[A-Za-z][A-Za-z0-9]*(-[A-Za-z0-9]+)+$")
     }
 
     /** 현재 연결 상태에서 보여 줄 오류 카드 */
-    fun cards(): List<ErrorCard> = ErrorCards.from(link.value, ntrip.value, form.enabled)
+    fun cards(): List<ErrorCard> = ErrorCards.from(link.value, ntrip.value, form.enabled, form.host)
 
     private fun card(e: BtError) = ErrorCard(e.code, e.title, e.action, !e.needsUserAction)
 }

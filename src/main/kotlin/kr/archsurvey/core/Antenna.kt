@@ -75,7 +75,8 @@ data class AntennaResult(
 
 object AntennaMath {
     const val MAX_HEIGHT_M = 5.0
-    val CHIPS_M = listOf(1.500, 1.800, 2.000)
+    /** 0.1.29: R10 기본 1.6 m 칩 추가(T19) */
+    val CHIPS_M = listOf(1.500, 1.600, 1.800, 2.000)
 
     sealed interface ParseResult {
         data class Ok(val meters: Double) : ParseResult
@@ -244,5 +245,21 @@ data class AntennaRecord(
             val r = AntennaMath.compute(cfg, model) ?: return null
             return AntennaRecord(model.dbId, r.refPointId, model.ref(r.refPointId).labelKo, cfg.inputValueM, r.method, r.pcoV, r.pcoH, r.totalToApcM)
         }
+    }
+}
+
+/**
+ * 0.1.29 T19 기기별 폴 높이 기본값(사용자 결정 10-06): SP60 1.8 m, R10 1.6 m.
+ * 뜻은 지금과 같음 = 지면(폴 끝) → 그 기기의 기본 기준점(R10 퀵릴리즈 하단 · SP60 수신기 바닥) [사용자 확인 중].
+ * 사용자가 직접 바꾼 값(AntennaSource.USER)은 절대 덮지 않는다. 입력 방식(vertical/slant)과 무관 — 기본 기준점은 둘 다 수직.
+ */
+object DevicePoleDefaults {
+    const val R10_M = 1.6
+    const val SP60_M = 1.8
+    /** 안테나 DB 모델 id → 기본 폴 높이(m). 모르는 모델은 null(바꾸지 않음) */
+    fun forModel(antennaModelId: String?): Double? = when (antennaModelId) {
+        "TRIMBLE_R10" -> R10_M
+        "SPECTRA_SP60" -> SP60_M
+        else -> null
     }
 }

@@ -95,10 +95,19 @@ fun SurveyMapScreen(
     }
 }
 
+/** 0.1.29 T22-4: 중복 점 창에서 뒤로를 눌렀을 때 안내 */
+internal const val DUP_BACK_HINT = "방금 측정값을 어떻게 할지 골라 주세요"
+
 /** 시스템 뒤로 단추가 할 일. 없으면 null(앱 기본 동작 = 나가기) */
 internal fun backTarget(c: SurveyController): (() -> Unit)? {
     val cc = c.connection
     return when {
+        // 0.1.29 T22-3: 기울기 확인 창 = 「측점 안 함」과 같다(SurveyController 로직은 그대로, 화면 쪽에서만)
+        c.tiltPrompt != null -> { { c.answerTilt(false) } }
+        // 0.1.29 T22-4: 중복 점 선택 창은 반드시 골라야 함 — 뒤로를 먹고 창은 그대로(방금 측정값을 잃지 않게)
+        c.dupPrompt != null -> { { c.ui.toast(DUP_BACK_HINT) } }
+        // 0.1.29 T22-5: 측정(취득) 중 뒤로 = 기존 「중지」 경로(cancelAcquire — 저장 안 함). 예전엔 null 이라 앱이 나갔다
+        c.phase == Phase.ACQUIRING -> { { c.cancelAcquire() } }
         c.photoReviewOpen -> { { c.confirmPhoto() } }
         c.markerStyleOpen -> { { c.markerStyleOpen = false } }
         c.pointMenuFor != null -> { { c.pointMenuFor = null } }

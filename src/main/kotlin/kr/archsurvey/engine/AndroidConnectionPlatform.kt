@@ -70,6 +70,9 @@ class AndroidConnectionPlatform(private val app: App) : ConnectionPlatform {
     override var autoConnect: Boolean
         get() = app.settings.autoConnect
         set(v) { app.settings.autoConnect = v }
+    override var correctionUserSet: Boolean
+        get() = app.settings.correctionUserSet
+        set(v) { app.settings.correctionUserSet = v }
 }
 
 /** 오류 기록에서 연결 진단(NMEA 활성화·블루투스·보정) 블록만 최근 4건 골라 짧게 돌려준다 */

@@ -26,6 +26,11 @@ import kotlinx.coroutines.delay
 /** 저장 알림(터치를 가로채지 않음)·확인 대화상자·선택 창. 화면 맨 위(모든 화면 위)에 그린다 */
 @Composable
 fun FeedbackOverlays(ui: FeedbackHub) {
+    // 0.1.29 T22-1·T22-2: 시스템 뒤로는 맨 위 창부터 — 선택 창이면 창만 닫고(고르지 않음), 확인 창이면 「취소」와 같다.
+    // 이 함수는 화면 맨 끝에 그려져 화면 BackHandler(backTarget)보다 나중에 등록 → 우선. 확인 창 처리를 나중에 등록해 둘 다 떠 있으면 확인 창부터.
+    // (예전: 창은 그대로 두고 뒤 화면이 홈으로 가거나 연결 화면이 닫혔다)
+    androidx.activity.compose.BackHandler(enabled = ui.choice != null) { ui.dismissChoice() }
+    androidx.activity.compose.BackHandler(enabled = ui.confirm != null) { ui.answer(false) }
     ui.choice?.let { ChoiceSheet(ui, it) }
     ui.confirm?.let { ConfirmDialog(ui, it) }
     ToastView(ui)

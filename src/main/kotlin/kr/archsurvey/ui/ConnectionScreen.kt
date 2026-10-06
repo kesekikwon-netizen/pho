@@ -38,7 +38,7 @@ import kr.archsurvey.ntrip.RtcmMountCompat
 fun ConnectionHost(c: SurveyController, cc: ConnectionController) {
     val link by cc.link.collectAsState()
     val ntrip by cc.ntrip.collectAsState()
-    val cards = ErrorCards.from(link, ntrip, cc.form.enabled)
+    val cards = ErrorCards.from(link, ntrip, cc.form.enabled, cc.form.host)
     if (!cc.open && cards.isNotEmpty()) AlertStrip(cards.first(), onClick = { cc.openScreen() })
     if (cc.open) ConnectionScreen(cc)
     if (cc.open && cc.mountPickerOpen) MountPicker(cc)
@@ -56,7 +56,7 @@ private fun ConnectionProgress(c: SurveyController, cc: ConnectionController, li
         StepView(l, states[i], ConnectSteps.detail(i, link, states, hostMount, c.gv.quality.labelKo, c.gv.satellites))
     }
     val sec = rememberElapsedSec(cc.progressStartMs)
-    val card = ErrorCards.from(link, ntrip, cc.form.enabled).firstOrNull()
+    val card = ErrorCards.from(link, ntrip, cc.form.enabled, cc.form.host).firstOrNull()
     val done = cc.progressDone(c.gv.quality.code)
     // 0.1.17: 시스템 뒤로 = 「닫기(계속 연결)」/「확인」과 같음 (뒤 화면이 대신 뒤로 가지 않게)
     // 0.1.18: 단추·BackHandler·backTarget 모두 cc.dismissProgress 하나로(완료 판정 기준도 하나)
@@ -202,7 +202,7 @@ fun ConnectionScreen(cc: ConnectionController) {
     val t = T
     val link by cc.link.collectAsState()
     val ntrip by cc.ntrip.collectAsState()
-    val cards = ErrorCards.from(link, ntrip, cc.form.enabled)
+    val cards = ErrorCards.from(link, ntrip, cc.form.enabled, cc.form.host)
     val p = cc.profile
     val vrsOnly = cc.section == ConnSection.VRS
     Column(Modifier.fillMaxSize().background(t.bg).testTag("connection_screen")) {
@@ -487,6 +487,18 @@ private fun VrsSection(cc: ConnectionController, ntrip: kr.archsurvey.engine.Ntr
             ToggleLine("자동 재접속", if (cc.autoRetry) "끊기면 알아서 다시 접속해요(인증 오류 제외)" else "꺼짐 — 끊기면 ‘다시 시도’를 눌러요", cc.autoRetry, "conn_autoretry") { cc.changeAutoRetry(it) }
         }
     }
+    // 0.1.29 T17: RTS3(G-VRS) 를 골랐을 때만 시범 서비스 안내(+ SP60 이면 RTCM 버전 미확인 안내)
+    cc.gvrsNotice()?.let { n ->
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(t.caution.copy(alpha = 0.16f)).border(1.5.dp, t.caution, RoundedCornerShape(16.dp)).padding(14.dp).testTag("conn_gvrs_notice"),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(n, style = Ty.label, color = t.ink)
+            cc.gvrsSp60Line()?.let { Text(it, style = Ty.small, color = t.ink, modifier = Modifier.testTag("conn_gvrs_sp60")) }
+        }
+    }
+    // 0.1.29 T17-2: σH 기준 11 mm 미만 + SP60 → 펌웨어 안내(막지 않음)
+    cc.firmwareNotice()?.let { Text(it, style = Ty.small, color = t.caution, modifier = Modifier.padding(horizontal = 4.dp).testTag("conn_sp60_fw")) }
     if (cc.form.enabled) {
         // 0.1.11 P0(통신): 수신기에 맞지 않는 RTCM 버전 마운트면 권장 마운트로 바꾸는 단추
         val compat = RtcmMountCompat.warnIfIncompatible(cc.profile, cc.form.mount)

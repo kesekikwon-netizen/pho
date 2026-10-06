@@ -193,8 +193,20 @@ class SurveyController(
         val m = antennaModel
         val ref = if (m.refPoints.any { it.id == cfg.refPointId }) cfg.refPointId else m.defaultRefPoint
         antenna = antenna.copy(inputValueM = AntennaMath.snapPole(cfg.poleM), refPointId = ref, tapeOn = false,
-            source = if (cfg.poleUserSet) AntennaSource.USER else antenna.source)
+            source = if (cfg.poleUserSet) AntennaSource.USER else if (antenna.source == AntennaSource.USER) AntennaSource.DEFAULT else antenna.source)
         epochs = cfg.epochs.coerceIn(1, 30)
+        applyDevicePoleDefault() // 0.1.29 T19: 이 작업에서 사용자가 폴 높이를 정하지 않았으면 기기 기본값
+    }
+    /**
+     * 0.1.29 T19 기기별 폴 높이 기본값(SP60 1.8 m · R10 1.6 m). 사용자가 정한 값(USER)·수신기 보고값(RECEIVER)은 그대로.
+     * 저장은 지금처럼 작업별, 출처는 DEFAULT 유지. 바뀌었으면 true
+     */
+    private fun applyDevicePoleDefault(): Boolean {
+        if (antenna.source != AntennaSource.DEFAULT) return false
+        val d = kr.archsurvey.core.DevicePoleDefaults.forModel(antennaModelId) ?: return false
+        if (kotlin.math.abs(antenna.inputValueM - d) < 1e-9) return false
+        antenna = antenna.copy(inputValueM = d)
+        return true
     }
     /** 이 작업에 다른 좌표계로 저장된 점이 있으면 이유 문구(바꾸지 않음). SmartTopo 는 전 점을 변환하지만 여기선 원본 보존을 위해 막는다 */
     fun zoneChangeProblem(z: KoreanTmZone): String? {
@@ -985,10 +997,15 @@ class SurveyController(
     // ---------------- 안테나 높이 ----------------
 
     fun setAntennaModel(id: String) {
-        if (id == antennaModelId) return
-        antennaModelId = id
-        antenna = AntennaResolver.proposeDefault(antenna, antennaModel)
-        jobConfigChanged()
+        val changed = id != antennaModelId
+        if (changed) {
+            antennaModelId = id
+            // 0.1.29 T19: 기기를 바꿔도 사용자가 정한 폴 높이(USER)는 그대로 — 기준점만 새 모델 기본으로
+            val wasUser = antenna.source == AntennaSource.USER
+            antenna = AntennaResolver.proposeDefault(antenna, antennaModel).let { if (wasUser) it.copy(source = AntennaSource.USER) else it }
+        }
+        val poleDefaulted = applyDevicePoleDefault()
+        if (changed || poleDefaulted) jobConfigChanged()
     }
     fun setRefPoint(id: String) { antenna = antenna.copy(refPointId = id); jobConfigChanged() }
     /** 0.1.12: 폴 높이는 10 cm(0.1 m) 단위로만 바꾼다. 지금 값을 0.1 m 에 맞춘 뒤 ±0.1 m */

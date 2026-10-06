@@ -129,10 +129,11 @@ class SurveyControllerTest {
     @Test fun switchingToSp60ChangesRecordedOffset() {
         val f = FakeGnssSource(FakeScenarios.allFixed()); val c = ctrl(f)
         c.setAntennaModel("SPECTRA_SP60")
-        assertEquals(2.000, c.antenna.inputValueM, 0.0); assertEquals("bottom_of_receiver_arp", c.antenna.refPointId)
+        // 0.1.29 T19: 사용자가 정하지 않은 폴 높이는 SP60 기본 1.8 m
+        assertEquals(1.800, c.antenna.inputValueM, 1e-9); assertEquals("bottom_of_receiver_arp", c.antenna.refPointId)
         repeat(2) { f.emitNext() }; c.onMeasure(); repeat(6) { f.emitNext() }
-        assertEquals(2.0687, c.points.single().antenna.apcHeightM, 1e-9)
-        assertEquals(64.0 - 2.0687, c.points.single().groundHeightM!!, 1e-6)
+        assertEquals(1.8687, c.points.single().antenna.apcHeightM, 1e-9)
+        assertEquals(64.0 - 1.8687, c.points.single().groundHeightM!!, 1e-6)
     }
     @Test fun heightStepAndRefSwitchUpdateResultImmediately() {
         val f = FakeGnssSource(FakeScenarios.allFixed()); val c = ctrl(f)
