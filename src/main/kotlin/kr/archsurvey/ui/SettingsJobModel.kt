@@ -189,7 +189,10 @@ class JobController(
         val prob = JobNames.problem(newName, list.map { it.name })
         if (prob != null) { error = prob; c.ui.fail(prob); return }
         val n = newName.trim()
-        val cfg = c.jobConfig().copy(epsg = formZone.epsg, geoid = formGeoid, mapBase = formMap)
+        val base = c.jobConfig()
+        // 0.1.29 UX-0129-1: 새 작업은 사용자가 정한 폴 높이가 아니면 기기 기본값(R10 1.6 · SP60 1.8)으로 시작
+        val pole = if (base.poleUserSet) base.poleM else kr.archsurvey.core.DevicePoleDefaults.forModel(base.antennaModelId) ?: base.poleM
+        val cfg = base.copy(epsg = formZone.epsg, geoid = formGeoid, mapBase = formMap, poleM = pole)
         run("새 작업") {
             platform.create(n)
             configs.save(n, cfg)

@@ -262,4 +262,9 @@ object DevicePoleDefaults {
         "SPECTRA_SP60" -> SP60_M
         else -> null
     }
+    /** 0.1.29 UX-0129-1: 기기를 바꿔 기본 폴 높이로 바뀌었을 때 안내. 예) 「폴 높이 1.6 → 1.8 m(SP60 기본)」 */
+    fun changeNotice(oldM: Double, newM: Double, antennaModelId: String): String {
+        val model = when (antennaModelId) { "TRIMBLE_R10" -> "R10"; "SPECTRA_SP60" -> "SP60"; else -> antennaModelId }
+        return String.format(java.util.Locale.US, "폴 높이 %.1f → %.1f m(%s 기본)", oldM, newM, model)
+    }
 }

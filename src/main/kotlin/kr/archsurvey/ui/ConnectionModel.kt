@@ -320,7 +320,8 @@ class ConnectionController(
     var bonded by mutableStateOf<List<Pair<String, String>>>(emptyList()); private set
     var notice by mutableStateOf<ErrorCard?>(null); private set
     /** 장비 프로필 변경 시(안테나 모델 동기화). SurveyViewModel 이 연결 */
-    var onProfileChanged: ((DeviceProfile) -> Unit)? = null
+    /** 0.1.29: 돌려주는 문구(폴 높이를 기기 기본값으로 바꿨을 때 안내)가 있으면 알림에 함께 보인다 */
+    var onProfileChanged: ((DeviceProfile) -> String?)? = null
     /** 0.1.19 연결 전용 효과음·진동(CONNECT_OK/FAIL/DISCONNECT). VM 이 FeedbackPlayer 에 연결 */
     var onFeedback: ((FeedbackEvent) -> Unit)? = null
     var showNmeaSteps by mutableStateOf(false)
@@ -436,9 +437,14 @@ class ConnectionController(
         profile = p; resetChecks(); address = null; notice = null; refresh()
         val defaulted = applyDeviceCorrectionDefault(p) // 0.1.29 T19: 처음 고를 때·값이 비었을 때만
         persist()
-        if (defaulted) ui.toast("${p.displayName.substringAfterLast(' ')} 기본 보정: ${currentService().short} · ${form.mount} (서버 목록에서 이름 확인)")
-        onProfileChanged?.invoke(p) // JobConfig.antennaModelId 와 맞춤(0.1.13 P0)
-        RtcmMountCompat.warnIfIncompatible(profile, form.mount)?.let { ui.toast(it) }
+        val poleMsg = onProfileChanged?.invoke(p) // JobConfig.antennaModelId 와 맞춤(0.1.13 P0) · 0.1.29 폴 높이 바뀜 안내
+        // 알림은 하나로(앞 알림이 뒤 알림에 덮이지 않게): 폴 높이 → 기본 보정 → RTCM 호환 경고
+        val msgs = listOfNotNull(
+            poleMsg,
+            if (defaulted) "${p.displayName.substringAfterLast(' ')} 기본 보정: ${currentService().short} · ${form.mount} (서버 목록에서 이름 확인)" else null,
+            RtcmMountCompat.warnIfIncompatible(profile, form.mount),
+        )
+        if (msgs.isNotEmpty()) ui.toast(msgs.joinToString(" · "))
     }
 
     fun selectAddress(a: String) { if (a != address && lockedForChange()) return; address = a; notice = null; persist() }

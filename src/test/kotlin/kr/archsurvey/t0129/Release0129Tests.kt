@@ -293,15 +293,105 @@ class DeviceDefaultsT19Tests {
         c.setAntennaModel("TRIMBLE_R10"); assertEquals(2.0, c.antenna.inputValueM, 1e-9)
     }
 
-    @Test fun jobConfigPoleDefaultOnlyWhenNotUserSet() {
-        val c = sc()
+    // ---------------- UX-0129-1: 기존 작업은 저장된 폴 높이 그대로 ----------------
+
+    private class Jobs : JobPlatform {
+        override var current = "작업1"; val names = linkedSetOf("작업1")
+        override suspend fun list() = names.map { JobInfo(it, 0, 0, 0, null, null) }
+        override suspend fun info(name: String) = JobInfo(name, 0, 0, 0, null, null)
+        override suspend fun create(name: String) { names += name; current = name }
+        override suspend fun open(name: String) { current = name }
+        override suspend fun delete(name: String): String { names -= name; return "b.zip" }
+    }
+    private class Sett : SettingsPlatform {
+        override var zone = KoreanTmZone.CENTRAL; override var poleRight = true; override var sound = true; override var vibration = true; override var keepScreenOn = true
+        override var epochs = 3
+    }
+
+    /** 앱(SurveyViewModel)처럼 배선: 연결 화면 기기 선택 → 안테나 모델 + 폴 안내 문구 */
+    private class App(profile: String = DeviceProfiles.R10_ID, jobs: Map<String, JobConfig> = emptyMap(), db: Map<String, kr.archsurvey.core.AntennaModel>) {
+        val c = SurveyController(FakeGnssSource(FakeScenarios.allFixed()), db, scope())
+        val cfgs = MemoryJobConfigPlatform().also { m -> jobs.forEach { (k, v) -> m.save(k, v) } }
+        val jp = Jobs().also { it.names += jobs.keys }
+        val cc = ConnectionController(FP(SavedConnection(profile, "AA:BB", NtripForm(user = "u", password = "p"), true)), scope())
+        val jc: JobController
+        init {
+            cc.ui = c.ui; c.connection = cc
+            cc.onProfileChanged = { p -> AntennaDb.antennaIdForProfile(p.id)?.let { c.setAntennaModel(it) } }
+            AntennaDb.antennaIdForProfile(cc.profile.id)?.let { c.setAntennaModel(it) } // 시작 시(안내 없음)
+            c.settingsState = SettingsState(c, Sett())
+            jc = JobController(c, jp, scope(), cfgs); c.jobs = jc
+            cfgs.load(jp.current)?.let { c.applyJobConfig(it) } ?: cfgs.save(jp.current, c.jobConfig()) // 직전 작업 복원
+            c.onJobConfigChanged = { cfgs.save(jp.current, it) }
+        }
+    }
+
+    @Test fun existingJobUntouched2m_staysOnOpen() {
+        // 앱 시작: 직전 작업(손대지 않은 2.0 m) — R10 이어도 1.6 으로 바뀌지 않음
+        val a = App(jobs = mapOf("작업1" to JobConfig(antennaModelId = "TRIMBLE_R10", poleM = 2.0, poleUserSet = false)), db = db)
+        assertEquals(2.0, a.c.antenna.inputValueM, 1e-9); assertEquals(AntennaSource.DEFAULT, a.c.antenna.source)
+        assertEquals(2.0, a.cfgs.load("작업1")!!.poleM, 1e-9)
+        // SP60 작업(2.0)을 열어도 그대로
+        a.cfgs.save("옛작업", JobConfig(antennaModelId = "SPECTRA_SP60", poleM = 2.0, poleUserSet = false)); a.jp.names += "옛작업"
+        a.jc.open("옛작업")
+        assertEquals(2.0, a.c.antenna.inputValueM, 1e-9)
+        a.jc.open("작업1"); assertEquals(2.0, a.c.antenna.inputValueM, 1e-9)
+        // 직접 applyJobConfig 도 같음
+        val c = sc(); c.setAntennaModel("SPECTRA_SP60")
         c.applyJobConfig(JobConfig(antennaModelId = "SPECTRA_SP60", poleM = 2.0, poleUserSet = false))
-        assertEquals(1.8, c.antenna.inputValueM, 1e-9)
+        assertEquals(2.0, c.antenna.inputValueM, 1e-9)
         c.applyJobConfig(JobConfig(antennaModelId = "SPECTRA_SP60", poleM = 2.0, poleUserSet = true))
-        assertEquals(2.0, c.antenna.inputValueM, 1e-9); assertEquals(AntennaSource.USER, c.antenna.source)
-        // 사용자 값 작업 → 기본 작업으로 열면 USER 표시가 따라오지 않음
+        assertEquals(AntennaSource.USER, c.antenna.source)
         c.applyJobConfig(JobConfig(antennaModelId = "TRIMBLE_R10", poleM = 2.0, poleUserSet = false))
-        assertEquals(1.6, c.antenna.inputValueM, 1e-9); assertEquals(AntennaSource.DEFAULT, c.antenna.source)
+        assertEquals(2.0, c.antenna.inputValueM, 1e-9); assertEquals("USER 표시가 따라오지 않음", AntennaSource.DEFAULT, c.antenna.source)
+    }
+
+    @Test fun deviceSwitchUntouched_changesPoleAndToasts() {
+        // 새로 설치(저장된 작업 없음) R10 → 1.6, SP60 으로 바꾸면 1.8 + 안내
+        val a = App(db = db)
+        assertEquals(1.6, a.c.antenna.inputValueM, 1e-9)
+        a.cc.selectProfile(DeviceProfiles.SP60)
+        assertEquals(1.8, a.c.antenna.inputValueM, 1e-9)
+        assertTrue(a.c.ui.toast!!, a.c.ui.toast!!.startsWith("폴 높이 1.6 → 1.8 m(SP60 기본)"))
+        assertEquals(1.8, a.cfgs.load("작업1")!!.poleM, 1e-9)
+        a.cc.selectProfile(DeviceProfiles.R10)
+        assertTrue(a.c.ui.toast!!.startsWith("폴 높이 1.8 → 1.6 m(R10 기본)"))
+        // 기존 작업(손대지 않은 2.0)에서 기기를 바꾸면 그때만 바뀌고 안내
+        val b = App(jobs = mapOf("작업1" to JobConfig(antennaModelId = "TRIMBLE_R10", poleM = 2.0)), db = db)
+        assertEquals(2.0, b.c.antenna.inputValueM, 1e-9)
+        b.cc.selectProfile(DeviceProfiles.SP60)
+        assertEquals(1.8, b.c.antenna.inputValueM, 1e-9)
+        assertTrue(b.c.ui.toast!!.startsWith("폴 높이 2.0 → 1.8 m(SP60 기본)"))
+        assertEquals("폴 높이 1.6 → 1.8 m(SP60 기본)", DevicePoleDefaults.changeNotice(1.6, 1.8, "SPECTRA_SP60"))
+    }
+
+    @Test fun newJobGetsDeviceDefault_oldJobKeepsValue() {
+        val a = App(jobs = mapOf("작업1" to JobConfig(antennaModelId = "TRIMBLE_R10", poleM = 2.0)), db = db)
+        assertEquals(2.0, a.c.antenna.inputValueM, 1e-9)
+        a.jc.openNew(); a.jc.newName = "새작업"; a.jc.create()
+        assertEquals("새 작업 = R10 기본", 1.6, a.c.antenna.inputValueM, 1e-9)
+        assertEquals(1.6, a.cfgs.load("새작업")!!.poleM, 1e-9)
+        a.jc.open("작업1"); assertEquals("옛 작업은 2.0 그대로", 2.0, a.c.antenna.inputValueM, 1e-9)
+        // SP60 에서 새 작업
+        a.cc.selectProfile(DeviceProfiles.SP60)
+        a.jc.openNew(); a.jc.newName = "새작업2"; a.jc.create()
+        assertEquals(1.8, a.cfgs.load("새작업2")!!.poleM, 1e-9)
+        // 사용자가 정한 높이는 새 작업에도 그대로(기존 동작)
+        a.c.setPoleHeight(2.1)
+        a.jc.openNew(); a.jc.newName = "새작업3"; a.jc.create()
+        assertEquals(2.1, a.cfgs.load("새작업3")!!.poleM, 1e-9); assertTrue(a.cfgs.load("새작업3")!!.poleUserSet)
+    }
+
+    @Test fun userSetPoleUnchangedOnSwitch_noToast() {
+        val a = App(db = db)
+        a.c.setPoleHeight(2.0); a.c.ui.hideToast()
+        a.cc.selectProfile(DeviceProfiles.SP60)
+        assertEquals(2.0, a.c.antenna.inputValueM, 1e-9); assertEquals(AntennaSource.USER, a.c.antenna.source)
+        assertFalse("폴 안내 없음", a.c.ui.toast.orEmpty().contains("폴 높이"))
+        // 사용자 값 작업을 열고 바꿔도 같음
+        val b = App(jobs = mapOf("작업1" to JobConfig(antennaModelId = "TRIMBLE_R10", poleM = 2.0, poleUserSet = true)), db = db)
+        b.cc.selectProfile(DeviceProfiles.SP60)
+        assertEquals(2.0, b.c.antenna.inputValueM, 1e-9); assertFalse(b.c.ui.toast.orEmpty().contains("폴 높이"))
     }
 
     @Test fun heightDefaultsUnchanged_receiverNotEgm96() {

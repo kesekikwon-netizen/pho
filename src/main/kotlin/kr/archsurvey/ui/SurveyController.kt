@@ -195,7 +195,7 @@ class SurveyController(
         antenna = antenna.copy(inputValueM = AntennaMath.snapPole(cfg.poleM), refPointId = ref, tapeOn = false,
             source = if (cfg.poleUserSet) AntennaSource.USER else if (antenna.source == AntennaSource.USER) AntennaSource.DEFAULT else antenna.source)
         epochs = cfg.epochs.coerceIn(1, 30)
-        applyDevicePoleDefault() // 0.1.29 T19: 이 작업에서 사용자가 폴 높이를 정하지 않았으면 기기 기본값
+        // 0.1.29 UX-0129-1: 기존 작업은 저장된 폴 높이 그대로(2.0 m 포함). 기기 기본값은 새로 설치·새 작업·기기 바꿀 때만
     }
     /**
      * 0.1.29 T19 기기별 폴 높이 기본값(SP60 1.8 m · R10 1.6 m). 사용자가 정한 값(USER)·수신기 보고값(RECEIVER)은 그대로.
@@ -996,8 +996,10 @@ class SurveyController(
 
     // ---------------- 안테나 높이 ----------------
 
-    fun setAntennaModel(id: String) {
+    /** 기기(안테나 모델)를 맞춘다. 기기를 바꿔 폴 높이가 기본값으로 바뀌었으면 안내 문구(「폴 높이 1.6 → 1.8 m(SP60 기본)」), 아니면 null */
+    fun setAntennaModel(id: String): String? {
         val changed = id != antennaModelId
+        val oldPole = antenna.inputValueM
         if (changed) {
             antennaModelId = id
             // 0.1.29 T19: 기기를 바꿔도 사용자가 정한 폴 높이(USER)는 그대로 — 기준점만 새 모델 기본으로
@@ -1006,6 +1008,7 @@ class SurveyController(
         }
         val poleDefaulted = applyDevicePoleDefault()
         if (changed || poleDefaulted) jobConfigChanged()
+        return if (changed && poleDefaulted) kr.archsurvey.core.DevicePoleDefaults.changeNotice(oldPole, antenna.inputValueM, id) else null
     }
     fun setRefPoint(id: String) { antenna = antenna.copy(refPointId = id); jobConfigChanged() }
     /** 0.1.12: 폴 높이는 10 cm(0.1 m) 단위로만 바꾼다. 지금 값을 0.1 m 에 맞춘 뒤 ±0.1 m */
