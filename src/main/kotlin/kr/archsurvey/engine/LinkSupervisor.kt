@@ -65,6 +65,8 @@ class LinkSupervisor(
     /** 0.1.30 T23: 이 수신기 자동 요청 횟수 상한(Engine 은 주소별 앱 실행 단위로 넘긴다) */
     private val precisionBudget: kr.archsurvey.bt.PrecisionBudget = kr.archsurvey.bt.PrecisionBudget(),
     private val precision: kr.archsurvey.bt.PrecisionActivator = kr.archsurvey.bt.PrecisionActivator(clock),
+    /** 0.1.30 T23-b: 사용자 [자동 켜기 다시] 신호(SP60 만). 자동 1번이 끝난 뒤에만 받고, 한 번에 한 순서씩 */
+    private val precisionRetry: ReceiveChannel<Unit>? = null,
 ) {
     class SessionLost(val error: BtError, msg: String) : IOException(msg)
 
@@ -313,6 +315,22 @@ class LinkSupervisor(
                 )
                 CrashLog.record("진단 ${r.summary()}", RuntimeException(r.log.joinToString("\n")))
                 onPrecisionResult(r)
+                // 0.1.30 T23-b: 사용자 재시도 — 자동 실행 중 눌린 것은 버리고, 그 뒤 누를 때마다 한 순서(자동 상한과 별도)
+                val retry = precisionRetry ?: return@launch
+                while (retry.tryReceive().isSuccess) { }
+                while (isActive) {
+                    retry.receive()
+                    val u = precision.run(
+                        send = { body -> frameLock.withLock { writeCmd(kr.archsurvey.bt.PrecisionCommands.line(body).toByteArray(Charsets.US_ASCII)) } },
+                        replies = pashReplies,
+                        seenTypes = { driver.snapshot.seenTypes },
+                        budget = kr.archsurvey.bt.PrecisionBudget(1),
+                        userRetry = true,
+                    )
+                    CrashLog.record("진단(사용자 재시도) ${u.summary()}", RuntimeException(u.log.joinToString("\n")))
+                    onPrecisionResult(u)
+                    while (retry.tryReceive().isSuccess) { }
+                }
             } catch (_: CancellationException) {
             } catch (e: Exception) {
                 CrashLog.record("정밀도 자동요청 오류", e)

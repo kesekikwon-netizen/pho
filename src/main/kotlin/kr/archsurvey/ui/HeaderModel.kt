@@ -28,6 +28,8 @@ object HeaderModel {
     private fun f1(x: Double) = String.format(Locale.US, "%.1f", x)
 
     /** 0.1.30 T24 머리글·상태 띠 공통 문구(UX리뷰) */
+    /** 0.1.30 T23-c: 고정인데 GST 없음 — H/V 옆 작은 표시 */
+    const val SIGMA_MISSING = "σ 없음"
     const val NO_RECEIVER = "수신기 없음"
     const val RECEIVER_LOST = "수신기 끊김"
     const val CONNECTING = "연결 중"
@@ -49,7 +51,7 @@ object HeaderModel {
         if (reason == StatusReason.LINK_DOWN) return if (gv.link == kr.archsurvey.device.LinkState.CONNECTING || gv.link == kr.archsurvey.device.LinkState.CONNECTED_NO_DATA)
             HeaderPill("0", "보정 —", Tone.NONE, CONNECTING, Tone.NONE)
         else HeaderPill("0", "보정 —", Tone.NONE, RECEIVER_LOST, Tone.BAD)
-        val fixTone = when (gv.status.status) { SurveyStatus.FIXED -> Tone.FIXED; SurveyStatus.CAUTION -> Tone.CAUTION; SurveyStatus.UNAVAILABLE -> Tone.BAD }
+        val fixTone = when (gv.displayStatus) { SurveyStatus.FIXED -> Tone.FIXED; SurveyStatus.CAUTION -> Tone.CAUTION; SurveyStatus.UNAVAILABLE -> Tone.BAD }
         val (corr, corrTone) = correction(gv, ntrip, ntripEnabled, nowMs)
         val fix = fixLabel(gv.quality)
         return HeaderPill(gv.satellites.toString(), corr, corrTone, fix, fixTone)
@@ -89,7 +91,8 @@ object HeaderModel {
             gv.hdop != null -> "HDOP " + f1(gv.hdop)
             else -> "PDOP —"
         }
-        return dop + " / H " + (gv.status.sigmaHM?.let { f3(it) } ?: "—") + " / V " + (gv.sigmaVM?.let { f3(it) } ?: "—")
+        return dop + " / H " + (gv.status.sigmaHM?.let { f3(it) } ?: "—") + " / V " + (gv.sigmaVM?.let { f3(it) } ?: "—") +
+            if (gv.sigmaMissingOnFix) " · $SIGMA_MISSING" else ""
     }
 
     fun antH(inputM: Double): String = "Ant.H " + f3(inputM)

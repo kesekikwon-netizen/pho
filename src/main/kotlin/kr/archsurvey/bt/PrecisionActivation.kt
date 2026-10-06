@@ -171,6 +171,8 @@ class PrecisionActivator(
         replies: ReceiveChannel<String>,
         seenTypes: () -> Set<String>,
         budget: PrecisionBudget,
+        /** 0.1.30 T23-b: 사용자가 [자동 켜기 다시]를 눌렀을 때 — 5 s 자연 대기 없이 바로(순서·잠금·허용 명령은 같음) */
+        userRetry: Boolean = false,
     ): PrecisionResult {
         val t0 = clock()
         val sent = ArrayList<String>(); val got = ArrayList<String>(); val log = ArrayList<String>()
@@ -180,7 +182,8 @@ class PrecisionActivator(
             return PrecisionResult(o, port, src, sent.toList(), got.toList(), log.toList(), gstAt, gsaAt, seenTypes(), clock())
         }
         // 1) GGA 확인 뒤 5 s 자연 대기
-        val until = t0 + naturalWaitMs
+        val until = if (userRetry) t0 else t0 + naturalWaitMs
+        if (userRetry) log += "사용자 요청 [자동 켜기 다시]"
         while (clock() < until && !(has("GST") && has("GSA"))) delay(pollMs)
         if (has("GST") && has("GSA")) { log += "GST·GSA 이미 수신 — 명령 안 보냄"; return result(PrecisionOutcome.ALREADY_PRESENT, null, "-") }
         val missing = PrecisionCommands.SENTENCES.filter { !has(it) }

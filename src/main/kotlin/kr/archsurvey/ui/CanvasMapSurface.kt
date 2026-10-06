@@ -90,7 +90,7 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
             // 이동 꼬리
             if (state.trail.size >= 2) {
                 val path = Path()
-                state.trail.forEachIndexed { i, p -> if (i == 0) path.moveTo(sx(p.x), sy(p.y)) else path.lineTo(sx(p.x), sy(p.y)) }
+                state.trail.forEachIndexed { i, p -> if (i == 0 || i in state.trailBreaks) path.moveTo(sx(p.x), sy(p.y)) else path.lineTo(sx(p.x), sy(p.y)) } // 0.1.30 T26 점프에서 끊음
                 drawPath(path, t.fixed.copy(alpha = 0.45f), style = Stroke(2.5f * density))
             }
             // 저장된 점

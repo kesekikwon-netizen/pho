@@ -121,7 +121,7 @@ class NoPhoneGps0130Tests {
         assertEquals("σ 없음(고정)", PointCaution.reason(base))
         assertEquals(PointCaution.FLOAT, PointCaution.reason(base.copy(fixQuality = 5)))
         assertEquals(PointCaution.AGE_OVER, PointCaution.reason(base.copy(correctionAgeSec = 99.0)))
-        assertEquals("주의 · σ 없음(고정)", PointCaution.label(base))
+        assertEquals("고정 · σ 없음", PointCaution.label(base)) // 0.1.30 T23-c 게이트: 같은 문구
     }
 
     @Test fun hdopShownAsHdop_whenPdopMissing_neverAsSigma() {

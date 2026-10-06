@@ -57,6 +57,8 @@ data class MapViewState(
     val style: MarkerStyle = MarkerStyle(),
     /** 0.1.14 찾아갈 목표(점 찾아가기). 없으면 null */
     val target: LocalXY? = null,
+    /** 0.1.30 T26: 이동 꼬리에서 새 선이 시작되는 인덱스(점프·비고정 뒤). 그 앞 점과 잇지 않는다 */
+    val trailBreaks: Set<Int> = emptySet(),
     /** 0.1.30 T24: 폰 위치 점(수신기 위치가 없을 때만). 측점에는 쓰지 않는다 */
     val phone: PhoneMarker? = null,
 )

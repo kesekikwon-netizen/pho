@@ -234,7 +234,7 @@ class PrecisionLinkTest {
         rtcmWriteChunk = chunk, rtcmWriteGapMs = gap,
         reconnect = ReconnectPolicy(initialDelayMs = 100, maxDelayMs = 400, settleMs = 0, repairHintAfterFailures = 3, firstConnectDelayMs = 0))
 
-    private class Rig(profile: DeviceProfile, scope: CoroutineScope, val budget: PrecisionBudget = PrecisionBudget(), factory: (Int) -> MockSocket) {
+    private class Rig(profile: DeviceProfile, scope: CoroutineScope, val budget: PrecisionBudget = PrecisionBudget(), val retry: Channel<Unit>? = null, factory: (Int) -> MockSocket) {
         val link = MutableStateFlow(LinkStatus())
         val gnss = MutableStateFlow(GnssSnapshot())
         val rtcm = Channel<ByteArray>(256)
@@ -243,7 +243,7 @@ class PrecisionLinkTest {
         val clock = { System.nanoTime() / 1_000_000 }
         val sup = LinkSupervisor(profile, { factory(sockets.size).also { sockets.add(it) } }, clock, link, gnss, rtcm, Channel(Channel.CONFLATED), {}, {},
             watchdogPeriodMs = 50, onPrecisionResult = { results.add(it) }, precisionBudget = budget,
-            precision = PrecisionActivator(clock, naturalWaitMs = 300, replyWaitMs = 200, verifyWaitMs = 500, pollMs = 10))
+            precision = PrecisionActivator(clock, naturalWaitMs = 300, replyWaitMs = 200, verifyWaitMs = 500, pollMs = 10), precisionRetry = retry)
         val job = scope.launch { sup.run() }
         fun waitFor(ms: Long = 6000, what: String = "", cond: () -> Boolean) {
             val end = System.currentTimeMillis() + ms
@@ -336,5 +336,23 @@ class PrecisionLinkTest {
         assertEquals('C', r.results[0].port)
         // 연결은 실패해도 유지(끊은 것은 시험의 eof)
         assertTrue(r.sockets.take(3).flatMap { pashLines(it.written.toString("US-ASCII")) }.all { PrecisionCommands.isAllowed(it) })
+    }
+
+    /** 0.1.30 T23-b: 사용자 [자동 켜기 다시] → 자동 상한과 별도로 한 순서만, 같은 잠금·순서 */
+    @Test fun userRetry_runsExactlyOneMoreSequence() {
+        val retry = Channel<Unit>(Channel.CONFLATED)
+        val budget = PrecisionBudget(); repeat(2) { budget.tryAcquire() } // 자동 상한을 이미 다 씀
+        val r = Rig(sp60(), scope, budget, retry) { MockSocket() } // 응답 없는 SP60
+        r.waitFor { r.sockets.size == 1 }
+        r.sockets[0].push(gga())
+        r.waitFor(what = "auto") { r.results.size == 1 }
+        assertEquals(PrecisionOutcome.BUDGET_USED, r.results[0].outcome)
+        assertEquals(0, pashLines(r.sockets[0].written.toString("US-ASCII")).size)
+        retry.trySend(Unit)
+        r.waitFor(what = "retry") { r.results.size == 2 }
+        Thread.sleep(500)
+        assertEquals(2, r.results.size)
+        assertEquals(listOf("PASHQ,PRT", "PASHS,NME,GST,C,ON,1", "PASHS,NME,GSA,C,ON,1"), pashLines(r.sockets[0].written.toString("US-ASCII")))
+        assertEquals(PrecisionOutcome.FAILED_TIMEOUT, r.results[1].outcome)
     }
 }

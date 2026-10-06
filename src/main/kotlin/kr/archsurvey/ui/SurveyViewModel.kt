@@ -127,6 +127,7 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
         media.recoverPending()
         // 0.1.30 T23: SP60 GST/GSA 자동 요청 결과 → 연결당 한 번 안내
         viewModelScope.launch { application.engine.precision.collect { controller.onPrecisionResult(it) } }
+        controller.precisionRetry = { application.engine.retryPrecision() }
         // 0.1.30 T24: 폰 위치는 지도 점에만. 수신기가 받는 중(STREAMING/STALE)이면 폰 위치를 끈다(점이 어차피 숨음·배터리)
         viewModelScope.launch { phoneGps.fix.collect { controller.onPhoneLocation(it) } }
         viewModelScope.launch {

@@ -50,9 +50,18 @@ data class GnssView(
     val sats: List<kr.archsurvey.core.SatInfo> = emptyList(),
     /** 0.1.30 T24: 수신기 링크 상태(머리글 「수신기 없음」·「수신기 끊김」·「연결 중」 구분용) */
     val link: kr.archsurvey.device.LinkState = kr.archsurvey.device.LinkState.IDLE,
+    /** 0.1.30 T23-c: 엄격 모드(표시만 — 엄격 + σ 없음은 막힘이라 고정 색으로 보이지 않게) */
+    val strictMode: Boolean = false,
 ) {
     /** 0.1.30 T24: 수신기 없음(미연결) 또는 끊김 — 측점 불가, 좌표·정밀도 「—」 */
     val noReceiver: Boolean get() = status.reason == StatusReason.NOT_CONNECTED || status.reason == StatusReason.LINK_DOWN
+    /**
+     * 0.1.30 T23-c: **표시 전용** 상태. RTK 고정 + 보정 연령 기준 안(= 판정 NO_SIGMA)이면 σ 가 없어도 ‘측량 가능’ 색으로 보인다.
+     * 저장 판정은 계속 [status](NO_SIGMA = 주의)로 한다 — 엄격 모드는 막고, 기본 모드는 주의 표시로 저장(규칙 그대로).
+     */
+    val displayStatus: SurveyStatus get() = if (sigmaMissingOnFix && !strictMode) SurveyStatus.FIXED else status.status
+    /** 고정·보정 양호인데 GST(σ)만 없음 → H/V 옆 「σ 없음」 */
+    val sigmaMissingOnFix: Boolean get() = status.status == SurveyStatus.CAUTION && status.reason == StatusReason.NO_SIGMA
     /** 타원체고(m) = 정표고(MSL) + 지오이드 분리. 둘 중 하나라도 없으면 null */
     val ellipsoidalM: Double? get() = if (altM != null && geoidSepM != null) altM + geoidSepM else null
 }
@@ -190,6 +199,7 @@ class SurveyController(
     fun jobConfigChanged() { onJobConfigChanged?.invoke(jobConfig()) }
     /** 저장된 작업 설정을 화면 상태에 적용(작업 열기·앱 시작). 저장 콜백은 부르지 않는다 */
     fun applyJobConfig(cfg: JobConfig) {
+        clearTrail() // 0.1.30 T26: 작업이 바뀌면 이전 꼬리를 남기지 않음
         zone = KoreanTmZone.fromEpsg(cfg.epsg); geoid = cfg.geoid; mapBase = cfg.mapBase
         if (antennaDb.containsKey(cfg.antennaModelId)) antennaModelId = cfg.antennaModelId
         val m = antennaModel
@@ -314,7 +324,7 @@ class SurveyController(
         override fun prompt(): kr.archsurvey.voicecmd.VoicePrompt? {
             val conf = ui.confirm
             if (conf != null && conf === qualityConfirm)
-                return kr.archsurvey.voicecmd.VoicePrompt(kr.archsurvey.voicecmd.VoicePrompt.Kind.CAUTION, conf, "주의 상태예요. ${gv.status.reason.textKo}. 저장할까요?")
+                return kr.archsurvey.voicecmd.VoicePrompt(kr.archsurvey.voicecmd.VoicePrompt.Kind.CAUTION, conf, if (gv.status.reason == StatusReason.NO_SIGMA) SigmaText.VOICE_PROMPT else "주의 상태예요. ${gv.status.reason.textKo}. 저장할까요?")
             val ta = tiltPrompt
             if (ta != null)
                 return kr.archsurvey.voicecmd.VoicePrompt(kr.archsurvey.voicecmd.VoicePrompt.Kind.TILT, tiltToken, "기울기 ${String.format(java.util.Locale.US, "%.1f", ta)}도예요. 저장할까요?")
@@ -353,7 +363,7 @@ class SurveyController(
         set(v) { field = v; v.onResult = { ok, m -> ui.result(ok, m) } }
 
     /** 저장소에서 점을 다시 읽는다 (작업을 바꾼 뒤) */
-    private fun anchorTo(lat: Double, lon: Double) { projection = LocalProjection(lat, lon); anchored = true; trail.clear() }
+    private fun anchorTo(lat: Double, lon: Double) { projection = LocalProjection(lat, lon); anchored = true; clearTrail() }
     private fun toLocalNow(lat: Double, lon: Double) = projection.toLocal(lat, lon)
 
     private fun anchorToLastPoint() {
@@ -404,7 +414,38 @@ class SurveyController(
     /** Engine 의 SP60 GST/GSA 자동 요청 결과 */
     fun onPrecisionResult(r: kr.archsurvey.bt.PrecisionResult?) {
         if (r == null) return
+        if (precisionRetryPending) {
+            precisionRetryPending = false
+            if (r.gstMissing) showPrecisionNotice(PrecisionGuide.SP60_FAIL) else { precisionNotice = PrecisionGuide.RETRY_OK; ui.ok(PrecisionGuide.RETRY_OK) }
+            return
+        }
         precisionGate.onActivation(deviceIdProvider(), r)?.let { showPrecisionNotice(it) }
+    }
+    /** 0.1.30 T23-b: [자동 켜기 다시] — Engine.retryPrecision(SP60 받는 중일 때만 true). 시험에서 바꿀 수 있다 */
+    var precisionRetry: (() -> Boolean)? = null
+    private var precisionRetryPending = false
+    /** 사용자가 누른 재시도: 한 순서만 요청. 품질 규칙·모드·저장은 건드리지 않는다 */
+    fun retryPrecision() {
+        val sent = precisionRetry?.invoke() == true
+        precisionRetryPending = sent
+        if (sent) ui.toast(PrecisionGuide.RETRY_SENT) else ui.fail(PrecisionGuide.RETRY_UNAVAILABLE)
+    }
+    /** 엄격 모드 + GST 없음(NO_SIGMA) 막힘: 「수신기 정밀도 출력 꺼짐」 + 해결 경로(재시도·기기별 안내·설정). 저장·모드 변경 없음 */
+    private fun blockNoSigmaStrict() {
+        message = "측점 불가 — ${PrecisionGuide.PRECISION_OFF}"
+        feedback?.invoke(false)
+        if (ui.choice != null || ui.confirm != null) return
+        val dev = deviceIdProvider()
+        val opts = buildList {
+            if (dev == kr.archsurvey.device.DeviceProfiles.SP60_ID && precisionRetry != null) add(PrecisionGuide.RETRY_LABEL)
+            add(PrecisionGuide.SETTINGS_LABEL)
+        }
+        ui.choose(ChoiceRequest(PrecisionGuide.PRECISION_OFF, opts, -1, "precision_off", PrecisionGuide.strictBlockedNote(dev)) { i ->
+            when (opts[i]) {
+                PrecisionGuide.RETRY_LABEL -> retryPrecision()
+                PrecisionGuide.SETTINGS_LABEL -> hub.open(ToolScreen.SETTINGS)
+            }
+        })
     }
     /** 마지막 GGA 이후 지난 초. 없으면 null (상태 띠가 1초마다 다시 부른다) */
     fun nowMs(): Long = clock()
@@ -463,6 +504,25 @@ class SurveyController(
 
     val points = mutableStateListOf<SavedPoint>()
     private val trail = mutableStateListOf<LocalXY>()
+    // ---- 0.1.30 T26 이동 꼬리: RTK 고정 위치만 · 점프(1초 안 3 m 넘게)·비고정 뒤에는 선을 끊음 · 재연결/작업 바뀜이면 비움 ----
+    private val trailBreaks = HashSet<Int>()
+    private var trailLastAtMs = 0L
+    private var trailBreakNext = false
+    /** 1초에 이보다 많이 움직이면 점프(선을 잇지 않음) */
+    var trailJumpM = 3.0
+    private fun clearTrail() { trail.clear(); trailBreaks.clear(); trailBreakNext = false; trailLastAtMs = 0L }
+    private fun addTrail(p: LocalXY, atMs: Long) {
+        val last = trail.lastOrNull()
+        val dtSec = ((atMs - trailLastAtMs).coerceAtLeast(0)) / 1000.0
+        val jump = last != null && hypot(p.x - last.x, p.y - last.y) > trailJumpM * maxOf(1.0, dtSec)
+        if (last != null && (jump || trailBreakNext)) trailBreaks.add(trail.size)
+        trail.add(p); trailLastAtMs = atMs; trailBreakNext = false
+        while (trail.size > 80) {
+            trail.removeAt(0)
+            val shifted = trailBreaks.map { it - 1 }.filter { it > 0 }
+            trailBreaks.clear(); trailBreaks.addAll(shifted)
+        }
+    }
     private var lastGgaStamp = -1L
     private var acquireJob: Job? = null
     private var voiceJob: Job? = null
@@ -496,13 +556,16 @@ class SurveyController(
                     pdop = if (shown) g.gsa?.pdop else null, correctionAgeSec = if (shown) gga?.correctionAgeSec else null,
                     vdop = if (shown) g.gsa?.vdop else null, geoidSepM = if (shown) gga?.geoidSeparation else null,
                     baseId = if (shown) gga?.baseStationId else null, sats = if (shown) g.satsDetail else emptyList(),
-                    link = l.state)
+                    link = l.state, strictMode = settingsState?.requireFixed == true)
                 precisionGate.onUpdate(deviceIdProvider(), l.state, g.seenTypes, source.clockMs())?.let { showPrecisionNotice(it) }
+                // 0.1.30 T26: 끊김·재연결(받는 중이 아님)이면 꼬리를 비운다
+                val live = l.state == kr.archsurvey.device.LinkState.STREAMING || l.state == kr.archsurvey.device.LinkState.STALE
+                if (!live && trail.isNotEmpty()) clearTrail()
                 if (shown && gga != null && gga.hasPosition && g.lastGgaAtMs != lastGgaStamp) {
                     lastGgaStamp = g.lastGgaAtMs
                     if (anchorOnFirstFix && !anchored) anchorTo(gga.lat!!, gga.lon!!)
-                    trail.add(toLocalNow(gga.lat!!, gga.lon!!))
-                    while (trail.size > 80) trail.removeAt(0)
+                    if (gga.quality == FixQuality.RTK_FIXED) addTrail(toLocalNow(gga.lat!!, gga.lon!!), g.lastGgaAtMs)
+                    else trailBreakNext = true // 비고정 위치는 꼬리에 넣지 않고, 다음 고정 위치에서 새 선
                 }
             }
         }
@@ -549,6 +612,7 @@ class SurveyController(
         val strict = settingsState?.requireFixed == true
         when (StatusJudge.savePolicy(st.status, strict)) {
             SavePolicy.BLOCK -> {
+                if (strict && st.reason == StatusReason.NO_SIGMA) { blockNoSigmaStrict(); return }
                 message = if (strict && st.status == SurveyStatus.CAUTION)
                     "엄격 모드에서는 FIX(고정)만 측점할 수 있어요 — ${st.reason.textKo}"
                 else
@@ -558,10 +622,11 @@ class SurveyController(
             }
             SavePolicy.ALLOW_WITH_WARNING -> if (!qualityBypass) {
                 val hint = if (st.reason == StatusReason.NO_SIGMA) PrecisionGuide.noSigmaHint(deviceIdProvider())?.let { " ($it)" } ?: "" else ""
+                val noSigma = st.reason == StatusReason.NO_SIGMA
                 val req = ConfirmRequest(
-                    "주의 상태에서 측점할까요?",
-                    "${st.reason.textKo}$hint · 저장은 되지만 주의 표시가 기록돼요.",
-                    "그래도 측점",
+                    if (noSigma) SigmaText.CONFIRM_TITLE else "주의 상태에서 측점할까요?",
+                    if (noSigma) SigmaText.CONFIRM_BODY + (hint.takeIf { it.isNotEmpty() } ?: "") else "${st.reason.textKo}$hint · 저장은 되지만 주의 표시가 기록돼요.",
+                    if (noSigma) SigmaText.CONFIRM_OK else "그래도 측점",
                 ) {
                     qualityConfirm = null
                     qualityBypass = true
@@ -681,13 +746,15 @@ class SurveyController(
         phase = Phase.RESULT; showResultStrip()
         photos.clear(); voices.clear()
         feedback?.invoke(saveError == null)
+        val noSigmaSaved = PointCaution.reason(points.last()) == PointCaution.NO_SIGMA_FIXED
         message = saveError ?: when {
+            noSigmaSaved -> SigmaText.SAVED_MESSAGE
             worst == SurveyStatus.CAUTION -> "주의 상태에서 취득한 점이에요 (표시가 기록돼요)"
             else -> null
         }
         if (saveError == null) {
             saveSerial++
-            lastSavedSpeech = "${points.last().name} 저장됨" + if (worst == SurveyStatus.CAUTION) ", 주의 표시" else ""
+            lastSavedSpeech = "${points.last().name} 저장됨" + if (noSigmaSaved) ", 시그마 없음" else if (worst == SurveyStatus.CAUTION) ", 주의 표시" else ""
             ui.toast(savedText(points.last()))
             drive?.notifyPointSaved()
         }
@@ -695,7 +762,8 @@ class SurveyController(
 
     /** 저장 알림 문구: 무엇이 저장됐는지 */
     internal fun savedText(p: SavedPoint): String =
-        "${p.name} 저장됨 · ${p.type} · ${p.epochs}회 평균" + (p.sigmaHM?.let { " · ±${String.format(java.util.Locale.US, "%.3f", it)} m" } ?: "")
+        "${p.name} 저장됨 · ${p.type} · ${p.epochs}회 평균" + (p.sigmaHM?.let { " · ±${String.format(java.util.Locale.US, "%.3f", it)} m" } ?: "") +
+            (if (PointCaution.reason(p) == PointCaution.NO_SIGMA_FIXED) SigmaText.SAVED_SUFFIX else "")
 
     /** 화면의 되돌리기 버튼: 확인 창을 거친다(측정 중 취소는 바로) */
     fun askUndo() {
@@ -1029,7 +1097,7 @@ class SurveyController(
         val pf = phoneFix?.takeIf { phoneDotVisible() }
         val phoneAt = pf?.let { projection.toLocal(it.lat, it.lon) }
         val center = if (follow) (cur ?: phoneAt ?: LocalXY(20.0, 16.0)) else panCenter
-        val head = if (trail.size >= 2) {
+        val head = if (trail.size >= 2 && (trail.size - 1) !in trailBreaks) { // 0.1.30 T26: 점프한 위치로 방향을 내지 않음
             val a = trail[trail.size - 2]; val b = trail.last()
             if (hypot(b.x - a.x, b.y - a.y) > 0.05) Math.toDegrees(atan2(b.x - a.x, b.y - a.y)) else null
         } else null
@@ -1042,10 +1110,10 @@ class SurveyController(
         val layers = mapTiles()
         return MapViewState(
             center = center, dpPerM = dpPerM, 
-            points = points.map { MapMarker(it.name, projection.toLocal(it.lat, it.lon), it.cautionFlag) },
-            current = cur?.let { CurrentMarker(it, sigma, gv.status.status, head) },
+            points = points.map { MapMarker(it.name, projection.toLocal(it.lat, it.lon), it.cautionFlag && PointCaution.displayStatus(it) != SurveyStatus.FIXED) },
+            current = cur?.let { CurrentMarker(it, sigma, gv.displayStatus, head) }, // 0.1.30 T23-c 표시 색만
             phone = if (cur == null && pf != null && phoneAt != null) PhoneMarker(phoneAt, pf.accuracyM, PHONE_DOT_LABEL) else null,
-            trail = trail.toList(),
+            trail = trail.toList(), trailBreaks = trailBreaks.toSet(),
             gridLines = if (g != null && g.cols + g.rows <= 400) GridMath.lines(g).map { loc(it.first) to loc(it.second) } else emptyList(),
             gridLabels = if (g != null && g.cols * g.rows <= 1200 && g.spacingM * dpPerM >= 26) GridMath.cellCenters(g).map { MapText(it.first, loc(it.second)) } else emptyList(),
             cellHighlight = if (g != null && cellNow != null && cellNow.col >= 0) g.cellCorners(cellNow.col, cellNow.row).map { loc(it) } else emptyList(),

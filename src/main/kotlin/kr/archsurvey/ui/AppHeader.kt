@@ -130,6 +130,9 @@ fun AppHeader(
 /** StatusBand 부제 문구. 엄격+CAUTION은 측점 버튼「엄격 · FIX 필요」와 맞춘다 (UX-0126-1). */
 internal fun statusBandSub(status: SurveyStatus, reason: StatusReason, notConnected: Boolean, requireFixed: Boolean, noSigmaHint: String? = null): String? {
     if (notConnected) return "블루투스로 R10 / SP60 을 연결하세요"
+    // 0.1.30 T23-c: 고정·보정 양호·σ만 없음 → 띠는 ‘측량 가능’(표시). 저장 결과는 그대로 알려 준다
+    if (status == SurveyStatus.CAUTION && reason == StatusReason.NO_SIGMA)
+        return if (requireFixed) "엄격 모드 · " + (noSigmaHint ?: "수신기에서 GST·GSA 출력을 켜 주세요") else SigmaText.BAND_SUB_NORMAL
     // 0.1.30 T23: σ 없음(NO_SIGMA)에는 기기별 안내를 붙인다
     val why = reason.textKo + if (reason == StatusReason.NO_SIGMA && noSigmaHint != null) " · $noSigmaHint" else ""
     return when (status) {
@@ -148,7 +151,10 @@ internal fun StatusBand(c: SurveyController, compact: Boolean = false, modifier:
     val t = T
     val st = c.gv.status
     val notConnected = st.reason == StatusReason.NOT_CONNECTED
-    val main = if (notConnected) "불가 · ${HeaderModel.NO_RECEIVER}" else when (st.status) {
+    val shown = c.gv.displayStatus // 0.1.30 T23-c: 색·제목은 표시 상태, 부제는 저장 판정(st)
+    val main = if (notConnected) "불가 · ${HeaderModel.NO_RECEIVER}"
+    else if (c.gv.sigmaMissingOnFix) (if (c.gv.strictMode) SigmaText.STRICT_BAND_MAIN else SigmaText.FIX_NO_SIGMA)
+    else when (shown) {
         SurveyStatus.FIXED -> "측량 가능"
         SurveyStatus.CAUTION -> "주의"
         SurveyStatus.UNAVAILABLE -> "불가"
@@ -157,8 +163,8 @@ internal fun StatusBand(c: SurveyController, compact: Boolean = false, modifier:
     val tick = rememberTick(!notConnected)
     val detail = if (notConnected) null else { tick; bandDetail(c) }
     val sigma = if (notConnected) null else st.sigmaHM
-    val dot = when (st.status) { SurveyStatus.FIXED -> t.fixed; SurveyStatus.CAUTION -> t.caution; SurveyStatus.UNAVAILABLE -> t.bad }
-    val tint = when (st.status) { SurveyStatus.FIXED -> t.card; SurveyStatus.CAUTION -> t.caution.copy(alpha = 0.14f); SurveyStatus.UNAVAILABLE -> t.bad.copy(alpha = 0.08f) }
+    val dot = when (shown) { SurveyStatus.FIXED -> t.fixed; SurveyStatus.CAUTION -> t.caution; SurveyStatus.UNAVAILABLE -> t.bad }
+    val tint = when (shown) { SurveyStatus.FIXED -> t.card; SurveyStatus.CAUTION -> t.caution.copy(alpha = 0.14f); SurveyStatus.UNAVAILABLE -> t.bad.copy(alpha = 0.08f) }
     Row(
         modifier.fillMaxWidth().height((if (compact) StatusLineDims.COMPACT_DP else StatusLineDims.FULL_DP).dp).background(tint).padding(horizontal = 16.dp).testTag("status_band"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -170,6 +176,7 @@ internal fun StatusBand(c: SurveyController, compact: Boolean = false, modifier:
                 if (compact && detail != null) Text(" · $detail", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("status_detail"))
                 else Spacer(Modifier.weight(1f))
                 if (sigma != null) Text("±" + f3(sigma) + " m", style = Ty.coord.copy(fontSize = 13.sp), color = t.ink, maxLines = 1, modifier = Modifier.padding(start = 8.dp).testTag("status_sigma"))
+                else if (!notConnected && c.gv.sigmaMissingOnFix) Text("H — · V — · " + HeaderModel.SIGMA_MISSING, style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1, modifier = Modifier.padding(start = 8.dp).testTag("status_sigma_note"))
             }
             if (!compact) Row(verticalAlignment = Alignment.CenterVertically) {
                 if (sub != null) Text(sub, style = Ty.small.copy(fontSize = 12.sp, lineHeight = 15.sp), color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = detail == null).testTag("status_sub"))

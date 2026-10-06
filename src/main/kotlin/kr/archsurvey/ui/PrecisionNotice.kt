@@ -12,6 +12,22 @@ object PrecisionGuide {
     const val R10_NO_GST = "수신기가 정밀도(GST)를 보내지 않아요. R10: 웹 설정 → Bluetooth NMEA에서 GST·GSA 켜기"
     const val R10_NO_GST_AFTER_MS = 10_000L
 
+    // 0.1.30 T23-b: 엄격 모드 + GST 없음 → 측점 막힘 창
+    const val PRECISION_OFF = "수신기 정밀도 출력 꺼짐"
+    const val RETRY_LABEL = "자동 켜기 다시 (SP60)"
+    const val SETTINGS_LABEL = "설정 열기 (엄격 모드 바꾸기)"
+    const val RETRY_SENT = "SP60에 정밀도(GST·GSA) 켜기를 다시 보냈어요 — 몇 초 기다려요"
+    const val RETRY_UNAVAILABLE = "지금은 다시 보낼 수 없어요 — SP60 연결을 확인하세요"
+    const val RETRY_OK = "정밀도(GST) 받는 중 — 다시 측점하세요"
+    /** 막힘 창 본문: 원인 + 기기별 해결 경로 + 모드는 사용자가 바꾼다 */
+    fun strictBlockedNote(deviceId: String?): String =
+        "고정(FIX)이지만 수신기가 정밀도(σ, GST)를 보내지 않아 엄격 모드(FIX만 저장)에서 측점할 수 없어요.\n" +
+            when (deviceId) {
+                DeviceProfiles.SP60_ID -> "SP60: [자동 켜기 다시] · 안 되면 터미널/SPace에서 GST·GSA 켜기"
+                DeviceProfiles.R10_ID -> "R10: 웹UI I/O 설정 → BT 포트 → NMEA에서 GST·GSA 켜기"
+                else -> "수신기 설정에서 NMEA GST·GSA 출력을 켜 주세요"
+            } + "\n엄격 모드를 끄면 주의 표시와 함께 저장돼요(설정에서 직접 바꿔야 해요)."
+
     /** 「정밀도 값을 받지 못했어요」(NO_SIGMA) 주의에 붙이는 기기별 안내 */
     fun noSigmaHint(deviceId: String?): String? = when (deviceId) {
         DeviceProfiles.SP60_ID -> "SP60: 앱이 GST 켜기를 요청해요 · 안 되면 터미널/SPace에서 GST·GSA 켜기"

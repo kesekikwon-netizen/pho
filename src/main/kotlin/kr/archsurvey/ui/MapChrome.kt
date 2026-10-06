@@ -158,6 +158,10 @@ internal fun ControlArea(c: SurveyController) {
                         notConn -> {
                             Text(MEASURE_NO_RECEIVER, style = Ty.button.copy(fontSize = 17.sp, lineHeight = 21.sp), color = t.onPrimary, maxLines = 2, textAlign = TextAlign.Center, modifier = Modifier.testTag("measure_disabled_reason"))
                         }
+                        strictBlock && c.gv.sigmaMissingOnFix -> {
+                            Text(SigmaText.STRICT_BUTTON, style = Ty.button.copy(fontSize = 18.sp, lineHeight = 22.sp), color = t.onPrimary)
+                            Text(SigmaText.STRICT_BUTTON_SUB, style = Ty.small.copy(fontSize = 11.sp, lineHeight = 13.sp), color = t.onPrimary, maxLines = 1, modifier = Modifier.testTag("measure_disabled_reason"))
+                        }
                         strictBlock -> {
                             Text("측점 불가", style = Ty.button.copy(fontSize = 18.sp, lineHeight = 22.sp), color = t.onPrimary)
                             Text("엄격 · FIX 필요", style = Ty.small.copy(fontSize = 11.sp, lineHeight = 13.sp), color = t.onPrimary, maxLines = 1, modifier = Modifier.testTag("measure_disabled_reason"))
@@ -165,6 +169,11 @@ internal fun ControlArea(c: SurveyController) {
                         blocked -> {
                             Text("측점 불가", style = Ty.button.copy(fontSize = 18.sp, lineHeight = 22.sp), color = t.onPrimary)
                             Text(reason.textKo, style = Ty.small.copy(fontSize = 11.sp, lineHeight = 13.sp), color = t.onPrimary, maxLines = 1, modifier = Modifier.testTag("measure_disabled_reason"))
+                        }
+                        caution && c.gv.sigmaMissingOnFix -> {
+                            GlyphIcon(Glyph.POLE, t.onPrimary, 24.dp)
+                            Text("측량하기", style = Ty.button.copy(fontSize = 18.sp, lineHeight = 22.sp), color = t.onPrimary, maxLines = 1)
+                            Text(c.nextName + " · " + HeaderModel.SIGMA_MISSING, style = Ty.coord.copy(fontSize = 11.sp, lineHeight = 13.sp), color = t.onPrimary, maxLines = 1, modifier = Modifier.testTag("measure_sigma_hint"))
                         }
                         caution -> {
                             GlyphIcon(Glyph.POLE, t.onPrimary, 24.dp)

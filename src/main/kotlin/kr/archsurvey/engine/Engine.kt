@@ -42,6 +42,15 @@ class SurveyEngine(private val app: Context, private val settingsStrategy: (Stri
     val profileFlow = MutableStateFlow<DeviceProfile?>(null)
     /** 0.1.30 T23: 이번 연결의 SP60 GST/GSA 자동 요청 결과(없으면 null). 화면 안내·진단용 */
     val precision = MutableStateFlow<PrecisionResult?>(null)
+    /** 0.1.30 T23-b: 사용자 [자동 켜기 다시] */
+    private val precisionRetry = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
+    /** SP60 이 받는 중일 때만 보낸다. 보냈으면 true */
+    fun retryPrecision(): Boolean {
+        if (profileFlow.value?.id != kr.archsurvey.device.DeviceProfiles.SP60_ID) return false
+        val st = link.value.state
+        if (st != kr.archsurvey.device.LinkState.STREAMING && st != kr.archsurvey.device.LinkState.STALE) return false
+        return precisionRetry.trySend(Unit).isSuccess
+    }
 
     private var gnssJob: Job? = null
     @Volatile private var ntripConfig: NtripConfig? = null
@@ -126,6 +135,7 @@ class SurveyEngine(private val app: Context, private val settingsStrategy: (Stri
             },
             onPrecisionResult = { precision.value = it },
             precisionBudget = PrecisionBudget.forDevice(address),
+            precisionRetry = precisionRetry,
         )
         sup.run()
     }

@@ -315,7 +315,7 @@ private fun AcquireStrip(c: SurveyController) {
 private fun ResultStrip(c: SurveyController) {
     val t = T
     val p = c.lastPoint ?: return
-    val (bg, fg) = statusColors(t, p.status)
+    val (bg, fg) = statusColors(t, PointCaution.displayStatus(p))
     Row(
         Modifier.fillMaxSize().hClickable { c.toggleExpand() }.padding(horizontal = 12.dp).testTag("result_strip"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -328,8 +328,8 @@ private fun ResultStrip(c: SurveyController) {
             Modifier.height(28.dp).clip(RoundedCornerShape(14.dp)).glossy(bg).padding(start = 6.dp, end = 9.dp).testTag("result_chip"),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            StatusIcon(p.status, fg, 14.dp)
-            Text(if (p.status == SurveyStatus.FIXED) "고정" else "주의", style = Ty.label.copy(fontSize = 12.sp), color = fg, maxLines = 1)
+            StatusIcon(PointCaution.displayStatus(p), fg, 14.dp)
+            Text(PointCaution.chip(p), style = Ty.label.copy(fontSize = 12.sp), color = fg, maxLines = 1)
         }
         GlyphIcon(Glyph.CHEVRON_UP, t.accent, 20.dp)
     }
@@ -351,15 +351,15 @@ private fun ResultPanel(c: SurveyController) {
         // 0.1.14 목업 17: 「측량된 점 정보」 · 이름+고정 · X/Y/Z · 수평/수직 정밀도 · 「다음 점(Pxx)을 계속 측량할까요?」 아니요 / 예, 계속
         Text("측량된 점 정보", style = Ty.label.copy(fontSize = 14.sp), color = t.inkSub, maxLines = 1, modifier = Modifier.height(18.dp).testTag("result_title"))
         if (p != null) {
-            val (bg, fg) = statusColors(t, p.status)
+            val (bg, fg) = statusColors(t, PointCaution.displayStatus(p))
             Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(p.name, style = Ty.coord.copy(fontSize = 20.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_name"))
                 Row(
                     Modifier.height(28.dp).clip(RoundedCornerShape(14.dp)).glossy(bg).padding(start = 6.dp, end = 9.dp).testTag("result_chip"),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    StatusIcon(p.status, fg, 14.dp)
-                    Text(if (p.status == SurveyStatus.FIXED) "고정" else "주의", style = Ty.label.copy(fontSize = 12.sp), color = fg, maxLines = 1)
+                    StatusIcon(PointCaution.displayStatus(p), fg, 14.dp)
+                    Text(PointCaution.chip(p), style = Ty.label.copy(fontSize = 12.sp), color = fg, maxLines = 1)
                 }
                 Text(p.type, style = Ty.small, color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 MBtn(Modifier.height(40.dp).testTag("photo_count_btn"), MKind.PLAIN, 14.dp, onClick = { if (c.photos.size < MediaLimits.PHOTOS) c.addPhotoCamera() else c.toggleExpand() }) {
