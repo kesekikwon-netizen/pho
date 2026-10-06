@@ -101,7 +101,7 @@ data class VoicePrompt(val kind: Kind, val token: Any, val question: String) {
 interface VoiceHost {
     /** 측량 화면이 맨 앞(다른 창·재생 없음) */
     fun screenReady(): Boolean
-    /** 수신기 연결됨(미연결·끊김·폰 GPS 아님) */
+    /** 수신기 연결됨(미연결·끊김 아님) */
     fun linkUp(): Boolean
     /** 측정 중·녹음 중 */
     fun busy(): Boolean
@@ -141,6 +141,8 @@ class VoiceCommandController(
         /** TTS 끝난 뒤 잔향이 들리지 않게 쉬는 시간 */
         const val TTS_GUARD_MS = 500L
         const val TTS_MAX_MS = 8_000L
+        /** 0.1.30 T24: 수신기 없이 저장 요청(이어폰 키·음성) — 측점 버튼과 같은 경로로 막고 이렇게 말한다 */
+        const val NO_RECEIVER_SPEECH = "수신기 없음, 저장 안 됨"
         /** 음성 저장 후 이 시간 안에 되돌리면 잘못 들은 것으로 센다 */
         const val FALSE_ACCEPT_WINDOW_MS = 10_000L
         const val FALSE_ACCEPT_SPAN_MS = 10 * 60_000L
@@ -188,6 +190,8 @@ class VoiceCommandController(
     private var confirmDeadline = 0L
 
     private var speaking = false
+    /** 수신기 없음 안내 발화: 듣기 조건(연결)이 꺼져 있어도 끝까지 말한다 */
+    private var keepSpeech = false
     private var speakEndAt = 0L
     private var speakStartAt = 0L
     /** 말이 끝나면 확인 대기로 들어갈지 */
@@ -289,7 +293,7 @@ class VoiceCommandController(
         if (!canHear(now)) {
             // 화면을 떠남·연결 끊김·녹음 중: 듣기를 멈추고 진행 중이던 음성 흐름을 버린다(화면의 확인 창은 손으로 답할 수 있게 그대로 둔다)
             if (engineOn) stopEngine()
-            if (speaking) { speaker?.stop(); speaking = false }
+            if (speaking && (!keepSpeech || now - speakStartAt > TTS_MAX_MS)) { speaker?.stop(); speaking = false; keepSpeech = false }
             clearFlow()
             state = if (now < pausedUntil) VoiceState.COOLDOWN else VoiceState.WAITING
             return
@@ -341,6 +345,8 @@ class VoiceCommandController(
         if (host.saveSerial() != s.serialAtStart) {
             lastVoiceSaveAt = now
             say(host.lastSavedText() ?: "저장됨")
+        } else if (!host.linkUp()) {
+            say(NO_RECEIVER_SPEECH)
         } else {
             val why = host.lastMessage()?.substringAfter(" — ", "")?.takeIf { it.isNotBlank() }
             say("저장 안 됨" + (why?.let { ", $it" } ?: ""))
@@ -360,7 +366,7 @@ class VoiceCommandController(
         stopEngine()
         val sp = speaker ?: platform.speaker().also { speaker = it }
         val now = clock()
-        val started = sp.speak(text) { speaking = false; speakEndAt = clock() }
+        val started = sp.speak(text) { speaking = false; keepSpeech = false; speakEndAt = clock() }
         if (started) { speaking = true; speakStartAt = now; state = VoiceState.SPEAKING }
         return started
     }
@@ -416,7 +422,17 @@ class VoiceCommandController(
     /** 이어폰 재생/일시정지 키. 처리했으면 true(앱이 키를 먹음). 확인 대기 중이면 **취소**(승인 불가) */
     fun onMediaKey(): Boolean {
         val now = clock()
-        if (!canHear(now)) return false
+        if (!canHear(now)) {
+            // 0.1.30 T24: 연결만 빠졌으면(수신기 없음) 측점 버튼과 같은 경로(onMeasure → 안내·실패음)로 막고 「수신기 없음, 저장 안 됨」
+            if (enabled && foreground && now >= pausedUntil && host.screenReady() && mic.owner != MicOwner.MEMO && !host.linkUp() && !host.busy() && !speaking) {
+                if (now - lastAcceptAt < ACCEPT_COOLDOWN_MS) return true
+                lastAcceptAt = now
+                host.requestSave()
+                if (say(NO_RECEIVER_SPEECH)) keepSpeech = true
+                return true
+            }
+            return false
+        }
         val c = confirm
         if (c != null) {
             host.answer(c, false)

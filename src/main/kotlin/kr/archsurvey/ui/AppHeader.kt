@@ -37,6 +37,7 @@ internal fun toneColors(t: Tokens, tone: Tone): Pair<Color, Color> = when (tone)
     Tone.BAD -> t.bad to t.onBad
     Tone.OK -> t.ok to t.onFixed
     Tone.NONE -> t.chip to t.inkSub
+    Tone.NO_RECEIVER -> t.chip to t.cautionInk
 }
 
 /** 1초마다 다시 그려 보정 연령·“오래됨”이 멈춰 보이지 않게 한다 */
@@ -66,8 +67,9 @@ fun StatusPill(c: SurveyController, modifier: Modifier = Modifier) {
     val corrColor = when (p.correctionTone) { Tone.BAD -> t.bad; Tone.NONE -> t.inkSub; else -> t.ink }
     val shape = RoundedCornerShape(18.dp)
     Box(
-        modifier.height(48.dp).hClickable { c.gnssInfoOpen = true }
-            .semantics { contentDescription = "위성 ${p.sats}개, ${p.correction}, ${p.fix}. 눌러서 GNSS 정보" }.testTag("status_pill"),
+        // 0.1.30 T24: 수신기 없음·끊김이면 누르면 연결 화면(그 밖엔 GNSS 정보 창)
+        modifier.height(48.dp).hClickable { if (c.gv.noReceiver) (c.connection?.openScreen() ?: run { c.gnssInfoOpen = true }) else c.gnssInfoOpen = true }
+            .semantics { contentDescription = "위성 ${p.sats}개, ${p.correction}, ${p.fix}. " + if (c.gv.noReceiver) "눌러서 수신기 연결" else "눌러서 GNSS 정보" }.testTag("status_pill"),
         contentAlignment = Alignment.Center,
     ) {
         Row(Modifier.height(36.dp).clip(shape).background(t.raised).border(1.dp, t.line.copy(alpha = 0.5f), shape), verticalAlignment = Alignment.CenterVertically) {
@@ -126,11 +128,13 @@ fun AppHeader(
 
 
 /** StatusBand 부제 문구. 엄격+CAUTION은 측점 버튼「엄격 · FIX 필요」와 맞춘다 (UX-0126-1). */
-internal fun statusBandSub(status: SurveyStatus, reason: StatusReason, notConnected: Boolean, requireFixed: Boolean): String? {
+internal fun statusBandSub(status: SurveyStatus, reason: StatusReason, notConnected: Boolean, requireFixed: Boolean, noSigmaHint: String? = null): String? {
     if (notConnected) return "블루투스로 R10 / SP60 을 연결하세요"
+    // 0.1.30 T23: σ 없음(NO_SIGMA)에는 기기별 안내를 붙인다
+    val why = reason.textKo + if (reason == StatusReason.NO_SIGMA && noSigmaHint != null) " · $noSigmaHint" else ""
     return when (status) {
-        SurveyStatus.CAUTION -> if (requireFixed) "엄격 모드 · FIX만 측점 · ${reason.textKo}"
-            else "저장 시 표시 기록 · ${reason.textKo}"
+        SurveyStatus.CAUTION -> if (requireFixed) "엄격 모드 · FIX만 측점 · $why"
+            else "저장 시 표시 기록 · $why"
         SurveyStatus.UNAVAILABLE -> "측점 막힘 · ${reason.textKo}"
         SurveyStatus.FIXED -> null
     }
@@ -144,12 +148,12 @@ internal fun StatusBand(c: SurveyController, compact: Boolean = false, modifier:
     val t = T
     val st = c.gv.status
     val notConnected = st.reason == StatusReason.NOT_CONNECTED
-    val main = if (notConnected) "불가 · 수신기 연결 안 됨" else when (st.status) {
+    val main = if (notConnected) "불가 · ${HeaderModel.NO_RECEIVER}" else when (st.status) {
         SurveyStatus.FIXED -> "측량 가능"
         SurveyStatus.CAUTION -> "주의"
         SurveyStatus.UNAVAILABLE -> "불가"
     }
-    val sub = statusBandSub(st.status, st.reason, notConnected, c.settingsState?.requireFixed == true)
+    val sub = statusBandSub(st.status, st.reason, notConnected, c.settingsState?.requireFixed == true, PrecisionGuide.noSigmaHint(c.deviceIdProvider()))
     val tick = rememberTick(!notConnected)
     val detail = if (notConnected) null else { tick; bandDetail(c) }
     val sigma = if (notConnected) null else st.sigmaHM
@@ -207,8 +211,8 @@ fun GnssInfoDialog(c: SurveyController) {
                 "X(N)" to (p?.northing?.let { grp3(it) } ?: "—"),
                 "Y(E)" to (p?.easting?.let { grp3(it) } ?: "—"),
                 "해 품질" to when {
-                    g.status.reason == StatusReason.NOT_CONNECTED -> "미연결"
-                    g.fromPhone || g.status.reason == StatusReason.PHONE_GPS -> "폰GPS (저정밀)"
+                    g.status.reason == StatusReason.NOT_CONNECTED -> HeaderModel.NO_RECEIVER
+                    g.status.reason == StatusReason.LINK_DOWN -> HeaderModel.RECEIVER_LOST
                     else -> g.quality.labelKo
                 },
                 "위성 사용/보임" to ("${g.satellites}" + (g.satsInView?.let { " / $it" } ?: "")),

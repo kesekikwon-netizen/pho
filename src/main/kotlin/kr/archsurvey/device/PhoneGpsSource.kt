@@ -12,22 +12,16 @@ import android.os.Looper
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
-import kr.archsurvey.core.FixQuality
-import kr.archsurvey.core.GgaMessage
-import kr.archsurvey.core.GnssSnapshot
-import kr.archsurvey.core.GstMessage
-import java.util.Locale
-import kotlin.math.sqrt
 
 /**
- * 폰 내장 GNSS(LocationManager). 수신기 미연결 때 지도 따라가기·저정밀 측점용.
- * 품질은 항상 SINGLE + [GnssSnapshot.fromPhone]=true → StatusJudge 가 「폰GPS」주의(RTK 아님).
+ * 폰 내장 위치(LocationManager) — 0.1.30 T24 부터 **지도 「폰 위치(참고)」 점 표시 전용**.
+ * [GnssSource] 가 아니다: 측점 취득·평균·주의 승인·저장·내보내기로 가는 길이 없다(SurveyController 의 source 는 수신기 엔진뿐).
  * 위치 권한이 있을 때만 갱신한다(권한 요청은 호출 측).
  */
-class PhoneGpsSource(private val ctx: Context) : GnssSource {
-    override val link = MutableStateFlow(LinkStatus(LinkState.IDLE, message = "폰 GPS 대기"))
-    override val gnss = MutableStateFlow(GnssSnapshot(fromPhone = true))
-    override fun clockMs(): Long = SystemClock.elapsedRealtime()
+class PhoneGpsSource(private val ctx: Context) {
+    /** 최신 폰 위치(없으면 null). 시각은 [clockMs] 와 같은 시계(elapsedRealtime) */
+    val fix = MutableStateFlow<PhoneFix?>(null)
+    fun clockMs(): Long = SystemClock.elapsedRealtime()
 
     @Volatile private var listening = false
     private val lm: LocationManager? get() =
@@ -47,20 +41,12 @@ class PhoneGpsSource(private val ctx: Context) : GnssSource {
         return fine || coarse
     }
 
-    /** 권한이 있으면 수신 시작. 없으면 IDLE 유지(호출 측에서 권한 요청). */
+    /** 권한이 있으면 수신 시작. 없으면 아무것도 안 함(호출 측에서 권한 요청) */
     @SuppressLint("MissingPermission")
     fun ensureStarted() {
-        if (!hasPermission()) {
-            link.value = LinkStatus(LinkState.IDLE, message = "폰 위치 권한이 필요해요")
-            return
-        }
-        if (listening) return
-        val mgr = lm ?: run {
-            link.value = LinkStatus(LinkState.IDLE, message = "이 기기에서 위치를 쓸 수 없어요")
-            return
-        }
+        if (!hasPermission() || listening) return
+        val mgr = lm ?: return
         listening = true
-        link.value = LinkStatus(LinkState.CONNECTED_NO_DATA, message = "폰 GPS 잡는 중")
         try {
             if (mgr.isProviderEnabled(LocationManager.GPS_PROVIDER))
                 mgr.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, listener, Looper.getMainLooper())
@@ -68,12 +54,8 @@ class PhoneGpsSource(private val ctx: Context) : GnssSource {
                 mgr.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 1000L, 0f, listener, Looper.getMainLooper())
             mgr.getLastKnownLocation(LocationManager.GPS_PROVIDER)?.let { push(it) }
                 ?: mgr.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)?.let { push(it) }
-        } catch (e: SecurityException) {
-            listening = false
-            link.value = LinkStatus(LinkState.IDLE, message = "폰 위치 권한이 필요해요")
         } catch (e: Exception) {
             listening = false
-            link.value = LinkStatus(LinkState.IDLE, message = "폰 GPS를 시작하지 못했어요")
         }
     }
 
@@ -81,34 +63,12 @@ class PhoneGpsSource(private val ctx: Context) : GnssSource {
         if (!listening) return
         listening = false
         runCatching { lm?.removeUpdates(listener) }
-        link.value = LinkStatus(LinkState.IDLE, message = "폰 GPS 중지")
-        // 마지막 좌표는 남겨 두지 않음(수신기 절환 때 혼동 방지)
-        gnss.value = GnssSnapshot(fromPhone = true)
+        fix.value = null
     }
 
-    override fun stop() = stopListening()
-
     private fun push(loc: Location) {
-        val now = clockMs()
         val acc = if (loc.hasAccuracy()) loc.accuracy.toDouble().coerceAtLeast(1.0) else 8.0
-        val sig = acc / sqrt(2.0)
-        val alt = if (loc.hasAltitude()) loc.altitude else null
-        val gga = GgaMessage(
-            raw = "PHONE",
-            utcTime = String.format(Locale.US, "%06.0f", (System.currentTimeMillis() % 86_400_000L) / 1000.0),
-            lat = loc.latitude,
-            lon = loc.longitude,
-            quality = FixQuality.SINGLE,
-            satellites = 0,
-            hdop = null,
-            altitudeMsl = alt,
-            geoidSeparation = null,
-            correctionAgeSec = null,
-            baseStationId = null,
-        )
-        val gst = GstMessage("PHONE", rmsRange = acc, sigmaLat = sig, sigmaLon = sig, sigmaAlt = if (loc.hasAltitude()) acc else null)
-        gnss.value = GnssSnapshot(gga = gga, gst = gst, lastGgaAtMs = now, lastAnyAtMs = now, fromPhone = true)
-        link.value = LinkStatus(LinkState.STREAMING, message = "폰 GPS")
+        fix.value = PhoneFix(loc.latitude, loc.longitude, acc, clockMs())
     }
 
     companion object {

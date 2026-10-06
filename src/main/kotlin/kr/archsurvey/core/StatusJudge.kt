@@ -22,10 +22,10 @@ enum class StatusReason(val textKo: String) {
     NO_POSITION("위치를 아직 못 찾았어요"),
     NO_DATA("수신기 데이터가 없어요"),
     STALE("수신 데이터가 잠시 끊겼어요"),
-    LINK_DOWN("수신기와 연결이 끊겼어요"),
-    NOT_CONNECTED("수신기 연결 안 됨"),
-    /** 0.1.20: 폰 내장 GPS — 수 m급, RTK 아님. 주의 저장만 허용 */
-    PHONE_GPS("폰 GPS — 저정밀(수 m), RTK 아님"),
+    /** 0.1.30 T24 UX리뷰 문구: 끊긴 직후·다시 연결 중 */
+    LINK_DOWN("수신기 끊김"),
+    /** 0.1.30 T24 UX리뷰 문구(예전 「수신기 연결 안 됨」). 폰 위치로 대신하지 않는다 */
+    NOT_CONNECTED("수신기 없음"),
 }
 
 /** 임계값은 **제안값**(design.md §5C.15, MASTER-PLAN §10 #8). 현장 시험으로 조정한다 [현장검증]. */
@@ -51,18 +51,7 @@ object StatusJudge {
 
     fun judge(snap: GnssSnapshot, link: LinkState, nowMs: Long, th: StatusThresholds = StatusThresholds()): StatusResult {
         val sigma = snap.gst?.sigmaHoriz
-        // 폰 GPS: 수신기 링크 게이트와 분리 — 위치만 있으면 주의 저장 허용(CONNECTED_NO_DATA·STREAMING)
-        if (snap.fromPhone) {
-            if (link == LinkState.IDLE || link == LinkState.NEEDS_USER)
-                return StatusResult(SurveyStatus.UNAVAILABLE, StatusReason.NOT_CONNECTED, sigma)
-            val ggaPhone = snap.gga
-                ?: return StatusResult(SurveyStatus.UNAVAILABLE, StatusReason.NO_DATA, sigma)
-            if (nowMs - snap.lastGgaAtMs > th.staleAfterMs)
-                return StatusResult(SurveyStatus.UNAVAILABLE, StatusReason.STALE, sigma)
-            if (!ggaPhone.hasPosition)
-                return StatusResult(SurveyStatus.UNAVAILABLE, StatusReason.NO_POSITION, sigma)
-            return StatusResult(SurveyStatus.CAUTION, StatusReason.PHONE_GPS, sigma)
-        }
+        // 0.1.30 T24: 수신기(블루투스 NMEA)만 판정한다. 폰 위치 경로 없음
         when (link) {
             LinkState.STREAMING -> {}
             LinkState.IDLE -> return StatusResult(SurveyStatus.UNAVAILABLE, StatusReason.NOT_CONNECTED, null)
@@ -94,7 +83,7 @@ object StatusJudge {
     /**
      * 저장 정책.
      * - 기본(strictMode=false): 고정=저장, 주의=경고 후 저장, 불가=차단
-     * - 엄격(strictMode=true): FIX(고정)만 저장. 주의(유동·보정나이·age없음·σ·폰 GPS 등)도 차단
+     * - 엄격(strictMode=true): FIX(고정)만 저장. 주의(유동·보정나이·age없음·σ 등)도 차단
      */
     fun savePolicy(status: SurveyStatus, strictMode: Boolean = false): SavePolicy = when (status) {
         SurveyStatus.FIXED -> SavePolicy.ALLOW

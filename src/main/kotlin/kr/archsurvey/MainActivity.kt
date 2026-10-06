@@ -36,7 +36,7 @@ class MainActivity : ComponentActivity() {
         vm.platform.permissionRequester = { perms, cb ->
             if (perms.isEmpty()) cb(true) else { permCallback = cb; permLauncher.launch(perms) }
         }
-        // 0.1.20: Activity 권한 연결 뒤 폰 GPS 권한·수신 시작(ViewModel init 시점에는 requester 가 아직 null)
+        // 0.1.30 T24: 지도 「폰 위치(참고)」 점용 위치 권한(측점에는 안 씀). ViewModel init 시점에는 requester 가 아직 null
         vm.ensurePhoneLocationPermission()
         vm.media.launcher = object : kr.archsurvey.engine.AndroidMediaPlatform.Launcher {
             override fun launchCamera(uri: android.net.Uri) = cameraLauncher.launch(uri)

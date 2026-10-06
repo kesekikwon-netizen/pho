@@ -139,6 +139,23 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
                     drawLine(t.bad, Offset(o.x, o.y - 10f * density * k), Offset(o.x, o.y + 10f * density * k), 2.5f * density)
                 }
             }
+            // 0.1.30 T24: 폰 위치(참고) — 회색 속 빈 원 + 정확도 원 + 이름표. 수신기 표시(색 채운 모양)와 다르게
+            state.phone?.let { ph ->
+                val o = Offset(sx(ph.at.x), sy(ph.at.y))
+                val grey = t.inkSub
+                val rAcc = (ph.accuracyM * ppm).toFloat().coerceIn(14f * density, 140f * density)
+                drawCircle(grey.copy(alpha = 0.10f), rAcc, o)
+                drawCircle(grey.copy(alpha = 0.55f), rAcc, o, style = Stroke(1.5f * density, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(6f * density, 4f * density))))
+                drawCircle(t.bg, 10f * density, o, style = Stroke(5f * density))
+                drawCircle(grey, 8f * density, o, style = Stroke(3f * density))
+                val lt = Offset(o.x + 12f * density, o.y + 6f * density)
+                if (lt.x >= -200f * density && lt.y >= -40f * density && lt.x < size.width && lt.y < size.height) {
+                    val ts = TextStyle(fontSize = 11.sp, color = t.inkSub, fontWeight = FontWeight.Normal)
+                    val lay = tm.measure(ph.label, ts)
+                    drawRect(t.bg.copy(alpha = 0.85f), Offset(lt.x - 2f * density, lt.y), androidx.compose.ui.geometry.Size(lay.size.width + 4f * density, lay.size.height.toFloat()))
+                    drawText(tm, ph.label, lt, ts)
+                }
+            }
             // 현재 위치 (정확도 원 + 방향 삼각형)
             state.current?.let { c ->
                 val o = Offset(sx(c.at.x), sy(c.at.y))

@@ -522,3 +522,18 @@ class VoiceGatePath0128Tests {
         assertFalse("마이크 FGS 타입 추가 안 함", m.contains("foregroundServiceType=\"microphone"))
     }
 }
+
+/** 0.1.30 T24: 수신기 없을 때 이어폰 키 = 측점 버튼과 같은 경로(막힘·실패음) + 「수신기 없음, 저장 안 됨」 */
+class VoiceNoReceiver0130Tests {
+    @Test fun mediaKeyWithoutReceiver_blocksLikeButton_andSpeaks() {
+        val r = Rig().on()
+        assertTrue("수신기 없음", r.c.gv.noReceiver)
+        assertFalse("마이크는 수신기 없이 듣지 않음(0.1.28 규칙)", r.eng.running)
+        assertTrue(r.v.onMediaKey())
+        assertEquals(VoiceCommandController.NO_RECEIVER_SPEECH, r.spk.said.last())
+        assertEquals(SurveyController.NO_RECEIVER_MSG, r.c.message)
+        assertEquals(listOf(false), r.results)
+        assertEquals(Phase.IDLE, r.c.phase)
+        assertEquals(0, r.c.points.size)
+    }
+}

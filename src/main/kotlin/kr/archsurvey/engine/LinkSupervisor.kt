@@ -3,6 +3,7 @@ package kr.archsurvey.engine
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.sync.withLock
 import kr.archsurvey.bt.BtConnectException
 import kr.archsurvey.bt.BtError
 import kr.archsurvey.bt.NmeaActivation
@@ -59,6 +60,11 @@ class LinkSupervisor(
     private val watchdogPeriodMs: Long = 1_000,
     private val writeStallMs: Long = 3_000,
     private val stableAfterMs: Long = 20_000,
+    /** 0.1.30 T23: SP60 GST/GSA 자동 요청 결과(연결마다 최대 1번) */
+    private val onPrecisionResult: (kr.archsurvey.bt.PrecisionResult) -> Unit = {},
+    /** 0.1.30 T23: 이 수신기 자동 요청 횟수 상한(Engine 은 주소별 앱 실행 단위로 넘긴다) */
+    private val precisionBudget: kr.archsurvey.bt.PrecisionBudget = kr.archsurvey.bt.PrecisionBudget(),
+    private val precision: kr.archsurvey.bt.PrecisionActivator = kr.archsurvey.bt.PrecisionActivator(clock),
 ) {
     class SessionLost(val error: BtError, msg: String) : IOException(msg)
 
@@ -170,6 +176,10 @@ class LinkSupervisor(
         var gotData = false
         writeStartedAt = 0L
         val outLock = Any()
+        // 0.1.30 T23: RTCM 프레임 한 개를 다 쓸 때까지 잡는 잠금. 명령($PASH)은 이 잠금을 잡고 써서 프레임 중간에 끼지 않는다
+        val frameLock = kotlinx.coroutines.sync.Mutex()
+        val pashr = kr.archsurvey.bt.PashrLineAssembler()
+        val pashReplies = kotlinx.coroutines.channels.Channel<String>(64, kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
         val ackSeen = AtomicBoolean(false)
         val bytesIn = AtomicLong(0)
         val bytesOutCmd = AtomicLong(0)
@@ -224,6 +234,7 @@ class LinkSupervisor(
                         val snip = buf.copyOf(n).toString(Charsets.US_ASCII).replace("\r", " ").replace("\n", " ").take(100)
                         cmdLog.add("RX $snip")
                     }
+                    for (line in pashr.feed(buf, n)) pashReplies.trySend(line)
                     val now = clock()
                     val msgs = driver.onBytes(buf, n, now)
                     if (msgs.isNotEmpty()) {
@@ -290,6 +301,23 @@ class LinkSupervisor(
                 diagSnapshot(actSummary)
             }
         }
+        // 0.1.30 T23: SP60 정밀도 문장(GST/GSA) 검사·요청 — GGA 확인 뒤 따로(연결당 1번). 실패해도 세션은 그대로
+        if (profile.id == kr.archsurvey.device.DeviceProfiles.SP60_ID) launch(io) {
+            try {
+                while (isActive && (actRunning.get() || driver.snapshot.gga == null)) delay(200)
+                val r = precision.run(
+                    send = { body -> frameLock.withLock { writeCmd(kr.archsurvey.bt.PrecisionCommands.line(body).toByteArray(Charsets.US_ASCII)) } },
+                    replies = pashReplies,
+                    seenTypes = { driver.snapshot.seenTypes },
+                    budget = precisionBudget,
+                )
+                CrashLog.record("진단 ${r.summary()}", RuntimeException(r.log.joinToString("\n")))
+                onPrecisionResult(r)
+            } catch (_: CancellationException) {
+            } catch (e: Exception) {
+                CrashLog.record("정밀도 자동요청 오류", e)
+            }
+        }
         // 워치독
         launch {
             while (isActive) {
@@ -330,12 +358,14 @@ class LinkSupervisor(
         launch(io) {
             try {
                 for (frame in rtcmQueue) {
-                    var off = 0
-                    while (off < frame.size) {
-                        val n = minOf(profile.rtcmWriteChunk, frame.size - off)
-                        safeWrite(frame, off, n)
-                        off += n
-                        if (profile.rtcmWriteGapMs > 0) delay(profile.rtcmWriteGapMs)
+                    frameLock.withLock {
+                        var off = 0
+                        while (off < frame.size) {
+                            val n = minOf(profile.rtcmWriteChunk, frame.size - off)
+                            safeWrite(frame, off, n)
+                            off += n
+                            if (profile.rtcmWriteGapMs > 0) delay(profile.rtcmWriteGapMs)
+                        }
                     }
                 }
             } catch (e: SessionLost) { throw e

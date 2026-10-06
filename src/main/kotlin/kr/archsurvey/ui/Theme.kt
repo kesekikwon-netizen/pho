@@ -35,6 +35,8 @@ data class Tokens(
     val ok: Color = Color(0xFF1E7A46),
     /** 상태 알약·세그먼트 바탕(연한 회색) */
     val chip: Color = Color(0xFFEDECE7),
+    /** 0.1.30 「수신기 없음」 글자: 주의(노랑) 계열을 회색 바탕에서 읽히게 짙게(노랑 F2B600 은 회색 위 대비 약 1.6:1) */
+    val cautionInk: Color = Color(0xFF7A5600),
     /** 0.1.11 SkyPlot 위성계 점 색(GPS·GLONASS·Galileo·BeiDou·QZSS). 상태색과 겹치지 않게 짙은 계열 */
     val satGps: Color = Color(0xFF1E7A46),
     val satGlo: Color = Color(0xFF1F4FA8),

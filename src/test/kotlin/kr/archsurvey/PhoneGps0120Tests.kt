@@ -2,7 +2,6 @@ package kr.archsurvey
 
 import kr.archsurvey.core.*
 import kr.archsurvey.device.LinkState
-import kr.archsurvey.device.PhoneFallbackGnssSource
 import kr.archsurvey.map.MapBase
 import kr.archsurvey.map.MapLayers
 import kr.archsurvey.map.VWorldAccess
@@ -14,34 +13,16 @@ import org.junit.Assert.*
 import org.junit.Test
 import java.io.File
 
-/** 0.1.20: 폰 GPS 라벨·판정·저장 정책. LocationManager 실수신 없음(순수 판정). */
+/**
+ * 0.1.20 폰 GPS 시험 → 0.1.30 T24 로 바뀜: 폰 위치 판정·저정밀 측점·폰 폴백 경로는 삭제됨.
+ * 남은 것: 수신기 단독 측위 차단, 미연결 머리글 문구, 배경맵(미연결) 시험, 버전 고정.
+ */
 class PhoneGps0120Tests {
     private val now = 10_000L
 
-    private fun phoneSnap(sigmaH: Double = 5.0, ageMs: Long = 200): GnssSnapshot {
-        val gga = GgaMessage("PHONE", "090000.00", 36.5, 127.0, FixQuality.SINGLE, 0, null, 40.0, null, null, null)
-        val gst = GstMessage("PHONE", sigmaH, sigmaH / Math.sqrt(2.0), sigmaH / Math.sqrt(2.0), sigmaH)
-        return GnssSnapshot(gga = gga, gst = gst, lastGgaAtMs = now - ageMs, lastAnyAtMs = now - ageMs, fromPhone = true)
-    }
-
     private fun rxSingle(): GnssSnapshot {
         val gga = GgaMessage("raw", "090000.00", 36.5, 127.0, FixQuality.SINGLE, 12, 1.2, 38.0, 26.0, null, null)
-        return GnssSnapshot(gga = gga, gst = GstMessage("raw", 1.0, 0.7, 0.7, 1.5), lastGgaAtMs = now - 200, lastAnyAtMs = now - 200, fromPhone = false)
-    }
-
-    @Test fun phoneGps_connectedNoData_stillAllowCaution() {
-        val r = StatusJudge.judge(phoneSnap(), LinkState.CONNECTED_NO_DATA, now)
-        assertEquals(SurveyStatus.CAUTION, r.status)
-        assertEquals(StatusReason.PHONE_GPS, r.reason)
-        assertEquals(SavePolicy.ALLOW_WITH_WARNING, StatusJudge.savePolicy(r.status))
-    }
-
-    @Test fun phoneGps_isCautionNotFixed_andAllowWithWarning() {
-        val r = StatusJudge.judge(phoneSnap(), LinkState.STREAMING, now)
-        assertEquals(SurveyStatus.CAUTION, r.status)
-        assertEquals(StatusReason.PHONE_GPS, r.reason)
-        assertEquals(SavePolicy.ALLOW_WITH_WARNING, StatusJudge.savePolicy(r.status))
-        assertFalse("폰 GPS 는 RTK 가 아님", phoneSnap().quality.isRtk)
+        return GnssSnapshot(gga = gga, gst = GstMessage("raw", 1.0, 0.7, 0.7, 1.5), lastGgaAtMs = now - 200, lastAnyAtMs = now - 200)
     }
 
     @Test fun receiverSingle_stillBlocked() {
@@ -51,33 +32,18 @@ class PhoneGps0120Tests {
         assertEquals(SavePolicy.BLOCK, StatusJudge.savePolicy(r.status))
     }
 
-    @Test fun phoneGps_neverLooksLikeRtkFixed() {
-        val r = StatusJudge.judge(phoneSnap(sigmaH = 0.01), LinkState.STREAMING, now)
-        assertNotEquals(SurveyStatus.FIXED, r.status)
-        assertNotEquals(StatusReason.OK, r.reason)
-        assertEquals("폰GPS", HeaderModel.fixLabel(FixQuality.SINGLE, fromPhone = true))
-        assertEquals("단독", HeaderModel.fixLabel(FixQuality.SINGLE, fromPhone = false))
+    @Test fun t24_noPhoneReasonOrFieldLeft() {
+        assertFalse("PHONE_GPS 판정 이유 삭제", StatusReason.entries.any { it.name.contains("PHONE") })
+        assertFalse("GnssSnapshot.fromPhone 삭제", GnssSnapshot::class.java.declaredFields.any { it.name == "fromPhone" })
+        assertFalse("GnssView.fromPhone 삭제", GnssView::class.java.declaredFields.any { it.name == "fromPhone" })
+        assertEquals("단독", HeaderModel.fixLabel(FixQuality.SINGLE))
     }
 
-    @Test fun headerPill_showsPhoneGps() {
-        val gv = GnssView(
-            StatusResult(SurveyStatus.CAUTION, StatusReason.PHONE_GPS, 5.0),
-            FixQuality.SINGLE, 0, 36.5, 127.0, fromPhone = true,
-        )
-        val p = HeaderModel.pill(gv, null, false, now)
-        assertEquals("폰GPS", p.fix)
-        assertEquals(Tone.CAUTION, p.fixTone)
-        assertEquals("보정 없음", p.correction)
-    }
-
-    @Test fun fallback_usePhoneOnlyWhenIdleOrNeedsUser() {
-        assertTrue(PhoneFallbackGnssSource.usePhone(LinkState.IDLE))
-        assertTrue(PhoneFallbackGnssSource.usePhone(LinkState.NEEDS_USER))
-        assertFalse(PhoneFallbackGnssSource.usePhone(LinkState.STREAMING))
-        assertFalse(PhoneFallbackGnssSource.usePhone(LinkState.STALE))
-        assertFalse(PhoneFallbackGnssSource.usePhone(LinkState.CONNECTING))
-        assertFalse(PhoneFallbackGnssSource.usePhone(LinkState.CONNECTED_NO_DATA))
-        assertFalse(PhoneFallbackGnssSource.usePhone(LinkState.RECONNECTING))
+    @Test fun t24_headerPill_noReceiver_neverPhone() {
+        val p = HeaderModel.pill(GnssView(), null, false, now)
+        assertEquals("수신기 없음", p.fix)
+        assertEquals(Tone.NO_RECEIVER, p.fixTone)
+        assertFalse(p.fix.contains("폰"))
     }
 
     @Test fun mapLayers_withoutAnchorStillResolveWithBuiltin() {
@@ -93,9 +59,9 @@ class PhoneGps0120Tests {
         assertEquals(MapBase.NONE, MapBase.fromId("junk"))
     }
 
-    @Test fun versionIs0_1_27Build28() {
+    @Test fun versionIs0_1_30Build31() {
         val g = File("build.gradle.kts").readText()
-        assertTrue(g.contains("versionCode = 30"))
-        assertTrue(g.contains("versionName = \"0.1.29\""))
+        assertTrue(g.contains("versionCode = 31"))
+        assertTrue(g.contains("versionName = \"0.1.30\""))
     }
 }

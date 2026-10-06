@@ -14,7 +14,7 @@ import kr.archsurvey.feedback.FeedbackEvent
 import kr.archsurvey.feedback.bindEngineFeedback
 
 /**
- * 위치 공급원: 수신기(블루투스 NMEA) 우선, 미연결 시 폰 GPS(지도 따라가기·저정밀 측점).
+ * 위치 공급원: 수신기(블루투스 NMEA)만. 0.1.30 T24: 폰 위치는 지도 「폰 위치(참고)」 점·따라가기 표시 전용(측점·저장에 안 씀).
  * 수신기 연결은 연결 화면의 [연결] 버튼으로만 시작한다(자동 연결은 설정 옵션).
  */
 class SurveyViewModel(app: Application) : AndroidViewModel(app) {
@@ -31,10 +31,10 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
         kr.archsurvey.diag.CrashLog.record("화면 작업", e)
         runCatching { controller.recoverFromError() }
     })
-    /** 0.1.20: 폰 GPS(수신기 IDLE 때). 권한은 [ensurePhoneLocationPermission] */
+    /** 0.1.30 T24: 폰 위치 — 지도 점 표시 전용. 권한은 [ensurePhoneLocationPermission] */
     val phoneGps = kr.archsurvey.device.PhoneGpsSource(application)
-    private val hybridSource = kr.archsurvey.device.PhoneFallbackGnssSource(application.engine, phoneGps, safeScope)
-    val controller: SurveyController = SurveyController(hybridSource, db, safeScope, epochsPerPoint = application.settings.epochsPerPoint, store = store, anchorOnFirstFix = true)
+    /** 측점 공급원은 수신기 엔진뿐(폰으로 자동 전환 없음) */
+    val controller: SurveyController = SurveyController(application.engine, db, safeScope, epochsPerPoint = application.settings.epochsPerPoint, store = store, anchorOnFirstFix = true)
     val media = AndroidMediaPlatform(application, viewModelScope) { application.settings.project }
     val docs = kr.archsurvey.engine.DocBridge()
     val exportPlatform = kr.archsurvey.engine.AndroidExportPlatform(application, { application.settings.project }, media.photoStore, media.voiceStore, docs)
@@ -125,18 +125,31 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
         controller.voiceHeard = { application.feedback.play(FeedbackEvent.VOICE_HEARD) }
         viewModelScope.launch { while (true) { kotlinx.coroutines.delay(200); if (vc.enabled) runCatching { vc.tick() }.onFailure { kr.archsurvey.diag.CrashLog.record("음성 저장", it) } } }
         media.recoverPending()
-        // 수신기 미연결이면 폰 GPS(지도·저정밀 측점) — 위치 권한은 이때만 요청
+        // 0.1.30 T23: SP60 GST/GSA 자동 요청 결과 → 연결당 한 번 안내
+        viewModelScope.launch { application.engine.precision.collect { controller.onPrecisionResult(it) } }
+        // 0.1.30 T24: 폰 위치는 지도 점에만. 수신기가 받는 중(STREAMING/STALE)이면 폰 위치를 끈다(점이 어차피 숨음·배터리)
+        viewModelScope.launch { phoneGps.fix.collect { controller.onPhoneLocation(it) } }
+        viewModelScope.launch {
+            application.engine.link.collect { st ->
+                val receiverLive = st.state == kr.archsurvey.device.LinkState.STREAMING || st.state == kr.archsurvey.device.LinkState.STALE
+                if (receiverLive) phoneGps.stopListening() else if (phoneGps.hasPermission()) phoneGps.ensureStarted()
+            }
+        }
         ensurePhoneLocationPermission()
     }
 
-    /** 0.1.20: 수신기 없을 때 폰 GPS용 위치 권한. 이미 있으면 즉시 시작 */
+    /** 지도 「폰 위치(참고)」 점용 위치 권한. 이미 있으면 즉시 시작 */
     fun ensurePhoneLocationPermission() {
-        if (phoneGps.hasPermission()) { phoneGps.ensureStarted(); return }
+        if (phoneGps.hasPermission()) { if (!receiverLive()) phoneGps.ensureStarted(); return }
         val req = platform.permissionRequester
         if (req == null) return
         req(kr.archsurvey.device.PhoneGpsSource.PERMISSIONS) { ok ->
-            if (ok) phoneGps.ensureStarted()
+            if (ok && !receiverLive()) phoneGps.ensureStarted()
         }
+    }
+
+    private fun receiverLive(): Boolean = application.engine.link.value.state.let {
+        it == kr.archsurvey.device.LinkState.STREAMING || it == kr.archsurvey.device.LinkState.STALE
     }
 
     fun onAppBackground() { runCatching { controller.drive?.onAppBackground() }.onFailure { kr.archsurvey.diag.CrashLog.record("Drive 자동 백업", it) } }

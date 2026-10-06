@@ -51,7 +51,7 @@ class QualityGate0126Tests {
         assertEquals(SavePolicy.BLOCK, StatusJudge.savePolicy(r.status, true))
     }
 
-    @Test fun strictBlocksFloatOldAgeHighSigmaNoSigmaPhoneGps() {
+    @Test fun strictBlocksFloatOldAgeHighSigmaNoSigma() {
         val cases = listOf(
             StatusJudge.judge(snap(FixQuality.RTK_FLOAT, 0.01), LinkState.STREAMING, now),
             StatusJudge.judge(snap(FixQuality.RTK_FIXED, 0.01, ageSec = 20.0), LinkState.STREAMING, now),
@@ -63,14 +63,14 @@ class QualityGate0126Tests {
             assertEquals(r.reason.name, SavePolicy.BLOCK, StatusJudge.savePolicy(r.status, true))
             assertEquals(r.reason.name, SavePolicy.ALLOW_WITH_WARNING, StatusJudge.savePolicy(r.status, false))
         }
-        val phone = GnssSnapshot(
+        // 0.1.30 T24: 폰 GPS 판정 경로 삭제 — 수신기 없이 데이터만 있으면(연결 대기) 저장 막힘
+        val noLink = GnssSnapshot(
             gga = GgaMessage("raw", "090000.00", 36.5, 127.0, FixQuality.SINGLE, 12, 1.0, 50.0, null, null, null),
-            lastGgaAtMs = now - 200, lastAnyAtMs = now - 200, fromPhone = true,
+            lastGgaAtMs = now - 200, lastAnyAtMs = now - 200,
         )
-        val pr = StatusJudge.judge(phone, LinkState.CONNECTED_NO_DATA, now)
-        assertEquals(StatusReason.PHONE_GPS, pr.reason)
-        assertEquals(SavePolicy.BLOCK, StatusJudge.savePolicy(pr.status, true))
-        assertEquals(SavePolicy.ALLOW_WITH_WARNING, StatusJudge.savePolicy(pr.status, false))
+        val pr = StatusJudge.judge(noLink, LinkState.CONNECTED_NO_DATA, now)
+        assertEquals(SurveyStatus.UNAVAILABLE, pr.status)
+        assertEquals(SavePolicy.BLOCK, StatusJudge.savePolicy(pr.status, false))
     }
 
     @Test fun csvExportsMaxCorrAgeAndFixAndSigma() {

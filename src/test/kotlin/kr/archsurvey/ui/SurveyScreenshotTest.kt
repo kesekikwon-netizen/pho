@@ -91,7 +91,7 @@ class SurveyScreenshotTest {
         rule.onNodeWithTag("status_main").assertTextContains("불가", substring = true)
                 shot("05_status_unavailable_single")
         skip(f); adv(f, 2)
-        rule.onNodeWithTag("status_sub").assertTextContains("연결이 끊겼어요", substring = true)
+        rule.onNodeWithTag("status_sub").assertTextContains("수신기 끊김", substring = true)
         shot("06_status_unavailable_link_down")
     }
 

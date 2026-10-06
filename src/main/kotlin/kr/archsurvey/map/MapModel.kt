@@ -20,6 +20,12 @@ data class MapMarker(val name: String, val at: LocalXY, val flagged: Boolean = f
 
 data class CurrentMarker(val at: LocalXY, val accuracyM: Double, val status: SurveyStatus, val headingDeg: Double?)
 
+/**
+ * 0.1.30 T24: 폰 내장 위치 점(표시 전용). 수신기 위치가 없을 때만 넘긴다.
+ * 수신기 표시([CurrentMarker])와 다르게 회색 속 빈 원 + 정확도 원 + 작은 이름표 「폰 위치(참고)」로 그린다.
+ */
+data class PhoneMarker(val at: LocalXY, val accuracyM: Double, val label: String)
+
 /** 지도에 얹는 업로드 배경(도면) 한 장의 윤곽. 정합이 끝난 것만 넘긴다. [preview] 는 수동 정렬 중 미리보기. */
 data class MapBgLayer(val id: String, val label: String, val polygon: List<LocalXY>, val opacity: Double, val preview: Boolean = false)
 
@@ -51,6 +57,8 @@ data class MapViewState(
     val style: MarkerStyle = MarkerStyle(),
     /** 0.1.14 찾아갈 목표(점 찾아가기). 없으면 null */
     val target: LocalXY? = null,
+    /** 0.1.30 T24: 폰 위치 점(수신기 위치가 없을 때만). 측점에는 쓰지 않는다 */
+    val phone: PhoneMarker? = null,
 )
 
 /** 지도 그리기 구현을 갈아끼우기 위한 경계. WP-3 은 자체 Canvas, 이후 MapLibre(WP-9 스파이크 결과에 따라). */

@@ -17,12 +17,13 @@ class HeaderModelTest {
 
     @Test fun notConnectedPillIsGrey() {
         val p = HeaderModel.pill(GnssView(), null, false, 0)
-        assertEquals("미연결", p.fix); assertEquals(Tone.NONE, p.fixTone); assertEquals("0", p.sats); assertEquals("보정 —", p.correction)
+        // 0.1.30 T24(UX리뷰): 「미연결」 → 「수신기 없음」(회색 바탕·주의색 글자)
+        assertEquals("수신기 없음", p.fix); assertEquals(Tone.NO_RECEIVER, p.fixTone); assertEquals("0", p.sats); assertEquals("보정 —", p.correction)
     }
 
     @Test fun linkDownIsRed() {
         val p = HeaderModel.pill(gv(SurveyStatus.UNAVAILABLE, StatusReason.LINK_DOWN, FixQuality.RTK_FIXED), null, false, 0)
-        assertEquals("끊김", p.fix); assertEquals(Tone.BAD, p.fixTone)
+        assertEquals("수신기 끊김", p.fix); assertEquals(Tone.BAD, p.fixTone)
     }
 
     @Test fun fixedBlueFloatYellowWithFreshVrs() {
@@ -72,7 +73,7 @@ class HeaderModelTest {
 
     @Test fun versionIs0_1_27Build28() {
         val g = File("build.gradle.kts").readText()
-        assertTrue(g.contains("versionCode = 30")); assertTrue(g.contains("versionName = \"0.1.29\""))
+        assertTrue(g.contains("versionCode = 31")); assertTrue(g.contains("versionName = \"0.1.30\""))
     }
 
     /** 고고학 발굴 용어만: 새 화면에 토목·건설 용어가 없어야 한다 */

@@ -106,6 +106,8 @@ private fun PointRow(p: SavedPoint, onLong: () -> Unit, onClick: () -> Unit) {
                 Box(Modifier.size(14.dp).clip(RoundedCornerShape(7.dp)).background(sbg), contentAlignment = Alignment.Center) { StatusIcon(p.status, sfg, 10.dp) }
                 Text(p.type + if (p.memo.isNotBlank()) " · ${p.memo}" else "", style = Ty.small.copy(fontSize = 10.sp), color = t.inkSub, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             }
+            // 0.1.30 T23: 주의 이유(「σ 없음(고정)」·Float·보정 나이 초과 …) — 목록 표시만
+            PointCaution.reason(p)?.let { Text(it, style = Ty.small.copy(fontSize = 10.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("point_reason_${p.name}")) }
         }
         val m = Ty.coord.copy(fontSize = 11.sp)
         Text(grp3(p.northing), style = m, color = t.ink, maxLines = 1, modifier = Modifier.weight(1.5f))
@@ -157,7 +159,7 @@ fun PointDetailScreen(c: SurveyController) {
         }
         Text("좌표·높이는 바꿀 수 없어요. 잘못 쟀다면 다시 측점하세요.", style = Ty.small, color = t.inkSub)
         Text(
-            "${if (p.status == SurveyStatus.FIXED) "고정" else "주의"}${p.sigmaHM?.let { " ±${f3(it)} m" } ?: ""} · 위성 ${p.satellites} · ${p.epochs}회 평균 · EPSG:${p.crsEpsg}" +
+            "${PointCaution.label(p)}${p.sigmaHM?.let { " ±${f3(it)} m" } ?: ""} · 위성 ${p.satellites} · ${p.epochs}회 평균 · EPSG:${p.crsEpsg}" +
                 (p.groundMslM?.let { " · 표고 ${f3(it)} m (" + kr.archsurvey.core.GeoidModel.fromId(p.heightModel.ifEmpty { null }).shortKo + ")" } ?: "") + (if (p.measuredAtMs > 0) "\n" + SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(p.measuredAtMs)) else "") + averagingLine(p),
             style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("detail_info"),
         )
@@ -418,7 +420,7 @@ fun SettingsScreen(c: SurveyController) {
         }
         Card {
             ToggleRow("엄격 모드 (FIX만 저장)", st.requireFixed, "set_strict_quality") { st.changeRequireFixed(it) }
-            Text("켜면 RTK 고정(FIX)만 측점해요. 유동·보정 오래됨·정밀도 낮음·폰 GPS는 저장하지 않아요. 끄면(기본) 주의 상태도 확인 후 저장할 수 있어요.", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("set_strict_note"))
+            Text("켜면 RTK 고정(FIX)만 측점해요. 유동·보정 오래됨·정밀도 낮음은 저장하지 않아요. 끄면(기본) 주의 상태도 확인 후 저장할 수 있어요.", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("set_strict_note"))
         }
         // 0.1.28 T14 음성 「저장」(기본 끔)
         c.voice?.let { VoiceSettingsCard(it) }

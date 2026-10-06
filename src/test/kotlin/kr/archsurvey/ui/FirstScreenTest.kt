@@ -51,9 +51,9 @@ class FirstScreenTest {
         val c = SurveyController(s, db, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
         rule.setContent { SurveyTheme(dark = false) { SurveyMapScreen(c, batteryPct = 82) } }
         rule.waitForIdle()
-        rule.onNodeWithText("불가 · 수신기 연결 안 됨").assertExists()
+        rule.onNodeWithText("불가 · 수신기 없음").assertExists()
         rule.onNodeWithTag("not_connected_card").assertExists()
-        rule.onNodeWithText("수신기 연결").assertExists()
+        rule.onNodeWithText("수신기 연결 필요").assertExists()
         rule.onNodeWithTag("measure_disabled_reason", useUnmergedTree = true).assertExists()
         shot("r1_not_connected")
         rule.onNodeWithTag("measure_button").performClick()
@@ -110,7 +110,7 @@ class FirstScreenTest {
         rule.setContent { SurveyTheme(dark = false) { SurveyMapScreen(c, batteryPct = 82) } }
         rule.waitForIdle()
         rule.onNodeWithTag("not_connected_card").assertExists()
-        rule.onNodeWithTag("status_main").assertTextContains("수신기 연결 안 됨", substring = true)
+        rule.onNodeWithTag("status_main").assertTextContains("수신기 없음", substring = true)
         shot("c_start_not_connected")
     }
 

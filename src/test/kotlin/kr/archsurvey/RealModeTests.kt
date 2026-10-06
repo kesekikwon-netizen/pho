@@ -30,7 +30,7 @@ class RealModeTests {
     @Test fun idleLinkIsNotConnectedAndBlocksSaving() {
         val r = StatusJudge.judge(GnssSnapshot(), LinkState.IDLE, 10_000L)
         assertEquals(SurveyStatus.UNAVAILABLE, r.status); assertEquals(StatusReason.NOT_CONNECTED, r.reason)
-        assertEquals("수신기 연결 안 됨", r.reason.textKo)
+        assertEquals("수신기 없음", r.reason.textKo) // 0.1.30 T24 UX리뷰 문구
         assertEquals(SavePolicy.BLOCK, StatusJudge.savePolicy(r.status))
     }
 
@@ -40,7 +40,7 @@ class RealModeTests {
         assertNull(c.gv.lat); assertNull(c.gv.lon)
         assertNull(c.mapState().current)
         c.onMeasure()
-        assertTrue(c.message!!.contains("수신기 연결 안 됨"))
+        assertEquals(SurveyController.NO_RECEIVER_MSG, c.message) // 0.1.30 T24
         assertEquals(0, c.points.size); assertEquals(Phase.IDLE, c.phase)
     }
 

@@ -9,7 +9,9 @@ import kr.archsurvey.ntrip.NtripState
 import java.util.Locale
 
 /** 상단 상태 알약·연결 막대의 색 구분. 화면은 [Tone] 을 테마 토큰 색으로 바꾼다 */
-enum class Tone { NONE, FIXED, CAUTION, BAD, OK }
+enum class Tone { NONE, FIXED, CAUTION, BAD, OK,
+    /** 0.1.30 T24 「수신기 없음」: 회색 바탕 + 주의색 글자 */
+    NO_RECEIVER }
 
 /** 상단 상태 알약(목업 02~23 공통): 위성 수 | 보정 상태 | 고정·유동·미연결 */
 data class HeaderPill(val sats: String, val correction: String, val correctionTone: Tone, val fix: String, val fixTone: Tone)
@@ -25,8 +27,12 @@ object HeaderModel {
     private fun f3(x: Double) = String.format(Locale.US, "%.3f", x)
     private fun f1(x: Double) = String.format(Locale.US, "%.1f", x)
 
-    fun fixLabel(q: FixQuality, fromPhone: Boolean = false): String = when {
-        fromPhone -> "폰GPS"
+    /** 0.1.30 T24 머리글·상태 띠 공통 문구(UX리뷰) */
+    const val NO_RECEIVER = "수신기 없음"
+    const val RECEIVER_LOST = "수신기 끊김"
+    const val CONNECTING = "연결 중"
+
+    fun fixLabel(q: FixQuality): String = when {
         q == FixQuality.RTK_FIXED -> "고정"
         q == FixQuality.RTK_FLOAT -> "유동"
         q == FixQuality.SINGLE -> "단독"
@@ -38,11 +44,14 @@ object HeaderModel {
 
     fun pill(gv: GnssView, ntrip: NtripStatus?, ntripEnabled: Boolean, nowMs: Long): HeaderPill {
         val reason = gv.status.reason
-        if (reason == StatusReason.NOT_CONNECTED) return HeaderPill("0", "보정 —", Tone.NONE, "미연결", Tone.NONE)
-        if (reason == StatusReason.LINK_DOWN) return HeaderPill("0", "보정 —", Tone.NONE, "끊김", Tone.BAD)
+        // 0.1.30 T24: 수신기 없을 때 폰 위치로 채우지 않는다 — 「수신기 없음」(회색·주의색 글자, 누르면 연결 화면)
+        if (reason == StatusReason.NOT_CONNECTED) return HeaderPill("0", "보정 —", Tone.NONE, NO_RECEIVER, Tone.NO_RECEIVER)
+        if (reason == StatusReason.LINK_DOWN) return if (gv.link == kr.archsurvey.device.LinkState.CONNECTING || gv.link == kr.archsurvey.device.LinkState.CONNECTED_NO_DATA)
+            HeaderPill("0", "보정 —", Tone.NONE, CONNECTING, Tone.NONE)
+        else HeaderPill("0", "보정 —", Tone.NONE, RECEIVER_LOST, Tone.BAD)
         val fixTone = when (gv.status.status) { SurveyStatus.FIXED -> Tone.FIXED; SurveyStatus.CAUTION -> Tone.CAUTION; SurveyStatus.UNAVAILABLE -> Tone.BAD }
         val (corr, corrTone) = correction(gv, ntrip, ntripEnabled, nowMs)
-        val fix = if (reason == StatusReason.PHONE_GPS || gv.fromPhone) "폰GPS" else fixLabel(gv.quality)
+        val fix = fixLabel(gv.quality)
         return HeaderPill(gv.satellites.toString(), corr, corrTone, fix, fixTone)
     }
 
@@ -70,9 +79,18 @@ object HeaderModel {
         }
     }
 
-    /** "PDOP 1.8 / H 0.008 / V 0.018" — 값이 없으면 "—" (H·V 는 GST 1σ, m) */
-    fun metrics(gv: GnssView): String =
-        "PDOP " + (gv.pdop?.let { f1(it) } ?: "—") + " / H " + (gv.status.sigmaHM?.let { f3(it) } ?: "—") + " / V " + (gv.sigmaVM?.let { f3(it) } ?: "—")
+    /**
+     * "PDOP 1.8 / H 0.008 / V 0.018" — 값이 없으면 "—" (H·V 는 GST 1σ, m).
+     * 0.1.30 T23: PDOP(GSA)가 없고 GGA HDOP 가 있으면 「HDOP」라고 이름을 바꿔 보여 준다. σ 자리는 절대 HDOP 로 채우지 않는다.
+     */
+    fun metrics(gv: GnssView): String {
+        val dop = when {
+            gv.pdop != null -> "PDOP " + f1(gv.pdop)
+            gv.hdop != null -> "HDOP " + f1(gv.hdop)
+            else -> "PDOP —"
+        }
+        return dop + " / H " + (gv.status.sigmaHM?.let { f3(it) } ?: "—") + " / V " + (gv.sigmaVM?.let { f3(it) } ?: "—")
+    }
 
     fun antH(inputM: Double): String = "Ant.H " + f3(inputM)
 

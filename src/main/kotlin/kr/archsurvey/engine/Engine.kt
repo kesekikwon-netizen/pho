@@ -40,6 +40,8 @@ class SurveyEngine(private val app: Context, private val settingsStrategy: (Stri
     val events = MutableSharedFlow<FeedbackEvent>(extraBufferCapacity = 16)
     val measureProgress = MutableStateFlow(0f)
     val profileFlow = MutableStateFlow<DeviceProfile?>(null)
+    /** 0.1.30 T23: 이번 연결의 SP60 GST/GSA 자동 요청 결과(없으면 null). 화면 안내·진단용 */
+    val precision = MutableStateFlow<PrecisionResult?>(null)
 
     private var gnssJob: Job? = null
     @Volatile private var ntripConfig: NtripConfig? = null
@@ -64,6 +66,7 @@ class SurveyEngine(private val app: Context, private val settingsStrategy: (Stri
     fun start(profile: DeviceProfile, address: String, ntrip: NtripConfig?, ntripEnabled: Boolean) {
         stop()
         profileFlow.value = profile
+        precision.value = null
         this.ntripConfig = ntrip
         this.ntripEnabled = ntripEnabled
         while (wake.tryReceive().isSuccess) { } // 이전 세션의 낡은 깨우기 신호 제거
@@ -121,6 +124,8 @@ class SurveyEngine(private val app: Context, private val settingsStrategy: (Stri
                 runCatching { Strategy.valueOf(name) }.getOrNull()?.let { silentStrategies.add(it) }
                 if (settingsStrategy(address) == name) saveStrategy(address, null)
             },
+            onPrecisionResult = { precision.value = it },
+            precisionBudget = PrecisionBudget.forDevice(address),
         )
         sup.run()
     }

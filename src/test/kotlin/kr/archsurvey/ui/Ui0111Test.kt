@@ -255,11 +255,11 @@ class Ui0111Test {
         rule.onAllNodesWithTag("header_title").assertAny(hasText("점 목록"))
         assertTrue(rule.onAllNodesWithTag("status_pill").fetchSemanticsNodes().size >= 2)
         shot("08_points")
-        // 미연결: 알약 회색 '미연결', 측점 불가 유지
+        // 미연결: 알약 회색 「수신기 없음」(0.1.30), 측점 불가 유지
         rule.runOnUiThread { c.hub.closeAll(); s.link.value = LinkStatus(state = LinkState.IDLE); s.gnss.value = GnssSnapshot() }
         rule.waitForIdle()
-        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("미연결")
-        rule.onNodeWithText("수신기 연결").assertExists()
+        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("수신기 없음")
+        rule.onNodeWithText("수신기 연결 필요").assertExists()
         shot("09_not_connected")
     }
 }

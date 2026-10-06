@@ -48,9 +48,11 @@ data class GnssView(
     val baseId: String? = null,
     /** 0.1.11 SkyPlot: GSV 위성 상세(받지 못하면 빈 목록) */
     val sats: List<kr.archsurvey.core.SatInfo> = emptyList(),
-    /** 0.1.20: 폰 내장 GPS(수신기 아님) */
-    val fromPhone: Boolean = false,
+    /** 0.1.30 T24: 수신기 링크 상태(머리글 「수신기 없음」·「수신기 끊김」·「연결 중」 구분용) */
+    val link: kr.archsurvey.device.LinkState = kr.archsurvey.device.LinkState.IDLE,
 ) {
+    /** 0.1.30 T24: 수신기 없음(미연결) 또는 끊김 — 측점 불가, 좌표·정밀도 「—」 */
+    val noReceiver: Boolean get() = status.reason == StatusReason.NOT_CONNECTED || status.reason == StatusReason.LINK_DOWN
     /** 타원체고(m) = 정표고(MSL) + 지오이드 분리. 둘 중 하나라도 없으면 null */
     val ellipsoidalM: Double? get() = if (altM != null && geoidSepM != null) altM + geoidSepM else null
 }
@@ -123,7 +125,7 @@ data class EpochSample(val n: Double, val e: Double, val h: Double?) {
     }
 }
 
-data class DupPrompt(val fresh: SavedPoint, val existing: SavedPoint, val distM: Double, val worst: SurveyStatus, val phoneMode: Boolean = false)
+data class DupPrompt(val fresh: SavedPoint, val existing: SavedPoint, val distM: Double, val worst: SurveyStatus)
 
 /** 측점 저장소. Android 의존 없음(시험용 가짜 구현 가능). 되돌리기는 숨김(소프트 삭제)이라 번호를 다시 쓰지 않는다. */
 interface PointStore {
@@ -305,7 +307,7 @@ class SurveyController(
         }
         override fun linkUp(): Boolean {
             val r = gv.status.reason
-            return r != StatusReason.NOT_CONNECTED && r != StatusReason.LINK_DOWN && !gv.fromPhone
+            return r != StatusReason.NOT_CONNECTED && r != StatusReason.LINK_DOWN
         }
         override fun busy(): Boolean = phase == Phase.ACQUIRING || phase == Phase.RECORDING
         override fun requestSave() { if (phase == Phase.RESULT || phase == Phase.RESULT_EXPANDED) nextPoint() else onMeasure() }
@@ -371,6 +373,39 @@ class SurveyController(
     }
 
     var gv by mutableStateOf(GnssView())
+
+    // ---------------- 0.1.30 T24 폰 위치: 지도 점 표시 전용 ----------------
+    /**
+     * 폰 내장 위치(지도 「폰 위치(참고)」 점·따라가기 전용). [source](수신기)와 완전히 분리되어
+     * gv·측점 취득·평균·주의 승인·저장·내보내기 어디에도 들어가지 않는다.
+     */
+    var phoneFix by mutableStateOf<kr.archsurvey.device.PhoneFix?>(null); private set
+    /** 폰 위치가 이보다 오래되면 지도에서 뺀다 */
+    var phoneFixMaxAgeMs: Long = 30_000L
+    fun onPhoneLocation(f: kr.archsurvey.device.PhoneFix?) {
+        phoneFix = f
+        // 지도 그림 기준(앵커)만 — 측량 좌표 계산에는 쓰지 않는다(수신기·점이 없을 때 배경맵을 내 근처로)
+        if (f != null && anchorOnFirstFix && !anchored) anchorTo(f.lat, f.lon)
+    }
+    /** 지도에 폰 점을 그릴지: 수신기 위치가 없을 때만, 그리고 신선할 때만 */
+    fun phoneDotVisible(): Boolean {
+        val f = phoneFix ?: return false
+        val receiverPos = gv.lat != null && gv.lon != null && !gv.noReceiver
+        return !receiverPos && source.clockMs() - f.atMs <= phoneFixMaxAgeMs
+    }
+
+    // ---------------- 0.1.30 T23 정밀도(GST) 안내: 연결당 한 번 ----------------
+    private val precisionGate = PrecisionNoticeGate()
+    /** 지금 수신기 모델 id(연결 화면 프로필). 시험에서 바꿀 수 있다 */
+    var deviceIdProvider: () -> String? = { connection?.profile?.id }
+    /** 이번 연결에 낸 정밀도 안내(없으면 null) — 시험·진단용 */
+    var precisionNotice by mutableStateOf<String?>(null); private set
+    private fun showPrecisionNotice(text: String) { precisionNotice = text; ui.toast(text) }
+    /** Engine 의 SP60 GST/GSA 자동 요청 결과 */
+    fun onPrecisionResult(r: kr.archsurvey.bt.PrecisionResult?) {
+        if (r == null) return
+        precisionGate.onActivation(deviceIdProvider(), r)?.let { showPrecisionNotice(it) }
+    }
     /** 마지막 GGA 이후 지난 초. 없으면 null (상태 띠가 1초마다 다시 부른다) */
     fun nowMs(): Long = clock()
     fun ggaAgeSec(): Long? = gv.ggaAtMs.takeIf { it > 0L }?.let { ((source.clockMs() - it) / 1000).coerceAtLeast(0) }
@@ -413,6 +448,12 @@ class SurveyController(
         /** 지도 배율(dp/m). 0.1.22: 핀치 축소·확대 클램프 완화(기존 2…80 → 0.25…320) */
         const val DP_PER_M_MIN = 0.25
         const val DP_PER_M_MAX = 320.0
+        /** 0.1.30 T24 UX리뷰 확정 문구 */
+        const val NO_RECEIVER_MSG = "수신기가 연결되지 않아 측점할 수 없어요"
+        const val RECEIVER_LOST_MSG = "수신기 끊김 · 저장하지 않았어요"
+        const val PHONE_DOT_LABEL = "폰 위치(참고)"
+        /** 측정 중 이 이유로 ‘불가’가 되면 「수신기 끊김」 */
+        val RECEIVER_LOST = setOf(StatusReason.LINK_DOWN, StatusReason.NOT_CONNECTED, StatusReason.STALE, StatusReason.NO_DATA)
     }
     var follow by mutableStateOf(true)
     private var panCenter by mutableStateOf(LocalXY(0.0, 0.0))
@@ -455,7 +496,8 @@ class SurveyController(
                     pdop = if (shown) g.gsa?.pdop else null, correctionAgeSec = if (shown) gga?.correctionAgeSec else null,
                     vdop = if (shown) g.gsa?.vdop else null, geoidSepM = if (shown) gga?.geoidSeparation else null,
                     baseId = if (shown) gga?.baseStationId else null, sats = if (shown) g.satsDetail else emptyList(),
-                    fromPhone = shown && g.fromPhone)
+                    link = l.state)
+                precisionGate.onUpdate(deviceIdProvider(), l.state, g.seenTypes, source.clockMs())?.let { showPrecisionNotice(it) }
                 if (shown && gga != null && gga.hasPosition && g.lastGgaAtMs != lastGgaStamp) {
                     lastGgaStamp = g.lastGgaAtMs
                     if (anchorOnFirstFix && !anchored) anchorTo(gga.lat!!, gga.lon!!)
@@ -489,10 +531,21 @@ class SurveyController(
         try { onMeasure() } finally { tiltBypass = false; qualityBypass = false }
     }
 
+    /** 수신기 없이 측점을 누름(버튼·음성 「저장」·이어폰 키 같은 경로) */
+    private fun blockNoReceiver() {
+        message = NO_RECEIVER_MSG
+        feedback?.invoke(false)
+        if (ui.confirm == null) ui.ask(ConfirmRequest(NO_RECEIVER_MSG, "블루투스로 R10 / SP60 을 연결한 뒤 측점하세요.", "연결") {
+            connection?.openScreen() ?: run { message = "연결 화면을 열 수 없어요" }
+        })
+    }
+
     fun onMeasure() {
         if (phase == Phase.ACQUIRING || phase == Phase.RECORDING) return
         resultStripShown = false
         val st = gv.status
+        // 0.1.30 T24: 수신기 없음/끊김 → 측점 안 함(폰 위치로 대신하지 않음). 안내 + [연결] + 실패음 1번
+        if (gv.noReceiver) { blockNoReceiver(); return }
         val strict = settingsState?.requireFixed == true
         when (StatusJudge.savePolicy(st.status, strict)) {
             SavePolicy.BLOCK -> {
@@ -504,9 +557,10 @@ class SurveyController(
                 return
             }
             SavePolicy.ALLOW_WITH_WARNING -> if (!qualityBypass) {
+                val hint = if (st.reason == StatusReason.NO_SIGMA) PrecisionGuide.noSigmaHint(deviceIdProvider())?.let { " ($it)" } ?: "" else ""
                 val req = ConfirmRequest(
                     "주의 상태에서 측점할까요?",
-                    "${st.reason.textKo} · 저장은 되지만 주의 표시가 기록돼요.",
+                    "${st.reason.textKo}$hint · 저장은 되지만 주의 표시가 기록돼요.",
                     "그래도 측점",
                 ) {
                     qualityConfirm = null
@@ -534,7 +588,7 @@ class SurveyController(
         if (rec == null) { message = "안테나 높이를 계산할 수 없어요. 높이 값을 확인하세요."; return }
         message = null; dupPrompt = null; arch.lastSummary = null
         phase = Phase.ACQUIRING; progress = 0f
-        val typeAtStart = typeName; val nameAtStart = nextName; val phoneMode = gv.fromPhone
+        val typeAtStart = typeName; val nameAtStart = nextName
         val strictAcquire = strict
         acquireJob?.cancel()
         acquireJob = scope.launch {
@@ -557,6 +611,14 @@ class SurveyController(
             val ar = aborted
             if (ar != null) {
                 phase = Phase.IDLE
+                progress = 0f
+                // 0.1.30 T24: 수신기가 끊기거나 멈추면 그 자리에서 취득 취소 · 아무것도 저장하지 않음(폰 위치로 이어 가지 않음)
+                if (ar in RECEIVER_LOST) {
+                    message = RECEIVER_LOST_MSG
+                    ui.fail(RECEIVER_LOST_MSG)
+                    feedback?.invoke(false)
+                    return@launch
+                }
                 message = if (strictAcquire)
                     "엄격 모드에서는 FIX만 허용돼요 — ${ar.textKo}. 저장하지 않았어요."
                 else
@@ -589,10 +651,10 @@ class SurveyController(
             val dup = findDuplicate(sp, NE(tm.northing, tm.easting))
             if (dup != null) {
                 phase = Phase.IDLE
-                dupPrompt = DupPrompt(sp, dup.first, dup.second, worst, phoneMode)
+                dupPrompt = DupPrompt(sp, dup.first, dup.second, worst)
                 return@launch
             }
-            commitNew(sp, worst, phoneMode)
+            commitNew(sp, worst)
         }
     }
 
@@ -604,7 +666,7 @@ class SurveyController(
     }
 
     /** 새 점으로 저장 (디스크 + 화면). 외곽 모드면 꼭짓점으로 이어 붙인다 */
-    private suspend fun commitNew(sp: SavedPoint, worst: SurveyStatus, phoneMode: Boolean = false) {
+    private suspend fun commitNew(sp: SavedPoint, worst: SurveyStatus) {
         resultName = null; resurveyUndo = null
         val named = (if (sp.name == nextName) sp else sp.copy(name = nextName)).let { if (pendingMemo.isNotBlank()) it.copy(memo = pendingMemo.trim()) else it }
         pendingMemo = ""
@@ -620,7 +682,6 @@ class SurveyController(
         photos.clear(); voices.clear()
         feedback?.invoke(saveError == null)
         message = saveError ?: when {
-            phoneMode -> "폰 GPS 저정밀 점이에요 (RTK 아님 · 표시가 기록돼요)"
             worst == SurveyStatus.CAUTION -> "주의 상태에서 취득한 점이에요 (표시가 기록돼요)"
             else -> null
         }
@@ -716,7 +777,7 @@ class SurveyController(
         dupPrompt = null
         when (choice) {
             DupChoice.RESURVEY -> scope.launch { applyResurvey(d.existing, d.fresh, d.worst) }
-            DupChoice.NEW_POINT -> scope.launch { commitNew(d.fresh, d.worst, d.phoneMode) }
+            DupChoice.NEW_POINT -> scope.launch { commitNew(d.fresh, d.worst) }
             DupChoice.DISCARD -> { phase = Phase.IDLE; message = "취소했어요 — 방금 측점은 저장하지 않았어요" }
         }
     }
@@ -964,7 +1025,10 @@ class SurveyController(
 
     fun mapState(): MapViewState {
         val cur = if (gv.lat != null && gv.lon != null) projection.toLocal(gv.lat!!, gv.lon!!) else null
-        val center = if (follow) (cur ?: LocalXY(20.0, 16.0)) else panCenter
+        // 0.1.30 T24: 폰 점은 수신기 위치가 없을 때만(표시 전용). 따라가기 = 수신기 우선, 없으면 폰
+        val pf = phoneFix?.takeIf { phoneDotVisible() }
+        val phoneAt = pf?.let { projection.toLocal(it.lat, it.lon) }
+        val center = if (follow) (cur ?: phoneAt ?: LocalXY(20.0, 16.0)) else panCenter
         val head = if (trail.size >= 2) {
             val a = trail[trail.size - 2]; val b = trail.last()
             if (hypot(b.x - a.x, b.y - a.y) > 0.05) Math.toDegrees(atan2(b.x - a.x, b.y - a.y)) else null
@@ -980,6 +1044,7 @@ class SurveyController(
             center = center, dpPerM = dpPerM, 
             points = points.map { MapMarker(it.name, projection.toLocal(it.lat, it.lon), it.cautionFlag) },
             current = cur?.let { CurrentMarker(it, sigma, gv.status.status, head) },
+            phone = if (cur == null && pf != null && phoneAt != null) PhoneMarker(phoneAt, pf.accuracyM, PHONE_DOT_LABEL) else null,
             trail = trail.toList(),
             gridLines = if (g != null && g.cols + g.rows <= 400) GridMath.lines(g).map { loc(it.first) to loc(it.second) } else emptyList(),
             gridLabels = if (g != null && g.cols * g.rows <= 1200 && g.spacingM * dpPerM >= 26) GridMath.cellCenters(g).map { MapText(it.first, loc(it.second)) } else emptyList(),

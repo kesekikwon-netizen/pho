@@ -37,6 +37,9 @@ import kr.archsurvey.core.*
 /** 목업(v2/simple) 버튼 3종: 일반(#FDFCF9 + 회색 테두리), 선택(#F7E4DB + 테라코타 2.5dp 테두리), 주(#D97757). 모두 은은한 글로시와 그림자. */
 internal enum class MKind { PLAIN, SELECTED, PRIMARY }
 
+/** 0.1.30 T24: 수신기 없을 때 측점 버튼 글자(UX리뷰) */
+internal const val MEASURE_NO_RECEIVER = "수신기 연결 필요"
+
 @Composable
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 internal fun MBtn(
@@ -119,7 +122,8 @@ internal fun ControlArea(c: SurveyController) {
     val reason = c.gv.status.reason
     val blocked = status == SurveyStatus.UNAVAILABLE
     val caution = status == SurveyStatus.CAUTION
-    val notConn = reason == StatusReason.NOT_CONNECTED
+    // 0.1.30 T24: 수신기 없음·끊김 → 회색 「수신기 연결 필요」(자리 그대로). 눌러도 측점 안 함 — 안내 + [연결] + 실패음
+    val notConn = c.gv.noReceiver
     val strict = c.settingsState?.requireFixed == true
     val strictBlock = strict && caution
     val sel = c.typeIndex.coerceIn(0, (c.types.size - 1).coerceAtLeast(0))
@@ -139,22 +143,20 @@ internal fun ControlArea(c: SurveyController) {
             }
             val measure: @Composable RowScope.() -> Unit = {
                 // 0.1.26: 미연결→연결 유도(활성), 엄격·주의=흐리게, 주의(기본)=확인 후 측점
-                val dim = busy || (blocked && !notConn) || strictBlock
+                val dim = busy || blocked || strictBlock
                 MBtn(
                     Modifier.width(SurveyDims.MEASURE_WIDTH_DP.dp).height(SurveyDims.MEASURE_BUTTON_DP.dp).testTag("measure_button"),
                     MKind.PRIMARY, 22.dp, alpha = if (dim) 0.5f else 1f, onLongClick = { if (!busy) c.setupOpen = true },
                     onClick = {
                         when {
                             busy -> {}
-                            notConn -> c.connection?.openScreen() ?: run { c.message = "연결 화면을 열 수 없어요" }
                             else -> c.onMeasure()
                         }
                     },
                 ) {
                     when {
                         notConn -> {
-                            Text("수신기 연결", style = Ty.button.copy(fontSize = 18.sp, lineHeight = 22.sp), color = t.onPrimary)
-                            Text("연결 화면 열기", style = Ty.small.copy(fontSize = 11.sp, lineHeight = 13.sp), color = t.onPrimary, maxLines = 1, modifier = Modifier.testTag("measure_disabled_reason"))
+                            Text(MEASURE_NO_RECEIVER, style = Ty.button.copy(fontSize = 17.sp, lineHeight = 21.sp), color = t.onPrimary, maxLines = 2, textAlign = TextAlign.Center, modifier = Modifier.testTag("measure_disabled_reason"))
                         }
                         strictBlock -> {
                             Text("측점 불가", style = Ty.button.copy(fontSize = 18.sp, lineHeight = 22.sp), color = t.onPrimary)
