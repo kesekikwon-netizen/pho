@@ -45,10 +45,12 @@ internal const val MEASURE_NO_RECEIVER = "수신기 연결 필요"
 internal fun MBtn(
     modifier: Modifier, kind: MKind = MKind.PLAIN, radius: Dp = 16.dp, alpha: Float = 1f,
     onLongClick: (() -> Unit)? = null,
+    /** 0.1.30: 바탕을 이 단색으로(없으면 종류별 색) */
+    solid: androidx.compose.ui.graphics.Color? = null,
     onClick: () -> Unit, content: @Composable ColumnScope.() -> Unit,
 ) {
     val t = T; val shape = RoundedCornerShape(radius)
-    val bgc = when (kind) { MKind.PRIMARY -> t.primary; MKind.SELECTED -> t.primaryCont; else -> t.raised }
+    val bgc = solid ?: when (kind) { MKind.PRIMARY -> t.primary; MKind.SELECTED -> t.primaryCont; else -> t.raised }
     val bm = when (kind) {
         MKind.PRIMARY -> Modifier
         MKind.SELECTED -> Modifier.border(1.5.dp, t.accent, shape)
@@ -146,7 +148,8 @@ internal fun ControlArea(c: SurveyController) {
                 val dim = busy || blocked || strictBlock
                 MBtn(
                     Modifier.width(SurveyDims.MEASURE_WIDTH_DP.dp).height(SurveyDims.MEASURE_BUTTON_DP.dp).testTag("measure_button"),
-                    MKind.PRIMARY, 22.dp, alpha = if (dim) 0.5f else 1f, onLongClick = { if (!busy) c.setupOpen = true },
+                    // 0.1.30 UX-0130-1(선택): 「수신기 연결 필요」·「측점 불가」는 반투명 대신 진회색 단색. 측정 중(busy)은 기존대로 흐리게
+                    MKind.PRIMARY, 22.dp, alpha = if (busy) 0.5f else 1f, solid = if (!busy && (notConn || dim)) t.blockedButton else null, onLongClick = { if (!busy) c.setupOpen = true },
                     onClick = {
                         when {
                             busy -> {}

@@ -93,7 +93,8 @@ fun PointsScreen(c: SurveyController) {
 @Composable
 private fun PointRow(p: SavedPoint, onLong: () -> Unit, onClick: () -> Unit) {
     val t = T
-    val (sbg, sfg) = statusColors(t, p.status)
+    val shown = PointCaution.displayStatus(p) // 0.1.30 UX-0130-1: 결과 칩·지도 점과 같은 표시 상태(σ 없음(고정) = 고정색)
+    val (sbg, sfg) = statusColors(t, shown)
     Row(
         Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(12.dp)).background(t.card).hCombinedClickable(onLongClick = onLong, onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 8.dp).testTag("point_row_${p.name}"),
@@ -103,11 +104,11 @@ private fun PointRow(p: SavedPoint, onLong: () -> Unit, onClick: () -> Unit) {
             Text(p.name, style = Ty.coord.copy(fontSize = 13.sp), color = t.ink, maxLines = 1, softWrap = false)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 // 상태는 색 + 아이콘 (목업 규칙: 색만으로 구분하지 않음)
-                Box(Modifier.size(14.dp).clip(RoundedCornerShape(7.dp)).background(sbg), contentAlignment = Alignment.Center) { StatusIcon(p.status, sfg, 10.dp) }
+                Box(Modifier.size(14.dp).clip(RoundedCornerShape(7.dp)).background(sbg), contentAlignment = Alignment.Center) { StatusIcon(shown, sfg, 10.dp) }
                 Text(p.type + if (p.memo.isNotBlank()) " · ${p.memo}" else "", style = Ty.small.copy(fontSize = 10.sp), color = t.inkSub, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             }
             // 0.1.30 T23: 주의 이유(「σ 없음(고정)」·Float·보정 나이 초과 …) — 목록 표시만
-            PointCaution.reason(p)?.let { Text(it, style = Ty.small.copy(fontSize = 10.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("point_reason_${p.name}")) }
+            PointCaution.rowReason(p)?.let { Text(it, style = Ty.small.copy(fontSize = 10.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("point_reason_${p.name}")) }
         }
         val m = Ty.coord.copy(fontSize = 11.sp)
         Text(grp3(p.northing), style = m, color = t.ink, maxLines = 1, modifier = Modifier.weight(1.5f))

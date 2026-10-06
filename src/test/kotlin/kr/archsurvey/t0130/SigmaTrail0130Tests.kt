@@ -224,3 +224,36 @@ class Trail0130Tests {
         assertEquals(1, c.mapState().trail.size); assertTrue(c.mapState().trailBreaks.isEmpty())
     }
 }
+
+/** 0.1.30 UX-0130-1: 점 목록 행 상태 = 결과 칩 = 지도 점 (σ 없음(고정)이 목록에서만 주의로 보이던 문제) */
+class PointRowConsistency0130Tests {
+    private fun pt(q: Int, sigma: Double?, floatEpochs: Int = 0, age: Double? = 1.0, caution: Boolean = true) = SavedPoint(
+        name = "P-$q-$sigma-$floatEpochs-$age", type = "t", lat = 37.0, lon = 127.0, northing = 0.0, easting = 0.0, crsEpsg = 5186,
+        groundHeightM = 0.0, sigmaHM = sigma, status = if (caution) SurveyStatus.CAUTION else SurveyStatus.FIXED, cautionFlag = caution, epochs = 3,
+        antenna = AntennaRecord("X", "ARP", "ARP", 1.8, "VERTICAL", 0.0, 0.0, 1.8), fixQuality = q, satellites = 30, measuredAtMs = 0L,
+        correctionAgeSec = age, floatEpochs = floatEpochs)
+
+    @Test fun pointListRowStatus_equalsResultChip_andMapMarker() {
+        val noSigma = pt(4, null); val fixed = pt(4, 0.01, caution = false); val float = pt(5, 0.02, floatEpochs = 2); val old = pt(4, 0.01, age = 99.0)
+        val (s, c) = rig(strict = false)
+        s.push(FixQuality.RTK_FIXED, 0.01)
+        c.points.addAll(listOf(noSigma, fixed, float, old))
+        val markers = c.mapState().points.associateBy { it.name }
+        for (p in listOf(noSigma, fixed, float, old)) {
+            val row = PointCaution.displayStatus(p) // PointRow 아이콘·색
+            val chipFixed = PointCaution.chip(p).startsWith("고정")
+            assertEquals(p.name, row == SurveyStatus.FIXED, chipFixed)
+            assertEquals(p.name, row != SurveyStatus.FIXED, markers.getValue(p.name).flagged)
+        }
+        assertEquals(SurveyStatus.FIXED, PointCaution.displayStatus(noSigma))
+        assertEquals("고정 · σ 없음", PointCaution.rowReason(noSigma))
+        assertEquals(PointCaution.FLOAT, PointCaution.rowReason(float))
+        assertEquals(PointCaution.AGE_OVER, PointCaution.rowReason(old))
+        assertNull(PointCaution.rowReason(fixed))
+        // 목록 행이 실제로 표시 상태를 쓰는지(소스 고정)
+        val src = File("src/main/kotlin/kr/archsurvey/ui/ToolScreens.kt").readText()
+        val row = src.substringAfter("private fun PointRow(").substringBefore("\n}\n")
+        assertTrue(row.contains("PointCaution.displayStatus(p)")); assertFalse(row.contains("statusColors(t, p.status)")); assertFalse(row.contains("StatusIcon(p.status"))
+        assertTrue(row.contains("PointCaution.rowReason(p)"))
+    }
+}

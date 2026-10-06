@@ -38,6 +38,8 @@ object PointCaution {
     }
     /** 0.1.30 T23-c 표시 상태: 고정·σ만 없음 → 고정 색(저장된 주의 표시는 그대로) */
     fun displayStatus(p: SavedPoint): SurveyStatus = if (reason(p) == NO_SIGMA_FIXED) SurveyStatus.FIXED else p.status
+    /** 0.1.30 UX-0130-1 점 목록 이유 줄: σ 없음(고정)은 「고정 · σ 없음」, 그 밖(Float·보정 나이 …)은 이유 그대로 */
+    fun rowReason(p: SavedPoint): String? = reason(p)?.let { if (it == NO_SIGMA_FIXED) label(p) else it }
     /** 결과 칩 문구 */
     fun chip(p: SavedPoint): String = when {
         reason(p) == NO_SIGMA_FIXED -> SigmaText.FIX_NO_SIGMA
