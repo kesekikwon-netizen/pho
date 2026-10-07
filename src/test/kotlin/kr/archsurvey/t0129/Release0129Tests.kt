@@ -37,6 +37,10 @@ private class FP(
     override fun openBluetoothSettings() {}
     override fun openAppSettings() {}
     var started = 0
+    var autoOn = false
+    override var autoConnect: Boolean
+        get() = autoOn
+        set(v) { autoOn = v }
     override fun startReal(profile: DeviceProfile, address: String, ntrip: NtripConfig, ntripEnabled: Boolean) { started++ }
     override fun stopReal() {}
     override fun loadSaved() = saved
@@ -134,8 +138,10 @@ class GvrsT17Tests {
         assertFalse(c2.sendGga)
         assertTrue(c2.connectProblems().contains(Gvrs.GGA_REQUIRED))
         c2.saveOnly(); assertTrue(c2.ui.toast!!.contains(Gvrs.GGA_REQUIRED))
-        assertFalse("자동 연결 안 함", c2.autoConnectOnLaunch())
         c2.connect(); assertNotNull(c2.notice); assertTrue(c2.notice!!.action.contains(Gvrs.GGA_REQUIRED)); assertEquals(0, p2.started)
+        // 0.1.32(의도된 변경): 자동 연결은 수신기만 하고 이번엔 보정을 끈다(GVRS 를 GGA 없이 접속하지 않음 · 예전엔 수신기 연결 자체를 조용히 건너뜀)
+        val p3 = FP(gvrsSaved, gga = false, success = true).also { it.autoOn = true }; val c3 = cc(p3)
+        assertTrue(c3.autoConnectOnLaunch()); assertEquals(1, p3.started); assertTrue(c3.ui.toast!!.contains(Gvrs.GGA_REQUIRED))
         // 다시 켜면 연결 진행
         c2.changeSendGga(true); assertTrue(c2.connectProblems().isEmpty())
         c2.connect(); assertEquals(1, p2.started)
@@ -174,7 +180,9 @@ class GvrsT17Tests {
         val g403 = ErrorCards.ntripCard(a403, "rts3.ngii.go.kr")!!
         assertTrue(g403.action.contains(Gvrs.AUTH_HINT)); assertFalse(g403.autoRetry); assertEquals("NT-403", g403.code)
         for (h in listOf("", "RTS1.ngii.go.kr", "RTS2.ngii.go.kr")) {
-            assertFalse(ErrorCards.ntripCard(a401, h)!!.action.contains("ngii"))
+            // 0.1.32(의도된 변경): RTS1·2 401 도 국토지리정보원 공식 FAQ(비밀번호 ngii)를 알린다. G-VRS 전용 문구(RTS1·RTS2 가입 ID인지…)는 여전히 RTS3 만
+            assertTrue(ErrorCards.ntripCard(a401, h)!!.action.contains("공식 FAQ"))
+            assertFalse(ErrorCards.ntripCard(a401, h)!!.action.contains("RTS1·RTS2 가입 ID인지"))
             assertFalse(ErrorCards.ntripCard(a403, h)!!.action.contains("ngii"))
         }
         assertEquals(ErrorCards.ntripCard(a401), ErrorCards.ntripCard(a401, "RTS1.ngii.go.kr"))

@@ -42,6 +42,10 @@ class SurveyEngine(private val app: Context, private val settingsStrategy: (Stri
     val profileFlow = MutableStateFlow<DeviceProfile?>(null)
     /** 0.1.30 T23: 이번 연결의 SP60 GST/GSA 자동 요청 결과(없으면 null). 화면 안내·진단용 */
     val precision = MutableStateFlow<PrecisionResult?>(null)
+    /** 0.1.32: 이번 연결에서 본 제조사 고유 NMEA 신호로 판단한 수신기 종류 id(`$PASH`=SP60, `$PTNL`=R10). 없으면 null */
+    val receiverSignature = MutableStateFlow<String?>(null)
+    /** 0.1.32: 알림 「연결 종료」처럼 화면 밖에서 연결을 멈췄을 때 한 번 */
+    val stoppedOutside = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     /** 0.1.30 T23-b: 사용자 [자동 켜기 다시] */
     private val precisionRetry = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
     /** SP60 이 받는 중일 때만 보낸다. 보냈으면 true */
@@ -73,14 +77,17 @@ class SurveyEngine(private val app: Context, private val settingsStrategy: (Stri
     val receiverReportedAntennaM = MutableStateFlow<Double?>(null)
 
     fun start(profile: DeviceProfile, address: String, ntrip: NtripConfig?, ntripEnabled: Boolean) {
+        val old = gnssJob
         stop()
         profileFlow.value = profile
         precision.value = null
+        receiverSignature.value = null
         this.ntripConfig = ntrip
         this.ntripEnabled = ntripEnabled
         while (wake.tryReceive().isSuccess) { } // 이전 세션의 낡은 깨우기 신호 제거
         registerReceivers()
-        gnssJob = scope.launch { gnssLoop(profile, address) }
+        // 0.1.32: 이전 세션이 완전히 끝난 뒤(소켓 닫힘·finally 의 link=IDLE) 새 세션 시작 — 늦게 도는 이전 finally 가 새 세션 상태를 IDLE 로 덮던 경합 제거
+        gnssJob = scope.launch { old?.join(); gnssLoop(profile, address) }
         restartNtrip()
     }
 
@@ -134,6 +141,7 @@ class SurveyEngine(private val app: Context, private val settingsStrategy: (Stri
                 if (settingsStrategy(address) == name) saveStrategy(address, null)
             },
             onPrecisionResult = { precision.value = it },
+            onSignature = { receiverSignature.value = it },
             precisionBudget = PrecisionBudget.forDevice(address),
             precisionRetry = precisionRetry,
         )

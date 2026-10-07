@@ -31,9 +31,10 @@ class AndroidConnectionPlatform(private val app: App) : ConnectionPlatform {
     override fun startReal(profile: DeviceProfile, address: String, ntrip: NtripConfig, ntripEnabled: Boolean) {
         val s = app.settings
         s.deviceId = profile.id; s.setBtAddress(profile.id, address)
-        s.saveNtrip(ntrip); s.ntripEnabled = ntripEnabled
+        // 0.1.32: 보정 켜짐은 이번 연결에만 넘긴다(자동 연결에서 VRS 입력이 모자라 이번만 끈 것을 저장값으로 남기지 않음). 저장은 save()
+        s.saveNtrip(ntrip)
         app.engine.setNtripOptions(s.ntripSendGga, s.ntripAutoRetry)
-        SurveyConnectionService.start(app, profile.id, address)
+        SurveyConnectionService.start(app, profile.id, address, ntripEnabled)
     }
     override fun stopReal() { SurveyConnectionService.stop(app); app.engine.stop() }
 
@@ -46,7 +47,23 @@ class AndroidConnectionPlatform(private val app: App) : ConnectionPlatform {
         val st = app.settings
         s.deviceId?.let { st.deviceId = it; st.setBtAddress(it, s.address); st.setPreChecked(it, s.preChecked) }
         st.saveNtrip(s.ntrip.toConfig()); st.ntripEnabled = s.ntrip.enabled
+        s.deviceId?.let { st.saveNtripFor(it, s.ntrip.toConfig(), s.ntrip.enabled) } // 0.1.32 기기별 보정
     }
+
+    // 0.1.32 수신기별 기억·자동 인식
+    override fun savedFor(deviceId: String): SavedConnection? {
+        val s = app.settings
+        val addr = s.btAddressFor(deviceId)
+        val nt = s.loadNtripFor(deviceId)
+        if (addr == null && nt == null) return null
+        val form = nt?.let { (c, on) -> NtripForm.from(c, on) } ?: NtripForm(host = "")
+        return SavedConnection(deviceId, addr, form, s.preChecked(deviceId))
+    }
+    override fun deviceTypeFor(address: String): String? = app.settings.deviceTypeFor(address)
+    override fun markLinkOk(address: String, deviceId: String) {
+        app.settings.setDeviceTypeFor(address, deviceId); app.settings.setLinkOkAt(address, System.currentTimeMillis())
+    }
+    override fun receiverSignature(): String? = app.engine.receiverSignature.value
 
     override suspend fun fetchMounts(cfg: NtripConfig): List<MountInfo> = app.engine.fetchMountPoints(cfg)
     override fun hostProfile(host: String): NtripForm? {

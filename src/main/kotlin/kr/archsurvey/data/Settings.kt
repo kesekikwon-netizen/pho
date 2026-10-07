@@ -43,7 +43,38 @@ class SettingsStore(private val ctx: Context) {
         set(v) = sp.edit().putString("device_id", v).apply()
 
     fun btAddressFor(deviceId: String): String? = sp.getString("bt_addr_$deviceId", null)
-    fun setBtAddress(deviceId: String, addr: String?) = sp.edit().putString("bt_addr_$deviceId", addr).apply()
+    /** 0.1.32: null 로 지우지 않는다(기기 종류만 바꿔도 그 기기의 저장 주소가 지워지던 원인). 바꿀 때만 쓴다 */
+    fun setBtAddress(deviceId: String, addr: String?) { if (addr != null) sp.edit().putString("bt_addr_$deviceId", addr).apply() }
+
+    /** 0.1.32: 블루투스 주소별로 확인된 수신기 종류(R10/SP60). 연결해 위치가 들어온 적 있으면 기록 */
+    fun deviceTypeFor(address: String): String? = sp.getString("bt_dev_$address", null)
+    fun setDeviceTypeFor(address: String, deviceId: String) = sp.edit().putString("bt_dev_$address", deviceId).apply()
+    /** 0.1.32: 이 주소에서 위치(GGA)를 받은 적 있는지(보정 성공과 따로) */
+    fun linkOkAt(address: String): Long = sp.getLong("bt_ok_$address", 0L)
+    fun setLinkOkAt(address: String, at: Long) = sp.edit().putLong("bt_ok_$address", at).apply()
+
+    /** 0.1.32: 수신기 종류별 보정 설정(서버·포트·마운트·아이디·v2·사용). 비밀번호는 암호화 저장소에만. 없으면 null */
+    fun loadNtripFor(deviceId: String): Pair<NtripConfig, Boolean>? {
+        val k = "dev_${deviceId}_"
+        val host = sp.getString("${k}ntrip_host", null) ?: return null
+        val d = NtripConfig()
+        return NtripConfig(
+            host = host, port = sp.getInt("${k}ntrip_port", d.port),
+            mountPoint = sp.getString("${k}ntrip_mount", "") ?: "",
+            username = sp.getString("${k}ntrip_user", "") ?: "",
+            password = secureGet("${k}ntrip_pw")?.takeIf { it.isNotEmpty() } ?: devPwMem[deviceId] ?: "",
+            useV2 = sp.getBoolean("${k}ntrip_v2", false),
+        ) to sp.getBoolean("${k}ntrip_on", true)
+    }
+    private val devPwMem = HashMap<String, String>()
+    fun saveNtripFor(deviceId: String, c: NtripConfig, enabled: Boolean) {
+        val k = "dev_${deviceId}_"
+        sp.edit().putString("${k}ntrip_host", c.host.trim()).putInt("${k}ntrip_port", c.port)
+            .putString("${k}ntrip_mount", c.mountPoint.trim()).putString("${k}ntrip_user", c.username.trim())
+            .putBoolean("${k}ntrip_v2", c.useV2).putBoolean("${k}ntrip_on", enabled).apply()
+        devPwMem[deviceId] = c.password
+        securePut("${k}ntrip_pw", c.password)
+    }
 
     fun preChecked(deviceId: String): Boolean = sp.getBoolean("pre_ok_$deviceId", false)
     fun setPreChecked(deviceId: String, v: Boolean) = sp.edit().putBoolean("pre_ok_$deviceId", v).apply()

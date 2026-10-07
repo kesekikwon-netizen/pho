@@ -535,7 +535,7 @@ private fun VrsSection(cc: ConnectionController, ntrip: kr.archsurvey.engine.Ntr
             if (ntrip.state == NtripState.ERROR || ntrip.state == NtripState.AUTH_FAILED || ntrip.state == NtripState.RECONNECTING)
                 Btn("보정 다시 시도", Modifier.fillMaxWidth().testTag("conn_ntrip_retry")) { cc.retryNtrip() }
         }
-        Text("마운트 줄을 누르면 서버에서 전체 목록을 받아 고를 수 있어요(아이디·비밀번호를 먼저 넣으세요). 국토지리정보원 VRS는 2025년 8월부터 ‘측위보정정보 통합회원 ID’를 쓴다고 알려져 있어요 — 공식 공지 원문은 확인하지 못했어요.", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("conn_id_help"))
+        Text("마운트 줄을 누르면 서버에서 전체 목록을 받아 고를 수 있어요(아이디·비밀번호를 먼저 넣으세요). 국토지리정보원 공식 FAQ: VRS는 ‘측위보정정보 통합회원 ID’(지각변동감시시스템 geodesy.ngii.go.kr 에서 등록)를 쓰고, RTS1·RTS2 비밀번호는 ngii 예요. ID 하나로 여러 개를 만들 수 있어요.", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("conn_id_help"))
         FoldRow("고급 · 마운트 이름 직접 입력 · 마지막 성공 설정", cc.showServer, "conn_server_toggle") { cc.showServer = !cc.showServer }
         if (cc.showServer) {
             Field("마운트 포인트", cc.form.mount, "conn_mount") { cc.updateForm(cc.form.copy(mount = it)) }

@@ -43,7 +43,13 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
     val driveAuth = kr.archsurvey.engine.DriveAuthBridge()
 
     /** 앱 첫 실행 화면에서 한 번: 지난번 성공 설정으로 자동 연결(설정에서 끌 수 있음) */
-    fun autoConnectOnLaunch() { runCatching { connection?.autoConnectOnLaunch() }.onFailure { kr.archsurvey.diag.CrashLog.record("자동 연결", it) } }
+    private var autoConnectTried = false
+    /** 0.1.32: 이 화면 모델에서 한 번만(회전으로 Activity 가 다시 만들어져도 다시 연결하지 않음) */
+    fun autoConnectOnLaunch() {
+        if (autoConnectTried) return
+        autoConnectTried = true
+        runCatching { connection?.autoConnectOnLaunch() }.onFailure { kr.archsurvey.diag.CrashLog.record("자동 연결", it) }
+    }
 
     /** 0.1.12: 앱 시작 때 직전 작업이 있으면 true → 홈 대신 그 작업의 측량 화면으로 바로 연다 */
     var resumeJob: Boolean = false; private set
@@ -119,6 +125,8 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
         // 0.1.19: Engine FIX/LINK/NTRIP 이벤트 → FeedbackPlayer (이전엔 emit 만 하고 재생 경로 없음)
         bindEngineFeedback(viewModelScope, application.engine.events, application.feedback::play)
         cc.onFeedback = { application.feedback.play(it) }
+        // 0.1.32: 알림 「연결 종료」 → 화면도 연결 안 함 상태로(「연결 중」에 멈추지 않게)
+        viewModelScope.launch { application.engine.stoppedOutside.collect { cc.onStoppedOutside() } }
         // 0.1.28 T14 음성 「저장」: 같은 onMeasure 경로 · 마이크 중재자는 controller.mic(음성 메모와 공유)
         val vc = kr.archsurvey.voicecmd.VoiceCommandController(controller.voiceHost, kr.archsurvey.engine.AndroidVoicePlatform(application, application.settings, media), controller.mic)
         controller.voice = vc

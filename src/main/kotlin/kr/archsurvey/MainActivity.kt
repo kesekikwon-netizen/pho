@@ -72,8 +72,10 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) {
             vm.controller.homeOpen = !vm.resumeJob
             if (vm.resumeJob) vm.controller.ui.toast(vm.resumeNotice())
-            vm.autoConnectOnLaunch()
         }
+        // 0.1.32: 화면 모델이 새로 만들어질 때마다 한 번(처음 실행 + 시스템이 앱을 정리한 뒤 되살릴 때). 회전은 같은 모델이라 다시 안 함.
+        // 예전엔 savedInstanceState == null 일 때만 → 최근 앱에서 되살아난 화면은 자동 연결 없이 폰 위치만 보였음
+        vm.autoConnectOnLaunch()
     }
 
     /** 0.1.31 T27: 종료 창에서 「예」를 눌러 닫는 중 */

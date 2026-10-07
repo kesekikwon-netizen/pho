@@ -18,6 +18,7 @@ import kr.archsurvey.device.DeviceProfile
 import kr.archsurvey.device.DeviceProfiles
 import kr.archsurvey.device.LinkState
 import kr.archsurvey.device.LinkStatus
+import kr.archsurvey.device.ReceiverDetect
 import kr.archsurvey.engine.NtripStatus
 import kr.archsurvey.ntrip.NtripConfig
 import kr.archsurvey.ntrip.NtripPresets
@@ -74,9 +75,9 @@ object ErrorCards {
         val gvrs = Gvrs.isHost(host)
         return when (ntrip.state) {
             NtripState.AUTH_FAILED ->
-                if ("403" in m) ErrorCard("NT-403", "VRS 접속이 거부됐어요 (403)", "같은 아이디가 다른 폰·컨트롤러에서 접속 중일 수 있어요. 그쪽을 끊고 다시 시도하세요. 계약(사용 기간·권한)도 확인하세요." + (if (gvrs) " G-VRS(RTS3): ${Gvrs.AUTH_HINT}하세요." else "") + " 자동 재시도는 하지 않아요.", false)
+                if ("403" in m) ErrorCard("NT-403", "VRS 접속이 거부됐어요 (403)", "같은 아이디가 다른 폰·컨트롤러에서 접속 중일 수 있어요(한 ID는 동시에 하나만). 그쪽을 끊고 다시 시도하세요. R10·SP60을 같이 쓰면 기기마다 다른 통합 ID를 쓰세요 — 국토지리정보원 ID 하나로 통합 ID를 여러 개 만들 수 있어요. 계약(사용 기간·권한)도 확인하세요." + (if (gvrs) " G-VRS(RTS3): ${Gvrs.AUTH_HINT}하세요." else "") + " 자동 재시도는 하지 않아요.", false)
                 else if (gvrs) ErrorCard("NT-401", "VRS 아이디/비밀번호가 맞지 않아요 (401)", "G-VRS(RTS3): ${Gvrs.AUTH_HINT}하세요(대소문자 구분). 자동 재시도는 하지 않아요.", false)
-                else ErrorCard("NT-401", "VRS 아이디/비밀번호가 맞지 않아요 (401)", "통합회원 ID와 비밀번호를 다시 입력하세요(대소문자 구분). 2025년 8월부터 국토지리정보원 VRS는 ‘측위보정정보 통합회원 ID’(지각변동감시시스템에서 등록)가 필요하다고 해요 — 공식 공지 원문은 확인하지 못했어요. 자동 재시도는 하지 않아요.", false)
+                else ErrorCard("NT-401", "VRS 아이디/비밀번호가 맞지 않아요 (401)", "통합회원 ID와 비밀번호를 다시 입력하세요(대소문자 구분). 국토지리정보원 공식 FAQ: VRS는 ‘측위보정정보 통합회원 ID’(지각변동감시시스템에서 등록), RTS1·2 비밀번호는 ngii. GNSS 데이터 통합센터 ID(이메일 형식)는 RTS1·2에서 안 돼요. 자동 재시도는 하지 않아요.", false)
             NtripState.ERROR ->
                 if ("마운트" in m || "404" in m) ErrorCard("NT-404", "마운트 포인트를 찾을 수 없어요", "마운트 포인트 이름이 맞는지 확인하세요(서비스 안내문의 이름, 예: VRS-RTCM31). 서버는 응답했으니 주소·포트·계정은 맞아요.", false)
                 else ErrorCard("NT-500", "VRS 서버에 연결하지 못했어요", m.ifBlank { "서버 주소·포트·마운트 포인트와 폰의 인터넷 연결을 확인하세요." }, true)
@@ -132,6 +133,16 @@ interface ConnectionPlatform {
         get() = false
         set(_) {}
     fun nowMs(): Long = System.currentTimeMillis()
+
+    // ---- 0.1.32 수신기별 기억·자동 인식(기본 = 기억 없음) ----
+    /** 이 수신기 종류로 마지막에 쓴 블루투스 주소·연결 전 확인·보정 설정. 없으면 null */
+    fun savedFor(deviceId: String): SavedConnection? = null
+    /** 주소별로 확인된 수신기 종류 id(위치를 받아 본 적 있거나 NMEA 신호로 확인). 없으면 null */
+    fun deviceTypeFor(address: String): String? = null
+    /** 이 주소에서 위치(GGA)를 받음 → 종류 기억 */
+    fun markLinkOk(address: String, deviceId: String) {}
+    /** 이번 연결에서 본 제조사 고유 NMEA 신호로 판단한 종류 id(ReceiverDetect.fromNmea). 없으면 null */
+    fun receiverSignature(): String? = null
 }
 
 /** 보정 서비스 선택 창의 항목. [mount] 는 처음 고를 때 넣는 기본 마운트 */
@@ -156,7 +167,7 @@ object KnownMounts {
         "rts1.ngii.go.kr" -> listOf(
             m("VRS-RTCM31", "RTCM 3.1", true, "미확인"),
             m("VRS-RTCM32", "RTCM 3.2", true, "미확인 · SP60 권장"),
-            m("VRS-RTCM34", "RTCM 3.4", true, "R10 허용 · SP60 비호환(최대 3.2) · 미확인"),
+            m("VRS-RTCM34", "RTCM 3.4", true, "운영 중(RTS1 최다 사용 · 제3자 현황판 2026-10) · R10 허용 · SP60 비호환(최대 3.2)"),
             m("VRS-CMRx", "CMRx", true, "미확인"),
             m("VRS-RTCM23", "RTCM 2.3", true, "미확인"),
             m("RTK-RTCM32", "RTCM 3.2", false, "Single RTK · 성과심사 불가 · 미확인"),
@@ -434,8 +445,7 @@ class ConnectionController(
     fun selectProfile(p: DeviceProfile) {
         if (p.id == profile.id) return
         if (lockedForChange()) return
-        profile = p; resetChecks(); address = null; notice = null; refresh()
-        val defaulted = applyDeviceCorrectionDefault(p) // 0.1.29 T19: 처음 고를 때·값이 비었을 때만
+        val defaulted = switchProfile(p)
         persist()
         val poleMsg = onProfileChanged?.invoke(p) // JobConfig.antennaModelId 와 맞춤(0.1.13 P0) · 0.1.29 폴 높이 바뀜 안내
         // 알림은 하나로(앞 알림이 뒤 알림에 덮이지 않게): 폴 높이 → 기본 보정 → RTCM 호환 경고
@@ -445,6 +455,35 @@ class ConnectionController(
             RtcmMountCompat.warnIfIncompatible(profile, form.mount),
         )
         if (msgs.isNotEmpty()) ui.toast(msgs.joinToString(" · "))
+    }
+
+    /**
+     * 0.1.32 기기 종류 바꾸기(수동·자동 공통). 지금 기기 설정을 먼저 저장하고, 새 기기는 **그 기기로 마지막에 쓴** 주소·연결 전 확인·보정 설정을 되살린다.
+     * (0.1.31 까지: 주소를 null 로 저장해 그 기기의 등록 주소가 지워졌고, 보정 설정은 기기와 상관없이 하나 → 기기를 바꿀 때마다 다시 설정)
+     * 새 기기에 저장된 보정이 없으면 지금 값을 이어받되, 기본값(0.1.29 T19) 또는 이 수신기에 너무 새 RTCM 이면 그 기기 기본 서버·마운트(아이디·비밀번호는 유지).
+     * 기본값을 넣었으면 true
+     */
+    private fun switchProfile(p: DeviceProfile): Boolean {
+        persistSafe() // 떠나는 기기 설정 저장(기기별)
+        val own = runCatching { platform.savedFor(p.id) }.getOrNull()
+        profile = p; resetChecks(); notice = null
+        address = own?.address
+        if (own?.preChecked == true) for (i in checks.indices) checks[i] = true
+        refresh()
+        if (own != null && own.ntrip.host.isNotBlank()) {
+            // 그 기기로 저장해 둔 보정 설정. 비밀번호가 비어 있으면(저장 실패 등) 지금 값을 쓴다
+            form = own.ntrip.let { f -> if (f.password.isEmpty() && f.user.trim() == form.user.trim()) f.copy(password = form.password) else f }
+            defaultMountApplied = null; defaultMountMissing = false
+            return false
+        }
+        if (applyDeviceCorrectionDefault(p)) return true // 0.1.29 T19: 처음 고를 때·값이 비었을 때만
+        val d = DeviceCorrectionDefaults.forProfile(p.id)
+        if (form.enabled && d != null && RtcmMountCompat.isTooNew(p, form.mount, "", "")) {
+            form = form.copy(host = d.host, port = d.port.toString(), mount = d.mount)
+            defaultMountApplied = d.mount; defaultMountMissing = false
+            return true
+        }
+        return false
     }
 
     fun selectAddress(a: String) { if (a != address && lockedForChange()) return; address = a; notice = null; persist() }
@@ -642,6 +681,7 @@ class ConnectionController(
     /** 화면이 링크·보정 상태를 볼 때마다 부른다. 위치 데이터가 들어오면(보정 켜짐이면 보정 수신까지) 한 번 저장 */
     fun onStatus(l: LinkStatus, n: NtripStatus) {
         reportFailure(l, n)
+        if (connectRequested) { onLinkOk(l); autoFallback(l) }
         if (!connectRequested || savedThisRun) return
         val ok = l.state == LinkState.STREAMING && (!form.enabled || n.state == NtripState.RECEIVING)
         if (!ok) return
@@ -670,16 +710,101 @@ class ConnectionController(
 
     fun changeAutoConnect(v: Boolean) { autoConnect = v; platform.autoConnect = v; ui.toast(if (v) "다음 실행 때 자동 연결: 켬" else "다음 실행 때 자동 연결: 끔") }
 
-    /** 앱 시작 시: 성공 이력 + 자동 연결 켬 + 권한·블루투스 OK 일 때만 조용히 연결. 막히면 아무것도 하지 않는다 */
+    /**
+     * 앱 시작 시(새 화면 모델마다 한 번) 자동 연결. 0.1.32:
+     * - 엔진이 이미 연결 중이면(알림·최근 앱에서 다시 열기) 다시 맺지 않고 그 연결을 이어받는다.
+     * - 마지막 수신기(기기 종류·주소·보정)를 그대로 되살려 연결. 폰 위치로 대신하지 않는다.
+     * - 저장된 것이 없거나 등록이 풀렸으면 등록된 기기 이름(R10/SP60/Trimble/Spectra)으로 수신기를 찾아 하나면 바로 연결, 여럿이면 고르는 창.
+     * - VRS 입력이 모자라도 수신기는 연결한다(이번 연결만 보정 끔, 저장값은 그대로) — 예전에는 아무 말 없이 연결 자체를 건너뜀.
+     * - 막히면(권한·블루투스 꺼짐) 이유를 알린다.
+     */
     fun autoConnectOnLaunch(): Boolean {
-        if (!autoConnect || !platform.hadSuccess() || connectRequested) return false
-        if (!platform.hasBluetoothPermission() || !platform.bluetoothEnabled()) return false
-        val addr = address ?: return false
-        if (runCatching { platform.bondedDevices() }.getOrDefault(emptyList()).none { it.second == addr }) return false
-        if (connectProblems().isNotEmpty()) return false
-        startNow(addr)
-        ui.toast("지난번 설정으로 자동 연결 중이에요")
+        if (connectRequested) return false
+        if (platform.link.value.state != LinkState.IDLE) { // 서비스가 살아 있음 → 이어받기(소켓을 끊었다 다시 맺지 않음)
+            connectRequested = true; savedThisRun = true
+            return false
+        }
+        if (!autoConnect) return false
+        val hasSaved = address != null
+        if (!platform.hasBluetoothPermission()) { if (hasSaved) ui.toast(AUTO_NO_PERMISSION); return false }
+        if (!platform.bluetoothEnabled()) { if (hasSaved) ui.toast(AUTO_BT_OFF); return false }
+        val bondedNow = runCatching { platform.bondedDevices() }.getOrDefault(emptyList())
+        val remembered: (String) -> String? = { a -> runCatching { platform.deviceTypeFor(a) }.getOrNull() }
+        val target: ReceiverDetect.Candidate
+        when (val d = ReceiverDetect.decide(profile.id, address, bondedNow, remembered)) {
+            is ReceiverDetect.Decision.UseSaved -> { target = d.target; autoQueue = (d.fallbacks + d.target).toMutableList() }
+            is ReceiverDetect.Decision.AutoPick -> { target = d.target; autoQueue = mutableListOf() }
+            is ReceiverDetect.Decision.Ambiguous -> {
+                bonded = profile.sortByRelevance(bondedNow) { it.first }
+                notice = ErrorCard("-", AUTO_PICK_TITLE, d.candidates.joinToString(" · ") { "${it.name}(${shortName(it.profile)})" }, false)
+                openScreen(); ui.toast(AUTO_PICK_TITLE)
+                return false
+            }
+            is ReceiverDetect.Decision.None -> { if (d.savedMissing) { openScreen(); notice = card(BtError.NOT_PAIRED); ui.fail(AUTO_SAVED_UNPAIRED) }; return false }
+        }
+        autoRun = true
+        val switched = adoptTarget(target)
+        val vrsOk = connectProblems().isEmpty()
+        startNow(target.address, ntripOn = form.enabled && vrsOk)
+        ui.toast(when {
+            !vrsOk -> AUTO_NO_VRS + " · " + connectProblems().joinToString(" · ")
+            switched -> "수신기 자동 인식: ${target.name} (${shortName(target.profile)}) · 연결 중이에요"
+            else -> "지난번 수신기(${target.name.ifBlank { shortName(profile) }})로 자동 연결 중이에요"
+        })
         return true
+    }
+
+    /** 자동 연결 대상으로 기기 종류·주소를 맞춘다(잠금 무시 — 아직 연결 전). 바뀌었으면 true */
+    private fun adoptTarget(t: ReceiverDetect.Candidate): Boolean {
+        val changed = t.profile.id != profile.id || t.address != address
+        if (t.profile.id != profile.id) {
+            switchProfile(t.profile)
+            onProfileChanged?.invoke(t.profile)
+        }
+        address = t.address
+        if (changed) persistSafe()
+        return changed
+    }
+
+    /** 0.1.32 자동 연결에서 마지막 수신기가 응답하지 않을 때 차례로 시도할 다른 등록 수신기(마지막 = 원래 수신기). 한 바퀴만 */
+    private var autoQueue: MutableList<ReceiverDetect.Candidate> = mutableListOf()
+    /** 이번 연결이 앱 시작 자동 연결로 시작됐는지(수동 연결은 다른 수신기로 바꾸지 않는다) */
+    private var autoRun = false
+    /** 이번 연결에서 위치를 받아 수신기를 기억했는지 */
+    private var linkOkThisRun = false
+
+    /** 위치(GGA)가 들어오면 보정 성공과 상관없이 「이 주소 = 이 종류」를 기억하고 설정을 저장(다음 실행 자동 연결 근거) */
+    private fun onLinkOk(l: LinkStatus) {
+        val a = address ?: return
+        if (l.state != LinkState.STREAMING) return
+        val sig = runCatching { platform.receiverSignature() }.getOrNull()
+        if (!linkOkThisRun) {
+            linkOkThisRun = true; autoRun = false; autoQueue.clear()
+            runCatching { platform.markLinkOk(a, profile.id) }
+            persistSafe()
+        }
+        if (sig != null && sig != profile.id && sigNoted != a) {
+            sigNoted = a
+            runCatching { platform.markLinkOk(a, sig) }
+            DeviceProfiles.byId(sig)?.let { ui.toast("이 수신기는 ${shortName(it)} 신호를 보내요 — 다음 연결부터 ${shortName(it)}(으)로 맞춰요") }
+        }
+    }
+    private var sigNoted: String? = null
+    private var awaitFreshSession = false
+
+    /** 자동 연결 중 마지막 수신기가 한 바퀴 다 실패(전원 꺼짐·범위 밖 등)하면 다른 등록 수신기로 바꿔 본다 */
+    private fun autoFallback(l: LinkStatus) {
+        if (!autoRun || linkOkThisRun || autoQueue.isEmpty()) return
+        if (awaitFreshSession) { if (l.state == LinkState.IDLE || l.state == LinkState.CONNECTING) awaitFreshSession = false; return }
+        if (l.state != LinkState.RECONNECTING && l.state != LinkState.NEEDS_USER) return
+        if (l.failures < AUTO_SWITCH_AFTER_FAILURES || l.error !in AUTO_SWITCH_ERRORS) return
+        val next = autoQueue.removeAt(0)
+        if (next.address == address && next.profile.id == profile.id) return // 원래 수신기로 돌아옴 → 그대로 계속 재시도
+        val from = bonded.firstOrNull { it.second == address }?.first ?: shortName(profile)
+        adoptTarget(next)
+        awaitFreshSession = true // 앞 수신기의 늦은 실패 상태로 한 번 더 넘어가지 않게
+        startNow(next.address, ntripOn = form.enabled && connectProblems().isEmpty())
+        ui.toast("$from 응답 없음 → ${next.name}(${shortName(next.profile)})(으)로 연결해 볼게요")
     }
 
     private fun persistSafe() = runCatching { persist() }.onFailure { kr.archsurvey.diag.CrashLog.record("연결 설정 저장", it) }
@@ -711,17 +836,18 @@ class ConnectionController(
             if (rtcmWarnedFor != key) { rtcmWarnedFor = key; return }
         }
         persistSafe()
+        autoRun = false; autoQueue.clear() // 수동 연결: 고른 수신기만
         startNow(addr)
         showProgress = true
     }
 
     private var rtcmWarnedFor: String? = null
 
-    private fun startNow(addr: String) {
+    private fun startNow(addr: String, ntripOn: Boolean = form.enabled) {
         notice = null // 0.1.19: 연결 시작 뒤 사전 점검/경고 카드 지움(남은 notice 가 「다시 시도」로 남는 것 방지)
-        savedThisRun = false
+        savedThisRun = false; linkOkThisRun = false
         progressStartMs = platform.nowMs()
-        platform.startReal(profile, addr, form.toConfig(), form.enabled)
+        platform.startReal(profile, addr, form.toConfig(), ntripOn)
         connectRequested = true
     }
 
@@ -732,9 +858,14 @@ class ConnectionController(
     fun disconnect() { stopAll(); ui.toast(DISCONNECTED_MSG); onFeedback?.invoke(FeedbackEvent.DISCONNECT) }
     /** 연결 시도를 멈춘다(HTML 64 「연결 취소」 — 연결 중일 때만) */
     fun cancelConnect() { stopAll(); ui.toast(CANCELLED_MSG) }
-    private fun stopAll() { platform.stopReal(); connectRequested = false; showProgress = false }
-    /** 0.1.31 T27 앱 종료: 알림·소리 없이 보정(VRS)·블루투스를 끊고 연결 서비스를 멈춘다 */
-    fun stopForExit() = stopAll()
+    private fun stopAll() { platform.stopReal(); connectRequested = false; showProgress = false; autoRun = false; autoQueue.clear() }
+    /**
+     * 0.1.31 T27 / 0.1.32 「기기 종료」: 알림·소리 없이 보정(VRS)·블루투스를 끊고 연결 서비스를 멈춘다.
+     * **저장된 마지막 수신기·보정 설정은 지우지 않는다**(다음 실행 때 같은 수신기로 자동 연결). 끊기 전에 지금 설정을 한 번 더 저장
+     */
+    fun stopForExit() { persistSafe(); stopAll() }
+    /** 0.1.32: 알림 「연결 종료」 등 화면 밖에서 연결이 멈췄을 때(연결 중 표시로 남지 않게) */
+    fun onStoppedOutside() { connectRequested = false; showProgress = false; autoRun = false; autoQueue.clear() }
     /** 0.1.31 T27: 수신기 연결이 살아 있거나 연결 중이면 true(종료 창 문구) */
     fun linkActive(): Boolean = connectRequested || link.value.state != kr.archsurvey.device.LinkState.IDLE
 
@@ -750,6 +881,15 @@ class ConnectionController(
         const val LOCKED_MSG = "먼저 연결을 해제하세요"
         const val DISCONNECTED_MSG = "수신기 연결을 해제했어요 · 지도의 위치·좌표가 사라져요"
         const val CANCELLED_MSG = "연결을 취소했어요"
+        const val AUTO_NO_PERMISSION = "자동 연결 못 함 · ‘근처 기기’ 권한이 필요해요 — 장비 연결에서 허용하세요"
+        const val AUTO_BT_OFF = "자동 연결 못 함 · 폰 블루투스가 꺼져 있어요 — 켠 뒤 장비 연결을 누르세요"
+        const val AUTO_PICK_TITLE = "등록된 수신기가 여러 대예요 — 쓸 수신기를 골라 주세요"
+        const val AUTO_SAVED_UNPAIRED = "지난번 수신기가 폰 블루투스에 등록돼 있지 않아요 — 다시 등록한 뒤 고르세요"
+        const val AUTO_NO_VRS = "수신기만 자동 연결 중 · VRS 입력 확인 필요(이번엔 보정 없이)"
+        /** 자동 연결에서 다른 수신기로 바꾸기 전 실패 횟수(한 번의 연결 시도 = 보안·비보안·SDP·채널1 모두 실패) */
+        const val AUTO_SWITCH_AFTER_FAILURES = 1
+        val AUTO_SWITCH_ERRORS = setOf(BtError.CONNECT_TIMEOUT, BtError.POWER_OR_RANGE, BtError.ALL_FAILED, BtError.CONNECT_REFUSED, BtError.SOCKET_CLOSED, BtError.UNKNOWN)
+        fun shortName(p: DeviceProfile) = p.displayName.substringAfterLast(' ')
         /** RTS3 지역명 마운트 모양(가이드 예: Seoul-Gangseo-Gaehwa, Yechon-Gaepo) */
         private val REGION_MOUNT = Regex("^[A-Za-z][A-Za-z0-9]*(-[A-Za-z0-9]+)+$")
     }

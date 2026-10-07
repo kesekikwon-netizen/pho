@@ -76,11 +76,15 @@ class Ui0131Test {
             c.onExitApp = { exits++ }
         }
         rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }; rule.waitForIdle()
-        rule.onNodeWithTag("confirm_title", useUnmergedTree = true).assertTextEquals("수신기 연결을 끊고 종료할까요?")
+        // 0.1.32(의도된 변경): 「기기 종료」 → 「프로그램 종료」 두 단계
+        rule.onNodeWithTag("confirm_title", useUnmergedTree = true).assertTextEquals(AppExit.TITLE_DEVICE)
         // 확인 창에서 뒤로 = 취소(앱 그대로)
         rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }; rule.waitForIdle()
         rule.onNodeWithTag("confirm_dialog").assertDoesNotExist(); assertEquals(0, exits); assertEquals(0, conn.stops)
         rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }; rule.waitForIdle()
+        rule.onNodeWithTag("confirm_ok").performClick(); rule.waitForIdle()
+        assertEquals(1, conn.stops); assertEquals(0, exits)
+        rule.onNodeWithTag("confirm_title", useUnmergedTree = true).assertTextEquals(AppExit.TITLE_APP)
         rule.onNodeWithTag("confirm_ok").performClick(); rule.waitForIdle()
         assertEquals(1, conn.stops); assertEquals(1, exits)
     }

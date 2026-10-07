@@ -27,7 +27,7 @@ internal class CountingConn(state: LinkState = LinkState.STREAMING) : Connection
     override fun openBluetoothSettings() {}
     override fun openAppSettings() {}
     override fun startReal(profile: DeviceProfile, address: String, ntrip: NtripConfig, ntripEnabled: Boolean) {}
-    override fun stopReal() { stops++ }
+    override fun stopReal() { stops++; link.value = LinkStatus() }
     override fun loadSaved() = SavedConnection(DeviceProfiles.SP60_ID, "00:11:22:33:44:55", NtripForm(user = "u", password = "p"), true)
     override fun save(s: SavedConnection) {}
 }
@@ -128,15 +128,19 @@ class Exit0131Tests {
         return Triple(c, p, exits)
     }
 
+    // 0.1.32(의도된 변경): 한 창 → 「기기 종료」 → 「프로그램 종료」 두 단계(t0132/Exit0132Tests 에 자세히)
     @Test fun homeBack_asksExit_yes_disconnectsAndFinishes() {
         val (c, p, exits) = setup()
         c.homeOpen = true
         backTarget(c)!!.invoke()
         val r = c.ui.confirm!!
-        assertEquals("수신기 연결을 끊고 종료할까요?", r.title)
+        assertEquals(AppExit.TITLE_DEVICE, r.title)
         assertEquals("예", r.okLabel); assertEquals("취소", r.cancelLabel)
         assertTrue(r.body.contains("수신기 버튼")) // 전원은 앱이 끄지 않음을 알림
         assertEquals(0, p.stops); assertEquals(0, exits[0])
+        c.ui.answer(true)
+        assertEquals(1, p.stops); assertEquals(0, exits[0])
+        assertEquals(AppExit.TITLE_APP, c.ui.confirm!!.title)
         c.ui.answer(true)
         assertEquals(1, p.stops); assertEquals(1, exits[0])
         assertNull("끊김 알림 토스트 없이 닫힘", c.ui.toast)
@@ -152,7 +156,7 @@ class Exit0131Tests {
     @Test fun notConnected_idleWording() {
         val (c, _, exits) = setup(LinkState.IDLE)
         c.requestExit()
-        assertEquals(AppExit.TITLE_IDLE, c.ui.confirm!!.title)
+        assertEquals(AppExit.TITLE_APP, c.ui.confirm!!.title)
         c.ui.answer(true); assertEquals(1, exits[0])
     }
 

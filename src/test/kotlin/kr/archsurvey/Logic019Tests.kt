@@ -50,7 +50,9 @@ class Logic019Tests {
         val r2 = KnownMounts.forHost(" rts2.NGII.go.kr ").map { it.mountPoint }
         assertTrue(r2.containsAll(listOf("VRS-RTCM31", "VRS-RTCM32", "VRS-RTCM34", "FKP-RTCM31", "SSR-SSRG")))
         assertTrue(KnownMounts.forHost("rts1.ngii.go.kr").first { it.mountPoint == "VRS-RTCM34" }.identifier.contains("SP60"))
-        assertTrue(KnownMounts.forHost("rts1.ngii.go.kr").all { "미확인" in it.identifier })
+        // 0.1.32(의도된 변경): RTS1 VRS-RTCM34 는 운영 확인(deep-research W2) → 「운영 중」, 나머지는 그대로 미확인
+        assertTrue(KnownMounts.forHost("rts1.ngii.go.kr").filter { it.mountPoint != "VRS-RTCM34" }.all { "미확인" in it.identifier })
+        assertTrue(KnownMounts.forHost("rts1.ngii.go.kr").single { it.mountPoint == "VRS-RTCM34" }.identifier.contains("운영 중"))
         assertTrue(KnownMounts.SOURCE.contains("미확인") && KnownMounts.SOURCE.contains("2022"))
         assertTrue(KnownMounts.forHost("caster.example.com").isEmpty())
         assertEquals("custom", KnownMounts.services.last().id)

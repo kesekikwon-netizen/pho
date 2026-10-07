@@ -73,7 +73,7 @@ class HeaderModelTest {
 
     @Test fun versionIs0_1_27Build28() {
         val g = File("build.gradle.kts").readText()
-        assertTrue(g.contains("versionCode = 32")); assertTrue(g.contains("versionName = \"0.1.31\""))
+        assertTrue(g.contains("versionCode = 33")); assertTrue(g.contains("versionName = \"0.1.32\""))
     }
 
     /** 고고학 발굴 용어만: 새 화면에 토목·건설 용어가 없어야 한다 */

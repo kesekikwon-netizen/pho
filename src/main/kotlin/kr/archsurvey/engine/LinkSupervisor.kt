@@ -67,6 +67,8 @@ class LinkSupervisor(
     private val precision: kr.archsurvey.bt.PrecisionActivator = kr.archsurvey.bt.PrecisionActivator(clock),
     /** 0.1.30 T23-b: 사용자 [자동 켜기 다시] 신호(SP60 만). 자동 1번이 끝난 뒤에만 받고, 한 번에 한 순서씩 */
     private val precisionRetry: ReceiveChannel<Unit>? = null,
+    /** 0.1.32: 제조사 고유 NMEA 신호로 판단한 수신기 종류 id(ReceiverDetect.fromNmea). 세션마다 처음 한 번 */
+    private val onSignature: (String) -> Unit = {},
 ) {
     class SessionLost(val error: BtError, msg: String) : IOException(msg)
 
@@ -176,6 +178,7 @@ class LinkSupervisor(
     /** 연결 수립 후 읽기/워치독/RTCM 쓰기·NMEA 자동 켜기. 끊기면 [SessionLost] 로 종료 */
     private suspend fun runSession(driver: NmeaDriver, t: LinkTransport, attempt: Int) = coroutineScope {
         var gotData = false
+        var sigSeen = false
         writeStartedAt = 0L
         val outLock = Any()
         // 0.1.30 T23: RTCM 프레임 한 개를 다 쓸 때까지 잡는 잠금. 명령($PASH)은 이 잠금을 잡고 써서 프레임 중간에 끼지 않는다
@@ -232,6 +235,9 @@ class LinkSupervisor(
                         ackSeen.set(true); cmdLog.add("RX PASHR,ACK")
                     }
                     if (containsAscii(buf, n, "PASHR,NAK")) cmdLog.add("RX PASHR,NAK")
+                    if (!sigSeen && (containsAscii(buf, n, "\$PASH") || containsAscii(buf, n, "\$PTNL"))) {
+                        kr.archsurvey.device.ReceiverDetect.fromNmea(buf.copyOf(n).toString(Charsets.US_ASCII))?.let { sigSeen = true; onSignature(it) }
+                    }
                     if (containsAscii(buf, n, "PASHR,PRT") || containsAscii(buf, n, "PASHR,NMO")) {
                         val snip = buf.copyOf(n).toString(Charsets.US_ASCII).replace("\r", " ").replace("\n", " ").take(100)
                         cmdLog.add("RX $snip")

@@ -173,7 +173,8 @@ class Ui019Test {
         assertSame("한 번만 저장", first, p.marked)
         rule.onNodeWithTag("conn_progress_close").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("conn_progress").assertDoesNotExist()
-        // 자동 연결: 다음 실행 흉내
+        // 자동 연결: 다음 실행 흉내(0.1.32: 엔진이 아직 돌면 다시 맺지 않고 이어받으므로 프로세스가 끝난 상태로)
+        rule.runOnUiThread { p.link.value = LinkStatus() }
         val cc2 = ConnectionController(p, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
         assertTrue(cc2.autoConnectOnLaunch()); assertEquals(2, p.started)
         p.autoConnect = false
