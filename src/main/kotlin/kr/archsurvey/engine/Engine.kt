@@ -221,7 +221,7 @@ class SurveyEngine(private val app: Context, private val settingsStrategy: (Stri
         val timeout = epochs * 3000L + 8000L
         val r = withTimeoutOrNull(timeout) {
             gnss.first { snap ->
-                snap.gga?.let { avg.add(it, snap.gst, snap.lastGgaAtMs) }
+                snap.gga?.let { avg.add(it, snap.freshGst(snap.lastGgaAtMs), snap.lastGgaAtMs) }
                 measureProgress.value = avg.progress
                 avg.done
             }

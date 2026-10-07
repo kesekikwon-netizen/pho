@@ -50,7 +50,8 @@ object StatusJudge {
     private const val EPS = 1e-9
 
     fun judge(snap: GnssSnapshot, link: LinkState, nowMs: Long, th: StatusThresholds = StatusThresholds()): StatusResult {
-        val sigma = snap.gst?.sigmaHoriz
+        // 0.1.33: staleAfterMs(5 s) 안에 받은 GST 만. 묵은 σ 로 고정 판정하지 않음
+        val sigma = snap.freshGst(nowMs, th.staleAfterMs)?.sigmaHoriz
         // 0.1.30 T24: 수신기(블루투스 NMEA)만 판정한다. 폰 위치 경로 없음
         when (link) {
             LinkState.STREAMING -> {}

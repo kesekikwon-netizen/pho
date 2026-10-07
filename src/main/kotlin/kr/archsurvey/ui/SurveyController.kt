@@ -547,14 +547,17 @@ class SurveyController(
         }
         scope.launch {
             combine(source.gnss, source.link) { g, l -> g to l }.collect { (g, l) ->
-                val st = StatusJudge.judge(g, l.state, source.clockMs())
+                val nowMs = source.clockMs()
+                val st = StatusJudge.judge(g, l.state, nowMs)
                 val gga = g.gga
+                // 0.1.33: 5초 안에 받은 GST(σV)·GSA(PDOP/VDOP)만 보여 준다(σH 는 StatusJudge 가 같은 기준으로 고름)
+                val gst = g.freshGst(nowMs); val gsa = g.freshGsa(nowMs)
                 // 연결이 없으면 마지막 위치도 지도에 남기지 않는다
                 val shown = st.reason != StatusReason.NOT_CONNECTED && st.reason != StatusReason.LINK_DOWN
                 gv = GnssView(st, g.quality, if (shown) gga?.satellites ?: 0 else 0, if (shown) gga?.lat else null, if (shown) gga?.lon else null,
-                    if (shown) g.gst?.sigmaAlt else null, if (shown) gga?.hdop else null, if (shown) g.satsInView else null, if (shown) gga?.altitudeMsl else null, if (shown && gga != null) g.lastGgaAtMs else 0L,
-                    pdop = if (shown) g.gsa?.pdop else null, correctionAgeSec = if (shown) gga?.correctionAgeSec else null,
-                    vdop = if (shown) g.gsa?.vdop else null, geoidSepM = if (shown) gga?.geoidSeparation else null,
+                    if (shown) gst?.sigmaAlt else null, if (shown) gga?.hdop else null, if (shown) g.satsInView else null, if (shown) gga?.altitudeMsl else null, if (shown && gga != null) g.lastGgaAtMs else 0L,
+                    pdop = if (shown) gsa?.pdop else null, correctionAgeSec = if (shown) gga?.correctionAgeSec else null,
+                    vdop = if (shown) gsa?.vdop else null, geoidSepM = if (shown) gga?.geoidSeparation else null,
                     baseId = if (shown) gga?.baseStationId else null, sats = if (shown) g.satsDetail else emptyList(),
                     link = l.state, strictMode = settingsState?.requireFixed == true)
                 precisionGate.onUpdate(deviceIdProvider(), l.state, g.seenTypes, source.clockMs())?.let { showPrecisionNotice(it) }
@@ -669,7 +672,7 @@ class SurveyController(
                     aborted = r.reason; return@first true
                 }
                 if (r.status == SurveyStatus.CAUTION) worst = SurveyStatus.CAUTION
-                g.gga?.let { if (avg.add(it, g.gst)) { measureCount = avg.count; val now = clock(); if (avgStart == null) avgStart = now; avgEnd = now; tilt?.currentAngle()?.let { a -> tilts.add(a) } } }
+                g.gga?.let { if (avg.add(it, g.freshGst(source.clockMs()))) { measureCount = avg.count; val now = clock(); if (avgStart == null) avgStart = now; avgEnd = now; tilt?.currentAngle()?.let { a -> tilts.add(a) } } }
                 progress = avg.progress
                 avg.done
             }

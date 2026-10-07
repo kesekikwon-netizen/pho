@@ -16,10 +16,32 @@ data class GnssSnapshot(
     val inViewByTalker: Map<String, Int> = emptyMap(),
     /** 0.1.11 GSV 위성 상세(최근 10초 안에 본 것). GSV 를 받지 못하면 빈 목록 */
     val satsDetail: List<SatInfo> = emptyList(),
+    /** 0.1.33: 마지막 GST/GSA 를 받은 시각(수신 시계 ms). null = 시각 모름(손으로 만든 스냅샷) → 신선으로 본다 */
+    val lastGstAtMs: Long? = null,
+    val lastGsaAtMs: Long? = null,
 ) {
+    /**
+     * 0.1.33: [maxAgeMs] 안에 받은 GST 만. GGA 는 계속 오는데 GST 출력이 멈추면 옛 σ 를 보여 주거나
+     * 그 σ 로 「고정·측량 가능」을 판정하지 않는다(그때는 σ 없음).
+     */
+    fun freshGst(nowMs: Long, maxAgeMs: Long = PRECISION_MAX_AGE_MS): GstMessage? {
+        val at = lastGstAtMs ?: return gst
+        return if (nowMs - at <= maxAgeMs) gst else null
+    }
+    /** 0.1.33: [maxAgeMs] 안에 받은 GSA 만(PDOP·VDOP) */
+    fun freshGsa(nowMs: Long, maxAgeMs: Long = PRECISION_MAX_AGE_MS): GsaMessage? {
+        val at = lastGsaAtMs ?: return gsa
+        return if (nowMs - at <= maxAgeMs) gsa else null
+    }
+
     /** 보이는 위성 수 합계. GSV 를 받지 못했으면 null */
     val satsInView: Int? get() = if (inViewByTalker.isEmpty()) null else inViewByTalker.values.sum()
     val quality: FixQuality get() = gga?.quality ?: FixQuality.NONE
+
+    companion object {
+        /** GST/GSA 신선 기준(ms). GGA 끊김 기준(StatusThresholds.staleAfterMs 5 s)과 같다 */
+        const val PRECISION_MAX_AGE_MS = 5_000L
+    }
 
     /**
      * 지금 시점의 보정 연령(초). GGA 의 "보정 연령" 필드는 그 문장이 만들어진 순간의 값이므로,
@@ -68,14 +90,15 @@ class NmeaDriver(val profile: DeviceProfile) {
         val s0 = snapshot
         var gga = s0.gga; var gst = s0.gst; var gsa = s0.gsa
         var lastGgaAt = s0.lastGgaAtMs
+        var lastGstAt = s0.lastGstAtMs; var lastGsaAt = s0.lastGsaAtMs
         var types: MutableSet<String>? = null
         var inView: MutableMap<String, Int>? = null
         var satsChanged = false
         for (m in msgs) {
             when (m) {
                 is GgaMessage -> { gga = m; lastGgaAt = nowMs }
-                is GstMessage -> gst = m
-                is GsaMessage -> gsa = m
+                is GstMessage -> { gst = m; lastGstAt = nowMs }
+                is GsaMessage -> { gsa = m; lastGsaAt = nowMs }
                 is GsvMessage -> {
                     if (m.sats.isNotEmpty()) { for (q in m.sats) satSeen[m.talker + ":" + q.prn] = q to nowMs; satsChanged = true }
                     val v = m.satsInView ?: 0
@@ -93,7 +116,7 @@ class NmeaDriver(val profile: DeviceProfile) {
             }
         }
         snapshot = s0.copy(
-            gga = gga, gst = gst, gsa = gsa, lastGgaAtMs = lastGgaAt,
+            gga = gga, gst = gst, gsa = gsa, lastGgaAtMs = lastGgaAt, lastGstAtMs = lastGstAt, lastGsaAtMs = lastGsaAt,
             lastAnyAtMs = nowMs, sentencesTotal = s0.sentencesTotal + msgs.size,
             seenTypes = types ?: s0.seenTypes,
             inViewByTalker = inView ?: s0.inViewByTalker,
