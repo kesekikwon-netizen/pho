@@ -20,7 +20,8 @@ class ConnectUx0118Tests {
         override val ntrip = MutableStateFlow(NtripStatus())
         var stopped = 0; var started = 0
         private val s = saved
-        override fun bondedDevices() = listOf("R10" to "AA:BB", "R10-2" to "CC:DD")
+        // 0.1.33-r10: 첫 기기 이름은 저장된 종류와 맞춘다(이름이 R10 인 기기를 SP60 으로 연결하면 이제 종류를 R10 으로 맞춤)
+        override fun bondedDevices() = listOf((if (s.deviceId == DeviceProfiles.SP60_ID) "SP60" else "R10") to "AA:BB", "R10-2" to "CC:DD")
         override fun hasBluetoothPermission() = true
         override fun requestBluetoothPermission(onResult: (Boolean) -> Unit) = onResult(true)
         override fun bluetoothEnabled() = true

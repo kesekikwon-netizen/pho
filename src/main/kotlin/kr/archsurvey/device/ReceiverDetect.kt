@@ -25,6 +25,23 @@ object ReceiverDetect {
     private val MODEL_SP60 = listOf("sp60", "sp 60", "sp-60", "sp_60")
     private val MODEL_R10 = listOf("r10")
 
+    /**
+     * 0.1.33-r10: 이름에 **모델 글자**(sp60 / 단어 r10)가 분명히 있을 때만 그 종류. 제조사 글자만이면 null.
+     * 모델 글자는 주소별 기억(위치를 받은 「그때의 기기 종류 탭」)보다 강하다 — R10 을 SP60 탭에서 고르고 연결하면
+     * 그 주소가 SP60 으로 기억돼 다음부터 R10 이 SP60 으로 연결되던 문제(그 반대도) 방지.
+     */
+    fun fromModelName(name: String?): DeviceProfile? {
+        if (name.isNullOrBlank()) return null
+        val n = name.lowercase()
+        val sp = MODEL_SP60.any { it in n }
+        val r10 = MODEL_R10.any { Regex("(^|[^a-z0-9])$it([^0-9]|$)").containsMatchIn(n) }
+        return when {
+            sp && !r10 -> DeviceProfiles.SP60
+            r10 && !sp -> DeviceProfiles.R10
+            else -> null
+        }
+    }
+
     /** 이름으로 종류 판단. 모델 글자가 제조사 글자보다 먼저. 모르면 null */
     fun fromName(name: String?): DeviceProfile? {
         if (name.isNullOrBlank()) return null
@@ -56,7 +73,7 @@ object ReceiverDetect {
     /** 등록된 기기 → 수신기 후보(종류를 알 수 있는 것만). [remembered]: 주소 → 확인된 종류 id */
     fun candidates(bonded: List<Pair<String, String>>, remembered: (String) -> String? = { null }): List<Candidate> =
         bonded.mapNotNull { (name, addr) ->
-            val p = DeviceProfiles.byId(remembered(addr)) ?: fromName(name)
+            val p = fromModelName(name) ?: DeviceProfiles.byId(remembered(addr)) ?: fromName(name)
             p?.let { Candidate(name, addr, it) }
         }.distinctBy { it.address }
 
@@ -71,7 +88,8 @@ object ReceiverDetect {
         val cands = candidates(bonded, remembered)
         val savedBonded = savedAddress?.let { a -> bonded.firstOrNull { it.second == a } }
         if (savedBonded != null) {
-            val prof = DeviceProfiles.byId(remembered(savedBonded.second)) ?: DeviceProfiles.byId(savedDeviceId)
+            // 0.1.33-r10: 이름의 모델 글자 → 주소별 기억 → 저장 종류 → 제조사 글자
+            val prof = fromModelName(savedBonded.first) ?: DeviceProfiles.byId(remembered(savedBonded.second)) ?: DeviceProfiles.byId(savedDeviceId)
                 ?: fromName(savedBonded.first) ?: DeviceProfiles.R10
             val target = Candidate(savedBonded.first, savedBonded.second, prof)
             return Decision.UseSaved(target, cands.filter { it.address != target.address })

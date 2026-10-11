@@ -467,7 +467,8 @@ class ConnectionController(
         persistSafe() // 떠나는 기기 설정 저장(기기별)
         val own = runCatching { platform.savedFor(p.id) }.getOrNull()
         profile = p; resetChecks(); notice = null
-        address = own?.address
+        // 0.1.33-r10: 그 기기 종류로 저장된 주소라도 이름이 분명히 다른 모델(예: R10 탭에 저장된 SP60 주소 — 0.1.31 이전 기본 탭 R10 에서 SP60 을 고른 기록)이면 되살리지 않는다
+        address = own?.address?.takeUnless { a -> modelOf(a)?.let { it.id != p.id } == true }
         if (own?.preChecked == true) for (i in checks.indices) checks[i] = true
         refresh()
         if (own != null && own.ntrip.host.isNotBlank()) {
@@ -486,7 +487,24 @@ class ConnectionController(
         return false
     }
 
-    fun selectAddress(a: String) { if (a != address && lockedForChange()) return; address = a; notice = null; persist() }
+    fun selectAddress(a: String) {
+        if (a != address && lockedForChange()) return
+        // 0.1.33-r10: 고른 기기 이름이 분명히 다른 모델이면 수신기 종류 탭도 맞춘다(R10 을 SP60 탭에서 고르면 SP60 명령·안테나·보정으로 연결되던 것)
+        val m = modelOf(a)
+        if (m != null && m.id != profile.id) {
+            selectProfile(m)
+            ui.toast("${bonded.firstOrNull { it.second == a }?.first ?: a}: ${shortName(m)} 수신기로 맞췄어요")
+        }
+        address = a; notice = null; persist()
+    }
+
+    /** 0.1.33-r10: 등록 목록에서 이 주소 기기 이름의 모델 글자(R10/SP60). 모르면 null */
+    private fun modelOf(a: String?): DeviceProfile? {
+        if (a == null) return null
+        val name = (bonded.takeIf { l -> l.any { it.second == a } } ?: runCatching { platform.bondedDevices() }.getOrDefault(emptyList()))
+            .firstOrNull { it.second == a }?.first
+        return ReceiverDetect.fromModelName(name)
+    }
 
     fun updateForm(f: NtripForm) {
         val corrChanged = f.host.trim() != form.host.trim() || f.port.trim() != form.port.trim() || f.mount.trim() != form.mount.trim()
@@ -825,6 +843,12 @@ class ConnectionController(
         val addr = address
         if (addr == null) { notice = card(BtError.NO_DEVICE_SELECTED); return }
         if (platform.bondedDevices().none { it.second == addr }) { notice = card(BtError.NOT_PAIRED); return }
+        // 0.1.33-r10: 고른 기기 이름과 종류 탭이 다르면(되살린 주소·예전 기록) 연결 전에 종류를 맞춘다
+        modelOf(addr)?.takeIf { it.id != profile.id }?.let { m ->
+            selectProfile(m); address = addr; persistSafe()
+            ui.toast("${bonded.firstOrNull { it.second == addr }?.first ?: addr}: ${shortName(m)} 수신기로 맞췄어요 · 연결 전 확인을 다시 봐 주세요")
+            if (checks.any { !it }) { notice = ErrorCard("-", "연결 전 확인을 모두 체크해 주세요", "수신기 종류를 ${shortName(m)}(으)로 바꿨어요. ${shortName(m)} 확인 항목을 체크한 뒤 다시 연결하세요.", false); return }
+        }
         if (checks.any { !it }) { notice = ErrorCard("-", "연결 전 확인을 모두 체크해 주세요", "수신기의 NMEA 출력을 켜지 않으면 연결돼도 위치가 오지 않아요.", false); return }
         val probs = connectProblems()
         if (probs.isNotEmpty()) { notice = ErrorCard("-", "VRS 입력을 확인해 주세요", probs.joinToString(" · "), false); return }

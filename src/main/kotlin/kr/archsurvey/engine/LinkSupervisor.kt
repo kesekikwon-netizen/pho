@@ -69,8 +69,29 @@ class LinkSupervisor(
     private val precisionRetry: ReceiveChannel<Unit>? = null,
     /** 0.1.32: 제조사 고유 NMEA 신호로 판단한 수신기 종류 id(ReceiverDetect.fromNmea). 세션마다 처음 한 번 */
     private val onSignature: (String) -> Unit = {},
+    /** 0.1.33-r10: 소켓이 붙었던 세션이 끝날 때마다(오류 코드·지속 시간·바이트·RTCM 쓰기). CrashLog 에도 남긴다 */
+    private val onSessionEnd: (SessionEnd) -> Unit = {},
 ) {
     class SessionLost(val error: BtError, msg: String) : IOException(msg)
+
+    /**
+     * 0.1.33-r10 세션 종료 진단. 0.1.32 까지는 BT-130 만 기록돼서, GGA 를 받다가 끊긴 세션(R10 현장 2026-10-11)이
+     * 왜 끊겼는지(수신기가 끊음·RTCM 쓰기 막힘/실패·무수신) 기록에 남지 않았다.
+     */
+    data class SessionEnd(
+        val error: BtError, val detail: String, val strategy: String?, val connectedMs: Long, val streamedMs: Long,
+        val bytesIn: Long, val sentences: Long, val types: Set<String>, val rtcmBytesOut: Long, val rtcmFrames: Long, val maxWriteMs: Long,
+    ) {
+        fun summary(profileId: String) = "진단 세션 종료 ${error.code} 수신기=$profileId 방식=$strategy 연결${connectedMs / 1000}s " +
+            "수신중${streamedMs / 1000}s 수신${bytesIn}B 문장=$sentences 종류=${types.sorted().joinToString("/").ifEmpty { "-" }} " +
+            "RTCM송신${rtcmBytesOut}B/${rtcmFrames}개 최장쓰기${maxWriteMs}ms · $detail"
+    }
+    // 세션 통계(세션마다 runSession 시작 때 0)
+    private val sesBytesIn = AtomicLong(0)
+    private val sesRtcmBytes = AtomicLong(0)
+    private val sesRtcmFrames = AtomicLong(0)
+    private val sesMaxWriteMs = AtomicLong(0)
+    @Volatile private var sesDriver: NmeaDriver? = null
 
     @Volatile private var wasConnectedOnce = false
     /** 0.1.19 QA-0119-2: GGA 까지 받은(STREAMING) 세션이 한 번이라도 있었는지. 소켓만 붙은 것은 「성공」이 아니다 */
@@ -105,10 +126,13 @@ class LinkSupervisor(
                     msg = if (attempt == 1 && !wasConnectedOnce) "연결하는 중…" else "다시 연결하는 중… (${attempt}번째)")
                 val transport = newTransport()
                 var err: BtError? = null
+                var errMsg = ""
+                var connectedAt = 0L
                 streamingSince = 0L
                 lastDiag.set("")
                 try {
                     connectCancellable(transport)
+                    connectedAt = clock()
                     // 소켓만 붙은 시점에 전략을 저장하지 않는다 — STREAMING 에서 onStrategyUsed
                     val driver = NmeaDriver(profile).also { it.reset(clock()) }
                     setLink(LinkState.CONNECTED_NO_DATA, attempt, failures, msg = "연결됨 — 데이터를 기다리는 중", strategy = transport.strategyName)
@@ -120,8 +144,20 @@ class LinkSupervisor(
                     throw e
                 } catch (e: Exception) {
                     err = (e as? BtConnectException)?.error ?: if (e is SessionLost) e.error else BtError.classify(e)
+                    errMsg = e.message.orEmpty()
                 } finally {
                     transport.close()
+                }
+                if (connectedAt != 0L) {
+                    val d = sesDriver?.snapshot
+                    val end = SessionEnd(
+                        error = err ?: BtError.LINK_LOST, detail = errMsg.take(160), strategy = transport.strategyName,
+                        connectedMs = clock() - connectedAt, streamedMs = if (streamingSince != 0L) clock() - streamingSince else 0L,
+                        bytesIn = sesBytesIn.get(), sentences = d?.sentencesTotal ?: 0L, types = d?.seenTypes ?: emptySet(),
+                        rtcmBytesOut = sesRtcmBytes.get(), rtcmFrames = sesRtcmFrames.get(), maxWriteMs = sesMaxWriteMs.get(),
+                    )
+                    runCatching { onSessionEnd(end) }
+                    CrashLog.record(end.summary(profile.id), IllegalStateException(end.error.title))
                 }
                 // 안정적으로 받았던 연결이면 백오프를 처음부터. 잠깐 붙었다 끊기는 반복은 계속 늘어난다
                 val streamedMs = if (streamingSince != 0L) clock() - streamingSince else 0L
@@ -180,6 +216,7 @@ class LinkSupervisor(
         var gotData = false
         var sigSeen = false
         writeStartedAt = 0L
+        sesBytesIn.set(0); sesRtcmBytes.set(0); sesRtcmFrames.set(0); sesMaxWriteMs.set(0); sesDriver = driver
         val outLock = Any()
         // 0.1.30 T23: RTCM 프레임 한 개를 다 쓸 때까지 잡는 잠금. 명령($PASH)은 이 잠금을 잡고 써서 프레임 중간에 끼지 않는다
         val frameLock = kotlinx.coroutines.sync.Mutex()
@@ -194,10 +231,13 @@ class LinkSupervisor(
         var actSummary = ""
         fun safeWrite(b: ByteArray, off: Int = 0, len: Int = b.size) {
             synchronized(outLock) {
-                writeStartedAt = clock()
+                val t0 = clock()
+                writeStartedAt = t0
                 t.output.write(b, off, len)
                 t.output.flush()
                 writeStartedAt = 0L
+                val dt = clock() - t0
+                if (dt > sesMaxWriteMs.get()) sesMaxWriteMs.set(dt)
             }
         }
         fun writeCmd(b: ByteArray) {
@@ -230,7 +270,7 @@ class LinkSupervisor(
                     if (n < 0) throw SessionLost(BtError.SOCKET_CLOSED, "EOF")
                     if (n == 0) { if (++zeros > 100) throw SessionLost(BtError.LINK_LOST, "read returned 0 repeatedly"); continue }
                     zeros = 0
-                    bytesIn.addAndGet(n.toLong())
+                    bytesIn.addAndGet(n.toLong()); sesBytesIn.addAndGet(n.toLong())
                     if (!ackSeen.get() && containsAscii(buf, n, "PASHR,ACK")) {
                         ackSeen.set(true); cmdLog.add("RX PASHR,ACK")
                     }
@@ -382,12 +422,14 @@ class LinkSupervisor(
         launch(io) {
             try {
                 for (frame in rtcmQueue) {
+                    sesRtcmFrames.incrementAndGet()
                     frameLock.withLock {
                         var off = 0
                         while (off < frame.size) {
                             val n = minOf(profile.rtcmWriteChunk, frame.size - off)
                             safeWrite(frame, off, n)
                             off += n
+                            sesRtcmBytes.addAndGet(n.toLong())
                             if (profile.rtcmWriteGapMs > 0) delay(profile.rtcmWriteGapMs)
                         }
                     }

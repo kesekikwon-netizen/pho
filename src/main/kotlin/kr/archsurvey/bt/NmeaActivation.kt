@@ -58,6 +58,11 @@ object NmeaActivation {
 
     /** 현장 체크리스트(진행 창·오류 카드). 모델별 안내를 붙인다 */
     fun fieldChecklist(profile: DeviceProfile): String = buildString {
+        // 0.1.33-r10: R10 에는 SP60 항목(SPace·도난경보·시작잠금)이 없다. 앱이 R10 에 NMEA 켜기 명령을 보낼 수 없다는 것을 분명히
+        if (profile.id == DeviceProfiles.R10_ID) {
+            append("R10은 앱이 명령으로 NMEA를 켤 수 없어요 · ① 다른 컨트롤러(Trimble Access 등)·다른 앱 연결 끊기 ② R10 웹 UI(Wi-Fi 192.168.142.1) 또는 Trimble 컨트롤러: I/O 설정 → Bluetooth 포트 → NMEA GGA·GST 1 Hz 켜기, 「Maintain configuration when connection dropped」 체크, 폰을 연결한 채 저장 ③ 다시 연결")
+            return@buildString
+        }
         append("① 위성 LED(추적) ② 다른 폰·컨트롤러·SPace 끊기 ③ 도난경보·시작잠금 확인 ④ ")
         append(when (profile.id) {
             DeviceProfiles.SP60_ID -> "NMEA(GGA) 켜기(앱 자동 명령 · 안 되면 SPace/Survey Pro) ⑤ 다시 연결"
@@ -101,7 +106,7 @@ object NmeaActivation {
         }
         if (cmds.isEmpty()) {
             log += "자동 NMEA 명령 없음 — 수신기 설정·현장 체크리스트로"
-            onStatus("NMEA 자동 명령 없음 · 수신기 설정 확인")
+            onStatus("수신기가 아직 위치(GGA)를 보내지 않아요 · 이 수신기는 앱이 NMEA를 켤 수 없어요(수신기 설정 확인)")
             val end = clock() + afterAllWaitMs
             while (coroutineContext.isActive && clock() < end) {
                 if (hasGga()) return NmeaActResult(NmeaActOutcome.NATURAL_GGA, tried, log, age())
