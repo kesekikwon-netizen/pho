@@ -54,7 +54,7 @@ open class Screens0135Test {
     @Before fun setUp() {
         db = Room.inMemoryDatabaseBuilder(ctx, SurveyDb::class.java).allowMainThreadQueries().setQueryExecutor { it.run() }.setTransactionExecutor { it.run() }.build()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
-        f = FakeGnssSource(FakeScenarios.fieldWalk())
+        f = FakeGnssSource(FakeScenarios.allFixed())
         val store = RoomPointStore(db, { "광령리 3지구" }, { "R10" })
         c = SurveyController(f, AntennaDb.parse(File("src/main/assets/antenna_db.json").readText()), scope, store = store, epochsPerPoint = 3)
         c.projectName = "광령리 3지구"
@@ -120,8 +120,16 @@ open class Screens0135Test {
         rule.onNodeWithTag("settings_advanced").performScrollTo().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.waitForIdle()
         rule.onNodeWithTag("mapbase_toggle").assertExists()
         shot("12_settings_advanced")
+        dig { c.hub.closeAll(); c.ui.hideToast() }
+        assertTrue("점이 있으면 좌표계 잠김", c.dig.crsLocked)
+        // 기준점: 첫 값 = 기준, 두 번째 = 확인 결과 카드
+        dig { c.dig.select(DigKind.BM, null) }
+        measure(); adv(3); measure()
+        shot("14_bm_check")
+        dig { c.dig.select(DigKind.STAKE, null) }
+        shot("15_grid_stake")
         // 모든 클릭 가능 요소 ≥48dp (측량 지도)
-        dig { c.hub.back() }
+        dig { c.hub.closeAll() }
         val small = rule.onAllNodes(hasClickAction()).fetchSemanticsNodes().filter { val b = it.boundsInRoot; b.width > 0 && minOf(b.width, b.height) / rule.density.density < 47.5f }
         File(out, "${prefix}_touch_targets.txt").writeText("small clickables on map: ${small.size}\n" + small.joinToString("\n") { "${it.config.getOrElseNullable(androidx.compose.ui.semantics.SemanticsProperties.TestTag) { null }} ${it.boundsInRoot}" })
     }

@@ -766,7 +766,7 @@ internal fun TodayPointsList(c: SurveyController) {
     val list = c.points.filter { kr.archsurvey.dig.DayKey.of(it.measuredAtMs) == day }.takeLast(30).reversed()
     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).testTag("today_points"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("오늘 점 ${list.size}", style = Ty.serifHead.copy(fontSize = 16.sp), color = t.ink)
-        for (p in list) Row(Modifier.fillMaxWidth().height(40.dp).hClickable { c.focusOn(p) }, verticalAlignment = Alignment.CenterVertically) {
+        for (p in list) Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).hClickable { c.focusOn(p) }, verticalAlignment = Alignment.CenterVertically) {
             Text(p.name, style = Ty.coord.copy(fontSize = 14.sp), color = t.ink, modifier = Modifier.width(76.dp))
             Text(c.dig.whatLine(p), style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         }

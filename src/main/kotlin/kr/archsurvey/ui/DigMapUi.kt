@@ -37,7 +37,8 @@ internal fun digPill(c: SurveyController): DigPill {
     if (g.noReceiver) return DigPill("수신기 연결 안 됨", null, Tone.NO_RECEIVER)
     // 0.1.31: FIX인데 수신기가 정밀도(σ)를 안 보냄 — 엄격 모드면 저장 잠김을 알약에 그대로
     if (g.sigmaMissingOnFix) return if (g.strictMode) DigPill("측점 불가 · σ 없음", "엄격", Tone.BAD) else DigPill("측량 가능", "σ 없음", Tone.FIXED)
-    val hv = g.status.sigmaHM?.let { hm -> String.format(Locale.US, "±%.1f", hm * 100) + (g.sigmaVM?.let { String.format(Locale.US, "/%.1f", it * 100) } ?: "") }
+    // 알약은 좁아서 수평만(±cm). 점마다 H/V는 장부 카드 · 점 목록에
+    val hv = g.status.sigmaHM?.let { hm -> String.format(Locale.US, "±%.1f", hm * 100) }
     return when (g.displayStatus) {
         SurveyStatus.FIXED -> DigPill("측량 가능", hv, Tone.FIXED)
         SurveyStatus.CAUTION -> DigPill(

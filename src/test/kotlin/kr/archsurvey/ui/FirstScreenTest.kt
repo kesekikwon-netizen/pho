@@ -74,7 +74,7 @@ class FirstScreenTest {
         rule.waitForIdle()
         rule.onNodeWithTag("cause_line").assertDoesNotExist()
         rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("측량 가능")
-        rule.onNodeWithTag("pill_sigma", useUnmergedTree = true).assertTextEquals("±0.8/1.2")
+        rule.onNodeWithTag("pill_sigma", useUnmergedTree = true).assertTextEquals("±0.8")
         // 자세한 값(위성·고정)은 알약을 눌러 「지금 상태」에서
         rule.onNodeWithTag("status_pill").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("dig_status").assertExists()

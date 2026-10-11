@@ -109,18 +109,14 @@ fun AppHeader(
             if (onBack != null) HeaderIcon(Glyph.BACK, "뒤로", backTag, onBack) else Spacer(Modifier.width(12.dp))
             Text(title, style = Ty.title.copy(fontSize = 20.sp), color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 4.dp).testTag("header_title"))
             if (c != null) {
-                StatusPill(c, Modifier.padding(horizontal = 4.dp))
-                HeaderIcon(Glyph.MENU, "전체 메뉴", menuTag) { c.drawerOpen = true }
+                // 0.1.35: 모든 화면 같은 상태 알약(측량 가능 ±H/V). PDOP·Ant.H 줄은 숨김(지금 상태 시트 · 설정 › 고급)
+                DigStatusPill(c, Modifier.padding(horizontal = 4.dp))
+                HeaderIcon(Glyph.MENU, "메뉴", menuTag) { c.dig.menuOpen = true }
             }
         }
         if (!compact && c != null) {
-            Column(Modifier.fillMaxWidth().height(HeaderDims.INFO_DP.dp).padding(horizontal = 16.dp), verticalArrangement = Arrangement.Center) {
-                Text("현재 작업명 " + c.projectName, style = Ty.small.copy(fontSize = 11.sp, lineHeight = 14.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("header_job"))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(HeaderModel.metrics(c.gv), style = Ty.coord.copy(fontSize = 13.sp, lineHeight = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("header_metrics"))
-                    Text(HeaderModel.antH(c.antenna.inputValueM), style = Ty.coord.copy(fontSize = 12.sp, lineHeight = 18.sp), color = t.inkSub, maxLines = 1, modifier = Modifier.padding(start = 8.dp).testTag("header_anth"))
-                }
-            }
+            Text("작업 · " + c.projectName, style = Ty.small.copy(fontSize = 12.sp, lineHeight = 15.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 6.dp).testTag("header_job"))
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.35f)))
     }
