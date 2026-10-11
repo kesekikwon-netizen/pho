@@ -103,6 +103,42 @@ class R10RtcmStall0133Tests {
         )
     }
 
+    private val base = UUID.fromString("00000000-0000-1000-8000-00805F9B34FB")
+    private fun r10Plan(adv: List<UUID>, pref: Strategy? = null, ex: Set<Strategy> = emptySet()) =
+        planAttempts(adv, pref, ex, DeviceProfiles.R10.advertisedUuidFirst, DeviceProfiles.R10.insecureFirst)
+    private fun sp60Plan(adv: List<UUID>) = planAttempts(adv, null, emptySet(), DeviceProfiles.SP60.advertisedUuidFirst, DeviceProfiles.SP60.insecureFirst)
+
+    /** 0.1.34 두 브랜치 합침: R10 = (SPP 미광고면 광고 UUID) → INSECURE → SECURE → BASE → (나머지 광고 UUID) → ch1 */
+    @Test fun r10CombinedOrder_insecureFirst_base_andAdvertisedPreference() {
+        assertEquals(
+            listOf(Attempt(Strategy.SDP_UUID, r10Advertised), Attempt(Strategy.INSECURE_SPP), Attempt(Strategy.SECURE_SPP), Attempt(Strategy.BASE_SPP), Attempt(Strategy.REFLECT_CH1)),
+            r10Plan(listOf(r10Advertised)),
+        )
+        assertEquals(
+            listOf(Attempt(Strategy.INSECURE_SPP), Attempt(Strategy.SECURE_SPP), Attempt(Strategy.BASE_SPP), Attempt(Strategy.REFLECT_CH1)),
+            r10Plan(emptyList()),
+        )
+        assertEquals(
+            listOf(Attempt(Strategy.INSECURE_SPP), Attempt(Strategy.SECURE_SPP), Attempt(Strategy.BASE_SPP), Attempt(Strategy.SDP_UUID, r10Advertised), Attempt(Strategy.REFLECT_CH1)),
+            r10Plan(listOf(spp, base, r10Advertised)),
+        )
+        assertEquals("저장된 성공 방식이 가장 앞", Strategy.SECURE_SPP, r10Plan(listOf(r10Advertised), Strategy.SECURE_SPP).first().strategy)
+        assertTrue("무음 판명 방식 제외", r10Plan(emptyList(), ex = setOf(Strategy.BASE_SPP)).none { it.strategy == Strategy.BASE_SPP })
+        assertEquals(Strategy.BASE_SPP, Strategy.valueOf("BASE_SPP"))
+    }
+
+    @Test fun sp60OrderUnchanged_noBaseNoInsecureFirst() {
+        assertFalse(DeviceProfiles.SP60.insecureFirst)
+        assertEquals(
+            listOf(Attempt(Strategy.SECURE_SPP), Attempt(Strategy.INSECURE_SPP), Attempt(Strategy.REFLECT_CH1)),
+            sp60Plan(emptyList()),
+        )
+        assertEquals(
+            listOf(Attempt(Strategy.SECURE_SPP), Attempt(Strategy.INSECURE_SPP), Attempt(Strategy.SDP_UUID, r10Advertised), Attempt(Strategy.REFLECT_CH1)),
+            sp60Plan(listOf(spp, r10Advertised)),
+        )
+    }
+
     /** 0.1.34 검토: 광고 UUID 먼저는 R10 만. SP60 은 현장에서 되는 예전 순서(SECURE → INSECURE → 광고 UUID → ch1) 그대로 */
     @Test fun planAttempts_sp60KeepsFieldProvenOrderEvenIfOnlyOtherUuidAdvertised() {
         assertFalse(DeviceProfiles.SP60.advertisedUuidFirst)

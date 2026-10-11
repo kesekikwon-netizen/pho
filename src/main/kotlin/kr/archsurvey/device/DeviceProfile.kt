@@ -55,6 +55,11 @@ data class DeviceProfile(
      * R10 현장 폰 기록은 0x1103 하나뿐이라 1101 두 번이 매번 먼저 실패했다. SP60 은 현장에서 되는 순서 유지(false)
      */
     val advertisedUuidFirst: Boolean = false,
+    /**
+     * 0.1.34: SPP 소켓을 INSECURE 먼저, 그다음 SECURE, 그다음 기본 UUID(BASE) — R10 연결 단계 실패(BT-120/124) 가설 대응.
+     * SP60 은 현장에서 되는 SECURE 먼저 순서 유지(false). [현장확인]
+     */
+    val insecureFirst: Boolean = false,
 ) {
     fun matchesName(name: String?): Boolean {
         if (name.isNullOrBlank()) return false
@@ -115,6 +120,7 @@ object DeviceProfiles {
         nmeaHealAttempts = 2,
         noDataHoldMs = 12_000,
         advertisedUuidFirst = true,
+        insecureFirst = true,
     )
 
     val SP60 = DeviceProfile(

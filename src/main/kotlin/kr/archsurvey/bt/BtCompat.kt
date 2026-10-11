@@ -22,6 +22,8 @@ import java.util.UUID
 /** 버전별 권한/어댑터 헬퍼. 모든 BT API 호출 전에 hasConnectPermission() 가드를 거친다. */
 object BtCompat {
     val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+    /** Bluetooth 기본 UUID(0x0000 + Base). R10 프로필에서만 SPP 다음 대체 시도 */
+    val BASE_UUID: UUID = UUID.fromString("00000000-0000-1000-8000-00805F9B34FB")
 
     /** 런타임으로 요청해야 하는 블루투스 권한. API 31+: CONNECT + SCAN 함께(cancelDiscovery 의 SecurityException 방지). 그 외: 설치 시 자동. */
     fun runtimePermissions(): Array<String> =
@@ -74,19 +76,25 @@ object BtCompat {
     }
 }
 
-enum class Strategy { SECURE_SPP, INSECURE_SPP, SDP_UUID, REFLECT_CH1 }
+enum class Strategy { SECURE_SPP, INSECURE_SPP, BASE_SPP, SDP_UUID, REFLECT_CH1 }
 
 data class Attempt(val strategy: Strategy, val uuid: UUID? = null)
 
 /**
- * 연결 시도 순서. 기본: SECURE → INSECURE SPP(1101) → 광고된 다른 UUID → 리플렉션 ch1.
+ * 연결 시도 순서. 기본(SP60): SECURE → INSECURE SPP(1101) → 광고된 다른 UUID → 리플렉션 ch1.
+ * 0.1.34 R10([insecureFirst]): INSECURE → SECURE → BASE_UUID → 광고된 다른 UUID → ch1.
  * 0.1.33-r10: 페어링 기록(SDP 캐시)에 UUID 가 있는데 SPP(1101)가 없으면 광고된 UUID 를 먼저 쓴다 —
  * 현장 R10 은 0x1103 하나만 광고해서 1101 두 번이 매번 먼저 실패했다. 캐시가 비면(모름) 예전 순서 그대로.
  * [preferred](지난번 GGA 까지 된 방식)가 가장 앞, [exclude](무음 판명)는 뺀다(전부 빠지면 원본 유지).
  */
-internal fun planAttempts(advertised: List<UUID>, preferred: Strategy?, exclude: Set<Strategy>, advertisedFirst: Boolean = false): List<Attempt> {
-    val spp = listOf(Attempt(Strategy.SECURE_SPP), Attempt(Strategy.INSECURE_SPP))
-    val sdp = advertised.distinct().filter { it != BtCompat.SPP_UUID }
+internal fun planAttempts(
+    advertised: List<UUID>, preferred: Strategy?, exclude: Set<Strategy>, advertisedFirst: Boolean = false,
+    /** 0.1.34 R10 프로필만: INSECURE → SECURE → BASE_UUID(secure). false(SP60·기본)면 예전 SECURE → INSECURE, BASE 없음 */
+    insecureFirst: Boolean = false,
+): List<Attempt> {
+    val spp = if (insecureFirst) listOf(Attempt(Strategy.INSECURE_SPP), Attempt(Strategy.SECURE_SPP), Attempt(Strategy.BASE_SPP))
+    else listOf(Attempt(Strategy.SECURE_SPP), Attempt(Strategy.INSECURE_SPP))
+    val sdp = advertised.distinct().filter { it != BtCompat.SPP_UUID && it != BtCompat.BASE_UUID }
         .sortedByDescending { it.toString().startsWith("0000110") }
         .map { Attempt(Strategy.SDP_UUID, it) }
     // 0.1.34 검토: 광고 UUID 먼저는 R10 프로필만([kr.archsurvey.device.DeviceProfile.advertisedUuidFirst]). SP60 은 현장에서 되는 예전 순서 그대로
@@ -109,6 +117,8 @@ class BtTransport(
     private val exclude: Set<Strategy> = emptySet(),
     /** 0.1.34: SPP(1101) 없이 다른 UUID 만 광고하면 그 UUID 먼저(R10 프로필만 true) */
     private val advertisedFirst: Boolean = false,
+    /** 0.1.34: INSECURE SPP 먼저 + BASE_UUID 대체(R10 프로필만 true) */
+    private val insecureFirst: Boolean = false,
 ) : kr.archsurvey.engine.LinkTransport {
     @Volatile private var socket: BluetoothSocket? = null
     @Volatile private var closed = false
@@ -166,6 +176,7 @@ class BtTransport(
     private fun open(dev: BluetoothDevice, a: Attempt): BluetoothSocket? = when (a.strategy) {
         Strategy.SECURE_SPP -> dev.createRfcommSocketToServiceRecord(BtCompat.SPP_UUID)
         Strategy.INSECURE_SPP -> dev.createInsecureRfcommSocketToServiceRecord(BtCompat.SPP_UUID)
+        Strategy.BASE_SPP -> dev.createRfcommSocketToServiceRecord(BtCompat.BASE_UUID)
         Strategy.SDP_UUID -> dev.createRfcommSocketToServiceRecord(a.uuid)
         Strategy.REFLECT_CH1 -> try {
             // 숨은 API: 막혀 있으면 건너뜀. 최근 Android 에서의 동작은 [현장확인]
@@ -176,7 +187,7 @@ class BtTransport(
     @SuppressLint("MissingPermission")
     private fun buildPlan(dev: BluetoothDevice, preferred: Strategy?): List<Attempt> {
         val advertised = try { dev.uuids?.map { it.uuid }.orEmpty() } catch (_: SecurityException) { emptyList() }
-        return planAttempts(advertised, preferred, exclude, advertisedFirst)
+        return planAttempts(advertised, preferred, exclude, advertisedFirst, insecureFirst)
     }
 
     override fun close() {

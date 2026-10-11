@@ -130,7 +130,7 @@ class SurveyEngine(
             newTransport = {
                 val preferred = settingsStrategy(address)?.let { runCatching { Strategy.valueOf(it) }.getOrNull() }
                     ?.takeUnless { it in silentStrategies }
-                BtTransport(app, address, preferred, exclude = silentStrategies.toSet(), advertisedFirst = profile.advertisedUuidFirst)
+                BtTransport(app, address, preferred, exclude = silentStrategies.toSet(), advertisedFirst = profile.advertisedUuidFirst, insecureFirst = profile.insecureFirst)
             },
             clock = { SystemClock.elapsedRealtime() },
             link = link, gnss = gnss, rtcmQueue = rtcmQueue, wake = wake,
