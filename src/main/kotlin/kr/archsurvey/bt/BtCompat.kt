@@ -22,6 +22,8 @@ import java.util.UUID
 /** 버전별 권한/어댑터 헬퍼. 모든 BT API 호출 전에 hasConnectPermission() 가드를 거친다. */
 object BtCompat {
     val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+    /** SmartTopo Trimble SDK(BluetoothCommunicator)가 insecure 실패 뒤 시도하는 BASE UUID. */
+    val BASE_UUID: UUID = UUID.fromString("00000000-0000-1000-8000-00805F9B34FB")
 
     /** 런타임으로 요청해야 하는 블루투스 권한. API 31+: CONNECT + SCAN 함께(cancelDiscovery 의 SecurityException 방지). 그 외: 설치 시 자동. */
     fun runtimePermissions(): Array<String> =
@@ -74,12 +76,12 @@ object BtCompat {
     }
 }
 
-enum class Strategy { SECURE_SPP, INSECURE_SPP, SDP_UUID, REFLECT_CH1 }
+enum class Strategy { SECURE_SPP, INSECURE_SPP, BASE_SPP, SDP_UUID, REFLECT_CH1 }
 
 data class Attempt(val strategy: Strategy, val uuid: UUID? = null)
 
 /**
- * RFCOMM(SPP) 전송 계층. 한 인스턴스 = 한 소켓. close() 는 멱등. 4단계 폴백, 성공한 방식을 반환.
+ * RFCOMM(SPP) 전송 계층. 한 인스턴스 = 한 소켓. close() 는 멱등. 5단계 폴백, 성공한 방식을 반환.
  * [exclude]: BT-130(소켓 OK·무음)으로 판명된 방식은 다음 치유에서 빼고 SECURE/INSECURE SPP 부터 다시 시도한다.
  */
 class BtTransport(
@@ -87,6 +89,12 @@ class BtTransport(
     private val address: String,
     private val preferred: Strategy? = null,
     private val exclude: Set<Strategy> = emptySet(),
+    /**
+     * SmartTopo 호환: Trimble R10은 insecure SPP를 먼저 시도해야 한다.
+     * SmartTopo SDK(BluetoothCommunicator.connect)는 insecure → BASE_UUID secure → reflect ch1 순서.
+     * 기존 secure-first는 R10에서 재인증/SDP 지연으로 BT-120/124를 유발한다. R10에만 true.
+     */
+    private val insecureFirst: Boolean = false,
 ) : kr.archsurvey.engine.LinkTransport {
     @Volatile private var socket: BluetoothSocket? = null
     @Volatile private var closed = false
@@ -144,6 +152,7 @@ class BtTransport(
     private fun open(dev: BluetoothDevice, a: Attempt): BluetoothSocket? = when (a.strategy) {
         Strategy.SECURE_SPP -> dev.createRfcommSocketToServiceRecord(BtCompat.SPP_UUID)
         Strategy.INSECURE_SPP -> dev.createInsecureRfcommSocketToServiceRecord(BtCompat.SPP_UUID)
+        Strategy.BASE_SPP -> dev.createRfcommSocketToServiceRecord(BtCompat.BASE_UUID)
         Strategy.SDP_UUID -> dev.createRfcommSocketToServiceRecord(a.uuid)
         Strategy.REFLECT_CH1 -> try {
             // 숨은 API: 막혀 있으면 건너뜀. 최근 Android 에서의 동작은 [현장확인]
@@ -153,9 +162,16 @@ class BtTransport(
 
     @SuppressLint("MissingPermission")
     private fun buildPlan(dev: BluetoothDevice, preferred: Strategy?): List<Attempt> {
-        val plan = mutableListOf(Attempt(Strategy.SECURE_SPP), Attempt(Strategy.INSECURE_SPP))
+        // SmartTopo 순서: insecure → (BASE secure) → reflect. R10은 insecure-first.
+        val plan = if (insecureFirst) {
+            mutableListOf(Attempt(Strategy.INSECURE_SPP), Attempt(Strategy.SECURE_SPP))
+        } else {
+            mutableListOf(Attempt(Strategy.SECURE_SPP), Attempt(Strategy.INSECURE_SPP))
+        }
+        // SmartTopo가 insecure 실패 뒤 시도하는 BASE_UUID secure (R10 호환). 양쪽 순서 모두 지원.
+        plan += Attempt(Strategy.BASE_SPP)
         val sdp = try { dev.uuids?.map { it.uuid }.orEmpty() } catch (_: SecurityException) { emptyList() }
-            .filter { it != BtCompat.SPP_UUID }
+            .filter { it != BtCompat.SPP_UUID && it != BtCompat.BASE_UUID }
             .sortedByDescending { it.toString().startsWith("0000110") }
             .map { Attempt(Strategy.SDP_UUID, it) }
         plan += sdp

@@ -130,7 +130,9 @@ class SurveyEngine(
             newTransport = {
                 val preferred = settingsStrategy(address)?.let { runCatching { Strategy.valueOf(it) }.getOrNull() }
                     ?.takeUnless { it in silentStrategies }
-                BtTransport(app, address, preferred, exclude = silentStrategies.toSet())
+                // SmartTopo 호환: R10은 insecure-first (SDK BluetoothCommunicator 순서).
+                val insecureFirst = profile.id == kr.archsurvey.device.DeviceProfiles.R10_ID
+                BtTransport(app, address, preferred, exclude = silentStrategies.toSet(), insecureFirst = insecureFirst)
             },
             clock = { SystemClock.elapsedRealtime() },
             link = link, gnss = gnss, rtcmQueue = rtcmQueue, wake = wake,
