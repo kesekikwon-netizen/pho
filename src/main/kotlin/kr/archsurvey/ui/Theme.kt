@@ -60,9 +60,10 @@ private fun c(h: Long) = Color(0xFF000000 or h)
  * 시스템 다크 모드와 무관하게 항상 이 토큰을 쓴다.
  */
 val LightTokens = Tokens(
-    bg = c(0xF7F6F2), card = c(0xFFFFFF), line = c(0x8A8A86), outline = c(0x767672),
+    bg = c(0xFAF9F5), card = c(0xFFFFFF), line = c(0x8A8A86), outline = c(0x767672),
     ink = c(0x111111), inkSub = c(0x474744),
-    primary = c(0x111111), onPrimary = c(0xFFFFFF), accent = c(0x111111), accentText = c(0x111111),
+    // 0.1.35 사용자 시안 「조용한 도판」: 주 단추 Action Terracotta #B5573A(흰 글자 약 4.9:1), 글자 강조는 더 진하게
+    primary = c(0xB5573A), onPrimary = c(0xFFFFFF), accent = c(0x9C4A30), accentText = c(0x863A23),
     fixed = c(0x146536), onFixed = c(0xFFFFFF), // 0.1.31: 측량 가능 = 초록(흰 글자 7.1:1)
     caution = c(0xF2B600), onCaution = c(0x141413),
     bad = c(0xA3123A), onBad = c(0xFFFFFF),
@@ -103,10 +104,14 @@ object Fonts {
         Font(kr.archsurvey.R.font.noto_sans_kr_regular, FontWeight.Normal),
         Font(kr.archsurvey.R.font.noto_sans_kr_regular, FontWeight.Medium),
     )
+    /** 0.1.35 숫자: IBM Plex Mono 400/500 (가는 글씨는 JetBrains Mono Light 유지) */
     val mono = FontFamily(
         Font(kr.archsurvey.R.font.jetbrains_mono_light, FontWeight.Light),
-        Font(kr.archsurvey.R.font.jetbrains_mono_regular, FontWeight.Normal),
+        Font(kr.archsurvey.R.font.ibm_plex_mono_regular, FontWeight.Normal),
+        Font(kr.archsurvey.R.font.ibm_plex_mono_medium, FontWeight.Medium),
     )
+    /** 0.1.35 제목(작업명·유구 이름): Noto Serif KR 400 (KS X 1001 한글 + 기호만) */
+    val serif = FontFamily(Font(kr.archsurvey.R.font.noto_serif_kr_regular, FontWeight.Normal))
 }
 
 /** 0.1.7: 평평한 면(그림자·광택 없음). 이전 이름을 유지해 호출부를 건드리지 않는다. */
@@ -115,6 +120,11 @@ fun Modifier.glossy(base: Color, enabled: Boolean = true, strength: Float = 0f):
 
 /** 글꼴: 번들 Noto Sans KR / JetBrains Mono */
 object Ty {
+    /** 0.1.35 명조 제목 */
+    val serifTitle = TextStyle(fontSize = 26.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.serif)
+    val serifHead = TextStyle(fontSize = 19.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.serif)
+    /** 장부 숫자 */
+    val ledger = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.mono)
     val label = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
     val body = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.sans)
     val small = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.sans)

@@ -43,9 +43,11 @@ class ThemeTokensTest {
     }
 
     /** 0.1.11 목업: 주 버튼은 검정(글자 흰색). 테라코타 강조색은 쓰지 않는다 */
-    @Test fun primaryIsBlackMockup_0_1_11() {
-        assertEquals(0xFF111111.toInt(), t.primary.toArgb())
+    @Test fun primaryIsTerracottaUserHtml_0_1_35() {
+        // 0.1.35: 사용자 HTML 시안(「조용한 도판」) 테라코타. 측점 버튼 흰 글자(큰 글씨) 4.5:1 이상
+        assertEquals(0xFFB5573A.toInt(), t.primary.toArgb())
         assertEquals(0xFFFFFFFF.toInt(), t.onPrimary.toArgb())
+        assertTrue("측점 버튼 글자 4.5:1", ratio(t.onPrimary, t.primary) >= 4.5)
     }
 
     private fun Color.toArgb() = ((alpha * 255).toInt() shl 24) or ((red * 255 + 0.5f).toInt() shl 16) or ((green * 255 + 0.5f).toInt() shl 8) or (blue * 255 + 0.5f).toInt()
