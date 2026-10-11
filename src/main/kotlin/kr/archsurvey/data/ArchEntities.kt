@@ -42,6 +42,10 @@ data class OutlineEntity(
     /** false = 아직 이어서 취득 중 */
     val finished: Boolean = false,
     val createdAtUtcMs: Long,
+    /** 0.1.35(DB v8): 무엇의 윤곽인가(feature 유구 / trench 트렌치 / area 조사구역, 옛 외곽은 ''), 유구 종류(수혈…), 이름 이력(줄바꿈) */
+    @ColumnInfo(defaultValue = "''") val kind: String = "",
+    @ColumnInfo(defaultValue = "''") val featureType: String = "",
+    @ColumnInfo(defaultValue = "''") val history: String = "",
 )
 
 @Entity(
@@ -114,6 +118,9 @@ abstract class ArchDao {
     @Query("SELECT COUNT(*) FROM outlines WHERE project = :project") abstract suspend fun outlineCount(project: String): Int
     @Query("UPDATE outlines SET closed = :closed, finished = 1 WHERE id = :id") abstract suspend fun finishOutline(id: Long, closed: Boolean)
     @Query("DELETE FROM outlines WHERE id = :id") abstract suspend fun deleteOutline(id: Long)
+    @Query("UPDATE outlines SET label = :label, history = :history, featureType = :featureType WHERE id = :id")
+    abstract suspend fun renameOutline(id: Long, label: String, history: String, featureType: String)
+    @Query("UPDATE outlines SET finished = 0, closed = 0 WHERE id = :id") abstract suspend fun reopenOutline(id: Long)
     @Query("DELETE FROM outlines WHERE project = :project") abstract suspend fun deleteOutlinesOf(project: String)
     @Query("DELETE FROM outline_points WHERE outlineId = :outlineId AND pointRowId = :pointRowId")
     abstract suspend fun removeOutlinePoint(outlineId: Long, pointRowId: Long)

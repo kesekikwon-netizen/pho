@@ -118,6 +118,12 @@ data class SavedPoint(
     val cellName: String = "",
     val cellU: Double? = null,
     val cellV: Double? = null,
+    /** 0.1.35 발굴 속성(DB v8). 옛 점은 비어 있음 → 위치 종류 글자로 종류를 짐작([kr.archsurvey.dig.DigKind.resolve]) */
+    val digKind: String = "",
+    val featureId: Long? = null,
+    val artifactNo: Int? = null,
+    val levelKind: String = "",
+    val digTag: String = "",
 )
 
 enum class DupChoice { RESURVEY, NEW_POINT, DISCARD }
@@ -149,6 +155,8 @@ interface PointStore {
     suspend fun resurvey(rowId: Long, updated: SavedPoint) {}
     /** 방금 한 재측량을 되돌린다: 가장 최근 이력을 지우고 [old] 값으로 복원 */
     suspend fun undoResurvey(rowId: Long, old: SavedPoint) {}
+    /** 0.1.35 발굴 속성만(유구·유물 번호·레벨 종류·꼬리표) 바꾼다 */
+    suspend fun updateDig(rowId: Long, featureId: Long?, artifactNo: Int?, levelKind: String, digTag: String) {}
 }
 
 /**

@@ -74,6 +74,12 @@ data class PointEntity(
     @ColumnInfo(defaultValue = "''") val cellName: String = "",
     val cellU: Double? = null,
     val cellV: Double? = null,
+    /** 0.1.35(DB v8) 발굴 속성: 종류 id(feature/artifact/level/…), 속한 유구(outlines.id), 유물 번호, 레벨 종류(detect/top/floor), 꼬리표(토층 A·A′, 기준점 BM-1, 말뚝 B-4). 옛 행은 비어 있음 */
+    @ColumnInfo(defaultValue = "''") val digKind: String = "",
+    val featureId: Long? = null,
+    val artifactNo: Int? = null,
+    @ColumnInfo(defaultValue = "''") val levelKind: String = "",
+    @ColumnInfo(defaultValue = "''") val digTag: String = "",
     /** null = 살아 있는 점. 값이 있으면 되돌리기로 숨겨진 점 */
     val deletedAtUtcMs: Long? = null,
 )
@@ -130,6 +136,14 @@ abstract class SurveyDao {
 
     @Query("UPDATE points SET memo = :memo, positionType = :positionType WHERE rowId = :rowId")
     abstract suspend fun updateMemoType(rowId: Long, memo: String, positionType: String)
+
+    /** 0.1.35 발굴 속성만 바꾼다(좌표·번호는 그대로) */
+    @Query("UPDATE points SET featureId = :featureId, artifactNo = :artifactNo, levelKind = :levelKind, digTag = :digTag WHERE rowId = :rowId")
+    abstract suspend fun updateDig(rowId: Long, featureId: Long?, artifactNo: Int?, levelKind: String, digTag: String)
+
+    /** 0.1.35 번호 계산용: 지운 점 포함 모든 점 이름 */
+    @Query("SELECT pointId FROM points WHERE project = :project")
+    abstract suspend fun allPointIds(project: String): List<String>
 
     @Query("SELECT p.*, (SELECT COUNT(*) FROM photos WHERE pointRowId = p.rowId) AS photoCount FROM points p WHERE project = :project AND deletedAtUtcMs IS NULL ORDER BY measuredAtUtcMs DESC")
     abstract fun observePoints(project: String): Flow<List<PointWithCount>>
@@ -239,8 +253,8 @@ object VoiceLimit { const val MAX = 3 }
         PointEntity::class, PhotoEntity::class, VoiceEntity::class,
         AreaEntity::class, GridEntity::class, OutlineEntity::class, OutlinePointEntity::class, PointRevisionEntity::class,
     ],
-    version = 7, exportSchema = true,
-    autoMigrations = [androidx.room.AutoMigration(from = 1, to = 2), androidx.room.AutoMigration(from = 2, to = 3), androidx.room.AutoMigration(from = 3, to = 4), androidx.room.AutoMigration(from = 4, to = 5), androidx.room.AutoMigration(from = 5, to = 6), androidx.room.AutoMigration(from = 6, to = 7)],
+    version = 8, exportSchema = true,
+    autoMigrations = [androidx.room.AutoMigration(from = 1, to = 2), androidx.room.AutoMigration(from = 2, to = 3), androidx.room.AutoMigration(from = 3, to = 4), androidx.room.AutoMigration(from = 4, to = 5), androidx.room.AutoMigration(from = 5, to = 6), androidx.room.AutoMigration(from = 6, to = 7), androidx.room.AutoMigration(from = 7, to = 8)],
 )
 abstract class SurveyDb : RoomDatabase() {
     abstract fun dao(): SurveyDao

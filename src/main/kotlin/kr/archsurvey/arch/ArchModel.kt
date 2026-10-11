@@ -41,6 +41,11 @@ data class Outline(
     val finished: Boolean,
     /** 꼭짓점 점의 rowId, 취득 순서 */
     val pointRowIds: List<Long>,
+    /** 0.1.35: feature(유구) / trench / area, 옛 외곽 "" */
+    val kind: String = "",
+    val featureType: String = "",
+    /** 이름 이력(옛 이름 → 새 이름, 줄바꿈) */
+    val history: String = "",
 )
 
 data class Revision(
@@ -65,6 +70,12 @@ interface ArchStore {
     suspend fun finishOutline(id: Long, closed: Boolean)
     suspend fun deleteOutline(id: Long)
     suspend fun revisions(pointRowId: Long): List<Revision>
+    /** 0.1.35 유구·트렌치·조사구역 윤곽 시작(종류·유구 종류 포함). 기본 구현 = 옛 외곽(시험용 가짜 호환) */
+    suspend fun startFeature(areaId: Long?, label: String, kind: String, featureType: String): Long = startOutline(areaId, label)
+    /** 이름 바꾸기: 점은 그대로, 이름·이력·종류만 */
+    suspend fun renameFeature(id: Long, label: String, history: String, featureType: String) {}
+    /** 「면 닫기」 되돌리기 */
+    suspend fun reopenOutline(id: Long) {}
 }
 
 /** 지도에 그리는 외곽 */

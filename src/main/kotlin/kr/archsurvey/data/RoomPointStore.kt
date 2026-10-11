@@ -17,7 +17,11 @@ class RoomPointStore(
 
     override suspend fun loadAll(): List<SavedPoint> = repo.livePoints(project()).map { fromEntity(it) }
 
-    override suspend fun maxSeq(): Int = dao.lastPointId(project())?.let { id -> Regex("(\\d+)$").find(id)?.value?.toIntOrNull() } ?: 0
+    /** 0.1.35: P-#### 이름 중 가장 큰 번호(지운 점 포함). 다른 이름(옛 작업 「구-07」 등)은 그대로 두고 번호 계산에 끌어들이지 않는다 */
+    override suspend fun maxSeq(): Int = dao.allPointIds(project()).mapNotNull { PointNames.seqOf(it) }.maxOrNull() ?: 0
+
+    override suspend fun updateDig(rowId: Long, featureId: Long?, artifactNo: Int?, levelKind: String, digTag: String) =
+        dao.updateDig(rowId, featureId, artifactNo, levelKind, digTag)
 
     override suspend fun save(p: SavedPoint): Long = repo.savePoint(toEntity(p))
 
@@ -49,7 +53,8 @@ class RoomPointStore(
     /** [base] 의 번호·종류·메모·사진 연결을 두고 측정값만 [m] 의 것으로 바꾼 행 */
     private fun measurementOnto(base: PointEntity, m: SavedPoint, deviceName: String): PointEntity {
         val e = toEntity(m)
-        return e.copy(rowId = base.rowId, project = base.project, pointId = base.pointId, positionType = base.positionType, memo = base.memo, device = deviceName)
+        return e.copy(rowId = base.rowId, project = base.project, pointId = base.pointId, positionType = base.positionType, memo = base.memo, device = deviceName,
+            digKind = base.digKind, featureId = base.featureId, artifactNo = base.artifactNo, levelKind = base.levelKind, digTag = base.digTag)
     }
 
     private fun toEntity(p: SavedPoint): PointEntity {
@@ -71,6 +76,7 @@ class RoomPointStore(
             groundEllipsoidalHeight = p.groundHeightM, groundMsl = p.groundMslM, heightModel = p.heightModel,
             device = device(), measuredAtUtcMs = p.measuredAtMs,
             areaId = p.areaId, gridId = p.gridId, cellName = p.cellName, cellU = p.cellU, cellV = p.cellV,
+            digKind = p.digKind, featureId = p.featureId, artifactNo = p.artifactNo, levelKind = p.levelKind, digTag = p.digTag,
         )
     }
 
@@ -91,6 +97,13 @@ class RoomPointStore(
             minCorrectionAgeSec = e.minCorrectionAgeSec, fixedEpochs = e.fixedEpochs, floatEpochs = e.floatEpochs,
             tiltDeg = e.tiltDeg, tiltMaxDeg = e.tiltMaxDeg, samples = kr.archsurvey.ui.EpochSample.decode(e.samplesCsv),
             areaId = e.areaId, gridId = e.gridId, cellName = e.cellName, cellU = e.cellU, cellV = e.cellV,
+            digKind = e.digKind, featureId = e.featureId, artifactNo = e.artifactNo, levelKind = e.levelKind, digTag = e.digTag,
         )
     }
+}
+
+/** 점 이름 규칙(0.1.35): 표준 이름 P-0001. 다른 이름은 그대로 보여 주고 번호 계산에서 뺀다 */
+object PointNames {
+    private val std = Regex("^P-(\\d+)$")
+    fun seqOf(id: String): Int? = std.find(id.trim())?.groupValues?.get(1)?.toIntOrNull()
 }

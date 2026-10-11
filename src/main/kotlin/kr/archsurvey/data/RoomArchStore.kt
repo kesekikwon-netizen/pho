@@ -16,7 +16,7 @@ class RoomArchStore(private val db: SurveyDb, private val project: () -> String,
         }
         val verts = dao.outlineVertices(p).groupBy { it.outlineId }
         val outlines = dao.outlines(p).map { o ->
-            Outline(o.id, o.label, o.areaId, o.closed, o.finished, verts[o.id].orEmpty().sortedBy { it.orderNo }.map { it.pointRowId })
+            Outline(o.id, o.label, o.areaId, o.closed, o.finished, verts[o.id].orEmpty().sortedBy { it.orderNo }.map { it.pointRowId }, o.kind, o.featureType, o.history)
         }
         return ArchSnapshot(areas, grids, outlines, dao.revisionCounts(p).associate { it.pointRowId to it.n })
     }
@@ -47,6 +47,10 @@ class RoomArchStore(private val db: SurveyDb, private val project: () -> String,
     override suspend fun removeVertex(outlineId: Long, pointRowId: Long) = dao.removeOutlinePoint(outlineId, pointRowId)
     override suspend fun finishOutline(id: Long, closed: Boolean) = dao.finishOutline(id, closed)
     override suspend fun deleteOutline(id: Long) = dao.deleteOutline(id)
+    override suspend fun startFeature(areaId: Long?, label: String, kind: String, featureType: String): Long =
+        dao.insertOutline(OutlineEntity(project = project(), areaId = areaId, label = label, createdAtUtcMs = clock(), kind = kind, featureType = featureType, history = label))
+    override suspend fun renameFeature(id: Long, label: String, history: String, featureType: String) = dao.renameOutline(id, label, history, featureType)
+    override suspend fun reopenOutline(id: Long) = dao.reopenOutline(id)
 
     override suspend fun revisions(pointRowId: Long): List<Revision> = dao.revisions(pointRowId).map {
         Revision(it.revNo, it.measuredAtUtcMs, it.northing, it.easting, it.groundEllipsoidalHeight, it.sigmaH, it.fixQuality, it.allEpochsFixed, it.epochs, it.device, it.cellName)
