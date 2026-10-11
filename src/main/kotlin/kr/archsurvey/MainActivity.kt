@@ -70,7 +70,8 @@ class MainActivity : ComponentActivity() {
         // 처음 설치면 0.1.11 처럼 홈. 회전 등으로 다시 만들어질 땐 보던 화면 유지. 수신기는 지난 성공 설정으로 자동 연결(설정에서 끌 수 있음)
         if (savedInstanceState == null) vm.restoreVoice() // 0.1.28: 음성 저장 켜짐 복원(권한·방식 다시 확인)
         if (savedInstanceState == null) {
-            vm.controller.homeOpen = !vm.resumeJob
+            // 0.1.35: 오늘 폴 높이를 아직 확인하지 않았으면 「오늘 준비」(홈)부터, 했으면 마지막 작업 지도로 바로
+            vm.controller.homeOpen = !vm.resumeJob || !vm.controller.dig.poleConfirmedToday
             if (vm.resumeJob) vm.controller.ui.toast(vm.resumeNotice())
         }
         // 0.1.32: 화면 모델이 새로 만들어질 때마다 한 번(처음 실행 + 시스템이 앱을 정리한 뒤 되살릴 때). 회전은 같은 모델이라 다시 안 함.
@@ -90,11 +91,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onResume() { super.onResume(); vm.controller.tilt?.resume(); vm.controller.voice?.setForeground(true) }
-    override fun onPause() { vm.controller.voice?.setForeground(false); vm.controller.tilt?.pause(); vm.onAppBackground(); super.onPause() }
+    override fun onResume() { super.onResume(); resumed = true; vm.controller.tilt?.resume(); vm.controller.voice?.setForeground(true) }
+    override fun onPause() { resumed = false; vm.controller.voice?.setForeground(false); vm.controller.tilt?.pause(); vm.onAppBackground(); super.onPause() }
 
     /** 0.1.28 T14: 이어폰 재생/일시정지 1번 = 저장 요청(음성 저장이 켜져 있고 측량 화면이 앞일 때만). 확인 대기 중이면 취소 */
+    private var resumed = false
+
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean {
+        // 0.1.35 X2: 볼륨 아래 키 = 측점(설정에서 켰을 때만 · 화면 켜짐 + 앱이 앞 + 측량 지도일 때만 · 길게 눌러 반복 무시). 실기기 미확인
+        if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN && vm.controller.dig.volumeKey) {
+            if (kr.archsurvey.dig.VolumeKeyGate.shouldMeasure(true, resumed && hasWindowFocus(), vm.controller.visibleRoute(), event.repeatCount)) { vm.controller.onMeasure(); return true }
+            if (resumed && vm.controller.visibleRoute() == "survey") return true   // 반복 누름은 소리 크기를 바꾸지 않고 먹는다
+        }
         val media = keyCode == android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || keyCode == android.view.KeyEvent.KEYCODE_HEADSETHOOK ||
             keyCode == android.view.KeyEvent.KEYCODE_MEDIA_PLAY || keyCode == android.view.KeyEvent.KEYCODE_MEDIA_PAUSE
         if (media) {

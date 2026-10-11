@@ -788,6 +788,7 @@ class SurveyController(
     /** 화면의 되돌리기 버튼: 확인 창을 거친다(측정 중 취소는 바로) */
     fun askUndo() {
         if (phase == Phase.ACQUIRING) { cancelAcquire(); return }
+        if (dig.undoIsReopen) { dig.undoClose(); return }   // 0.1.35 면 닫기 되돌리기는 확인 없이(점은 지우지 않음)
         val last = resurveyUndo?.name?.let { "$it 재측량" } ?: points.lastOrNull()?.name ?: run { message = "되돌릴 점이 없어요"; return }
         ui.ask(ConfirmRequest("$last 을(를) 되돌릴까요?", "되돌린 점은 목록과 지도에서 사라져요. 번호는 다시 쓰지 않아요.", "되돌리기") { undo() })
     }
@@ -849,6 +850,7 @@ class SurveyController(
         quickSheetOpen -> "quick"
         settingsMenuOpen -> "settings_menu"
         homeOpen -> "home"
+        dig.pickerOpen || dig.layersOpen || dig.statusOpen || dig.menuOpen || dig.renameFor != null -> "dig_sheet"
         else -> "survey"
     }
 
@@ -1157,18 +1159,20 @@ class SurveyController(
         val layers = mapTiles()
         return MapViewState(
             center = center, dpPerM = dpPerM, 
-            points = points.map { MapMarker(it.name, projection.toLocal(it.lat, it.lon), it.cautionFlag && PointCaution.displayStatus(it) != SurveyStatus.FIXED) },
+            points = dig.mapMarkers(points) { projection.toLocal(it.lat, it.lon) },
             current = cur?.let { CurrentMarker(it, sigma, gv.displayStatus, head) }, // 0.1.30 T23-c 표시 색만
             phone = if (cur == null && pf != null && phoneAt != null) PhoneMarker(phoneAt, pf.accuracyM, PHONE_DOT_LABEL) else null,
             trail = trail.toList(), trailBreaks = trailBreaks.toSet(),
-            gridLines = if (g != null && g.cols + g.rows <= 400) GridMath.lines(g).map { loc(it.first) to loc(it.second) } else emptyList(),
-            gridLabels = if (g != null && g.cols * g.rows <= 1200 && g.spacingM * dpPerM >= 26) GridMath.cellCenters(g).map { MapText(it.first, loc(it.second)) } else emptyList(),
+            gridLines = if (g != null && dig.showGrid && g.cols + g.rows <= 400) GridMath.lines(g).map { loc(it.first) to loc(it.second) } else emptyList(),
+            gridLabels = if (g != null && dig.showGrid && g.cols * g.rows <= 1200 && g.spacingM * dpPerM >= 26) GridMath.cellCenters(g).map { MapText(it.first, loc(it.second)) } else emptyList(),
             cellHighlight = if (g != null && cellNow != null && cellNow.col >= 0) g.cellCorners(cellNow.col, cellNow.row).map { loc(it) } else emptyList(),
             gridColorIdx = arch.activeArea?.colorIdx ?: 0,
             backgrounds = bg?.mapLayers().orEmpty(),
             tiles = layers,
             geo = if (layers.isNotEmpty()) projection else null,
-            outlines = arch.outlineViews().map { MapOutline(it.outline.label, it.vertices.map { v -> loc(v) }, it.outline.closed, !it.outline.finished, arch.areas.firstOrNull { a -> a.id == it.outline.areaId }?.colorIdx ?: 0) },
+            outlines = arch.outlineViews().filter { dig.outlineVisible(it.outline.kind) }.map { MapOutline(it.outline.label, it.vertices.map { v -> loc(v) }, it.outline.closed, !it.outline.finished, arch.areas.firstOrNull { a -> a.id == it.outline.areaId }?.colorIdx ?: 0, it.outline.kind) },
+            sections = if (dig.showSection) dig.sectionLines { projection.toLocal(it.lat, it.lon) } else emptyList(),
+            stake = dig.stakeTarget?.takeIf { dig.kind == kr.archsurvey.dig.DigKind.STAKE }?.let { MapText(it.name, loc(it.ne)) },
             style = markerStyle,
             target = runCatching { hub.gotoTargetNE()?.let { loc(it) } }.getOrNull(),
         )

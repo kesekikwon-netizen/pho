@@ -34,7 +34,7 @@ data class FeatureCard(
 
 /**
  * 0.1.35 발굴 측량 상태: 「지금 재는 것」(종류·유구·레벨), 점의 발굴 속성 붙이기, 유구 면 닫기/되돌리기, 유구 이름 바꾸기,
- * 오늘 준비(폴 확인·기준점 검측), 지도 레이어 보이기, 말뚝 찾아가기. Android 의존 없음(시험 가능).
+ * 오늘 준비(폴 확인·기준점 확인), 지도 레이어 보이기, 말뚝 찾아가기. Android 의존 없음(시험 가능).
  * 점 이름(P-0001)은 바꾸지 않는다 — 유구·칸·번호는 점의 속성이다.
  */
 class DigController(private val c: SurveyController) {
@@ -62,7 +62,7 @@ class DigController(private val c: SurveyController) {
     var closeArmed by mutableStateOf(false)
     /** 방금 닫은 유구(되돌리기 = 다시 열기) */
     var justClosed by mutableStateOf<Long?>(null); private set
-    /** 방금 끝난 기준점 검측(지도 위 카드) */
+    /** 방금 끝난 기준점 확인(지도 위 카드) */
     var bmResult by mutableStateOf<Pair<String, BmResult>?>(null)
     /** 「측량 지도의 좌표계 잠금」을 이번 실행에서 풀었는가(X11, 길게 눌러 풀기) */
     var crsUnlocked by mutableStateOf(false)
@@ -95,7 +95,7 @@ class DigController(private val c: SurveyController) {
     }
     fun saveLayers() { prefs.put("dig_layers", listOf(showArea, showGrid, showTrench, showFeature, showArtifactNo, showLevelH, showSection, showBm).joinToString("") { if (it) "1" else "0" }) }
     fun changeArtifactMode(m: ArtifactMode) { artifactMode = m; prefs.put("dig_artifact_mode", m.id); c.ui.ok("유물 번호: ${m.labelKo}") }
-    fun changeBmTol(m: Double) { bmTolM = m.coerceIn(0.005, 0.5); prefs.put("dig_bm_tol", String.format(Locale.US, "%.3f", bmTolM)); c.ui.ok("기준점 검측 허용: ${String.format(Locale.US, "%.0f", bmTolM * 100)} cm") }
+    fun changeBmTol(m: Double) { bmTolM = m.coerceIn(0.005, 0.5); prefs.put("dig_bm_tol", String.format(Locale.US, "%.3f", bmTolM)); c.ui.ok("기준점 확인 허용: ${String.format(Locale.US, "%.0f", bmTolM * 100)} cm") }
     fun changeProvisional(v: Boolean) { provisional = v; prefs.put("dig_provisional", if (v) "1" else "0"); c.ui.ok(if (v) "새 유구는 가번호(가-1)로 시작" else "새 유구는 번호(1호 수혈)로 시작") }
     fun changeVolumeKey(v: Boolean) { volumeKey = v; prefs.put("dig_volume_key", if (v) "1" else "0"); c.ui.ok(if (v) "볼륨 아래 키로 측점 · 화면이 켜져 있을 때만" else "볼륨 키 측점 끔") }
     fun changeScale(d: Int) { if (d in DrawingScale.CHOICES) { drawScale = d; prefs.put("dig_scale", d.toString()) } }
@@ -108,6 +108,7 @@ class DigController(private val c: SurveyController) {
     private fun key(k: String) = "dig_${k}_${c.projectName}"
     /** 작업을 열거나 바꾼 뒤: 고르던 종류·유구 되살리기 */
     fun restoreSelection() {
+        crsUnlocked = false; stakeTarget = null; bmResult = null; closeArmed = false
         val raw = prefs.get(key("sel")) ?: return
         val f = raw.split('|')
         DigKind.fromId(f.getOrNull(0))?.let { applyKind(it) }
@@ -119,7 +120,7 @@ class DigController(private val c: SurveyController) {
 
     val poleConfirmedToday: Boolean get() = prefs.get(key("pole_day")) == today() + "|" + String.format(Locale.US, "%.1f", c.antenna.inputValueM) + "|" + c.antennaModelId
     fun confirmPole() { prefs.put(key("pole_day"), today() + "|" + String.format(Locale.US, "%.1f", c.antenna.inputValueM) + "|" + c.antennaModelId); c.ui.ok("폴 높이 ${String.format(Locale.US, "%.1f", c.antenna.inputValueM)} m 확인 · 오늘") }
-    /** 오늘 기준점 검측: null = 아직, true = 통과, false = 차이 큼 */
+    /** 오늘 기준점 확인: null = 아직, true = 통과, false = 차이 큼 */
     val bmToday: Boolean? get() = prefs.get(key("bm_day"))?.split('|')?.takeIf { it.getOrNull(0) == today() }?.getOrNull(1)?.let { it == "1" }
 
     // ---------------- 고르기 ----------------
@@ -198,7 +199,7 @@ class DigController(private val c: SurveyController) {
         }
     }
 
-    /** 디스크에 저장된 뒤: 윤곽 꼭짓점 잇기, 기준점 검측, 말뚝 다음 목표 */
+    /** 디스크에 저장된 뒤: 윤곽 꼭짓점 잇기, 기준점 확인, 말뚝 다음 목표 */
     suspend fun afterSaved(saved: SavedPoint): SavedPoint {
         val k = DigKind.resolve(saved.digKind, saved.type) ?: return saved
         justClosed = null
@@ -314,7 +315,7 @@ class DigController(private val c: SurveyController) {
             DigKind.ARTIFACT -> "유물 ${nextArtifactNo()}"
             DigKind.LEVEL -> level.labelKo + (featureName(featureId)?.let { " · $it" } ?: "")
             DigKind.SECTION -> SectionLabels.next(c.points.filter { it.digKind == DigKind.SECTION.id }.map { it.digTag }) + " 끝점"
-            DigKind.BM -> "$bmName 검측"
+            DigKind.BM -> "$bmName 확인"
             DigKind.STAKE -> stakeTarget?.let { "${it.name} · ${String.format(Locale.US, "%.0f", StakeGuide.ARRIVE_M * 100)} cm 안이면" } ?: c.nextName
             else -> c.nextName
         }
@@ -388,11 +389,11 @@ class DigController(private val c: SurveyController) {
     }
 
     /** 오늘 준비 5단계 */
-    fun prepSteps(): List<PrepStep> {
+    fun prepSteps(ntripNowMs: Long = c.nowMs()): List<PrepStep> {
         val cc = c.connection
         val ntripOn = cc?.form?.enabled == true
         val nt = cc?.ntrip?.value
-        val receiving = nt?.let { it.state == kr.archsurvey.ntrip.NtripState.RECEIVING && it.freshness(c.nowMs()) != kr.archsurvey.engine.RtcmFreshness.LOST } ?: false
+        val receiving = nt?.let { it.state == kr.archsurvey.ntrip.NtripState.RECEIVING && it.freshness(ntripNowMs) != kr.archsurvey.engine.RtcmFreshness.LOST } ?: false
         val model = if (c.antennaModelId == "TRIMBLE_R10") "R10" else "SP60"
         val receiverLive = !c.gv.noReceiver && c.gv.link.let { it == kr.archsurvey.device.LinkState.STREAMING || it == kr.archsurvey.device.LinkState.STALE }
         return TodayPrep.steps(PrepInput(
@@ -402,6 +403,51 @@ class DigController(private val c: SurveyController) {
             bmName = bmName, bmCheckedToday = bmToday != null, bmPassedToday = bmToday, bmKnown = c.points.any { it.digKind == DigKind.BM.id && it.digTag == bmName },
         ))
     }
+
+    // ---------------- 지도 기호 ----------------
+    fun outlineVisible(kind: String): Boolean = when (kind) { "trench" -> showTrench; "area" -> showArea; else -> showFeature }
+
+    /** 발굴 도면 기호로 점 표시. 꺼 둔 레이어의 점은 빼고, 유구 경계점은 윤곽이 그린다 */
+    fun mapMarkers(pts: List<SavedPoint>, at: (SavedPoint) -> kr.archsurvey.map.LocalXY): List<kr.archsurvey.map.MapMarker> = pts.mapNotNull { p ->
+        val flagged = p.cautionFlag && kr.archsurvey.ui.PointCaution.displayStatus(p) != SurveyStatus.FIXED
+        val k = DigKind.resolve(p.digKind, p.type)
+        val inOutline = p.rowId > 0 && c.arch.outlines.any { p.rowId in it.pointRowIds }
+        when (k) {
+            DigKind.ARTIFACT -> if (!showArtifactNo && !showFeature) null else kr.archsurvey.map.MapMarker(p.name, at(p), flagged, kr.archsurvey.map.MapSym.ARTIFACT, p.artifactNo?.toString().takeIf { showArtifactNo })
+            DigKind.LEVEL -> kr.archsurvey.map.MapMarker(p.name, at(p), flagged, kr.archsurvey.map.MapSym.LEVEL, if (showLevelH) (p.groundMslM ?: p.groundHeightM)?.let { String.format(Locale.US, "%.2f", it) } else null)
+            DigKind.BM -> if (!showBm) null else kr.archsurvey.map.MapMarker(p.name, at(p), flagged, kr.archsurvey.map.MapSym.BM, p.digTag.ifBlank { p.name })
+            DigKind.STAKE -> if (!showGrid) null else kr.archsurvey.map.MapMarker(p.name, at(p), flagged, kr.archsurvey.map.MapSym.STAKE, p.digTag.substringBefore(' ').ifBlank { null })
+            DigKind.SECTION -> if (!showSection) null else kr.archsurvey.map.MapMarker(p.name, at(p), flagged, kr.archsurvey.map.MapSym.SECTION, p.digTag.ifBlank { null })
+            DigKind.FEATURE, DigKind.TRENCH, DigKind.AREA -> if (inOutline) { if (outlineVisible(when (k) { DigKind.TRENCH -> "trench"; DigKind.AREA -> "area"; else -> "feature" })) kr.archsurvey.map.MapMarker(p.name, at(p), flagged, kr.archsurvey.map.MapSym.VERTEX, null) else null }
+                else kr.archsurvey.map.MapMarker(p.name, at(p), flagged)
+            null -> kr.archsurvey.map.MapMarker(p.name, at(p), flagged)
+        }
+    }
+
+    /** 토층 단면선(양 끝이 다 있는 것만) */
+    fun sectionLines(at: (SavedPoint) -> kr.archsurvey.map.LocalXY): List<kr.archsurvey.map.MapSection> {
+        val sec = c.points.filter { DigKind.resolve(it.digKind, it.type) == DigKind.SECTION && it.digTag.isNotBlank() }
+        return SectionLabels.completeLines(sec.map { it.digTag }).map { line ->
+            kr.archsurvey.map.MapSection(SectionLabels.lineName(line) + " 토층", at(sec.last { it.digTag == line }), at(sec.last { it.digTag == line + SectionLabels.PRIME }))
+        }
+    }
+
+    /** X12 원인 한 줄(고정이 아닐 때만). [ntripNowMs] = NTRIP 상태와 같은 시계 */
+    fun causeLine(ntripNowMs: Long): String? {
+        val g = c.gv
+        val cc = c.connection
+        val nt = cc?.ntrip?.value
+        val enabled = cc?.form?.enabled == true
+        return CauseLine.of(CauseInput(
+            noReceiver = g.noReceiver, fixed = g.displayStatus == SurveyStatus.FIXED, floatOrWorse = g.displayStatus != SurveyStatus.FIXED,
+            ntripEnabled = enabled && nt != null, ntripReceiving = nt?.state == kr.archsurvey.ntrip.NtripState.RECEIVING,
+            ntripRetrying = nt?.state == kr.archsurvey.ntrip.NtripState.RECONNECTING || nt?.state == kr.archsurvey.ntrip.NtripState.CONNECTING,
+            rtcmAgeSec = nt?.rtcmAgeMs(ntripNowMs)?.let { it / 1000.0 }, correctionAgeSec = g.correctionAgeSec, satellites = g.satellites,
+        ))
+    }
+
+    /** 오늘 잰 점 수 */
+    fun todayCount(): Int { val d = today(); return c.points.count { DayKey.of(it.measuredAtMs) == d } }
 
     /** X11: 점이 있으면 좌표계·지역·지오이드 잠금 */
     val crsLocked: Boolean get() = CrsLock.locked(c.points.size, crsUnlocked)

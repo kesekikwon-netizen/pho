@@ -71,9 +71,10 @@ class ConsecutivePointsTest {
     @Test fun nextPointButtonOnExpandedPanelStartsAcquisitionWithOneTap() {
         val (f, spy, c) = setup(); adv(f, 3)
         rule.onNodeWithTag("measure_button").performClick(); adv(f, 5)
-        rule.onNodeWithTag("result_strip").performClick(); rule.waitForIdle()
-        assertEquals(Phase.RESULT_EXPANDED, c.phase)
-        rule.onNodeWithTag("next_point").performClick(); rule.waitForIdle()
+        // 0.1.35 X3: 장부 카드를 닫지 않아도 측점 단추(「다음 점」) 한 번 = 바로 다음 측정
+        rule.onNodeWithTag("result_strip").assertExists()
+        rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("다음 점")
+        rule.onNodeWithTag("measure_button").performClick(); rule.waitForIdle()
         assertEquals(Phase.ACQUIRING, c.phase)
         adv(f, 5)
         assertEquals(2, c.points.size)

@@ -77,6 +77,7 @@ class TiltScreenTest {
         val p = FakeTiltPlatform()
         val (c, tc) = setup(p)
         rule.runOnUiThread { repeat(60) { tc.onSample(tiltReading(3.0)) }; c.hub.open(ToolScreen.SETTINGS) }; rule.waitForIdle()
+        rule.onNodeWithTag("settings_advanced").performScrollTo().performClick(); rule.waitForIdle() // 0.1.35: 전자 기포는 설정 › 고급
         rule.onNodeWithTag("tilt_toggle").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("tilt_plus").performScrollTo().performClick(); rule.waitForIdle()
         assertEquals(2.5, p.limitDeg, 0.0)
@@ -93,6 +94,7 @@ class TiltScreenTest {
         val (c, _) = setup(FakeTiltPlatform(available = false))
         rule.onNodeWithTag("tilt_bubble").assertDoesNotExist()
         rule.runOnUiThread { c.hub.open(ToolScreen.SETTINGS) }; rule.waitForIdle()
+        rule.onNodeWithTag("settings_advanced").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("tilt_no_sensor").performScrollTo().assertExists()
     }
 }

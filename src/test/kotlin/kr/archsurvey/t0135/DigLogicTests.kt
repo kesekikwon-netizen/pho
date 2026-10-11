@@ -5,7 +5,7 @@ import kr.archsurvey.dig.*
 import org.junit.Assert.*
 import org.junit.Test
 
-/** 0.1.35 발굴 전용 로직(화면 없음): 종류·유구 이름·유물 번호·유구 안 판정·깊이·기준점 검측·말뚝 안내·토층 단면·오늘 준비·도면 레이어 */
+/** 0.1.35 발굴 전용 로직(화면 없음): 종류·유구 이름·유물 번호·유구 안 판정·깊이·기준점 확인·말뚝 안내·토층 단면·오늘 준비·도면 레이어 */
 class DigLogicTests {
     private val eps = 1e-9
 
@@ -110,7 +110,7 @@ class DigLogicTests {
         assertNull(DigDepth.mean(emptyList()))
     }
 
-    // ---------- 기준점 검측 ----------
+    // ---------- 기준점 확인 ----------
     @Test fun bmCheckPassesWithinTolerance() {
         val r = BmCheck.evaluate(NEH(100.0, 200.0, 50.0), NEH(100.006, 199.996, 50.011))
         assertEquals(0.006, r.dN, 1e-9); assertEquals(-0.004, r.dE, 1e-9); assertEquals(0.011, r.dH!!, 1e-9)

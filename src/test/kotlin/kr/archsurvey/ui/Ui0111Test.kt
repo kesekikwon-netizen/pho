@@ -108,44 +108,38 @@ class Ui0111Test {
     }
 
     @Test fun a_homeShowsPillJobAndConnectionBar() {
+        // 0.1.35: 홈 = 「오늘 준비」(작업명 명조 · 상태 알약 · 장부 · 5단계). PDOP·연결 문자열은 숨김(지금 상태 시트 / 설정 › 고급)
         setup()
         rule.onNodeWithTag("home_screen").assertIsDisplayed()
-        rule.onAllNodesWithTag("header_title").assertAny(hasText("발굴 측량"))
-        rule.onNodeWithTag("pill_sats", useUnmergedTree = true).assertTextEquals("23")
-        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("고정")
-        rule.onNodeWithTag("pill_corr", useUnmergedTree = true).assertTextEquals("보정 양호")
-        rule.onNodeWithTag("header_job", useUnmergedTree = true).assertTextContains("20261005-1040", substring = true)
-        rule.onNodeWithTag("header_metrics", useUnmergedTree = true).assertTextEquals("PDOP 1.8 / H 0.008 / V 0.018")
-        rule.onNodeWithTag("header_anth", useUnmergedTree = true).assertTextEquals("Ant.H 2.000")
-        rule.onNodeWithTag("home_conn_left", useUnmergedTree = true).assertTextContains("R10 · Trimble R10-5512 연결됨")
-        rule.onNodeWithTag("home_conn_right", useUnmergedTree = true).assertTextEquals("VRS 수신 중")
+        rule.onNodeWithTag("home_title").assertTextEquals("발굴 측량")
+        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("측량 가능")
+        rule.onNodeWithTag("home_job").assertTextContains("20261005-1040", substring = true)
+        for (i in 0 until 5) rule.onNodeWithTag("prep_$i").performScrollTo().assertExists()
+        rule.onNodeWithTag("prep_count").assertTextContains("/ 5", substring = true)
         rule.onAllNodesWithText("[앱 이름]", substring = true).assertCountEquals(0)
+        rule.onAllNodesWithText("PDOP", substring = true).assertCountEquals(0)
         assertTouchTargets("홈")
         shot("01_home")
     }
 
     @Test fun b_homeToSurveyMapAndBack() {
         val (c, _, _) = setup()
-        // 0.1.14: 큰 카드 → 일반 측량 메뉴(목업 08) → 「측량」 → 지도
+        // 0.1.35: 「측량 시작」 → 바로 지도(허브 없음)
         rule.onNodeWithTag("home_survey").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("survey_hub").assertExists()
-        rule.onNodeWithTag("hub_survey").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("survey_hub").assertDoesNotExist()
         assertFalse(c.homeOpen)
         rule.onNodeWithTag("home_screen").assertDoesNotExist()
-        rule.onAllNodesWithTag("header_title").assertAny(hasText("측량"))
-        rule.onNodeWithTag("status_main").assertTextContains("측량 가능", substring = true)
+        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("측량 가능")
         rule.onNodeWithTag("measure_button").assertIsDisplayed()
-        assertEquals(72f, rule.onNodeWithTag("measure_button").getBoundsInRoot().let { it.bottom - it.top }.value, 0.6f)
-        for (tag in listOf("tool_locate", "tool_fit", "tool_zoom_in", "tool_zoom_out", "tool_bgmap", "tool_layers", "tool_points", "type_chip", "tool_link_line", "tool_link_area", "tool_undo")) rule.onNodeWithTag(tag).assertExists()
-        // 지도 비율(800dp): 머리글·판정 줄이 생겨도 60% 이상
+        assertTrue(rule.onNodeWithTag("measure_button").getBoundsInRoot().let { it.bottom - it.top }.value >= 72f)
+        for (tag in listOf("tool_locate", "tool_fit", "tool_zoom_in", "tool_zoom_out", "now_row", "pole_chip", "status_pill", "gear", "tool_undo")) rule.onNodeWithTag(tag).assertExists()
         val map = rule.onNodeWithTag("map_area").getBoundsInRoot(); val root = rule.onRoot().getBoundsInRoot()
         assertTrue("지도 비율", (map.bottom - map.top).value / (root.bottom - root.top).value >= 0.6f)
         assertTouchTargets("측량 지도")
         shot("02_survey_map")
-        rule.onNodeWithTag("tool_link_area").performClick(); rule.waitForIdle()
-        assertTrue(c.arch.outlineMode); assertTrue(c.arch.preferClosed)
-        rule.onNodeWithTag("tool_link_area").performClick(); rule.waitForIdle()
-        assertFalse("같은 쪽을 다시 누르면 끈다", c.arch.outlineMode)
+        // 유구를 고르면 「면 닫기」가 생긴다
+        rule.runOnUiThread { c.dig.select(kr.archsurvey.dig.DigKind.FEATURE, null) }; rule.waitForIdle()
+        rule.onNodeWithTag("tool_close_area").assertExists()
         rule.onNodeWithTag("survey_back").performClick(); rule.waitForIdle()
         assertTrue(c.homeOpen)
         rule.onNodeWithTag("home_screen").assertIsDisplayed()
@@ -153,11 +147,12 @@ class Ui0111Test {
 
     @Test fun c_settingsMenuToVrsOnlyAndDevice() {
         val (c, cc, _) = setup()
+        // 0.1.35: 설정 한 화면 「꼭 필요한 네 가지」에서 VRS · 수신기
         rule.onNodeWithTag("home_settings").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("settings_menu").assertIsDisplayed()
-        assertTouchTargets("환경설정")
+        rule.onNodeWithTag("settings_screen").assertIsDisplayed()
+        assertTouchTargets("설정")
         shot("03_settings_menu")
-        rule.onNodeWithTag("set_row_vrs").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("set_vrs").performClick(); rule.waitForIdle()
         assertTrue(cc.open); assertEquals(ConnSection.VRS, cc.section)
         rule.onAllNodesWithTag("header_title").assertAny(hasText("VRS 설정"))
         rule.onNodeWithTag("conn_host").assertExists()
@@ -177,7 +172,7 @@ class Ui0111Test {
         rule.onNodeWithTag("conn_autoretry_note", useUnmergedTree = true).assertTextContains("다시 시도", substring = true)
         rule.onNodeWithTag("conn_back").performClick(); rule.waitForIdle()
         assertFalse(cc.open)
-        rule.onNodeWithTag("set_row_device").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("set_receiver").performClick(); rule.waitForIdle()
         assertEquals(ConnSection.ALL, cc.section)
         rule.onAllNodesWithTag("header_title").assertAny(hasText("장비 연결"))
         rule.onNodeWithTag("conn_model_trimble_r10").assertIsDisplayed()
@@ -189,7 +184,7 @@ class Ui0111Test {
         rule.onNodeWithTag("conn_diag_text", useUnmergedTree = true).assertTextContains("NMEA 활성화", substring = true)
         // 시스템 뒤로 = 연결 화면 닫기 → 환경설정 닫기 → (홈)
         rule.runOnUiThread { backTarget(c)!!.invoke() }; rule.waitForIdle(); assertFalse(cc.open)
-        rule.runOnUiThread { backTarget(c)!!.invoke() }; rule.waitForIdle(); assertFalse(c.settingsMenuOpen)
+        rule.runOnUiThread { backTarget(c)!!.invoke() }; rule.waitForIdle(); assertNull(c.hub.screen)
         // 0.1.31 T27: 홈에서 뒤로 = 종료 확인 창(예전: null = 앱 기본 나가기 → 연결 서비스가 남았다)
         assertNotNull("홈에서는 종료 확인 창", backTarget(c))
     }
@@ -197,7 +192,10 @@ class Ui0111Test {
     @Test fun d_gnssInfoFromPill() {
         val (c, _, sp) = setup()
         val s = sp
+        // 0.1.35: 알약 → 「지금 상태」(신호등 3칸) → GNSS 자세히
         rule.onNodeWithTag("status_pill").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("dig_status").assertIsDisplayed()
+        rule.onNodeWithTag("status_more").performClick(); rule.waitForIdle()
         assertTrue(c.gnssInfoOpen)
         rule.onNodeWithTag("gnss_info").assertIsDisplayed()
         shot("06_gnss_info")
@@ -259,8 +257,9 @@ class Ui0111Test {
         // 미연결: 알약 회색 「수신기 없음」(0.1.30), 측점 불가 유지
         rule.runOnUiThread { c.hub.closeAll(); s.link.value = LinkStatus(state = LinkState.IDLE); s.gnss.value = GnssSnapshot() }
         rule.waitForIdle()
-        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("수신기 없음")
-        rule.onNodeWithText("수신기 연결 필요").assertExists()
+        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("수신기 연결 안 됨")
+        rule.onNodeWithTag("cause_line").assertExists()
+        rule.onNodeWithTag("measure_disabled_reason", useUnmergedTree = true).assertExists()
         shot("09_not_connected")
     }
 }

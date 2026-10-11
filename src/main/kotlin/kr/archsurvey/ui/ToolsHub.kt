@@ -10,7 +10,9 @@ import kr.archsurvey.core.NE
 
 enum class ToolScreen { POINTS, POINT_DETAIL, GOTO, CALC, SETTINGS, JOB_INFO, JOB_OPEN, JOB_NEW, AREAS, GRID_WIZ, TYPES, VWORLD,
     /** 0.1.14 목업 08 일반 측량 메뉴 · 09 작업관리 · 03 RTK 설정 · 23 IMU/기울기 */
-    SURVEY_HUB, JOB_HUB, RTK, IMU }
+    SURVEY_HUB, JOB_HUB, RTK, IMU,
+    /** 0.1.35 측량한 것(유구별·날짜별·종류별) */
+    FEATURES }
 enum class CalcMode(val label: String) { DISTANCE("거리·방위"), AREA("면적·둘레"), OFFSET("방위·거리로 좌표") }
 
 /** 찾아갈 목표: 저장된 점 또는 직접 입력한 좌표 */
@@ -38,7 +40,7 @@ class ToolsHub(private val c: SurveyController) {
         screen = s
     }
     fun back() {
-        val next = when (screen) { ToolScreen.POINT_DETAIL -> ToolScreen.POINTS; ToolScreen.GOTO -> cameFrom?.takeIf { it == ToolScreen.POINT_DETAIL }; ToolScreen.GRID_WIZ -> ToolScreen.AREAS; else -> null }
+        val next = when (screen) { ToolScreen.POINT_DETAIL -> if (cameFrom == ToolScreen.FEATURES) ToolScreen.FEATURES else ToolScreen.POINTS; ToolScreen.GOTO -> cameFrom?.takeIf { it == ToolScreen.POINT_DETAIL }; ToolScreen.GRID_WIZ -> ToolScreen.AREAS; else -> null }
         screen = next ?: if (screen != ToolScreen.SURVEY_HUB && screen != ToolScreen.JOB_HUB) hubParent.also { hubParent = null } else null
     }
     fun closeAll() { screen = null; hubParent = null }

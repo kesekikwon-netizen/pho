@@ -46,6 +46,7 @@ fun ToolHost(c: SurveyController) {
         ToolScreen.JOB_HUB -> JobHubScreen(c)
         ToolScreen.RTK -> RtkScreen(c)
         ToolScreen.IMU -> ImuScreen(c)
+        ToolScreen.FEATURES -> FeaturesScreen(c)
         null -> {}
     }
 }
@@ -220,7 +221,7 @@ private fun DetailPhotos(c: SurveyController, p: SavedPoint) {
     androidx.compose.runtime.LaunchedEffect(p.rowId) { photos = runCatching { c.media?.photos(p.rowId) }.getOrNull().orEmpty() }
     Card {
         Text("현장 사진 ${photos.size}/${MediaLimits.PHOTOS}", style = Ty.label, color = t.ink, modifier = Modifier.testTag("detail_photos_title"))
-        if (photos.isEmpty()) Text("이 점에 붙은 사진이 없어요. 측량 직후 결과 패널의 카메라로 찍어요.", style = Ty.small, color = t.inkSub)
+        if (photos.isEmpty()) Text("이 점에 붙은 사진이 없어요. 잰 직후 장부 카드의 「사진」으로 찍어요.", style = Ty.small, color = t.inkSub)
         else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             for (ph in photos.take(MediaLimits.PHOTOS)) Box(Modifier.size(72.dp).clip(RoundedCornerShape(12.dp)).background(t.bg).testTag("detail_photo_${ph.id}"), contentAlignment = Alignment.Center) { PhotoThumb(c, ph) }
         }
@@ -395,20 +396,29 @@ private fun PickRow(label: String, value: String?, tag: String, onClick: () -> U
 fun SettingsScreen(c: SurveyController) {
     val t = T; val h = c.hub
     val st = c.settingsState
+    val d = c.dig
+    var advanced by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     ToolScaffold("설정", "settings_screen", onBack = { h.back() }) {
         if (st == null) { Text("설정을 불러올 수 없어요", style = Ty.body, color = t.inkSub); return@ToolScaffold }
-        // 0.1.13 P0-2A: CRS·Geoid·배경맵은 작업 정보에서만 편집(즉시저장 vs 적용 충돌 제거). 표시는 현재 작업(c.*)
-        Text("지금 작업 · ${c.projectName}", style = Ty.small, color = t.inkSub)
-        SelectRow("지역 · Geoid · 배경맵", "${c.zone.labelKo} · ${c.geoid.shortKo} · ${c.mapBase.labelKo}", false, "zone_toggle") {
+        // 0.1.35 「꼭 필요한 네 가지」: 수신기 · VRS · 폴 기본값 · 좌표계/높이. 나머지는 측점 · 발굴 · 고급(접힘)
+        Text("꼭 필요한 네 가지", style = Ty.serifHead, color = t.ink)
+        val cc = c.connection
+        SelectRow("수신기", if (c.gv.noReceiver) "연결 안 됨 · 눌러서 연결" else "연결됨 · ${c.gv.quality.labelKo}", false, "set_receiver") { cc?.openScreen() ?: c.ui.toast("연결 화면을 열 수 없어요") }
+        SelectRow("VRS 보정", if (cc?.form?.enabled == true) "켜짐" else "꺼짐", false, "set_vrs") { cc?.openVrs() ?: c.ui.toast("VRS 설정을 열 수 없어요") }
+        SelectRow("폴 높이", String.format(java.util.Locale.US, "%.1f m · 기본 R10 1.6 · SP60 1.8 (0.1 m 단위)", c.antenna.inputValueM), false, "set_pole") { c.antennaSheetOpen = true }
+        // 0.1.13 P0-2A: CRS·Geoid·배경맵은 작업 정보에서만 편집. 0.1.35 X11: 점이 있으면 잠김(작업 정보에서 길게 눌러 풀기)
+        SelectRow("좌표계 · 높이", "EPSG:${c.zone.epsg} · ${c.zone.labelKo} · ${c.geoid.shortKo}" + if (d.crsLocked) " · 측량 중 잠김" else "", false, "zone_toggle") {
             c.jobs?.openInfo() ?: c.ui.toast("작업 관리를 쓸 수 없어요")
         }
-        SelectRow("V월드 키 · 지적 스타일", if (c.vworld.hasKey) "키 있음 · 배경맵은 작업 정보에서" else "키 없음 · 설정으로", false, "mapbase_toggle") {
-            c.vworld.load(); c.hub.open(ToolScreen.VWORLD)
-        }
+        Text("측점", style = Ty.serifHead, color = t.ink)
         val counts = listOf(1, 3, 5, 10)
         SelectRow("측정 횟수", "${c.epochs}회 평균", false, "epochs_toggle") {
             c.ui.choose(ChoiceRequest("한 점 측정 횟수", counts.map { "${it}회" + if (it == 3) " (기본)" else "" }, counts.indexOf(c.epochs), "epochs",
                 "측점 버튼을 누르면 이 횟수만큼 위치를 받아 평균해 저장해요. 각 측정값과 편차는 점 상세에서 볼 수 있어요.") { st.setEpochs(counts[it]) })
+        }
+        Card {
+            ToggleRow("엄격 모드 (FIX만 저장)", st.requireFixed, "set_strict_quality") { st.changeRequireFixed(it) }
+            Text("켜면 RTK 고정(FIX)만 측점해요. FLOAT·보정 오래됨·정밀도 낮음은 저장이 잠겨요. 끄면(기본) 주의 상태도 확인 후 저장할 수 있어요.", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("set_strict_note"))
         }
         Card {
             Text("측점 버튼 위치 (폴 쪽)", style = Ty.label, color = t.ink)
@@ -416,32 +426,62 @@ fun SettingsScreen(c: SurveyController) {
                 Choice("오른쪽", c.poleOnRight, Modifier.weight(1f).testTag("pole_right")) { st.setPoleRight(true) }
                 Choice("왼쪽", !c.poleOnRight, Modifier.weight(1f).testTag("pole_left")) { st.setPoleRight(false) }
             }
-        }
-        c.tilt?.let { TiltSettings(it) }
-        Card {
-            ToggleRow("소리", st.sound, "set_sound") { st.changeSound(it) }
-            ToggleRow("진동 (알림 · 버튼 탭)", st.vibration, "set_vibration") { st.changeVibration(it) }
-            ToggleRow("화면 항상 켜두기", st.keepScreenOn, "set_keepscreen") { st.changeKeepScreenOn(it) }
-        }
-        Card {
-            ToggleRow("엄격 모드 (FIX만 저장)", st.requireFixed, "set_strict_quality") { st.changeRequireFixed(it) }
-            Text("켜면 RTK 고정(FIX)만 측점해요. 유동·보정 오래됨·정밀도 낮음은 저장하지 않아요. 끄면(기본) 주의 상태도 확인 후 저장할 수 있어요.", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("set_strict_note"))
+            ToggleRow("볼륨 아래 키로 측점", d.volumeKey, "set_volume_key") { d.changeVolumeKey(it) }
+            Text("화면이 켜져 있고 측량 지도가 보일 때만 동작해요. 장갑 낀 손·한 손 측량용 (실기기 시험 전)", style = Ty.small, color = t.inkSub)
         }
         // 0.1.28 T14 음성 「저장」(기본 끔)
         c.voice?.let { VoiceSettingsCard(it) }
+        Text("발굴", style = Ty.serifHead, color = t.ink)
         Card {
-            Text(if (c.gv.status.reason == kr.archsurvey.core.StatusReason.NOT_CONNECTED) "수신기 연결 안 됨" else "수신기 연결됨 · ${c.gv.quality.labelKo}", style = Ty.label, color = t.ink, modifier = Modifier.testTag("set_fake_state"))
-        }
-        SelectRow("오류 기록", if (st.showCrash) "닫기" else "보기 · 공유", st.showCrash, "crash_toggle") { if (st.showCrash) st.showCrash = false else st.openCrash() }
-        if (st.showCrash) Card {
-            val txt = st.crashText
-            Text(if (txt.isBlank()) "기록된 오류가 없어요." else "최근 오류 기록 (문의할 때 ‘공유’로 보내 주세요)", style = Ty.label, color = t.ink)
-            if (txt.isNotBlank()) Text(txt.takeLast(4000), style = Ty.coord.copy(fontSize = 12.sp, lineHeight = 16.sp), color = t.ink, modifier = Modifier.testTag("crash_text"))
+            Text("유물 번호", style = Ty.label, color = t.ink)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.weight(1f)) { Btn("공유", Modifier.fillMaxWidth().testTag("crash_share")) { st.shareCrash() } }
-                Box(Modifier.weight(1f)) { Btn("지우기", Modifier.fillMaxWidth().testTag("crash_clear")) {
-                    c.ui.ask(ConfirmRequest("오류 기록을 지울까요?", "지운 기록은 되살릴 수 없어요.", "지우기") { st.clearCrash() })
-                } }
+                for (m in kr.archsurvey.dig.ArtifactMode.entries) Choice(m.labelKo, d.artifactMode == m, Modifier.weight(1f).testTag("set_art_${m.id}")) { d.changeArtifactMode(m) }
+            }
+            ToggleRow("새 유구는 가번호(가-1)로 시작", d.provisional, "set_provisional") { d.changeProvisional(it) }
+            Text("기준점 확인 허용 차이", style = Ty.label, color = t.ink)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (cm in listOf(2, 3, 5)) Choice("$cm cm" + if (cm == 3) " (기본)" else "", kotlin.math.abs(d.bmTolM - cm / 100.0) < 1e-6, Modifier.weight(1f).testTag("set_bm_tol_$cm")) { d.changeBmTol(cm / 100.0) }
+            }
+            Text("도면 축척 (내보내기 글자 크기)", style = Ty.label, color = t.ink)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (sc in kr.archsurvey.dig.DrawingScale.CHOICES) Choice("1:$sc", d.drawScale == sc, Modifier.weight(1f).testTag("set_scale_$sc")) { d.changeScale(sc); c.exporter?.scale = sc }
+            }
+        }
+        var typesText by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(d.featureTypes.joinToString(", ")) }
+        Card {
+            Text("유구 종류 (쉼표로 구분)", style = Ty.label, color = t.ink)
+            Field("수혈, 주거지, 주혈 …", typesText, "set_feature_types") { typesText = it }
+            Btn("유구 종류 저장", Modifier.fillMaxWidth().testTag("set_feature_types_save")) { d.setFeatureTypes(typesText.split(',', '\n')); typesText = d.featureTypes.joinToString(", "); c.ui.ok("유구 종류 ${d.featureTypes.size}개") }
+        }
+        SelectRow("고급 · 문제 있을 때만", if (advanced) "접기" else "펼치기", advanced, "settings_advanced") { advanced = !advanced }
+        if (advanced) {
+            SelectRow("V월드 키 · 지적 스타일", if (c.vworld.hasKey) "키 있음 · 가려 둠" else "키 없음 · 설정으로", false, "mapbase_toggle") {
+                c.vworld.load(); c.hub.open(ToolScreen.VWORLD)
+            }
+            SelectRow("배경지도", c.mapBase.labelKo, false, "set_mapbase") { chooseMapBase(c) }
+            SelectRow("위치 종류 목록", "${c.types.size}개", false, "set_types") { c.hub.open(ToolScreen.TYPES) }
+            SelectRow("위치 모양 (지도)", "점 · 이름표 · 현재 위치", false, "set_marker") { c.markerStyleOpen = true }
+            c.tilt?.let { TiltSettings(it) }
+            Card {
+                ToggleRow("소리", st.sound, "set_sound") { st.changeSound(it) }
+                ToggleRow("진동 (알림 · 버튼 탭)", st.vibration, "set_vibration") { st.changeVibration(it) }
+                ToggleRow("화면 항상 켜두기", st.keepScreenOn, "set_keepscreen") { st.changeKeepScreenOn(it) }
+            }
+            Card {
+                Text(if (c.gv.status.reason == kr.archsurvey.core.StatusReason.NOT_CONNECTED) "수신기 연결 안 됨" else "수신기 연결됨 · ${c.gv.quality.labelKo}", style = Ty.label, color = t.ink, modifier = Modifier.testTag("set_fake_state"))
+                Text(HeaderModel.metrics(c.gv), style = Ty.coord.copy(fontSize = 12.sp), color = t.inkSub)
+            }
+            SelectRow("오류 기록", if (st.showCrash) "닫기" else "보기 · 공유", st.showCrash, "crash_toggle") { if (st.showCrash) st.showCrash = false else st.openCrash() }
+            if (st.showCrash) Card {
+                val txt = st.crashText
+                Text(if (txt.isBlank()) "기록된 오류가 없어요." else "최근 오류 기록 (문의할 때 ‘공유’로 보내 주세요)", style = Ty.label, color = t.ink)
+                if (txt.isNotBlank()) Text(txt.takeLast(4000), style = Ty.coord.copy(fontSize = 12.sp, lineHeight = 16.sp), color = t.ink, modifier = Modifier.testTag("crash_text"))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.weight(1f)) { Btn("공유", Modifier.fillMaxWidth().testTag("crash_share")) { st.shareCrash() } }
+                    Box(Modifier.weight(1f)) { Btn("지우기", Modifier.fillMaxWidth().testTag("crash_clear")) {
+                        c.ui.ask(ConfirmRequest("오류 기록을 지울까요?", "지운 기록은 되살릴 수 없어요.", "지우기") { st.clearCrash() })
+                    } }
+                }
             }
         }
         Text(rememberAppVersionLabel() + " · 발굴 측량 · 실기기 시험 전 버전", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("app_version").padding(vertical = 8.dp))
@@ -546,7 +586,14 @@ fun JobScreen(c: SurveyController) {
                     Text(jc.current, style = Ty.title, color = t.inkSub, modifier = Modifier.testTag("job_info_name"))
                     Box(Modifier.fillMaxWidth().height(1.dp).background(t.line))
                 }
-                JobConfigRows(c, jc, editableZone = true)
+                // 0.1.35 X11: 점이 있는 작업은 좌표계·높이 잠금(실수로 바꾸면 도면이 어긋남). 풀기 버튼으로만
+                if (c.dig.crsLocked) Card {
+                    Text("측량 중 잠김 · 점 ${c.points.size}개가 이 좌표계·높이로 저장돼 있어요", style = Ty.label, color = t.ink, modifier = Modifier.testTag("crs_locked"))
+                    Btn("잠금 풀고 바꾸기", Modifier.fillMaxWidth().testTag("crs_unlock")) {
+                        c.ui.ask(ConfirmRequest("좌표계·높이 잠금을 풀까요?", "이미 저장된 점은 바뀌지 않고, 바꾼 뒤 찍는 점부터 적용돼요. 같은 도면에 섞이면 위치가 어긋날 수 있어요.", "풀기") { c.dig.crsUnlocked = true })
+                    }
+                }
+                JobConfigRows(c, jc, editableZone = !c.dig.crsLocked)
                 Card {
                     if (i != null) {
                         Text("점 ${i.points}개 · 사진 ${i.photos}장 · 음성 ${i.voices}개", style = Ty.body, color = t.ink, modifier = Modifier.testTag("job_info_counts"))
@@ -583,7 +630,7 @@ private fun JobConfigRows(c: SurveyController, jc: JobController, editableZone: 
             "지금은 GRS80 TM(EPSG:5185~5188)만 써요. Bessel·UTM·경위도 좌표계는 이 앱에서 지원하지 않아요.") {})
     }
     FormRow("지역", jc.formZone.labelKo, "job_zone") {
-        if (!editableZone) return@FormRow
+        if (!editableZone) { c.ui.toast("측량 중 잠김 · 위의 「잠금 풀고 바꾸기」를 누르세요"); return@FormRow }
         val opts = zones.map { it.labelKo } + "자동 (현재 위치로 고르기)"
         c.ui.choose(ChoiceRequest("지역 (투영 원점)", opts, zones.indexOf(jc.formZone), "jobzone",
             "서부 125°E · 중부 127°E · 동부 129°E(EPSG:5187, 경북·경남 동부) · 동해 131°E. 점이 있는 작업은 다른 좌표계로 바꿀 수 없어요.") { i ->
@@ -597,6 +644,7 @@ private fun JobConfigRows(c: SurveyController, jc: JobController, editableZone: 
     }
     val geoids = kr.archsurvey.core.GeoidModel.entries
     FormRow("Geoid", jc.formGeoid.labelKo, "job_geoid") {
+        if (!editableZone) { c.ui.toast("측량 중 잠김 · 위의 「잠금 풀고 바꾸기」를 누르세요"); return@FormRow }
         c.ui.choose(ChoiceRequest("Geoid (표고 모델)", geoids.map { it.labelKo }, geoids.indexOf(jc.formGeoid), "jobgeoid",
             "새 점부터 적용돼요. 수신기 출력 = 수신기가 보낸 해발고 그대로. EGM96 = 앱이 타원체고에서 EGM96 지오이드고를 빼요(수신기가 지오이드 분리를 보내야 함). KNGeoid18은 격자 파일이 없어 아직 지원하지 않아요.") { jc.formGeoid = geoids[it] })
     }

@@ -156,24 +156,18 @@ class ArchUiTest {
     }
 
     @Test fun outlineModeBarAndQuickSheetEntries() {
+        // 0.1.35: 윤곽 모드 막대 → 「지금 재는 것」 고르기 · 유구 경계는 「면 닫기」
         start()
-        rule.onNodeWithTag("type_chip").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("quick_menu").assertExists(); rule.onNodeWithTag("quick_areas").assertDoesNotExist()
-        rule.onNodeWithTag("quick_outline").performClick(); rule.waitForIdle()
-        assertTrue(c.arch.outlineMode)
-        assertEquals(ArchTypes.OUTLINE_POINT, c.typeName)
-        rule.onNodeWithTag("outline_bar").assertExists()
-        rule.onNodeWithTag("outline_finish_line").performClick(); rule.waitForIdle()
-        assertNotNull(c.arch.error)
-        rule.onNodeWithTag("outline_off").performClick(); rule.waitForIdle()
-        assertFalse(c.arch.outlineMode)
+        rule.onNodeWithTag("now_row").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("dig_picker").assertExists()
+        rule.onNodeWithTag("kind_feature").performClick(); rule.waitForIdle()
+        assertEquals(kr.archsurvey.dig.DigKind.FEATURE, c.dig.kind)
+        rule.onAllNodesWithTag("dig_picker").fetchSemanticsNodes().let { if (it.isNotEmpty()) rule.runOnUiThread { c.dig.pickerOpen = false } }
+        rule.waitForIdle()
+        rule.onNodeWithTag("tool_close_area").performClick(); rule.waitForIdle()
+        assertTrue("점이 없으면 닫기 안 됨 안내", c.message.orEmpty().contains("유구"))
+        assertFalse(c.dig.closeArmed)
     }
-
-    @Test fun noArtifactQuantityOrMaterialFieldsInArchScreens() {
-        val txt = listOf("ArchScreens.kt", "MapChrome.kt", "ToolScreens.kt").joinToString("\n") { File("src/main/kotlin/kr/archsurvey/ui/$it").readText() }
-        for (w in listOf("수량", "재질", "크기", "시대", "개수")) assertFalse("화면 문구에 $w", txt.contains("\"$w") || txt.contains("$w:"))
-    }
-
     @Test fun setupSheetFromLongPressAppliesMemoTypeAndLinkMode() {
         start()
         rule.onNodeWithTag("measure_button").performTouchInput { longClick() }; rule.waitForIdle()

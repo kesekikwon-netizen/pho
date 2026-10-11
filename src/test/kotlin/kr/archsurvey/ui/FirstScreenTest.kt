@@ -51,9 +51,9 @@ class FirstScreenTest {
         val c = SurveyController(s, db, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
         rule.setContent { SurveyTheme(dark = false) { SurveyMapScreen(c, batteryPct = 82) } }
         rule.waitForIdle()
-        rule.onNodeWithText("불가 · 수신기 없음").assertExists()
-        rule.onNodeWithTag("not_connected_card").assertExists()
-        rule.onNodeWithText("수신기 연결 필요").assertExists()
+        // 0.1.35: 상태 알약 + 원인 한 줄(누르면 연결)
+        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("수신기 연결 안 됨")
+        rule.onNodeWithTag("cause_line").assertExists()
         rule.onNodeWithTag("measure_disabled_reason", useUnmergedTree = true).assertExists()
         shot("r1_not_connected")
         rule.onNodeWithTag("measure_button").performClick()
@@ -72,12 +72,14 @@ class FirstScreenTest {
             s.gnss.value = GnssSnapshot(gga, GstMessage("", 0.01, 0.006, 0.006, 0.012), lastGgaAtMs = 10_000L)
         }
         rule.waitForIdle()
-        rule.onNodeWithTag("not_connected_card").assertDoesNotExist()
-        rule.onNodeWithTag("status_main").assertTextContains("측량 가능", substring = true); rule.onNodeWithTag("status_band").assertExists()
-        rule.onNodeWithTag("status_detail").assertTextContains("위성 21", substring = true)
-        rule.onNodeWithTag("status_detail").assertTextContains("H ±0.8cm", substring = true)
-        rule.onNodeWithTag("status_detail").assertTextContains("V ±1.2cm", substring = true)
-        rule.onNodeWithTag("status_detail").assertTextContains("고정", substring = true)
+        rule.onNodeWithTag("cause_line").assertDoesNotExist()
+        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("측량 가능")
+        rule.onNodeWithTag("pill_sigma", useUnmergedTree = true).assertTextEquals("±0.8/1.2")
+        // 자세한 값(위성·고정)은 알약을 눌러 「지금 상태」에서
+        rule.onNodeWithTag("status_pill").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("dig_status").assertExists()
+        rule.onNodeWithText("21", substring = true).assertExists()
+        rule.onNodeWithTag("light_2").assertExists()
         shot("r3_streaming")
     }
 
@@ -97,7 +99,7 @@ class FirstScreenTest {
     @Test fun startsDirectlyOnSurveyMap() {
         val (_, c) = streaming()
         rule.onNodeWithTag("home_screen").assertDoesNotExist()
-        rule.onNodeWithTag("status_band").assertExists()
+        rule.onNodeWithTag("status_pill").assertExists()
         rule.onNodeWithTag("measure_button").assertExists()
         rule.onNodeWithTag("tab_points").assertDoesNotExist()
         rule.onNodeWithTag("pole_strip").assertDoesNotExist()
@@ -109,19 +111,20 @@ class FirstScreenTest {
         val c = SurveyController(s, db, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
         rule.setContent { SurveyTheme(dark = false) { SurveyMapScreen(c, batteryPct = 82) } }
         rule.waitForIdle()
-        rule.onNodeWithTag("not_connected_card").assertExists()
-        rule.onNodeWithTag("status_main").assertTextContains("수신기 없음", substring = true)
+        rule.onNodeWithTag("cause_line").assertExists()
+        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextContains("연결 안 됨", substring = true)
         shot("c_start_not_connected")
     }
 
     @Test fun quickSheetAndDrawerAndVersion() {
         val (_, c) = streaming()
-        rule.onNodeWithTag("type_chip").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("quick_sheet").assertExists()
+        // 0.1.35: 위치 종류 칩 → 「지금 재는 것」 줄 → 고르기 시트
+        rule.onNodeWithTag("now_row").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("dig_picker").assertExists()
         shot("c_quick_sheet")
-        rule.onNodeWithTag("quick_type_1").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("quick_sheet").assertDoesNotExist()
-        assertEquals(1, c.typeIndex)
+        rule.runOnUiThread { c.dig.select(kr.archsurvey.dig.DigKind.ARTIFACT, null); c.dig.pickerOpen = false }; rule.waitForIdle()
+        rule.onNodeWithTag("dig_picker").assertDoesNotExist()
+        assertEquals(kr.archsurvey.dig.DigKind.ARTIFACT, c.dig.kind)
         rule.runOnUiThread { c.drawerOpen = true }
         rule.waitForIdle()
         rule.onNodeWithTag("drawer_version", useUnmergedTree = true).assertExists()

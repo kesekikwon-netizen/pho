@@ -154,8 +154,10 @@ class Ui0114MockupTest {
         // 02 홈
         rule.onNodeWithTag("home_screen").assertExists(); shot("mockup_02_home")
         // 03 환경설정 (목업 순서)
-        ui { c.homeOpen = false; c.settingsMenuOpen = true }
-        for (tag in listOf("set_row_device", "set_row_rtk", "set_row_vrs", "set_row_job", "set_row_marker", "set_row_alert", "set_row_info")) rule.onNodeWithTag(tag).assertExists()
+        // 0.1.35: 환경설정 목록 → 설정 한 화면(꼭 필요한 네 가지 + 측점 + 발굴 + 고급)
+        ui { c.homeOpen = false; c.hub.open(ToolScreen.SETTINGS) }
+        for (tag in listOf("set_receiver", "set_vrs", "set_pole", "zone_toggle", "epochs_toggle", "set_strict_quality")) rule.onNodeWithTag(tag).performScrollTo().assertExists()
+        rule.onNodeWithTag("settings_advanced").performScrollTo().assertExists()
         shot("mockup_03_settings")
         // 03→RTK 설정
         reset(); ui { c.hub.open(ToolScreen.RTK) }; rule.onNodeWithTag("rtk_compat").assertExists(); shot("mockup_03b_rtk")
@@ -194,7 +196,7 @@ class Ui0114MockupTest {
         // 14 백업/복구 창
         reset(); ui { c.bg!!.close(); c.backupQuickOpen = true }; rule.onNodeWithTag("backup_quick").assertExists(); shot("mockup_14_backup_restore")
         // 15 측량 지도
-        reset(); for (tag in listOf("tool_link_line", "tool_link_area", "tool_undo", "tool_new_link", "type_chip", "tool_2d", "measure_button")) rule.onNodeWithTag(tag).assertExists()
+        reset(); for (tag in listOf("tool_undo", "tool_memo", "now_row", "pole_chip", "status_pill", "tool_2d", "measure_button")) rule.onNodeWithTag(tag).assertExists()
         shot("mockup_15_survey_map")
         // 16 측량 설정
         ui { c.setupOpen = true }
@@ -205,17 +207,17 @@ class Ui0114MockupTest {
         ui { c.onMeasure(); repeat(7) { f.emitNext() } }
         assertEquals(Phase.RESULT, c.phase)
         shot("mockup_17a_result_strip")
-        ui { c.ui.hideToast(); c.toggleExpand() } // 결과 띠를 누르면 목업 17 패널
-        rule.onNodeWithTag("result_question").assertTextContains("계속 측량할까요", substring = true)
-        rule.onNodeWithTag("result_no").assertExists(); rule.onNodeWithTag("next_point").assertExists()
+        // 0.1.35: 「계속 측량할까요」 패널 없음 — 장부 카드 + 측점 단추가 「다음 점」(X3)
+        ui { c.ui.hideToast() }
+        rule.onNodeWithTag("result_strip").assertExists()
+        rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("다음 점")
         shot("mockup_17_survey_result")
-        // 18 사진 확인
-        rule.onNodeWithTag("photo_count_btn").performClick(); rule.waitForIdle()
+        // 18 사진 확인(찍은 뒤 확인 화면은 그대로)
+        rule.onNodeWithTag("result_photo").performClick(); rule.waitForIdle()
+        ui { c.photoReviewOpen = true }
         rule.onNodeWithTag("photo_review").assertExists(); shot("mockup_18_photo_capture")
         rule.onNodeWithTag("photo_review_ok").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("photo_review").assertDoesNotExist()
-        rule.onNodeWithTag("result_no").performClick(); rule.waitForIdle()
-        assertEquals(Phase.IDLE, c.phase)
         // 19 점 목록
         reset(); ui { c.hub.open(ToolScreen.POINTS) }
         rule.onNodeWithTag("points_sort_0").assertExists(); shot("mockup_19_point_manager")
@@ -241,17 +243,15 @@ class Ui0114MockupTest {
 
     /** 홈 큰 카드 → 일반 측량 메뉴 → 측량(지도) · 홈 작업 관리 → 작업관리 메뉴 */
     @Test fun homeCardsFollowMockupFlow() {
+        // 0.1.35: 홈 「측량 시작」 → 바로 지도, 「작업」 → 작업 정보 → 적용 → 지도
         setup()
         rule.onNodeWithTag("home_survey").performClick(); rule.waitForIdle()
-        assertEquals("tool:SURVEY_HUB", c.visibleRoute())
-        rule.onNodeWithTag("hub_survey").performClick(); rule.waitForIdle()
         assertEquals("survey", c.visibleRoute())
         ui { c.homeOpen = true }
-        rule.onNodeWithTag("home_jobs").performScrollTo().performClick(); rule.waitForIdle()
-        assertEquals("tool:JOB_HUB", c.visibleRoute())
-        rule.onNodeWithTag("jobhub_info").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("home_job_btn").performScrollTo().performClick(); rule.waitForIdle()
+        assertEquals("tool:JOB_INFO", c.visibleRoute())
         rule.onNodeWithTag("job_apply").performClick(); rule.waitForIdle()
-        assertEquals("survey", c.visibleRoute()) // 적용 → 측량 유지
+        assertEquals("survey", c.visibleRoute())
     }
 
     /** 수신기 IMU 와 폰 기포를 문구로 구분: 수신기 쪽은 보정 불가 안내, 폰 쪽은 참고용·좌표 미보정 */

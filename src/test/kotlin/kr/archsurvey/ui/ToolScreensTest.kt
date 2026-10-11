@@ -89,7 +89,7 @@ class ToolScreensTest {
         f = FakeGnssSource(FakeScenarios.allFixed()); media = Media()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         c = SurveyController(f, db, scope, store = Store())
-        c.media = media
+        c.media = media; c.resultStripMs = Long.MAX_VALUE
         c.exporter = ExportController(Exp(), scope)
         c.backup = BackupController(Bak(), scope)
         c.settingsState = SettingsState(c, Sett())
@@ -182,18 +182,17 @@ class ToolScreensTest {
     }
 
     @Test fun photosAndVoiceInExpandedResult() {
+        // 0.1.35: 펼친 결과 패널 대신 잰 직후 장부 카드에 「사진」「음성 · 메모」
         setup()
-        rule.runOnUiThread { c.toggleExpand() }; rule.waitForIdle()
-        rule.onNodeWithTag("photo_slot_0").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("photo_slot_1").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("result_strip").assertExists()
+        rule.onNodeWithTag("result_photo").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("result_photo").performClick(); rule.waitForIdle()
         assertEquals(2, c.photos.size)
-        rule.onNodeWithTag("photo_count").assertExists()
-        rule.onNodeWithTag("voice_big").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("result_voice").performClick(); rule.waitForIdle()
         assertEquals(Phase.RECORDING, c.phase)
         shot("t13_recording")
-        rule.onNodeWithTag("record_stop").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("result_voice").performClick(); rule.waitForIdle()
         assertEquals(1, c.voices.size)
-        rule.runOnUiThread { c.toggleExpand() }; rule.waitForIdle()
         shot("t14_expanded_with_media")
     }
 }

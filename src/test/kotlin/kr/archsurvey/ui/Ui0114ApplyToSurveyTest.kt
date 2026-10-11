@@ -100,9 +100,8 @@ class Ui0114ApplyToSurveyTest {
     /** 사용자 스크린샷과 같은 경로: 홈 › 환경설정 › 작업 정보 확인 › 적용 */
     @Test fun applyFromSettingsMenuNavigatesToSurvey() {
         setup()
-        rule.onNodeWithTag("home_settings").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("settings_menu").assertExists()
-        rule.onNodeWithTag("set_row_job").performClick(); rule.waitForIdle()
+        // 0.1.35: 환경설정 목록 없앰 → 홈 「오늘 준비」의 「작업」 단추
+        rule.onNodeWithTag("home_job_btn").performClick(); rule.waitForIdle()
         assertEquals("tool:JOB_INFO", c.visibleRoute())
         pickEast()
         shot("01_job_info_before_apply")
@@ -135,7 +134,6 @@ class Ui0114ApplyToSurveyTest {
     @Test fun applyFromSettingsScreenNavigatesToSurvey() {
         setup()
         rule.onNodeWithTag("home_settings").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("set_row_survey").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
         assertEquals("tool:JOB_INFO", c.visibleRoute())
         pickEast()
@@ -147,8 +145,7 @@ class Ui0114ApplyToSurveyTest {
     /** 새 작업 › 만들기 → 작업 정보 → 적용 → 측량 */
     @Test fun newJobThenApplyNavigatesToSurvey() {
         setup()
-        rule.onNodeWithTag("home_settings").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("set_row_job").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("home_job_btn").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("job_to_new").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("job_name").performTextInput("동부-1")
         rule.onNodeWithTag("job_create").performClick(); rule.waitForIdle()
@@ -164,19 +161,18 @@ class Ui0114ApplyToSurveyTest {
         val before = c.jobConfig()
         cfgs.save("te1", before)
         rule.onNodeWithTag("home_settings").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("set_row_job").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
         pickEast()
         rule.onNodeWithTag("job_exit").performClick(); rule.waitForIdle()
-        assertEquals("settings_menu", c.visibleRoute())
-        rule.onNodeWithTag("settings_menu").assertExists()
+        assertEquals("tool:SETTINGS", c.visibleRoute())
         rule.onNodeWithTag("job_screen").assertDoesNotExist()
         assertEquals(before.epsg, c.zone.epsg); assertEquals(before.geoid, c.geoid); assertEquals(before.mapBase, c.mapBase)
         assertEquals(before, cfgs.load("te1"))
         // 다시 열면 폼은 저장된 값(나가기로 바꾼 값은 버려짐)
-        rule.onNodeWithTag("set_row_job").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("job_zone_value", useUnmergedTree = true).assertTextContains(before.epsg.toString(), substring = true)
         rule.onNodeWithTag("tool_back").performClick(); rule.waitForIdle()
-        assertEquals("settings_menu", c.visibleRoute())
+        assertEquals("tool:SETTINGS", c.visibleRoute())
         assertEquals(before, cfgs.load("te1"))
     }
 
@@ -188,7 +184,13 @@ class Ui0114ApplyToSurveyTest {
         rule.waitForIdle()
         assertEquals(1, c.points.size)
         val before = c.zone
-        rule.runOnUiThread { c.homeOpen = true; c.settingsMenuOpen = true; c.jobs!!.openInfo() }; rule.waitForIdle()
+        rule.runOnUiThread { c.homeOpen = true; c.jobs!!.openInfo() }; rule.waitForIdle()
+        // 0.1.35 X11: 점이 있으면 좌표계 잠김 — 먼저 풀어야 고를 수 있다(풀어도 다른 좌표계 적용은 아래에서 막힘)
+        rule.onNodeWithTag("crs_locked").performScrollTo().assertExists()
+        rule.onNodeWithTag("job_zone").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("jobzone_0").assertDoesNotExist()
+        rule.onNodeWithTag("crs_unlock").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("confirm_ok").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("job_zone").performScrollTo().performClick(); rule.waitForIdle()
         val other = KoreanTmZone.entries.first { it != before }
         rule.onNodeWithTag("jobzone_" + KoreanTmZone.entries.indexOf(other)).performClick(); rule.waitForIdle()
@@ -201,8 +203,10 @@ class Ui0114ApplyToSurveyTest {
     /** 교차검증: 홈 › 점 목록(빈) › 「지도로 돌아가기」 → 측량(0.1.13 은 홈에 남음) */
     @Test fun pointsBackToMapFromHomeGoesToSurvey() {
         setup()
+        // 0.1.35: 홈 「측량한 것」 → 뒤로 = 측량 지도
         rule.onNodeWithTag("home_points").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("points_to_map").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("features_summary").assertExists()
+        rule.onNodeWithTag("tool_back").performClick(); rule.waitForIdle()
         assertOnSurvey()
     }
 
@@ -220,10 +224,10 @@ class Ui0114ApplyToSurveyTest {
         setup()
         val before = c.jobConfig(); cfgs.save("te1", before)
         rule.onNodeWithTag("home_settings").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("set_row_job").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
         pickEast()
         rule.runOnUiThread { backTarget(c)!!.invoke() }; rule.waitForIdle()
-        assertEquals("settings_menu", c.visibleRoute())
+        assertEquals("tool:SETTINGS", c.visibleRoute())
         rule.runOnUiThread { backTarget(c)!!.invoke() }; rule.waitForIdle()
         assertEquals("home", c.visibleRoute())
         assertEquals(before, cfgs.load("te1"))

@@ -189,16 +189,15 @@ class Ui019Test {
         adv(3)
         rule.onNodeWithTag("measure_button").performClick(); rule.waitForIdle()
         assertEquals(Phase.ACQUIRING, c.phase)
-        rule.onNodeWithTag("measure_progress").assertExists()
+        // 0.1.35 X4: 진행은 측점 단추 안(지도·내 위치를 가리지 않음)
+        rule.onNodeWithTag("measure_progress", useUnmergedTree = true).assertExists()
         var guard = 0
         while (c.measureCount < 1 && guard++ < 5) adv(1)
         assertEquals(1, c.measureCount)
-        rule.onNodeWithTag("measure_progress_title").assertTextEquals("측정 중 1/3")
-        rule.onNodeWithTag("measure_progress_step_0").assertTextContains("1/3", substring = true)
-        rule.onNodeWithTag("measure_progress_step_1").assertTextContains("진행 중", substring = true)
+        rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("재는 중 1/3")
         shot("05_measure_1of3")
         adv(1)
-        rule.onNodeWithTag("measure_progress_title").assertTextEquals("측정 중 2/3")
+        rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("재는 중 2/3")
         adv(1)
         assertEquals(Phase.RESULT, c.phase)
         val p = c.points.last()
@@ -218,7 +217,8 @@ class Ui019Test {
         val (c, _, _) = setup(src = f)
         rule.runOnIdle { repeat(3) { f.emitNext() } }; rule.waitForIdle()
         rule.onNodeWithTag("measure_button").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("measure_stop").performClick(); rule.waitForIdle()
+        // 0.1.35: 재는 중 측점 단추 다시 누름 = 중지
+        rule.onNodeWithTag("measure_button").performClick(); rule.waitForIdle()
         assertNotEquals(Phase.ACQUIRING, c.phase); assertEquals(0, c.points.size)
     }
 

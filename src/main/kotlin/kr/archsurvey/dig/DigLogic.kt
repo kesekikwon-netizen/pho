@@ -19,7 +19,7 @@ enum class DigKind(val id: String, val labelKo: String, val positionType: String
     SECTION("section", "토층 단면", "토층 단면", "A — A′ 양 끝"),
     TRENCH("trench", "트렌치", "트렌치", "Tr. 모서리"),
     STAKE("stake", "그리드 말뚝", "그리드 모서리", "찾아가서 박기"),
-    BM("bm", "기준점", "기준점", "BM · 검측"),
+    BM("bm", "기준점", "기준점", "BM · 확인"),
     AREA("area", "조사구역", "조사구역 경계", "경계");
 
     /** 점을 이어 선·면을 만드는 종류(유구·트렌치·조사구역) */
@@ -146,7 +146,7 @@ object DigDepth {
 data class NEH(val n: Double, val e: Double, val h: Double?)
 data class BmResult(val dN: Double, val dE: Double, val dH: Double?, val horizM: Double, val pass: Boolean, val tolM: Double)
 
-/** 기준점 검측: 아침에 BM 한 번 → 알려진 값과 차이. 기준 3 cm 는 제안값(현장·기관 기준 확인 전) */
+/** 기준점 확인: 아침에 BM 한 번 → 알려진 값과 차이. 기준 3 cm 는 제안값(현장·기관 기준 확인 전) */
 object BmCheck {
     const val DEFAULT_TOL_M = 0.03
     fun evaluate(known: NEH, measured: NEH, tolM: Double = DEFAULT_TOL_M): BmResult {
@@ -158,7 +158,7 @@ object BmCheck {
     }
     private fun cm(m: Double): String { val v = m * 100.0; val s = String.format(Locale.US, "%.1f", abs(v)); return (if (v < -0.049) "−" else "+") + s }
     fun deltaText(r: BmResult): String = "ΔN ${cm(r.dN)} · ΔE ${cm(r.dE)}" + (r.dH?.let { " · Δ해발 ${cm(it)}" } ?: "") + " cm"
-    fun verdictText(name: String, r: BmResult): String = if (r.pass) "기준점 검측 · $name 통과" else "기준점 검측 · $name 차이 큼"
+    fun verdictText(name: String, r: BmResult): String = if (r.pass) "기준점 확인 · $name 통과" else "기준점 확인 · $name 차이 큼"
     fun adviceText(r: BmResult): String {
         val tol = String.format(Locale.US, "%.0f", r.tolM * 100)
         return if (r.pass) "알려진 값과 $tol cm 안이에요. 폴 높이·좌표계·지오이드가 맞다는 뜻이에요."
@@ -207,7 +207,7 @@ data class PrepInput(
     val bmName: String, val bmCheckedToday: Boolean, val bmPassedToday: Boolean?, val bmKnown: Boolean,
 )
 
-/** 홈 「오늘 준비」 5단계: 수신기 · VRS · 폴 높이 확인 · 좌표계·높이 · 기준점 검측. 끝나지 않은 첫 단계가 「다음」 */
+/** 홈 「오늘 준비」 5단계: 수신기 · VRS · 폴 높이 확인 · 좌표계·높이 · 기준점 확인. 끝나지 않은 첫 단계가 「다음」 */
 object TodayPrep {
     fun steps(i: PrepInput): List<PrepStep> {
         val pole = String.format(Locale.US, "%.1f", i.poleM)
@@ -220,10 +220,10 @@ object TodayPrep {
                 if (i.poleConfirmedToday) "${i.modelShort} · $pole m · 오늘 확인함" else "${i.modelShort} · $pole m · 폴 눈금과 같나요?", StepState.TODO, if (i.poleConfirmedToday) null else "맞아요")),
             Triple("crs", i.crsReady, PrepStep("crs", "좌표계 · 높이",
                 "EPSG:${i.epsg} · 해발 ${i.heightLabel}", StepState.TODO, if (i.crsReady) null else "확인")),
-            Triple("bm", i.bmCheckedToday && i.bmPassedToday == true, PrepStep("bm", "기준점 검측",
+            Triple("bm", i.bmCheckedToday && i.bmPassedToday == true, PrepStep("bm", "기준점 확인",
                 when {
                     !i.bmKnown -> "${i.bmName} 이 아직 없어요 · 기준점 위에서 한 번 재면 기준값이 돼요"
-                    i.bmCheckedToday && i.bmPassedToday == true -> "${i.bmName} · 오늘 검측 통과"
+                    i.bmCheckedToday && i.bmPassedToday == true -> "${i.bmName} · 오늘 확인 통과"
                     i.bmCheckedToday -> "${i.bmName} · 차이가 커요 · 폴·좌표계 확인 후 다시 재세요"
                     else -> "${i.bmName}에 폴을 세우고 한 번 재세요 (아침 1회)"
                 }, StepState.TODO, if (i.bmCheckedToday && i.bmPassedToday == true) null else "재기")),
@@ -295,7 +295,7 @@ object CauseLine {
     }
 }
 
-/** 하루(현지 날짜) 열쇠 yyyyMMdd — 오늘 폴 확인·기준점 검측 기록 */
+/** 하루(현지 날짜) 열쇠 yyyyMMdd — 오늘 폴 확인·기준점 확인 기록 */
 object DayKey {
     fun of(ms: Long, tz: java.util.TimeZone = java.util.TimeZone.getDefault()): String {
         val f = java.text.SimpleDateFormat("yyyyMMdd", Locale.US); f.timeZone = tz; return f.format(java.util.Date(ms))

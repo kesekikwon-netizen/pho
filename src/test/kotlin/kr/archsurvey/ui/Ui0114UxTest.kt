@@ -71,13 +71,13 @@ class Ui0114UxTest {
         setup()
         rule.onNodeWithTag("home_settings").performClick(); rule.waitForIdle()
         assertTrue("탭 햅틱", TapHaptics.taps >= 1)
-        rule.onNodeWithTag("set_row_job").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("zone_toggle").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("job_exit").performClick(); rule.waitForIdle()
         assertTrue(TapHaptics.taps >= 3)
         // 진동 끔 → 탭 햅틱도 끔
         rule.runOnUiThread { c.settingsState!!.changeVibration(false) }; rule.waitForIdle()
         val before = TapHaptics.taps
-        rule.onNodeWithTag("set_row_job").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("zone_toggle").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("job_exit").performClick(); rule.waitForIdle()
         assertEquals(before, TapHaptics.taps)
     }

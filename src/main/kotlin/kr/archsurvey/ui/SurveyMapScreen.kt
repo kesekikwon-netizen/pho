@@ -56,12 +56,28 @@ fun SurveyMapScreen(
     val t = T
     androidx.compose.runtime.CompositionLocalProvider(LocalSurvey provides c, LocalTapHaptic provides (c.settingsState?.vibration ?: true)) {
     Box(Modifier.fillMaxSize().background(t.bg).windowInsetsPadding(WindowInsets.systemBars).testTag("screen")) {
-        val expanded = SurveyLayout.isResult(c.phase)
-        if (c.homeOpen) HomeScreen(c) else Column(Modifier.fillMaxSize()) {
-            AppHeader(c, "측량", onBack = { c.homeOpen = true }, compact = expanded, backTag = "survey_back", menuTag = "gear")
-            StatusBand(c, compact = expanded)
-            MapArea(c, map, Modifier.weight(1f))
-            if (expanded) ResultPanel(c) else { InfoZone(c); ControlArea(c) }
+        // 0.1.35: 위 한 줄(작업명·상태 알약·메뉴) · 원인 한 줄 · 넓은 지도 · 잰 직후 장부 · 지금 재는 것 + 조작부.
+        // 폴드 안쪽 화면(가로 600dp 이상)은 왼쪽 지도 · 오른쪽 결과 + 오늘 점 + 조작부 2단
+        if (c.homeOpen) HomeToday(c) else androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+            val wide = maxWidth >= 600.dp
+            Column(Modifier.fillMaxSize()) {
+                DigHeader(c)
+                DigCauseLine(c)
+                if (wide) Row(Modifier.weight(1f).fillMaxWidth()) {
+                    MapArea(c, map, Modifier.weight(1.4f).fillMaxHeight())
+                    Column(Modifier.weight(1f).fillMaxHeight().background(t.bg).testTag("side_pane")) {
+                        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                            if (c.lastPoint != null) SavedLedgerCard(c)
+                            TodayPointsList(c)
+                        }
+                        DigControlArea(c)
+                    }
+                } else {
+                    MapArea(c, map, Modifier.weight(1f))
+                    DigInfoZone(c)
+                    DigControlArea(c)
+                }
+            }
         }
         if (c.settingsMenuOpen) SettingsMenuScreen(c)
         // 시스템 뒤로: 열린 창부터 닫고, 지도면 홈으로
@@ -76,6 +92,7 @@ fun SurveyMapScreen(
         if (c.setupOpen) SetupSheet(c)
         if (c.antennaSheetOpen) AntennaSheet(c)
         if (c.hub.screen != null) ToolHost(c)
+        DigOverlays(c) // 0.1.35 무엇을 잴까요 · 지도에 보이기 · 지금 상태 · 메뉴 · 유구 이름 바꾸기
         c.exporter?.let { if (it.open) ExportScreen(it) }
         c.backup?.let { if (it.open) BackupScreen(it, c.drive) }
         c.connection?.let { ConnectionHost(c, it) }
@@ -87,7 +104,7 @@ fun SurveyMapScreen(
         c.pointMenuFor?.let { PointMenuSheet(c, it) }
         if (c.markerStyleOpen) MarkerStyleDialog(c)
         if (c.photoReviewOpen) PhotoReviewScreen(c)
-        if (c.phase == Phase.ACQUIRING) MeasureProgress(c)
+        // 0.1.35 X4: 재는 중 진행은 측량하기 단추 안(지도를 가리지 않음)
         BusyQueueBar(c) // 0.1.14 대기열·진행 게이지
         if (!c.homeOpen) VoiceConfirmBanner(c) // 0.1.28 음성 확인 대기 띠
         FeedbackOverlays(c.ui)
@@ -110,6 +127,12 @@ internal fun backTarget(c: SurveyController): (() -> Unit)? {
         c.phase == Phase.ACQUIRING -> { { c.cancelAcquire() } }
         c.photoReviewOpen -> { { c.confirmPhoto() } }
         c.markerStyleOpen -> { { c.markerStyleOpen = false } }
+        c.dig.renameFor != null -> { { c.dig.renameFor = null } }
+        c.dig.pickerOpen -> { { c.dig.pickerOpen = false } }
+        c.dig.layersOpen -> { { c.dig.saveLayers(); c.dig.layersOpen = false } }
+        c.dig.statusOpen -> { { c.dig.statusOpen = false } }
+        c.dig.menuOpen -> { { c.dig.menuOpen = false } }
+        c.dig.closeArmed -> { { c.dig.closeArmed = false } }
         c.pointMenuFor != null -> { { c.pointMenuFor = null } }
         c.backupQuickOpen -> { { c.backupQuickOpen = false } }
         c.skyPlotOpen -> { { c.skyPlotOpen = false } }
@@ -208,31 +231,22 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
         map.Draw(ms, Modifier.fillMaxSize())
         // 왼쪽(목업 15): 현재 좌표 X/Y/Z + 내 위치 · 전체 보기 · 확대 · 축소
         Column(Modifier.align(Alignment.TopStart).padding(start = 10.dp, top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (!SurveyLayout.isResult(c.phase)) CoordBox(c)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ToolBtn(Glyph.LOCATE, "내 위치 고정/해제", "tool_locate", if (c.follow) MKind.PRIMARY else MKind.PLAIN) { if (c.follow) c.follow = false else c.recenter() }
-                ToolBtn(Glyph.EXTENT, "전체 보기", "tool_fit") { c.fitAll() }
                 ToolBtn(Glyph.PLUS, "확대", "tool_zoom_in") { c.zoomIn() }
                 ToolBtn(Glyph.MINUS, "축소", "tool_zoom_out") { c.zoomOut() }
-                // 0.1.14 목업 15 「2D」: 평면 지도 표시 설정 → 위치 모양(목업 22)
-                MBtn(Modifier.size(48.dp).testTag("tool_2d"), MKind.PLAIN, 16.dp, onClick = { c.markerStyleOpen = true }) { Text("2D", style = Ty.label, color = t.ink) }
             }
         }
         // 오른쪽(목업 15): 배경지도 · 레이어 · 점 목록 / 아래로 기포 · 안테나 높이 · 더보기
         Column(Modifier.align(Alignment.TopEnd).padding(end = 10.dp, top = 10.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                MBtn(Modifier.height(48.dp).testTag("tool_bgmap"), MKind.PLAIN, 24.dp, onClick = { chooseMapBase(c) }) {
-                    Text("배경지도", style = Ty.label.copy(fontSize = 13.sp), color = t.ink, maxLines = 1, modifier = Modifier.padding(horizontal = 12.dp))
-                }
-                ToolBtn(Glyph.LAYERS, "레이어 관리", "tool_layers") { c.bg?.openManage() ?: run { c.message = "배경 레이어는 이 빌드에 없어요" } }
-                ToolBtn(Glyph.LIST, "점 목록", "tool_points") { c.hub.open(ToolScreen.POINTS) }
-            }
+            ToolBtn(Glyph.LAYERS, "지도에 보이기", "tool_layers") { c.dig.layersOpen = true }
+            ToolBtn(Glyph.EXTENT, "전체 보기", "tool_fit") { c.fitAll() }
             c.tilt?.let { TiltBubble(it) }
-            MBtn(Modifier.size(48.dp).testTag("antenna_chip"), MKind.PLAIN, 16.dp, onClick = { c.antennaSheetOpen = true }) {
-                GlyphIcon(Glyph.RULER, t.accent, 18.dp)
-                Text(f3(c.antenna.inputValueM), style = Ty.coord.copy(fontSize = 12.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("antenna_input"))
-            }
-            ToolBtn(Glyph.MENU, "더보기", "tool_quick") { c.quickSheetOpen = true }
+        }
+        // 0.1.35 지도 위 카드: 말뚝 찾아가기 · 기준점 확인 결과
+        Column(Modifier.align(Alignment.TopCenter).padding(top = 10.dp, start = 64.dp, end = 64.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            StakeCard(c)
+            BmResultCard(c)
         }
         Column(Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 6.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             // 0.1.12 V월드: 키 없음 안내 · 오류 · 출처 표시(약관)
@@ -247,31 +261,18 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
                 Text(it, style = Ty.small, color = t.ink, modifier = Modifier.background(t.raised.copy(alpha = 0.85f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp).testTag("map_caption"))
             }
         }
-        NotConnectedCard(c, Modifier.align(Alignment.Center))
         val h = c.antennaResult?.totalToApcM
         Column(Modifier.align(Alignment.BottomStart).padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             // 0.1.14: 위치 종류(코드) 칩 — 하단 툴바가 목업처럼 선·면·삭제·새 연결이 되면서 지도 왼쪽 아래로
-            if (!SurveyLayout.isResult(c.phase)) {
-                val sel = c.typeIndex.coerceIn(0, (c.types.size - 1).coerceAtLeast(0))
-                val typeName = c.types.getOrElse(sel) { "—" }
-                MBtn(Modifier.height(48.dp).semantics { contentDescription = "위치 종류 $typeName. 눌러서 바꾸기" }.testTag("type_chip"), MKind.PLAIN, 24.dp, onClick = { c.quickSheetOpen = true }) {
-                    Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        GlyphIcon(Glyph.PIN, t.accent, 16.dp)
-                        Text(typeName, style = Ty.label.copy(fontSize = 13.sp), color = t.ink, maxLines = 1)
-                        GlyphIcon(Glyph.CHEVRON_DOWN, t.inkSub, 14.dp)
-                    }
-                }
-            }
             ArchOverlays(c)
             VoicePill(c) // 0.1.28 T14 듣는 중 표시
             c.message?.let { msg ->
                 Text(msg, style = Ty.body, color = t.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.background(t.raised.copy(alpha = 0.95f), RoundedCornerShape(10.dp)).border(1.dp, t.accent, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 6.dp).testTag("message"))
             }
-            if (h != null) Text(
-                "위상중심 ${f3(h)} m", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub,
-                modifier = Modifier.background(t.bg.copy(alpha = 0.85f), RoundedCornerShape(8.dp)).padding(horizontal = 6.dp, vertical = 1.dp).testTag("apc_label"),
-            )
+            // 0.1.35 축척 막대 글자(화면 1 cm ≈ 실제 m)
+            Text(scaleText(c.dpPerM), style = Ty.coord.copy(fontSize = 12.sp), color = t.ink,
+                modifier = Modifier.background(t.bg.copy(alpha = 0.85f), RoundedCornerShape(8.dp)).padding(horizontal = 6.dp, vertical = 1.dp).testTag("scale_label"))
         }
     }
 }
@@ -743,6 +744,31 @@ fun TiltSheet(c: SurveyController) {
             Text(TiltCopy.offsetLine(a) + " · " + TiltCopy.SHORT, style = Ty.small, color = t.inkSub)
             MBtn(Modifier.fillMaxWidth().height(56.dp).testTag("tilt_cancel"), MKind.PRIMARY, 18.dp, onClick = { c.answerTilt(false) }) { Text("취소 (폴 세우기)", style = Ty.label, color = t.onPrimary) }
             MBtn(Modifier.fillMaxWidth().height(56.dp).testTag("tilt_go"), MKind.PLAIN, 18.dp, onClick = { c.answerTilt(true) }) { Text("그래도 측점", style = Ty.label, color = t.ink) }
+        }
+    }
+}
+
+
+/** 0.1.35 축척 글자: 「2 m · 화면 1:200」(화면 1 dp ≈ 1/160 inch 로 근사) */
+internal fun scaleText(dpPerM: Double): String {
+    val nice = listOf(0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0)
+    val m = nice.firstOrNull { it * dpPerM >= 60 } ?: nice.last()
+    val denom = (160.0 / 0.0254 / dpPerM).let { d -> listOf(20, 50, 100, 200, 500, 1000, 2000, 5000, 10000).minByOrNull { kotlin.math.abs(it - d) } ?: 1000 }
+    val ms = if (m < 1) String.format(java.util.Locale.US, "%.1f", m) else String.format(java.util.Locale.US, "%.0f", m)
+    return "$ms m · 화면 1:$denom"
+}
+
+/** 폴드 안쪽 오른쪽 칸: 오늘 잰 점 */
+@Composable
+internal fun TodayPointsList(c: SurveyController) {
+    val t = T
+    val day = c.dig.today()
+    val list = c.points.filter { kr.archsurvey.dig.DayKey.of(it.measuredAtMs) == day }.takeLast(30).reversed()
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).testTag("today_points"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("오늘 점 ${list.size}", style = Ty.serifHead.copy(fontSize = 16.sp), color = t.ink)
+        for (p in list) Row(Modifier.fillMaxWidth().height(40.dp).hClickable { c.focusOn(p) }, verticalAlignment = Alignment.CenterVertically) {
+            Text(p.name, style = Ty.coord.copy(fontSize = 14.sp), color = t.ink, modifier = Modifier.width(76.dp))
+            Text(c.dig.whatLine(p), style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         }
     }
 }

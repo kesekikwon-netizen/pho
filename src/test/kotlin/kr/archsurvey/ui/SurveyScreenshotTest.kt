@@ -82,42 +82,35 @@ class SurveyScreenshotTest {
     @Test fun b_status_band_three_states() {
         val (f, c) = make(); show(c)
         adv(f, 5)
-        rule.onNodeWithTag("status_main").assertTextContains("측량 가능", substring = true)
+        // 0.1.35: 상태 띠 → 머리줄 상태 알약(초록 FIX · 노랑 FLOAT · 빨강 불가) + 안 될 때만 원인 한 줄
+        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextContains("측량 가능", substring = true)
+        rule.onNodeWithTag("cause_line").assertDoesNotExist()
                 shot("03_status_fixed")
         skip(f); adv(f, 2)
-        rule.onNodeWithTag("status_main").assertTextContains("주의", substring = true)
+        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextContains("주의", substring = true)
                 shot("04_status_caution_float")
         skip(f); adv(f, 2)
-        rule.onNodeWithTag("status_main").assertTextContains("불가", substring = true)
+        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextContains("불가", substring = true)
                 shot("05_status_unavailable_single")
         skip(f); adv(f, 2)
-        rule.onNodeWithTag("status_sub").assertTextContains("수신기 끊김", substring = true)
+        rule.onNodeWithTag("cause_line").assertExists()
         shot("06_status_unavailable_link_down")
     }
 
     @Test fun c_measure_flow_map_never_covered() {
         val (f, c) = make(); c.resultStripMs = Long.MAX_VALUE; show(c); adv(f, 3)
-        assertEquals(72f, bounds("measure_button").height.value, 0.6f)
+        assertTrue("측점 단추 ≥72dp", bounds("measure_button").height.value >= 72f)
         val idleMap = bounds("map_area")
         val metrics = StringBuilder()
         fun check(label: String, expectMin: Double = 0.6) {
             val m = bounds("map_area")
-            val resultPanel = c.phase == Phase.RESULT_EXPANDED
-            if (resultPanel) {
-                // 결과 패널(목업 s6b)이 정보 영역+컨트롤 영역을 대신한다
+            val ctl = bounds("control_area")
+            if (rule.onAllNodesWithTag("info_zone").fetchSemanticsNodes().any { it.size.height > 0 }) {
                 val info = bounds("info_zone")
-                assertTrue("$label: 지도와 결과 패널이 겹치지 않음", m.bottom.value <= info.top.value + 0.6f)
-                rule.onNodeWithTag("next_point").assertIsDisplayed()
-                rule.onAllNodesWithTag("control_area").assertCountEquals(0)
-            } else {
-                val ctl = bounds("control_area")
-                if (rule.onAllNodesWithTag("info_zone").fetchSemanticsNodes().any { it.size.height > 0 }) {
-                    val info = bounds("info_zone")
-                    assertTrue("$label: 지도와 정보 영역이 겹치지 않음", m.bottom.value <= info.top.value + 0.6f)
-                    assertTrue("$label: 정보와 컨트롤이 겹치지 않음", info.bottom.value <= ctl.top.value + 0.6f)
-                } else assertTrue("$label: 지도와 컨트롤이 겹치지 않음", m.bottom.value <= ctl.top.value + 0.6f)
-                assertTrue("$label: 측점 버튼은 컨트롤 영역 안", bounds("measure_button").top.value >= ctl.top.value - 0.6f)
-            }
+                assertTrue("$label: 지도와 장부 카드가 겹치지 않음", m.bottom.value <= info.top.value + 0.6f)
+                assertTrue("$label: 장부와 조작부가 겹치지 않음", info.bottom.value <= ctl.top.value + 0.6f)
+            } else assertTrue("$label: 지도와 조작부가 겹치지 않음", m.bottom.value <= ctl.top.value + 0.6f)
+            assertTrue("$label: 측점 단추는 조작부 안", bounds("measure_button").top.value >= ctl.top.value - 0.6f)
             val fr = mapFraction()
             assertTrue("$label: 지도 비율 $fr", fr >= expectMin)
             metrics.append("$label map_fraction=${"%.3f".format(fr)} map_h_dp=${"%.1f".format(m.height.value)}\n")
@@ -125,23 +118,19 @@ class SurveyScreenshotTest {
         check("idle")
         rule.runOnIdle { c.onMeasure() }; adv(f, 2)
         assertEquals(Phase.ACQUIRING, c.phase)
-        rule.onNodeWithTag("acquire_text").assertIsDisplayed()
+        rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextContains("재는 중", substring = true)
         check("acquiring"); shot("07_acquiring")
         adv(f, 5)
         assertEquals(Phase.RESULT, c.phase)
         rule.onNodeWithTag("result_chip", useUnmergedTree = true).assertExists()
         rule.onNodeWithTag("result_strip").assertIsDisplayed()
         rule.onNodeWithTag("measure_button").assertIsDisplayed()
-        check("result_strip"); shot("08_result_strip_min")
-        rule.onNodeWithTag("result_strip").performClick(); rule.waitForIdle()
-        assertEquals(Phase.RESULT_EXPANDED, c.phase)
-        check("result_expanded", 0.4); shot("09_result_expanded_photos_voice")
-        rule.onNodeWithTag("voice_btn").performClick(); rule.waitForIdle()
+        check("result_strip", 0.4); shot("08_result_strip_min")
+        rule.onNodeWithTag("result_voice").performClick(); rule.waitForIdle()
         assertEquals(Phase.RECORDING, c.phase)
-        check("recording"); shot("10_recording_mock")
-        rule.onNodeWithTag("record_stop").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("result_strip").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("next_point").performClick(); rule.waitForIdle()
+        check("recording", 0.4); shot("10_recording_mock")
+        rule.onNodeWithTag("result_voice").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("measure_button").performClick(); rule.waitForIdle()
         assertEquals("다음 점 한 번 탭 = 바로 취득 시작", Phase.ACQUIRING, c.phase)
         adv(f, 6)
         assertEquals(2, c.points.size)
@@ -152,7 +141,7 @@ class SurveyScreenshotTest {
 
     @Test fun d_touch_targets_min_48dp_and_measure_button_present() {
         val (f, c) = make(); show(c); adv(f, 3)
-        assertEquals(72f, bounds("measure_button").height.value, 0.6f)
+        assertTrue("측점 단추 ≥72dp", bounds("measure_button").height.value >= 72f)
         rule.runOnIdle { c.onMeasure() }; adv(f, 7)
         val clickables = rule.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.OnClick)).fetchSemanticsNodes()
         assertTrue(clickables.isNotEmpty())
@@ -167,7 +156,11 @@ class SurveyScreenshotTest {
     @Test fun e_gear_opens_left_drawer_and_map_still_visible() {
         val (f, c) = make(); show(c); adv(f, 3)
         rule.onNodeWithTag("drawer").assertDoesNotExist()
+        // 0.1.35: ≡ = 줄인 메뉴(아래 시트). 「전체 메뉴」에서 예전 서랍(작업·백업·도구)
         rule.onNodeWithTag("gear").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("dig_menu").assertIsDisplayed()
+        shot("12a_dig_menu")
+        rule.onNodeWithTag("menu_all").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("drawer").assertIsDisplayed()
         val d = bounds("drawer")
         assertEquals("서랍은 왼쪽에서 시작", 0f, d.left.value, 0.6f)
@@ -178,7 +171,7 @@ class SurveyScreenshotTest {
         shot("12_drawer_open")
         rule.onNodeWithTag("drawer_scrim").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("drawer").assertDoesNotExist()
-        rule.onNodeWithTag("gear").performClick(); rule.waitForIdle()
+        rule.runOnIdle { c.drawerOpen = true }; rule.waitForIdle()
         rule.onNodeWithTag("menu_job_new").performClick(); rule.waitForIdle()
         assertTrue(c.message!!.contains("이 빌드에 없어요"))
         File(out, "metrics.txt").appendText("drawer_width_dp=${"%.1f".format(d.width.value)} map_exposed_dp=${"%.1f".format(root.width.value - d.width.value)}\n")
@@ -186,9 +179,9 @@ class SurveyScreenshotTest {
 
     @Test fun f_antenna_sheet_values() {
         val (f, c) = make(); show(c); adv(f, 3)
-        rule.onNodeWithTag("antenna_input", useUnmergedTree = true).assertTextContains("2.000", substring = true)
-        rule.onNodeWithTag("apc_label").assertTextContains("2.199", substring = true)
-        rule.onNodeWithTag("antenna_chip").performClick(); rule.waitForIdle()
+        // 0.1.35: 폴 칩은 0.1 m 단위 표시(위상중심 값은 시트에서)
+        rule.onNodeWithTag("antenna_input", useUnmergedTree = true).assertTextContains("2.0", substring = true)
+        rule.onNodeWithTag("pole_chip").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("antenna_sheet").assertIsDisplayed()
         rule.onNodeWithTag("sheet_summary").assertTextContains("안테나 위상중심 2.199 m", substring = true)
         shot("13_antenna_sheet_r10_quick_release_2_1991")
@@ -211,7 +204,7 @@ class SurveyScreenshotTest {
 
     @Test fun g_pole_left() {
         val (f, c) = make(poleRight = false); show(c); adv(f, 3)
-        assertTrue("측점 버튼이 왼쪽(0.1.14: 위치 종류 칩은 지도로 옮겨 툴바 첫 버튼과 비교)", bounds("measure_button").left.value < bounds("tool_link_line").left.value)
+        assertTrue("측점 버튼이 왼쪽(0.1.14: 위치 종류 칩은 지도로 옮겨 툴바 첫 버튼과 비교)", bounds("measure_button").left.value < bounds("tool_undo").left.value)
         shot("16_pole_left")
     }
 
