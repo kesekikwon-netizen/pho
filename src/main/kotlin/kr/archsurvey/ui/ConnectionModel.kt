@@ -59,12 +59,20 @@ data class NtripForm(
 data class ErrorCard(val code: String, val title: String, val action: String, val autoRetry: Boolean)
 
 object ErrorCards {
+    const val RTCM_BLOCKED_TITLE = "보정 데이터가 수신기에 들어가지 않아요"
+    const val RTCM_BLOCKED_ACTION = "위치는 계속 받지만 RTK 보정이 수신기에 전달되지 않아요(고정해가 나오지 않아요). " +
+        "수신기 블루투스 포트의 입력(Input)을 Auto 로 두세요 — R10: 웹 UI(Wi-Fi 192.168.142.1) I/O Configuration → 폰이 붙은 Bluetooth 포트 → Input: Auto. " +
+        "수신기가 다시 받기 시작하면 자동으로 이어 보내요. 자세한 기록은 진단 「RTCM 전달 막힘」"
+
     /** [host] = 지금 VRS 서버 주소(0.1.29 T17: RTS3 인증 실패 안내용). 모르면 "" */
     fun from(link: LinkStatus, ntrip: NtripStatus?, ntripEnabled: Boolean, host: String = ""): List<ErrorCard> = buildList {
         link.error?.let { e ->
             if (link.state == LinkState.NEEDS_USER || link.state == LinkState.RECONNECTING || link.state == LinkState.CONNECTING || link.state == LinkState.CONNECTED_NO_DATA || link.state == LinkState.STALE)
                 add(ErrorCard(e.code, e.title, e.action, !e.needsUserAction))
         }
+        // 0.1.33-r10: 위치는 오는데 보정(RTCM)이 수신기에 안 들어갈 때 — 세션은 유지하고 원인만 알린다
+        if (link.state == LinkState.STREAMING && link.error == BtError.WRITE_STALLED)
+            add(ErrorCard(BtError.WRITE_STALLED.code, RTCM_BLOCKED_TITLE, RTCM_BLOCKED_ACTION, true))
         if (link.repairHint && link.error == null) add(ErrorCard("BT-124", BtError.ALL_FAILED.title, BtError.ALL_FAILED.action, false))
         if (ntripEnabled && ntrip != null) ntripCard(ntrip, host)?.let { add(it) }
     }
@@ -716,7 +724,8 @@ class ConnectionController(
     private fun reportFailure(l: LinkStatus, n: NtripStatus) {
         if (!connectRequested) { lastFailKey = null; return }
         val card = ErrorCards.from(l, n, form.enabled, form.host).firstOrNull()
-        val failing = l.state == LinkState.NEEDS_USER || (form.enabled && (n.state == NtripState.AUTH_FAILED || n.state == NtripState.ERROR))
+        val failing = l.state == LinkState.NEEDS_USER || (form.enabled && (n.state == NtripState.AUTH_FAILED || n.state == NtripState.ERROR)) ||
+            (l.state == LinkState.STREAMING && l.error == BtError.WRITE_STALLED) // 0.1.33-r10: 보정 전달 막힘은 한 번 알린다
         if (!failing || card == null) { if (l.state == LinkState.STREAMING) lastFailKey = null; return }
         val key = "${l.state}/${n.state}/${card.code}"
         if (key == lastFailKey) return

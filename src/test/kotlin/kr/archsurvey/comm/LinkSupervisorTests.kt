@@ -245,9 +245,10 @@ class LinkSupervisorTests {
         r.waitFor(what = "streaming after activation") { r.link.value.state == LinkState.STREAMING }
     }
 
+    /** 0.1.33-r10: 쓰기가 막히고 위치(NMEA)까지 끊기면 예전처럼 새 연결. 위치가 계속 오는 경우는 t0133/R10RtcmStall0133Tests */
     @Test fun stalledRtcmWriteIsDetected() {
         val blockForever = Object()
-        val r = Rig(profile(dead = 5000, stale = 4000), scope, writeStallMs = 300) { i ->
+        val r = Rig(profile(dead = 5000, stale = 500), scope, writeStallMs = 300) { i ->
             if (i == 0) MockSocket(writeBehavior = { s, _, _, _ -> synchronized(blockForever) { while (!s.closed.get()) blockForever.wait(50) }; throw IOException("closed") })
             else MockSocket()
         }
