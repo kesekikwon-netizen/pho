@@ -112,13 +112,16 @@ class ExportService(
         if (ExportFormat.GEOJSON in formats) File(dir, "points.geojson").writeText(Formats.pointsGeoJson(pts, byPoint), Charsets.UTF_8)
         // DXF: 지면 표고(표고 우선, 없으면 타원체고). 축 순서 기본 X=동·Y=북, 한글은 CP949
         if (ExportFormat.DXF in formats) File(dir, "points.dxf").writeBytes(DxfWriter.write(pts.map { DxfPoint(it.pointId, it.easting, it.northing, it.groundMsl ?: it.groundEllipsoidalHeight) }))
-        if (ExportFormat.DRAWING_DXF in formats || ExportFormat.FIELD_CSV in formats) {
+        if (ExportFormat.DRAWING_DXF in formats || ExportFormat.FIELD_CSV in formats || ExportFormat.ITWIN_GCP in formats) {
             val a = arch
             val verts = a?.outlineVertices(project).orEmpty().groupBy { it.outlineId }
             val outs = a?.outlines(project).orEmpty().map { o -> DigOutline(o.id, o.label, o.kind, o.featureType, o.closed, verts[o.id].orEmpty().sortedBy { it.orderNo }.map { it.pointRowId }) }
             val grids = a?.grids(project).orEmpty().map { kr.archsurvey.arch.GridDef(it.id, it.areaId, it.name, kr.archsurvey.core.NE(it.originN, it.originE), kr.archsurvey.core.NE(it.dirN, it.dirE), it.spacingM, it.cols, it.rows, it.crsEpsg) }
             if (ExportFormat.DRAWING_DXF in formats) File(dir, "drawing_1-$drawingScale.dxf").writeBytes(DxfWriter.writeDrawing(DigExport.drawing(pts, outs, grids, drawingScale)))
             if (ExportFormat.FIELD_CSV in formats) File(dir, "field_book.csv").writeText(DigExport.fieldCsv(pts, outs, byPoint.mapValues { it.value.size }), Charsets.UTF_8)
+            // 0.1.36 iTwin 사진 기준점: 유구마다 itwin_gcp/<유구>_AprilTag_EPSG<n>_<높이>.txt/.xml + 표 + 읽어보기
+            if (ExportFormat.ITWIN_GCP in formats) for (gf in ItwinGcpExport.build(pts, outs.associate { it.id to it.label }, project).files)
+                File(dir, gf.path).also { it.parentFile?.mkdirs() }.writeText(gf.text, Charsets.UTF_8)
         }
         if (ExportFormat.REPORT in formats) File(dir, "point_report.csv").writeText(MoreFormats.reportCsv(pts, byPoint), Charsets.UTF_8)
         if (ExportFormat.KML in formats) File(dir, "points.kml").writeText(MoreFormats.kml(project, pts), Charsets.UTF_8)
@@ -182,6 +185,7 @@ class ExportService(
         hgis_control_points_<EPSG>.csv  hgis 「CSV 기준점」 양식(point_id,x,y,z,datum,ellipsoid,projection,origin,accuracy_m,pdop,fix_type)
         itwin_capture_<EPSG>.xml  iTwin Capture Modeler 기준점(SurveysData XML, x=동 y=북 z=지면 표고, 이름 「1호」→「Target #1」)
         itwin_capture_names_<EPSG>.csv  iTwin 이름 ↔ 현장 점 번호 대조표
+        itwin_gcp/      iTwin 사진 기준점(AprilTag) 유구별 TXT·XML(이름 「AprilTag #번호」) · 표 · README_iTwin_AprilTag.txt
         (고른 양식만 들어 있어요)
         photos.csv, photos/  점별 사진(최대 4장)
         voice.csv, voices/   점별 음성 메모(m4a, AAC 16kHz 모노). 내보낼 때 '음성 포함'을 켠 경우만

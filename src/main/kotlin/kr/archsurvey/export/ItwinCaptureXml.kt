@@ -107,6 +107,37 @@ object ItwinCaptureXml {
         return sb.toString()
     }
 
+    /**
+     * 0.1.36: 이름을 정해서 쓰기(사진 기준점 「AprilTag #12」). 꼴은 [write] 와 바이트 단위로 같고 이름·순서만 넘겨받는다.
+     * 높이 없는 점은 뺀다. 검사점은 [isCheckPoint] 규칙 그대로
+     */
+    fun writeNamed(named: List<Pair<String, PointEntity>>, epsg: Int): String {
+        val sb = StringBuilder()
+        sb.append("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<SurveysData>\n")
+        sb.append("\t<SpatialReferenceSystems>\n\t\t<SRS>\n\t\t\t<Id>1</Id>\n")
+        sb.append("\t\t\t<Name>").append(esc(srsName(epsg))).append("</Name>\n")
+        sb.append("\t\t\t<Definition>EPSG:").append(epsg).append("</Definition>\n")
+        sb.append("\t\t</SRS>\n\t</SpatialReferenceSystems>\n\t<ControlPoints>\n")
+        named.filter { MoreFormats.groundZ(it.second) != null }.forEachIndexed { i, (name, p) ->
+            sb.append("\t\t<ControlPoint>\n")
+            sb.append("\t\t\t<Id>").append(i).append("</Id>\n")
+            sb.append("\t\t\t<SRSId>1</SRSId>\n")
+            sb.append("\t\t\t<Name>").append(esc(name)).append("</Name>\n")
+            sb.append("\t\t\t<Category>Full</Category>\n")
+            sb.append("\t\t\t<Position>\n")
+            sb.append("\t\t\t\t<x>").append(num(p.easting)).append("</x>\n")
+            sb.append("\t\t\t\t<y>").append(num(p.northing)).append("</y>\n")
+            sb.append("\t\t\t\t<z>").append(num(MoreFormats.groundZ(p)!!)).append("</z>\n")
+            sb.append("\t\t\t</Position>\n")
+            sb.append("\t\t\t<HorizontalAccuracy>").append(accuracy(p.sigmaH)).append("</HorizontalAccuracy>\n")
+            sb.append("\t\t\t<VerticalAccuracy>").append(accuracy(p.sigmaU)).append("</VerticalAccuracy>\n")
+            sb.append("\t\t\t<CheckPoint>").append(isCheckPoint(p)).append("</CheckPoint>\n")
+            sb.append("\t\t</ControlPoint>\n")
+        }
+        sb.append("\t</ControlPoints>\n</SurveysData>\n")
+        return sb.toString()
+    }
+
     /** UX-0127-1: 높이(지면 표고·타원체고)가 없어 XML 에서 빠지는 점 번호(측정 순서) */
     fun droppedNoHeight(points: List<PointEntity>): List<String> = points.filter { MoreFormats.groundZ(it) == null }.map { it.pointId }
 
