@@ -16,7 +16,9 @@ class LocalProjection(val lat0: Double, val lon0: Double) {
     fun toLatLon(p: LocalXY) = (lat0 + p.y / mPerDegLat) to (lon0 + p.x / mPerDegLon)
 }
 
-data class MapMarker(val name: String, val at: LocalXY, val flagged: Boolean = false)
+/** 0.1.35 발굴 도면 기호: 점(기본) · 유물 검은 네모+번호 · 레벨 ✕+해발 · 기준점 △ · 말뚝 ✚ · 토층 끝 눈금 · 유구 경계점(윤곽이 그림) */
+enum class MapSym { DOT, ARTIFACT, LEVEL, BM, STAKE, SECTION, VERTEX }
+data class MapMarker(val name: String, val at: LocalXY, val flagged: Boolean = false, val sym: MapSym = MapSym.DOT, val label: String? = null)
 
 data class CurrentMarker(val at: LocalXY, val accuracyM: Double, val status: SurveyStatus, val headingDeg: Double?)
 
@@ -30,7 +32,11 @@ data class PhoneMarker(val at: LocalXY, val accuracyM: Double, val label: String
 data class MapBgLayer(val id: String, val label: String, val polygon: List<LocalXY>, val opacity: Double, val preview: Boolean = false)
 
 /** 고고학 외곽(선·면). 꼭짓점은 취득 순서대로 1,2,3… 번호를 붙여 그린다. [active]=아직 이어서 취득 중 */
-data class MapOutline(val label: String, val pts: List<LocalXY>, val closed: Boolean, val active: Boolean, val colorIdx: Int)
+data class MapOutline(val label: String, val pts: List<LocalXY>, val closed: Boolean, val active: Boolean, val colorIdx: Int,
+    /** 0.1.35 "feature"/"trench"/"area", 옛 외곽 = "" (예전 모양) */
+    val kind: String = "")
+/** 0.1.35 토층 단면선 A — A′ */
+data class MapSection(val label: String, val a: LocalXY, val b: LocalXY)
 data class MapText(val text: String, val at: LocalXY)
 
 data class MapViewState(
@@ -61,6 +67,10 @@ data class MapViewState(
     val trailBreaks: Set<Int> = emptySet(),
     /** 0.1.30 T24: 폰 위치 점(수신기 위치가 없을 때만). 측점에는 쓰지 않는다 */
     val phone: PhoneMarker? = null,
+    /** 0.1.35 토층 단면선 */
+    val sections: List<MapSection> = emptyList(),
+    /** 0.1.35 말뚝 찾아가기 목표(이름표 포함) */
+    val stake: MapText? = null,
 )
 
 /** 지도 그리기 구현을 갈아끼우기 위한 경계. WP-3 은 자체 Canvas, 이후 MapLibre(WP-9 스파이크 결과에 따라). */

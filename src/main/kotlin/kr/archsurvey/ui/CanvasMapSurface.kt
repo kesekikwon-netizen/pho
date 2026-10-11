@@ -76,6 +76,7 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
             // 유구 외곽: 선/면 + 꼭짓점 번호
             for (o in state.outlines) {
                 if (o.pts.isEmpty()) continue
+                if (o.kind.isNotEmpty()) { drawDigOutline(tm, o, ::sx, ::sy, t); continue }
                 val col = ArchColors[o.colorIdx % ArchColors.size]
                 val path = Path()
                 o.pts.forEachIndexed { i, q -> if (i == 0) path.moveTo(sx(q.x), sy(q.y)) else path.lineTo(sx(q.x), sy(q.y)) }
@@ -94,16 +95,13 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
                 drawPath(path, t.fixed.copy(alpha = 0.45f), style = Stroke(2.5f * density))
             }
             // 저장된 점
-            var prev: Offset? = null
-            for (m in state.points) {
-                val o = Offset(sx(m.at.x), sy(m.at.y))
-                prev?.let { drawLine(t.ink, it, o, 1.5f * density) }
-                prev = o
-            }
+            // 0.1.35: 점끼리 차례로 잇는 선은 그리지 않는다(발굴 도면은 윤곽만 잇는다)
+            for (sct in state.sections) drawSection(tm, sct, ::sx, ::sy, t)
             val st = state.style
             val pr = 7f * density * st.scale(st.pointSize)
             for (m in state.points) {
                 val o = Offset(sx(m.at.x), sy(m.at.y))
+                if (m.sym != kr.archsurvey.map.MapSym.DOT) { drawDigMarker(tm, m, o, t); continue }
                 val pc = if (m.flagged) t.caution else t.fixed
                 when (st.point) {
                     kr.archsurvey.map.PointShape.DOT -> { drawCircle(pc, pr, o); drawCircle(t.bg, pr, o, style = Stroke(2f * density)) }
@@ -138,6 +136,15 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
                     drawLine(t.bad, Offset(o.x - 10f * density * k, o.y), Offset(o.x + 10f * density * k, o.y), 2.5f * density)
                     drawLine(t.bad, Offset(o.x, o.y - 10f * density * k), Offset(o.x, o.y + 10f * density * k), 2.5f * density)
                 }
+            }
+            // 0.1.35 말뚝 찾아가기 목표: 테라코타 ✚ + 이름 + 지금 위치에서 잇는 점선
+            state.stake?.let { sk ->
+                val o = Offset(sx(sk.at.x), sy(sk.at.y))
+                state.current?.let { cur -> drawLine(t.primary, Offset(sx(cur.at.x), sy(cur.at.y)), o, 2f * density, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f * density, 6f * density))) }
+                drawCircle(t.bg, 12f * density, o); drawCircle(t.primary, 12f * density, o, style = Stroke(2.5f * density))
+                drawLine(t.primary, Offset(o.x - 8f * density, o.y), Offset(o.x + 8f * density, o.y), 2.5f * density)
+                drawLine(t.primary, Offset(o.x, o.y - 8f * density), Offset(o.x, o.y + 8f * density), 2.5f * density)
+                haloText(tm, sk.text, Offset(o.x + 14f * density, o.y - 22f * density), TextStyle(fontSize = 13.sp, color = t.primary, fontWeight = FontWeight.Medium), t)
             }
             // 0.1.30 T24: 폰 위치(참고) — 회색 속 빈 원 + 정확도 원 + 이름표. 수신기 표시(색 채운 모양)와 다르게
             state.phone?.let { ph ->
@@ -231,4 +238,92 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
 /** 화면 안(여유 포함)에 있을 때만 글자를 그린다. 멀리 벗어난 좌표로 drawText 를 부르면 제약 크기 초과로 앱이 죽는다(0.1.11 발견) */
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.safeText(tm: androidx.compose.ui.text.TextMeasurer, text: String, at: Offset, style: TextStyle) {
     if (at.x >= -400f && at.y >= -100f && at.x < size.width && at.y < size.height) drawText(tm, text, at, style)
+}
+
+
+// ---------------- 0.1.35 발굴 도면 기호 ----------------
+
+/** 아이보리 테두리 글자(위성 사진 위에서도 읽힘). 화면 밖은 그리지 않는다 */
+private fun DrawScope.haloText(tm: androidx.compose.ui.text.TextMeasurer, text: String, at: Offset, style: TextStyle, t: Tokens) {
+    if (at.x < -300f * density || at.y < -40f * density || at.x > size.width || at.y > size.height) return
+    val lay = tm.measure(text, style)
+    drawRect(t.bg.copy(alpha = 0.82f), Offset(at.x - 2f * density, at.y), androidx.compose.ui.geometry.Size(lay.size.width + 4f * density, lay.size.height.toFloat()))
+    drawText(lay, topLeft = at)
+}
+
+/** 유구(검은 윤곽 + 옅은 채움 + 명조 이름) · 진행 중 유구(테라코타 선 + 꼭짓점) · 트렌치(점선) · 조사구역(굵은 점선) */
+private fun DrawScope.drawDigOutline(tm: androidx.compose.ui.text.TextMeasurer, o: kr.archsurvey.map.MapOutline, sx: (Double) -> Float, sy: (Double) -> Float, t: Tokens) {
+    val path = Path()
+    o.pts.forEachIndexed { i, q -> if (i == 0) path.moveTo(sx(q.x), sy(q.y)) else path.lineTo(sx(q.x), sy(q.y)) }
+    val ink = Color(0xFF141413)
+    val closed = o.closed && o.pts.size >= 3
+    if (closed) path.close()
+    val cx = o.pts.sumOf { it.x } / o.pts.size; val cy = o.pts.sumOf { it.y } / o.pts.size
+    when (o.kind) {
+        "area" -> {
+            drawPath(path, ink, style = Stroke(3f * density, pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f * density, 7f * density))))
+            haloText(tm, o.label, Offset(sx(o.pts[0].x) + 6f * density, sy(o.pts[0].y) + 4f * density), TextStyle(fontSize = 12.sp, color = ink, fontFamily = Fonts.serif), t)
+        }
+        "trench" -> {
+            drawPath(path, ink, style = Stroke(2f * density, pathEffect = PathEffect.dashPathEffect(floatArrayOf(7f * density, 5f * density))))
+            haloText(tm, o.label, Offset(sx(cx), sy(cy)), TextStyle(fontSize = 12.sp, color = ink, fontFamily = Fonts.mono), t)
+        }
+        else -> if (o.active) {
+            drawPath(path, t.primary, style = Stroke(2.5f * density))
+            o.pts.forEachIndexed { i, q ->
+                val p = Offset(sx(q.x), sy(q.y))
+                if (i == o.pts.lastIndex) drawCircle(t.primary, 6.5f * density, p)
+                else { drawCircle(Color.White, 5.5f * density, p); drawCircle(t.primary, 5.5f * density, p, style = Stroke(2f * density)) }
+            }
+            haloText(tm, o.label, Offset(sx(o.pts.last().x) - 20f * density, sy(o.pts.last().y) + 10f * density), TextStyle(fontSize = 15.sp, color = t.primary, fontFamily = Fonts.serif), t)
+        } else {
+            if (closed) drawPath(path, Color(0xFFF2E8DC).copy(alpha = 0.78f))
+            drawPath(path, ink, style = Stroke(2.2f * density))
+            val st = TextStyle(fontSize = 15.sp, color = ink, fontFamily = Fonts.serif)
+            val w = tm.measure(o.label, st).size.width
+            haloText(tm, o.label, Offset(sx(cx) - w / 2f, sy(cy) - 10f * density), st, t)
+        }
+    }
+}
+
+/** 토층 단면선: 선 + 양 끝 눈금 + 「A — A′ 토층」 */
+private fun DrawScope.drawSection(tm: androidx.compose.ui.text.TextMeasurer, s: kr.archsurvey.map.MapSection, sx: (Double) -> Float, sy: (Double) -> Float, t: Tokens) {
+    val a = Offset(sx(s.a.x), sy(s.a.y)); val b = Offset(sx(s.b.x), sy(s.b.y))
+    val ink = Color(0xFF141413)
+    drawLine(ink, a, b, 2.2f * density)
+    val dx = b.x - a.x; val dy = b.y - a.y; val len = kotlin.math.hypot(dx, dy).coerceAtLeast(1f)
+    val nx = -dy / len * 8f * density; val ny = dx / len * 8f * density
+    for (e in listOf(a, b)) drawLine(ink, Offset(e.x - nx, e.y - ny), Offset(e.x + nx, e.y + ny), 2.2f * density)
+    haloText(tm, s.label, Offset(a.x - 8f * density, a.y + 10f * density), TextStyle(fontSize = 12.sp, color = ink), t)
+}
+
+/** 유물 검은 네모+번호 · 레벨 ✕(+해발) · 기준점 △ · 말뚝 ✚ · 토층 끝 · 유구 꼭짓점(작은 점) */
+private fun DrawScope.drawDigMarker(tm: androidx.compose.ui.text.TextMeasurer, m: kr.archsurvey.map.MapMarker, o: Offset, t: Tokens) {
+    val ink = if (m.flagged) t.cautionInk else Color(0xFF141413)
+    val d = density
+    when (m.sym) {
+        kr.archsurvey.map.MapSym.ARTIFACT -> {
+            drawRect(Color.White, Offset(o.x - 5.5f * d, o.y - 5.5f * d), androidx.compose.ui.geometry.Size(11f * d, 11f * d))
+            drawRect(ink, Offset(o.x - 4f * d, o.y - 4f * d), androidx.compose.ui.geometry.Size(8f * d, 8f * d))
+            m.label?.let { haloText(tm, it, Offset(o.x - 6f * d, o.y + 7f * d), TextStyle(fontSize = 12.sp, color = ink, fontFamily = Fonts.mono), t) }
+        }
+        kr.archsurvey.map.MapSym.LEVEL -> {
+            drawLine(ink, Offset(o.x - 5f * d, o.y - 5f * d), Offset(o.x + 5f * d, o.y + 5f * d), 2f * d)
+            drawLine(ink, Offset(o.x - 5f * d, o.y + 5f * d), Offset(o.x + 5f * d, o.y - 5f * d), 2f * d)
+            m.label?.let { haloText(tm, it, Offset(o.x + 7f * d, o.y - 8f * d), TextStyle(fontSize = 12.sp, color = ink, fontFamily = Fonts.mono), t) }
+        }
+        kr.archsurvey.map.MapSym.BM -> {
+            val tri = Path().apply { moveTo(o.x, o.y - 9f * d); lineTo(o.x - 8f * d, o.y + 6f * d); lineTo(o.x + 8f * d, o.y + 6f * d); close() }
+            drawPath(tri, Color.White); drawPath(tri, ink, style = Stroke(2.2f * d))
+            m.label?.let { haloText(tm, it, Offset(o.x + 11f * d, o.y - 9f * d), TextStyle(fontSize = 12.sp, color = ink, fontFamily = Fonts.mono), t) }
+        }
+        kr.archsurvey.map.MapSym.STAKE -> {
+            drawLine(ink, Offset(o.x - 6f * d, o.y), Offset(o.x + 6f * d, o.y), 2.2f * d); drawLine(ink, Offset(o.x, o.y - 6f * d), Offset(o.x, o.y + 6f * d), 2.2f * d)
+        }
+        kr.archsurvey.map.MapSym.SECTION -> {
+            drawCircle(ink, 3f * d, o)
+            m.label?.let { haloText(tm, it, Offset(o.x + 6f * d, o.y - 18f * d), TextStyle(fontSize = 12.sp, color = ink), t) }
+        }
+        kr.archsurvey.map.MapSym.VERTEX, kr.archsurvey.map.MapSym.DOT -> {}
+    }
 }
