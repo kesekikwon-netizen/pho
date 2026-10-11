@@ -27,6 +27,9 @@ interface ExportPlatform {
     /** iTwin XML 이름 선택까지. 기본 구현은 위 것(시험용 가짜 호환) */
     suspend fun exportFormats(formats: Set<kr.archsurvey.export.ExportFormat>, includePhotos: Boolean, includeVoices: Boolean, itwinKeepNames: Boolean): ExportOutput =
         exportFormats(formats, includePhotos, includeVoices)
+    /** 0.1.35 축척(도면 DXF 글자)·오늘만. 기본 구현은 위 것(시험용 가짜 호환) */
+    suspend fun exportBundle(formats: Set<kr.archsurvey.export.ExportFormat>, includePhotos: Boolean, includeVoices: Boolean, itwinKeepNames: Boolean, scale: Int, todayKey: String?): ExportOutput =
+        exportFormats(formats, includePhotos, includeVoices, itwinKeepNames)
     /** 공유 시트(카카오톡·메일·드라이브 등) 열기 */
     fun share(out: ExportOutput)
     /** 파일 저장 위치 고르기(시스템 문서 선택기). 끝나면 onDone(성공 여부) */
@@ -45,6 +48,13 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
     /** 「hgis용 SHP」 한 번 누르기: Shape 한 벌 + hgis 기준점 CSV 만 골라 바로 만든다 */
     /** iTwin Capture XML: false(기본) = 「1호」→「Target #1」, true = 현장 이름 그대로 */
     var itwinKeepNames by mutableStateOf(false)
+    /** 0.1.35 도면 축척 분모(1:20/1:100/1:200) */
+    var scale by mutableStateOf(kr.archsurvey.dig.DrawingScale.DEFAULT)
+    /** 0.1.35 오늘 잰 점만 */
+    var todayOnly by mutableStateOf(false)
+    var todayKey: () -> String = { kr.archsurvey.dig.DayKey.of(System.currentTimeMillis()) }
+    /** 「저녁 도면용 한 번에」: 도면 DXF + SHP + 야장 CSV + 기본 CSV + 사진·음성 */
+    fun runEvening() { if (running) return; formats = kr.archsurvey.export.ExportFormat.EVENING; includePhotos = true; includeVoices = true; output = null; run() }
     fun runHgis() { if (running) return; formats = kr.archsurvey.export.ExportFormat.HGIS; output = null; run() }
     /** 0.1.14 목업 12 전송 방식: true = 무선 전송(공유), false = 장치 내 저장 */
     var methodShare by mutableStateOf(true)
@@ -70,7 +80,7 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
         running = true; error = null; notice = null; output = null
         scope.launch {
             try {
-                val o = platform.exportFormats(fs, includePhotos && (s?.photos ?: 1) > 0, includeVoices && (s?.voices ?: 1) > 0, itwinKeepNames)
+                val o = platform.exportBundle(fs, includePhotos && (s?.photos ?: 1) > 0, includeVoices && (s?.voices ?: 1) > 0, itwinKeepNames, scale, if (todayOnly) todayKey() else null)
                 output = o
                 o.publicFolder?.let { notice = hgisFolderText(it) }
                 onResult?.invoke(true, "내보내기 파일을 만들었어요 · ${o.fileName} (${sizeText(o.sizeBytes)}) · ${fs.size}개 양식 · " +

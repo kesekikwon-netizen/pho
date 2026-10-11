@@ -39,6 +39,41 @@ object DxfWriter {
         val minX = xs.minOfOrNull { it.first } ?: 0.0; val maxX = xs.maxOfOrNull { it.first } ?: 0.0
         val minY = xs.minOfOrNull { it.second } ?: 0.0; val maxY = xs.maxOfOrNull { it.second } ?: 0.0
 
+        val modelBr = head(w, LAYERS, minX, maxX, minY, maxY)
+        w.sec("ENTITIES")
+        fun ent(type: String, layer: String, sub: String) {
+            w.g(0, type); w.g(5, w.handle()); w.g(330, modelBr); w.g(100, "AcDbEntity"); w.g(8, layer); w.g(100, sub)
+        }
+        for (p in points) {
+            val (x, y) = xy(p.eastM, p.northM)
+            val z = p.heightM ?: 0.0
+            ent("POINT", "PT", "AcDbPoint")
+            w.g(10, w.n(x)); w.g(20, w.n(y)); w.g(30, w.n(z))
+            val tx = xy(p.eastM + opt.labelOffsetM, p.northM + opt.labelOffsetM)
+            ent("TEXT", "PT_NO", "AcDbText")
+            w.g(10, w.n(tx.first)); w.g(20, w.n(tx.second)); w.g(30, "0.0"); w.g(40, w.n(opt.labelHeightM, 3)); w.g(1, w.text(p.id)); w.g(100, "AcDbText")
+            if (p.heightM != null) {
+                val ez = xy(p.eastM + opt.labelOffsetM, p.northM - opt.labelOffsetM - opt.labelHeightM)
+                ent("TEXT", "PT_ELEV", "AcDbText")
+                w.g(10, w.n(ez.first)); w.g(20, w.n(ez.second)); w.g(30, "0.0"); w.g(40, w.n(opt.labelHeightM * 0.8, 3))
+                w.g(1, String.format(Locale.US, "%.3f", p.heightM)); w.g(100, "AcDbText")
+            }
+        }
+        if (opt.closedOutline && points.size >= 3) {
+            ent("LWPOLYLINE", "PT_LINE", "AcDbPolyline")
+            w.g(90, points.size); w.g(70, 1)
+            for (p in points) { val (x, y) = xy(p.eastM, p.northM); w.g(10, w.n(x)); w.g(20, w.n(y)) }
+        }
+        w.endsec()
+        w.sec("OBJECTS")
+        w.g(0, "DICTIONARY"); w.g(5, "C"); w.g(330, "0"); w.g(100, "AcDbDictionary"); w.g(281, 1)
+        w.endsec()
+        w.g(0, "EOF")
+        return w.toString()
+    }
+
+
+    private fun head(w: W, layers: List<Pair<String, Int>>, minX: Double, maxX: Double, minY: Double, maxY: Double): String {
         w.sec("HEADER")
         w.g(9, "\$ACADVER"); w.g(1, "AC1015")
         w.g(9, "\$HANDSEED"); w.g(5, "FFFFF")
@@ -55,10 +90,10 @@ object DxfWriter {
         w.g(0, "LTYPE"); w.g(5, w.handle()); w.g(100, "AcDbSymbolTableRecord"); w.g(100, "AcDbLinetypeTableRecord")
         w.g(2, "CONTINUOUS"); w.g(70, 0); w.g(3, "Solid line"); w.g(72, 65); w.g(73, 0); w.g(40, "0.0")
         w.g(0, "ENDTAB")
-        w.g(0, "TABLE"); w.g(2, "LAYER"); w.g(5, w.handle()); w.g(100, "AcDbSymbolTable"); w.g(70, LAYERS.size + 1)
-        for ((name, color) in listOf("0" to 7) + LAYERS) {
+        w.g(0, "TABLE"); w.g(2, "LAYER"); w.g(5, w.handle()); w.g(100, "AcDbSymbolTable"); w.g(70, layers.size + 1)
+        for ((name, color) in listOf("0" to 7) + layers) {
             w.g(0, "LAYER"); w.g(5, w.handle()); w.g(100, "AcDbSymbolTableRecord"); w.g(100, "AcDbLayerTableRecord")
-            w.g(2, name); w.g(70, 0); w.g(62, color); w.g(6, "CONTINUOUS")
+            w.g(2, w.text(name)); w.g(70, 0); w.g(62, color); w.g(6, "CONTINUOUS")
         }
         w.g(0, "ENDTAB")
         w.g(0, "TABLE"); w.g(2, "STYLE"); w.g(5, w.handle()); w.g(100, "AcDbSymbolTable"); w.g(70, 1)
@@ -84,29 +119,34 @@ object DxfWriter {
         }
         w.endsec()
 
+        return modelBr
+    }
+
+    // ---------------- 0.1.35 도면 DXF(레이어별) ----------------
+
+    sealed class Ent { abstract val layer: String }
+    data class EPoint(override val layer: String, val e: Double, val n: Double, val z: Double?) : Ent()
+    data class EText(override val layer: String, val e: Double, val n: Double, val heightM: Double, val text: String) : Ent()
+    data class EPoly(override val layer: String, val pts: List<Pair<Double, Double>>, val closed: Boolean) : Ent()
+    /** 레이어(이름, 색) + 도형. 좌표는 (동, 북) m */
+    data class Drawing(val layers: List<Pair<String, Int>>, val ents: List<Ent>)
+
+    fun writeDrawing(d: Drawing, axis: DxfAxisOrder = DxfAxisOrder.EAST_X, charset: Charset = cp949()): ByteArray = buildDrawing(d, axis, charset).toByteArray(charset)
+
+    fun buildDrawing(d: Drawing, axis: DxfAxisOrder = DxfAxisOrder.EAST_X, charset: Charset = cp949()): String {
+        val w = W(charset)
+        fun xy(e: Double, n: Double) = if (axis == DxfAxisOrder.NORTH_X) n to e else e to n
+        val all = d.ents.flatMap { when (it) { is EPoint -> listOf(it.e to it.n); is EText -> listOf(it.e to it.n); is EPoly -> it.pts } }.map { xy(it.first, it.second) }
+        val modelBr = head(w, d.layers, all.minOfOrNull { it.first } ?: 0.0, all.maxOfOrNull { it.first } ?: 0.0, all.minOfOrNull { it.second } ?: 0.0, all.maxOfOrNull { it.second } ?: 0.0)
         w.sec("ENTITIES")
-        fun ent(type: String, layer: String, sub: String) {
-            w.g(0, type); w.g(5, w.handle()); w.g(330, modelBr); w.g(100, "AcDbEntity"); w.g(8, layer); w.g(100, sub)
-        }
-        for (p in points) {
-            val (x, y) = xy(p.eastM, p.northM)
-            val z = p.heightM ?: 0.0
-            ent("POINT", "PT", "AcDbPoint")
-            w.g(10, w.n(x)); w.g(20, w.n(y)); w.g(30, w.n(z))
-            val tx = xy(p.eastM + opt.labelOffsetM, p.northM + opt.labelOffsetM)
-            ent("TEXT", "PT_NO", "AcDbText")
-            w.g(10, w.n(tx.first)); w.g(20, w.n(tx.second)); w.g(30, "0.0"); w.g(40, w.n(opt.labelHeightM, 3)); w.g(1, w.text(p.id)); w.g(100, "AcDbText")
-            if (p.heightM != null) {
-                val ez = xy(p.eastM + opt.labelOffsetM, p.northM - opt.labelOffsetM - opt.labelHeightM)
-                ent("TEXT", "PT_ELEV", "AcDbText")
-                w.g(10, w.n(ez.first)); w.g(20, w.n(ez.second)); w.g(30, "0.0"); w.g(40, w.n(opt.labelHeightM * 0.8, 3))
-                w.g(1, String.format(Locale.US, "%.3f", p.heightM)); w.g(100, "AcDbText")
+        fun ent(type: String, layer: String, sub: String) { w.g(0, type); w.g(5, w.handle()); w.g(330, modelBr); w.g(100, "AcDbEntity"); w.g(8, w.text(layer)); w.g(100, sub) }
+        for (en in d.ents) when (en) {
+            is EPoint -> { val (x, y) = xy(en.e, en.n); ent("POINT", en.layer, "AcDbPoint"); w.g(10, w.n(x)); w.g(20, w.n(y)); w.g(30, w.n(en.z ?: 0.0)) }
+            is EText -> { val (x, y) = xy(en.e, en.n); ent("TEXT", en.layer, "AcDbText"); w.g(10, w.n(x)); w.g(20, w.n(y)); w.g(30, "0.0"); w.g(40, w.n(en.heightM, 3)); w.g(1, w.text(en.text)); w.g(100, "AcDbText") }
+            is EPoly -> if (en.pts.size >= 2) {
+                ent("LWPOLYLINE", en.layer, "AcDbPolyline"); w.g(90, en.pts.size); w.g(70, if (en.closed) 1 else 0)
+                for (q in en.pts) { val (x, y) = xy(q.first, q.second); w.g(10, w.n(x)); w.g(20, w.n(y)) }
             }
-        }
-        if (opt.closedOutline && points.size >= 3) {
-            ent("LWPOLYLINE", "PT_LINE", "AcDbPolyline")
-            w.g(90, points.size); w.g(70, 1)
-            for (p in points) { val (x, y) = xy(p.eastM, p.northM); w.g(10, w.n(x)); w.g(20, w.n(y)) }
         }
         w.endsec()
         w.sec("OBJECTS")

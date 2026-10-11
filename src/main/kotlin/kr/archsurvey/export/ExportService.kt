@@ -60,12 +60,19 @@ internal object PublicDocs {
 class ExportService(
     private val ctx: Context, private val dao: SurveyDao, private val photos: PhotoStore,
     private val voices: kr.archsurvey.voice.VoiceStore? = null,
+    /** 0.1.35 도면 DXF·야장 CSV 용 유구·그리드 */
+    private val arch: kr.archsurvey.data.ArchDao? = null,
 ) {
     suspend fun export(project: String, includePhotos: Boolean, includeVoices: Boolean = false, formats: Set<ExportFormat> = ExportFormat.DEFAULT,
         /** iTwin XML 에서 「1호」 → 「Target #1」 로 바꾸지 않고 현장 이름 그대로 */
         itwinKeepNames: Boolean = false,
+        /** 0.1.35 도면 축척 분모(20/100/200) — 도면 DXF 글자 크기 */
+        drawingScale: Int = kr.archsurvey.dig.DrawingScale.DEFAULT,
+        /** 0.1.35 오늘 잰 점만(yyyy-MM-dd, 폰 시간대). null = 전체 */
+        todayKey: String? = null,
     ): ExportResult {
-        val pts = dao.pointsOf(project)
+        val all = dao.pointsOf(project)
+        val pts = if (todayKey == null) all else DigExport.todayOnly(all, todayKey) { kr.archsurvey.dig.DayKey.of(it) }
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val base = File(ctx.getExternalFilesDir("Documents") ?: ctx.filesDir, "exports").also { it.mkdirs() }
         val safe = project.replace(Regex("[^0-9A-Za-z가-힣._-]"), "_")
@@ -105,6 +112,14 @@ class ExportService(
         if (ExportFormat.GEOJSON in formats) File(dir, "points.geojson").writeText(Formats.pointsGeoJson(pts, byPoint), Charsets.UTF_8)
         // DXF: 지면 표고(표고 우선, 없으면 타원체고). 축 순서 기본 X=동·Y=북, 한글은 CP949
         if (ExportFormat.DXF in formats) File(dir, "points.dxf").writeBytes(DxfWriter.write(pts.map { DxfPoint(it.pointId, it.easting, it.northing, it.groundMsl ?: it.groundEllipsoidalHeight) }))
+        if (ExportFormat.DRAWING_DXF in formats || ExportFormat.FIELD_CSV in formats) {
+            val a = arch
+            val verts = a?.outlineVertices(project).orEmpty().groupBy { it.outlineId }
+            val outs = a?.outlines(project).orEmpty().map { o -> DigOutline(o.id, o.label, o.kind, o.featureType, o.closed, verts[o.id].orEmpty().sortedBy { it.orderNo }.map { it.pointRowId }) }
+            val grids = a?.grids(project).orEmpty().map { kr.archsurvey.arch.GridDef(it.id, it.areaId, it.name, kr.archsurvey.core.NE(it.originN, it.originE), kr.archsurvey.core.NE(it.dirN, it.dirE), it.spacingM, it.cols, it.rows, it.crsEpsg) }
+            if (ExportFormat.DRAWING_DXF in formats) File(dir, "drawing_1-$drawingScale.dxf").writeBytes(DxfWriter.writeDrawing(DigExport.drawing(pts, outs, grids, drawingScale)))
+            if (ExportFormat.FIELD_CSV in formats) File(dir, "field_book.csv").writeText(DigExport.fieldCsv(pts, outs, byPoint.mapValues { it.value.size }), Charsets.UTF_8)
+        }
         if (ExportFormat.REPORT in formats) File(dir, "point_report.csv").writeText(MoreFormats.reportCsv(pts, byPoint), Charsets.UTF_8)
         if (ExportFormat.KML in formats) File(dir, "points.kml").writeText(MoreFormats.kml(project, pts), Charsets.UTF_8)
         // hgis(Strata)·QGIS: 좌표계(작업 좌표계 = 점의 crsEpsg)마다 points_<EPSG>.shp/.shx/.dbf/.prj/.cpg 한 벌. 5179 를 기본으로 쓰지 않는다
@@ -158,6 +173,8 @@ class ExportService(
         작업: $project / 점 $n 개
         points.csv      모든 항목(UTF-8, 엑셀 한글 가능)
         points.geojson  경위도(WGS84)+속성
+        drawing_1-<축척>.dxf  도면용 DXF(레이어: 조사구역·그리드·트렌치·유구·유물·레벨·토층·기준점·기타·점번호·해발, 글자 = 축척 × 2.5 mm, 한글 CP949)
+        field_book.csv  야장(점번호·종류·유구·유물번호·레벨·칸·해발·정밀도·사진 수·메모)
         points.dxf      CAD용 점·번호·표고 (R2000, 단위 m, 한글 CP949, X=동 Y=북, 레이어 PT/PT_NO/PT_ELEV)
         point_report.csv 점 보고서(엑셀용 핵심 열)
         points.kml      구글어스(경위도+지면 타원체고)

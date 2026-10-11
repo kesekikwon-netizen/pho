@@ -20,7 +20,7 @@ class AndroidExportPlatform(
     private val docs: DocBridge,
 ) : ExportPlatform {
     private val dao = SurveyDb.get(ctx).dao()
-    private val svc = ExportService(ctx, dao, photoStore, voiceStore)
+    private val svc = ExportService(ctx, dao, photoStore, voiceStore, SurveyDb.get(ctx).arch())
     private var lastZip: File? = null
 
     override suspend fun summary(): ExportSummary {
@@ -35,8 +35,11 @@ class AndroidExportPlatform(
     override suspend fun exportFormats(formats: Set<kr.archsurvey.export.ExportFormat>, includePhotos: Boolean, includeVoices: Boolean): ExportOutput =
         exportFormats(formats, includePhotos, includeVoices, false)
 
-    override suspend fun exportFormats(formats: Set<kr.archsurvey.export.ExportFormat>, includePhotos: Boolean, includeVoices: Boolean, itwinKeepNames: Boolean): ExportOutput {
-        val r: ExportResult = svc.export(project(), includePhotos, includeVoices, formats, itwinKeepNames)
+    override suspend fun exportFormats(formats: Set<kr.archsurvey.export.ExportFormat>, includePhotos: Boolean, includeVoices: Boolean, itwinKeepNames: Boolean): ExportOutput =
+        exportBundle(formats, includePhotos, includeVoices, itwinKeepNames, kr.archsurvey.dig.DrawingScale.DEFAULT, null)
+
+    override suspend fun exportBundle(formats: Set<kr.archsurvey.export.ExportFormat>, includePhotos: Boolean, includeVoices: Boolean, itwinKeepNames: Boolean, scale: Int, todayKey: String?): ExportOutput {
+        val r: ExportResult = svc.export(project(), includePhotos, includeVoices, formats, itwinKeepNames, scale, todayKey)
         lastZip = r.zip
         return ExportOutput(r.zip.name, r.zip.length(), r.zip.path, r.pointCount, r.photoCount, r.voiceCount, r.publicFolder, r.itwinDroppedCount, r.itwinDroppedNames)
     }

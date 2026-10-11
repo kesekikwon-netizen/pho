@@ -22,13 +22,19 @@ enum class ExportFormat(val id: String, val labelKo: String, val ext: String) {
     /** hgis(Strata) 「CSV 기준점」 불러오기 양식 */
     HGIS_CSV("hgis_csv", "hgis 기준점 CSV", ".csv"),
     /** iTwin Capture Modeler(Flex) 기준점 SurveysData XML(사진 실측 3D 모델 기준점) */
-    ITWIN_XML("itwin_xml", "iTwin Capture XML (사진 실측 기준점)", ".xml");
+    ITWIN_XML("itwin_xml", "iTwin Capture XML (사진 실측 기준점)", ".xml"),
+    /** 0.1.35 도면용 DXF: 레이어별(조사구역·그리드·트렌치·유구·유물·레벨·토층·기준점) + 축척별 글자 */
+    DRAWING_DXF("drawing_dxf", "도면 DXF (레이어별)", ".dxf"),
+    /** 0.1.35 야장 CSV: 점번호·종류·유구·유물번호·레벨·칸·해발 */
+    FIELD_CSV("field_csv", "야장 CSV", ".csv");
 
     companion object {
         /** 0.1.13 까지 늘 만들던 세 가지 = 기본값 */
         val DEFAULT: Set<ExportFormat> = setOf(CSV, DXF, GEOJSON)
         /** 「hgis용 SHP」 한 번 누르기: Shape 한 벌(.shp/.shx/.dbf/.prj/.cpg) + hgis 기준점 CSV */
         val HGIS: Set<ExportFormat> = setOf(SHP, HGIS_CSV)
+        /** 0.1.35 「저녁 도면용 한 번에」: 도면 DXF + SHP + 야장 CSV + 기본 CSV (사진·음성은 켜 둔 대로) */
+        val EVENING: Set<ExportFormat> = setOf(DRAWING_DXF, SHP, FIELD_CSV, CSV)
     }
 }
 
