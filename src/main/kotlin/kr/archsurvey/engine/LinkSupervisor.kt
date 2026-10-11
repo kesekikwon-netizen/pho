@@ -83,6 +83,11 @@ class LinkSupervisor(
     private val dcolTx = java.util.concurrent.atomic.AtomicInteger(0)
     class SessionLost(val error: BtError, msg: String) : IOException(msg)
 
+    companion object {
+        /** 0.1.33-r10: 위치는 오는데 RTCM 쓰기가 막혀 보정 전달만 멈춘 상태의 상태줄 문구 */
+        const val RTCM_BLOCKED_MSG = "수신 중 · 보정(RTCM)이 수신기에 들어가지 않아요"
+    }
+
     /**
      * 0.1.33-r10 세션 종료 진단. 0.1.32 까지는 BT-130 만 기록돼서, GGA 를 받다가 끊긴 세션(R10 현장 2026-10-11)이
      * 왜 끊겼는지(수신기가 끊음·RTCM 쓰기 막힘/실패·무수신) 기록에 남지 않았다.
@@ -243,6 +248,11 @@ class LinkSupervisor(
         val r10Port = AtomicReference<Int?>(null)
         val actEndedAt = AtomicLong(0)
         var actSummary = ""
+        // 0.1.33-r10: RTCM 쓰기가 막혔는데 위치(NMEA)는 계속 오는 동안 true. 세션은 유지하고 보정 전달만 멈춘다
+        val rtcmBlocked = AtomicBoolean(false)
+        fun streamingLink() = setLink(LinkState.STREAMING, attempt, link.value.failures,
+            if (rtcmBlocked.get()) BtError.WRITE_STALLED else null,
+            if (rtcmBlocked.get()) RTCM_BLOCKED_MSG else "수신 중", strategy = t.strategyName)
         fun safeWrite(b: ByteArray, off: Int = 0, len: Int = b.size) {
             synchronized(outLock) {
                 val t0 = clock()
@@ -318,9 +328,9 @@ class LinkSupervisor(
                         if (!gotData && snap.gga != null) {
                             gotData = true; streamingSince = now; nmeaHeals = 0; streamedOnce = true
                             t.strategyName?.let { onStrategyUsed(it) } // GGA 확인된 방식만 저장
-                            setLink(LinkState.STREAMING, attempt, link.value.failures, msg = "수신 중", strategy = t.strategyName)
+                            streamingLink()
                         } else if (link.value.state == LinkState.STALE) {
-                            setLink(LinkState.STREAMING, attempt, link.value.failures, msg = "수신 중", strategy = t.strategyName)
+                            streamingLink()
                         }
                     }
                 }
@@ -456,7 +466,19 @@ class LinkSupervisor(
                 delay(watchdogPeriodMs)
                 val now = clock()
                 val ws = writeStartedAt
-                if (ws != 0L && now - ws > writeStallMs) throw SessionLost(BtError.WRITE_STALLED, "write stalled ${now - ws}ms")
+                if (ws != 0L && now - ws > writeStallMs) {
+                    // 0.1.33-r10: 위치가 계속 오면 끊지 않는다. 다시 연결해도 수신기가 RTCM 을 안 받으면 같은 자리에서 또 막혀
+                    // 1~2분마다 위치까지 끊겼다(현장 2026-10-11). 위치까지 끊겼을 때만 예전처럼 새 연결
+                    if (driver.health(now) != DataHealth.OK) throw SessionLost(BtError.WRITE_STALLED, "write stalled ${now - ws}ms")
+                    if (rtcmBlocked.compareAndSet(false, true)) {
+                        if (link.value.state == LinkState.STREAMING) streamingLink()
+                        CrashLog.record(
+                            "진단 RTCM 전달 막힘 수신기=${profile.id} 방식=${t.strategyName} 막힘${now - ws}ms " +
+                                "RTCM송신${sesRtcmBytes.get()}B/${sesRtcmFrames.get()}개 · 위치 수신은 유지(세션 안 끊음)",
+                            IllegalStateException(BtError.WRITE_STALLED.title),
+                        )
+                    }
+                }
                 when (driver.health(now)) {
                     DataHealth.STALE -> if (link.value.state != LinkState.STALE && !actRunning.get()) {
                         val s = driver.snapshot
@@ -500,6 +522,13 @@ class LinkSupervisor(
                             sesRtcmBytes.addAndGet(n.toLong())
                             if (profile.rtcmWriteGapMs > 0) delay(profile.rtcmWriteGapMs)
                         }
+                    }
+                    // 막혔던 쓰기가 풀림 → 막힌 동안 쌓인 낡은 보정은 버리고 새 보정부터 이어 보낸다
+                    if (rtcmBlocked.compareAndSet(true, false)) {
+                        var dropped = 0
+                        while (rtcmQueue.tryReceive().isSuccess) dropped++
+                        if (link.value.state == LinkState.STREAMING) streamingLink()
+                        CrashLog.record("진단 RTCM 전달 재개 수신기=${profile.id} 막힌 동안 쌓인 보정 ${dropped}개 버림", IllegalStateException("RTCM resumed"))
                     }
                 }
             } catch (e: SessionLost) { throw e
