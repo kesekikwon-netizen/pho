@@ -99,21 +99,31 @@ class R10RtcmStall0133Tests {
     @Test fun planAttempts_r10AdvertisingOnly1103_triesItFirst() {
         assertEquals(
             listOf(Attempt(Strategy.SDP_UUID, r10Advertised), Attempt(Strategy.SECURE_SPP), Attempt(Strategy.INSECURE_SPP), Attempt(Strategy.REFLECT_CH1)),
-            planAttempts(listOf(r10Advertised), null, emptySet()),
+            planAttempts(listOf(r10Advertised), null, emptySet(), advertisedFirst = DeviceProfiles.R10.advertisedUuidFirst),
         )
     }
 
-    @Test fun planAttempts_sppAdvertisedOrUnknown_keepsOldOrder() {
-        assertEquals(Strategy.SECURE_SPP, planAttempts(emptyList(), null, emptySet()).first().strategy)
+    /** 0.1.34 검토: 광고 UUID 먼저는 R10 만. SP60 은 현장에서 되는 예전 순서(SECURE → INSECURE → 광고 UUID → ch1) 그대로 */
+    @Test fun planAttempts_sp60KeepsFieldProvenOrderEvenIfOnlyOtherUuidAdvertised() {
+        assertFalse(DeviceProfiles.SP60.advertisedUuidFirst)
         assertEquals(
             listOf(Attempt(Strategy.SECURE_SPP), Attempt(Strategy.INSECURE_SPP), Attempt(Strategy.SDP_UUID, r10Advertised), Attempt(Strategy.REFLECT_CH1)),
-            planAttempts(listOf(spp, r10Advertised), null, emptySet()),
+            planAttempts(listOf(r10Advertised), null, emptySet(), advertisedFirst = DeviceProfiles.SP60.advertisedUuidFirst),
+        )
+        assertEquals("기본값은 예전 순서", Strategy.SECURE_SPP, planAttempts(listOf(r10Advertised), null, emptySet()).first().strategy)
+    }
+
+    @Test fun planAttempts_sppAdvertisedOrUnknown_keepsOldOrder() {
+        assertEquals(Strategy.SECURE_SPP, planAttempts(emptyList(), null, emptySet(), advertisedFirst = true).first().strategy)
+        assertEquals(
+            listOf(Attempt(Strategy.SECURE_SPP), Attempt(Strategy.INSECURE_SPP), Attempt(Strategy.SDP_UUID, r10Advertised), Attempt(Strategy.REFLECT_CH1)),
+            planAttempts(listOf(spp, r10Advertised), null, emptySet(), advertisedFirst = true),
         )
     }
 
     @Test fun planAttempts_preferredAndSilentExclusionStillApply() {
-        assertEquals(Strategy.INSECURE_SPP, planAttempts(listOf(r10Advertised), Strategy.INSECURE_SPP, emptySet()).first().strategy)
-        val p = planAttempts(listOf(r10Advertised), null, setOf(Strategy.SDP_UUID))
+        assertEquals(Strategy.INSECURE_SPP, planAttempts(listOf(r10Advertised), Strategy.INSECURE_SPP, emptySet(), advertisedFirst = true).first().strategy)
+        val p = planAttempts(listOf(r10Advertised), null, setOf(Strategy.SDP_UUID), advertisedFirst = true)
         assertTrue(p.none { it.strategy == Strategy.SDP_UUID })
         assertEquals(Strategy.SECURE_SPP, p.first().strategy)
     }

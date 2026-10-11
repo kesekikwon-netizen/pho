@@ -50,6 +50,11 @@ data class DeviceProfile(
      */
     val noDataHoldMs: Long = 15_000,
     val verifiedOnRealDevice: Boolean = false,
+    /**
+     * 0.1.34: 페어링 기록에 SPP(0x1101) 없이 다른 UUID 만 있으면 그 UUID 로 먼저 연결.
+     * R10 현장 폰 기록은 0x1103 하나뿐이라 1101 두 번이 매번 먼저 실패했다. SP60 은 현장에서 되는 순서 유지(false)
+     */
+    val advertisedUuidFirst: Boolean = false,
 ) {
     fun matchesName(name: String?): Boolean {
         if (name.isNullOrBlank()) return false
@@ -109,6 +114,7 @@ object DeviceProfiles {
         connectAttemptsPerCycle = 1,
         nmeaHealAttempts = 2,
         noDataHoldMs = 12_000,
+        advertisedUuidFirst = true,
     )
 
     val SP60 = DeviceProfile(

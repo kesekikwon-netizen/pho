@@ -84,12 +84,13 @@ data class Attempt(val strategy: Strategy, val uuid: UUID? = null)
  * 현장 R10 은 0x1103 하나만 광고해서 1101 두 번이 매번 먼저 실패했다. 캐시가 비면(모름) 예전 순서 그대로.
  * [preferred](지난번 GGA 까지 된 방식)가 가장 앞, [exclude](무음 판명)는 뺀다(전부 빠지면 원본 유지).
  */
-internal fun planAttempts(advertised: List<UUID>, preferred: Strategy?, exclude: Set<Strategy>): List<Attempt> {
+internal fun planAttempts(advertised: List<UUID>, preferred: Strategy?, exclude: Set<Strategy>, advertisedFirst: Boolean = false): List<Attempt> {
     val spp = listOf(Attempt(Strategy.SECURE_SPP), Attempt(Strategy.INSECURE_SPP))
     val sdp = advertised.distinct().filter { it != BtCompat.SPP_UUID }
         .sortedByDescending { it.toString().startsWith("0000110") }
         .map { Attempt(Strategy.SDP_UUID, it) }
-    val sppFirst = advertised.isEmpty() || BtCompat.SPP_UUID in advertised
+    // 0.1.34 검토: 광고 UUID 먼저는 R10 프로필만([kr.archsurvey.device.DeviceProfile.advertisedUuidFirst]). SP60 은 현장에서 되는 예전 순서 그대로
+    val sppFirst = !advertisedFirst || advertised.isEmpty() || BtCompat.SPP_UUID in advertised
     val plan = (if (sppFirst) spp + sdp else sdp + spp) + Attempt(Strategy.REFLECT_CH1)
     // 무음 채널로 판명된 방식은 제외(모두 제외되면 원본 유지 — 연결 자체는 시도해야 함)
     val filtered = plan.filter { it.strategy !in exclude }.ifEmpty { plan }
@@ -106,6 +107,8 @@ class BtTransport(
     private val address: String,
     private val preferred: Strategy? = null,
     private val exclude: Set<Strategy> = emptySet(),
+    /** 0.1.34: SPP(1101) 없이 다른 UUID 만 광고하면 그 UUID 먼저(R10 프로필만 true) */
+    private val advertisedFirst: Boolean = false,
 ) : kr.archsurvey.engine.LinkTransport {
     @Volatile private var socket: BluetoothSocket? = null
     @Volatile private var closed = false
@@ -173,7 +176,7 @@ class BtTransport(
     @SuppressLint("MissingPermission")
     private fun buildPlan(dev: BluetoothDevice, preferred: Strategy?): List<Attempt> {
         val advertised = try { dev.uuids?.map { it.uuid }.orEmpty() } catch (_: SecurityException) { emptyList() }
-        return planAttempts(advertised, preferred, exclude)
+        return planAttempts(advertised, preferred, exclude, advertisedFirst)
     }
 
     override fun close() {

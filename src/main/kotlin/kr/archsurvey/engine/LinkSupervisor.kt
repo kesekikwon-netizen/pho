@@ -250,6 +250,8 @@ class LinkSupervisor(
         var actSummary = ""
         // 0.1.33-r10: RTCM 쓰기가 막혔는데 위치(NMEA)는 계속 오는 동안 true. 세션은 유지하고 보정 전달만 멈춘다
         val rtcmBlocked = AtomicBoolean(false)
+        /** 막힘 진단·상태 표시는 막힐 때마다 한 번(풀리면 다시 false) */
+        val rtcmBlockNoted = AtomicBoolean(false)
         fun streamingLink() = setLink(LinkState.STREAMING, attempt, link.value.failures,
             if (rtcmBlocked.get()) BtError.WRITE_STALLED else null,
             if (rtcmBlocked.get()) RTCM_BLOCKED_MSG else "수신 중", strategy = t.strategyName)
@@ -470,7 +472,10 @@ class LinkSupervisor(
                     // 0.1.33-r10: 위치가 계속 오면 끊지 않는다. 다시 연결해도 수신기가 RTCM 을 안 받으면 같은 자리에서 또 막혀
                     // 1~2분마다 위치까지 끊겼다(현장 2026-10-11). 위치까지 끊겼을 때만 예전처럼 새 연결
                     if (driver.health(now) != DataHealth.OK) throw SessionLost(BtError.WRITE_STALLED, "write stalled ${now - ws}ms")
-                    if (rtcmBlocked.compareAndSet(false, true)) {
+                    // 0.1.34 검토: 판정과 표시 사이에 쓰기가 끝났으면(writeStartedAt=0) 표시를 되돌린다 —
+                    // 쓰기 쪽 해제(compareAndSet(true,false))보다 늦게 켜져 「막힘」이 남는 경합 방지
+                    if (rtcmBlocked.compareAndSet(false, true) && writeStartedAt == 0L) rtcmBlocked.compareAndSet(true, false)
+                    else if (rtcmBlocked.get() && !rtcmBlockNoted.getAndSet(true)) {
                         if (link.value.state == LinkState.STREAMING) streamingLink()
                         CrashLog.record(
                             "진단 RTCM 전달 막힘 수신기=${profile.id} 방식=${t.strategyName} 막힘${now - ws}ms " +
@@ -525,6 +530,7 @@ class LinkSupervisor(
                     }
                     // 막혔던 쓰기가 풀림 → 막힌 동안 쌓인 낡은 보정은 버리고 새 보정부터 이어 보낸다
                     if (rtcmBlocked.compareAndSet(true, false)) {
+                        rtcmBlockNoted.set(false)
                         var dropped = 0
                         while (rtcmQueue.tryReceive().isSuccess) dropped++
                         if (link.value.state == LinkState.STREAMING) streamingLink()
