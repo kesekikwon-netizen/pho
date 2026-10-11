@@ -246,6 +246,7 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
         // 0.1.35 지도 위 카드: 말뚝 찾아가기 · 기준점 확인 결과
         Column(Modifier.align(Alignment.TopCenter).padding(top = 10.dp, start = 64.dp, end = 64.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             StakeCard(c)
+            TagCard(c)
             BmResultCard(c)
         }
         Column(Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 6.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {

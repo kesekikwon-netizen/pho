@@ -324,6 +324,14 @@ private fun DrawScope.drawDigMarker(tm: androidx.compose.ui.text.TextMeasurer, m
             drawCircle(ink, 3f * d, o)
             m.label?.let { haloText(tm, it, Offset(o.x + 6f * d, o.y - 18f * d), TextStyle(fontSize = 12.sp, color = ink), t) }
         }
+        kr.archsurvey.map.MapSym.TAG -> {
+            // 0.1.36 사진 기준점(AprilTag): 흰 네모 + 검은 테두리 + 대각 두 칸(표적 모양) + 「#12」
+            drawRect(Color.White, Offset(o.x - 7f * d, o.y - 7f * d), androidx.compose.ui.geometry.Size(14f * d, 14f * d))
+            drawRect(ink, Offset(o.x - 7f * d, o.y - 7f * d), androidx.compose.ui.geometry.Size(7f * d, 7f * d))
+            drawRect(ink, Offset(o.x, o.y), androidx.compose.ui.geometry.Size(7f * d, 7f * d))
+            drawRect(ink, Offset(o.x - 7f * d, o.y - 7f * d), androidx.compose.ui.geometry.Size(14f * d, 14f * d), style = Stroke(2f * d))
+            m.label?.let { haloText(tm, it, Offset(o.x + 10f * d, o.y - 9f * d), TextStyle(fontSize = 12.sp, color = ink, fontFamily = Fonts.mono), t) }
+        }
         kr.archsurvey.map.MapSym.VERTEX, kr.archsurvey.map.MapSym.DOT -> {}
     }
 }

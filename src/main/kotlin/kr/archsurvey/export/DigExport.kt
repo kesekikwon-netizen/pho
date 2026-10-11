@@ -18,17 +18,17 @@ data class DigOutline(val id: Long, val label: String, val kind: String, val fea
  */
 object DigExport {
     const val L_AREA = "조사구역"; const val L_GRID = "그리드"; const val L_TRENCH = "트렌치"; const val L_FEATURE = "유구"
-    const val L_ARTIFACT = "유물"; const val L_LEVEL = "레벨"; const val L_SECTION = "토층"; const val L_BM = "기준점"; const val L_OTHER = "기타"
+    const val L_ARTIFACT = "유물"; const val L_LEVEL = "레벨"; const val L_SECTION = "토층"; const val L_BM = "기준점"; const val L_GCP = "사진기준점"; const val L_OTHER = "기타"
     const val L_NO = "점번호"; const val L_ELEV = "해발"
     /** 레이어 이름과 AutoCAD 색 번호 */
-    val LAYERS = listOf(L_AREA to 7, L_GRID to 8, L_TRENCH to 4, L_FEATURE to 1, L_ARTIFACT to 2, L_LEVEL to 3, L_SECTION to 5, L_BM to 6, L_OTHER to 9, L_NO to 7, L_ELEV to 3)
+    val LAYERS = listOf(L_AREA to 7, L_GRID to 8, L_TRENCH to 4, L_FEATURE to 1, L_ARTIFACT to 2, L_LEVEL to 3, L_SECTION to 5, L_BM to 6, L_GCP to 30, L_OTHER to 9, L_NO to 7, L_ELEV to 3)
 
     private fun h(p: PointEntity) = p.groundMsl ?: p.groundEllipsoidalHeight
     private fun f3(v: Double) = String.format(Locale.US, "%.3f", v)
 
     fun layerOf(p: PointEntity): String = when (DigKind.resolve(p.digKind, p.positionType)) {
         DigKind.FEATURE -> L_FEATURE; DigKind.ARTIFACT -> L_ARTIFACT; DigKind.LEVEL -> L_LEVEL; DigKind.SECTION -> L_SECTION
-        DigKind.TRENCH -> L_TRENCH; DigKind.STAKE -> L_GRID; DigKind.BM -> L_BM; DigKind.AREA -> L_AREA; null -> L_OTHER
+        DigKind.TRENCH -> L_TRENCH; DigKind.STAKE -> L_GRID; DigKind.BM -> L_BM; DigKind.AREA -> L_AREA; DigKind.GCP -> L_GCP; null -> L_OTHER
     }
 
     fun drawing(points: List<PointEntity>, outlines: List<DigOutline>, grids: List<GridDef>, scaleDenominator: Int = DrawingScale.DEFAULT): DxfWriter.Drawing {
@@ -71,6 +71,7 @@ object DigExport {
                 DigKind.LEVEL -> LevelKind.fromId(p.levelKind)?.labelKo
                 DigKind.SECTION -> p.digTag.ifBlank { null }
                 DigKind.BM, DigKind.STAKE -> p.digTag.ifBlank { null }
+                DigKind.GCP -> kr.archsurvey.dig.AprilTagNaming.parse(p.digTag)?.let { kr.archsurvey.dig.AprilTagNaming.name(it) }
                 else -> null
             }
             if (label != null) ents += DxfWriter.EText(layer, p.easting + off, p.northing + off, th, label)

@@ -81,19 +81,21 @@ internal fun DigPickerSheet(c: SurveyController) {
         SectionTitle("종류")
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), maxItemsInEachRow = 2) {
             for (k in DigKind.entries) Tile(k.labelKo, k.subKo, d.kind == k, "kind_${k.id}", Modifier.weight(1f)) {
-                d.select(k); if (k != DigKind.FEATURE && k != DigKind.ARTIFACT && k != DigKind.LEVEL && k != DigKind.BM) close()
+                d.select(k); if (k != DigKind.FEATURE && k != DigKind.ARTIFACT && k != DigKind.LEVEL && k != DigKind.BM && k != DigKind.GCP) close()
             }
         }
         val k = d.kind
-        if (k == DigKind.FEATURE || k == DigKind.ARTIFACT || k == DigKind.LEVEL) {
-            SectionTitle(if (k == DigKind.FEATURE) "어느 유구를 잴까요" else "유구 (안에 있으면 자동)")
+        if (k == DigKind.FEATURE || k == DigKind.ARTIFACT || k == DigKind.LEVEL || k == DigKind.GCP) {
+            SectionTitle(when (k) { DigKind.FEATURE -> "어느 유구를 잴까요"; DigKind.GCP -> "어느 유구의 사진 기준점인가요 (유구마다 따로 저장)"; else -> "유구 (안에 있으면 자동)" })
             val list = d.featureOutlines().sortedByDescending { !it.finished }
-            if (k != DigKind.FEATURE) Tile("자동 · 닫힌 유구 안이면 그 유구", null, d.featureId == null, "feature_auto", Modifier.fillMaxWidth()) { d.chooseFeature(null); close() }
+            if (k == DigKind.GCP) Tile("유구 밖 · 조사구역 전체용", null, d.featureId == null, "feature_auto", Modifier.fillMaxWidth()) { d.chooseFeature(null); close() }
+            else if (k != DigKind.FEATURE) Tile("자동 · 닫힌 유구 안이면 그 유구", null, d.featureId == null, "feature_auto", Modifier.fillMaxWidth()) { d.chooseFeature(null); close() }
             for (o in list.take(12)) {
-                val sub = (if (o.finished) (if (o.closed) "면 닫힘" else "선") else "재는 중") + " · 경계점 ${o.pointRowIds.size}"
+                val sub = if (k == DigKind.GCP) d.tagsIn(o.id).distinct().sorted().let { tg -> if (tg.isEmpty()) "표적 아직 없음" else "표적 ${tg.size}개 · #" + tg.joinToString(",") }
+                    else (if (o.finished) (if (o.closed) "면 닫힘" else "선") else "재는 중") + " · 경계점 ${o.pointRowIds.size}"
                 Tile(o.label, sub, d.featureId == o.id, "feature_${o.id}", Modifier.fillMaxWidth()) { d.chooseFeature(o.id); close() }
             }
-            if (k == DigKind.FEATURE) {
+            if (k == DigKind.FEATURE || k == DigKind.GCP) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Tile("새 유구 ${d.nextFeatureName()}", if (d.provisional) "가번호 · 나중에 이름 바꾸기" else "번호 자동", false, "feature_new", Modifier.weight(1f)) {
                         scope.launch { if (d.newFeature() == null) d.chooseFeature(null); close() }
@@ -138,6 +140,7 @@ internal fun DigLayersSheet(c: SurveyController) {
             Triple("트렌치", d.showTrench) { v: Boolean -> d.showTrench = v }, Triple("유구", d.showFeature) { v: Boolean -> d.showFeature = v },
             Triple("유물 번호", d.showArtifactNo) { v: Boolean -> d.showArtifactNo = v }, Triple("레벨 해발", d.showLevelH) { v: Boolean -> d.showLevelH = v },
             Triple("토층 단면선", d.showSection) { v: Boolean -> d.showSection = v }, Triple("기준점", d.showBm) { v: Boolean -> d.showBm = v },
+            Triple("사진 기준점 (AprilTag)", d.showGcp) { v: Boolean -> d.showGcp = v },
         )
         for ((i, r) in rows.withIndex()) {
             Row(

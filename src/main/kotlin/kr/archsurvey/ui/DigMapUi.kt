@@ -314,3 +314,33 @@ internal fun DigInfoZone(c: SurveyController) {
         }
     }
 }
+
+/**
+ * 0.1.36 사진 기준점(AprilTag) 카드(지도 위): 큰 「AprilTag #12」 + 장갑 낀 손으로 누르는 − / + (64dp) + 이 유구에서 잰 번호.
+ * 재면 다음 번호로 저절로 넘어간다. 이미 잰 번호를 고르면 「다시 재기」(내보내기는 마지막 값)
+ */
+@Composable
+internal fun TagCard(c: SurveyController, modifier: Modifier = Modifier) {
+    val t = T
+    val d = c.dig
+    if (d.kind != DigKind.GCP) return
+    val again = d.tagAlreadyMeasured
+    val done = d.tagsIn(d.featureId).distinct().sorted()
+    Column(
+        modifier.padding(horizontal = 4.dp).clip(RoundedCornerShape(14.dp)).background(t.raised).border(2.dp, if (again) t.cautionInk else t.primary, RoundedCornerShape(14.dp)).padding(10.dp).testTag("tag_card"),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            MBtn(Modifier.size(64.dp).testTag("tag_minus"), MKind.PLAIN, 14.dp, onClick = { d.stepTag(-1) }) { Text("−", style = Ty.title.copy(fontSize = 30.sp), color = t.ink) }
+            Column(Modifier.weight(1f).padding(horizontal = 8.dp).semantics { contentDescription = "사진 기준점 AprilTag ${d.tagId}번" }, horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("AprilTag", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1)
+                Text("#${d.tagId}", style = Ty.ledger.copy(fontSize = 30.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("tag_id"))
+                Text(d.featureName(d.featureId) ?: "유구 밖", style = Ty.label.copy(fontSize = 13.sp), color = t.accentText, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("tag_feature"))
+            }
+            MBtn(Modifier.size(64.dp).testTag("tag_plus"), MKind.PLAIN, 14.dp, onClick = { d.stepTag(1) }) { Text("+", style = Ty.title.copy(fontSize = 30.sp), color = t.ink) }
+        }
+        if (again) Text("이 유구에서 이미 잰 번호 · 다시 재면 마지막 값으로 내보내요", style = Ty.small.copy(fontSize = 12.sp), color = t.cautionInk, maxLines = 2, modifier = Modifier.testTag("tag_again"))
+        else if (done.isNotEmpty()) Text("잰 표적 ${done.size}개 · #" + done.joinToString(","), style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("tag_done"))
+        else Text("표적 가운데에 폴을 세우고 재세요 · 재면 다음 번호로", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
