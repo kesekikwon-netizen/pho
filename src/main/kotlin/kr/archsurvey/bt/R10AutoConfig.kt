@@ -27,7 +27,7 @@ interface R10PortStore {
 }
 
 /** LinkSupervisor 에 넘기는 R10 자동설정 묶음. SP60·기타 수신기는 null */
-class R10AutoOptions(val store: R10PortStore, val timing: R10AutoTiming = R10AutoTiming()) {
+class R10AutoOptions(val store: R10PortStore, val timing: R10AutoTiming = R10AutoTiming(), val probeWhenNatural: Boolean = false) {
     companion object {
         /** Engine 이 쓰는 선택: R10 만 자동설정. SP60 경로는 그대로 */
         fun forProfile(profile: DeviceProfile, store: R10PortStore): R10AutoOptions? =
@@ -44,6 +44,8 @@ enum class R10AutoOutcome {
     PRECISION_ADDED,
     /** GGA·GST·GSA 가 다 와서 보충 필요 없음 */
     PRECISION_OK,
+    /** 0.1.34: 자연 NMEA 인데 GST/GSA 없음 — 64h 를 보내지 않고 기록·안내만 */
+    PRECISION_MISSING_NATURAL,
     /** 모든 포트가 NAK(거부) */
     ALL_NAK,
     /** 명령은 보냈지만 어떤 포트에서도 문장이 안 옴 */
@@ -88,6 +90,11 @@ class R10AutoConfig(
     private val timing: R10AutoTiming = R10AutoTiming(),
     private val nextTx: () -> Int,
     private val onStatus: (String) -> Unit = {},
+    /**
+     * 0.1.34(사용자 SmartTopo 분석 반영): 자연 NMEA 가 이미 오면 DCOL 64h 를 보내지 않는다(기본 false).
+     * true 일 때만 0.1.33 의 GST 포트 탐색 보충을 한다(시험·향후 선택용).
+     */
+    private val probeWhenNatural: Boolean = false,
 ) {
     companion object {
         val FULL_SET = listOf("GGA", "GST", "GSA", "GSV")
@@ -217,6 +224,10 @@ class R10AutoConfig(
         if (knownPort != null) {
             log += "포트 $knownPort 에 이미 4종을 켰는데 ${missing} 없음 — 다시 보내지 않음(수신기 옵션·펌웨어 확인)"
             return R10AutoResult(R10AutoOutcome.NOT_FOUND, knownPort, "-", tried, emptySet(), age(), log)
+        }
+        if (!probeWhenNatural) {
+            log += "자연 NMEA 수신 중 ${missing} 없음 — 64h 보내지 않음(수신기 설정 그대로). 웹 UI 에서 GST·GSA 켜기 안내"
+            return R10AutoResult(R10AutoOutcome.PRECISION_MISSING_NATURAL, null, "-", tried, emptySet(), age(), log)
         }
         val probe = missing.first()
         log += "GGA 는 오는데 ${missing} 없음 → $probe 로 포트 탐색"

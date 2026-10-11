@@ -287,7 +287,7 @@ class R10AutoConfigStateMachine0133Tests {
         override fun save(port: Int) { p = port; saves += port }
     }
 
-    private inner class Rig(val fake: FakeR10, val store: Store = Store(), chunk: Int = 256, gap: Long = 20, dead: Long = 6_000) {
+    private inner class Rig(val fake: FakeR10, val store: Store = Store(), chunk: Int = 256, gap: Long = 20, dead: Long = 6_000, probeWhenNatural: Boolean = false) {
         val link = MutableStateFlow(LinkStatus())
         val gnss = MutableStateFlow(GnssSnapshot())
         val rtcm = Channel<ByteArray>(256)
@@ -299,7 +299,7 @@ class R10AutoConfigStateMachine0133Tests {
             reconnect = ReconnectPolicy(initialDelayMs = 100, maxDelayMs = 400, settleMs = 0, repairHintAfterFailures = 3),
         )
         val sup = LinkSupervisor(profile, { fake.socket }, { System.nanoTime() / 1_000_000 }, link, gnss, rtcm, wake, {}, {},
-            watchdogPeriodMs = 50, r10Auto = R10AutoOptions(store, fast), onR10Auto = { results += it })
+            watchdogPeriodMs = 50, r10Auto = R10AutoOptions(store, fast, probeWhenNatural), onR10Auto = { results += it })
         val job = scope.launch { sup.run() }
         init { fakes += fake }
         fun waitFor(ms: Long = 8_000, what: String, cond: () -> Boolean) {
@@ -388,8 +388,22 @@ class R10AutoConfigStateMachine0133Tests {
         r.stopAll()
     }
 
-    @Test fun naturalGgaWithoutGst_noEnq_neverTouchesGga_addsPrecisionOnFoundPort() {
+    /** 0.1.34(사용자 SmartTopo 분석): 자연 NMEA 가 오면 64h 를 보내지 않는다 — GST/GSA 가 없어도 기록·안내만 */
+    @Test fun naturalGgaWithoutGst_default_sendsNothing_reportsMissing() {
         val r = Rig(FakeR10(btPort = 18, natural = setOf("GGA")))
+        r.waitFor(what = "precision result") { r.results.size >= 2 }
+        assertEquals(R10AutoOutcome.NATURAL, r.results[0].outcome)
+        assertEquals(R10AutoOutcome.PRECISION_MISSING_NATURAL, r.results[1].outcome)
+        Thread.sleep(300)
+        assertEquals("자연 NMEA 면 아무 바이트도 쓰지 않음", 0, r.fake.socket.written.size())
+        assertTrue(r.fake.appFiles.isEmpty()); assertEquals(0, r.fake.enqCount.get())
+        assertTrue(r.store.saves.isEmpty())
+        r.stopAll()
+    }
+
+    /** 선택 기능(probeWhenNatural=true, 기본 꺼짐): 0.1.33 의 GST 포트 탐색 보충 — GGA 는 절대 안 건드림 */
+    @Test fun naturalGgaWithoutGst_optIn_neverTouchesGga_addsPrecisionOnFoundPort() {
+        val r = Rig(FakeR10(btPort = 18, natural = setOf("GGA")), probeWhenNatural = true)
         r.waitFor(what = "precision result") { r.results.any { it.outcome != R10AutoOutcome.NATURAL } }
         assertEquals(R10AutoOutcome.NATURAL, r.results[0].outcome)
         val b = r.results.last()
@@ -419,13 +433,13 @@ class R10AutoConfigStateMachine0133Tests {
     }
 
     @Test fun commandsNeverInterleaveWithRtcmFrames() {
-        val r = Rig(FakeR10(btPort = 19, natural = setOf("GGA")), chunk = 32, gap = 3)
-        r.waitFor(what = "streaming") { r.link.value.state == LinkState.STREAMING }
+        // RTCM 을 처음부터 계속 밀어 넣는 동안 포트 탐색(17·18 실패 후 19)·4종 켜기가 일어난다
+        val r = Rig(FakeR10(btPort = 19), chunk = 32, gap = 3)
         val pump = scope.launch {
             var n = 0
             while (isActive) { r.rtcm.send(CommTestUtil.rtcmFrame(1077 + (n++ % 3), 200 + n % 50)); delay(15) }
         }
-        r.waitFor(ms = 12_000, what = "precision added") { r.results.any { it.outcome == R10AutoOutcome.PRECISION_ADDED } }
+        r.waitFor(ms = 12_000, what = "port found") { r.results.any { it.outcome == R10AutoOutcome.PORT_FOUND } }
         pump.cancel()
         Thread.sleep(300)
         assertTrue(r.fake.violations.toString(), r.fake.violations.isEmpty())

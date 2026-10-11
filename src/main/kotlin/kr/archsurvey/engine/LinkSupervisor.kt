@@ -419,7 +419,7 @@ class LinkSupervisor(
                 val r = kr.archsurvey.bt.R10AutoConfig(
                     send = { b, label -> writeDcol(b, label) }, events = dcolEvents,
                     count = { typeCounts[it]?.get() ?: 0L }, clock = clock, store = auto.store, timing = auto.timing,
-                    nextTx = { dcolTx.getAndIncrement() and 0xFF },
+                    nextTx = { dcolTx.getAndIncrement() and 0xFF }, probeWhenNatural = auto.probeWhenNatural,
                 ).addPrecision(r10Port.get())
                 if (r.outcome != kr.archsurvey.bt.R10AutoOutcome.PRECISION_OK)
                     CrashLog.record("진단 ${r.summary()}", RuntimeException(r.log.joinToString("\n")))
