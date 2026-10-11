@@ -29,7 +29,11 @@ import java.io.IOException
  * 서비스(SurveyConnectionService) 수명 동안 소켓을 소유한다(Activity/ViewModel 아님).
  * 모델별 차이는 DeviceProfile 로만 주입한다.
  */
-class SurveyEngine(private val app: Context, private val settingsStrategy: (String) -> String?, private val saveStrategy: (String, String?) -> Unit) : GnssSource {
+class SurveyEngine(
+    private val app: Context, private val settingsStrategy: (String) -> String?, private val saveStrategy: (String, String?) -> Unit,
+    /** 0.1.33: R10 자동설정이 확인한 주소별 블루투스 포트 */
+    private val r10Port: (String) -> Int? = { null }, private val saveR10Port: (String, Int) -> Unit = { _, _ -> },
+) : GnssSource {
     /** 백그라운드 작업의 예외는 앱을 끄지 않고 오류 기록에 남긴다(0.1.9) */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, e -> kr.archsurvey.diag.CrashLog.record("엔진(블루투스·보정) 작업", e) })
 
@@ -44,6 +48,8 @@ class SurveyEngine(private val app: Context, private val settingsStrategy: (Stri
     val precision = MutableStateFlow<PrecisionResult?>(null)
     /** 0.1.32: 이번 연결에서 본 제조사 고유 NMEA 신호로 판단한 수신기 종류 id(`$PASH`=SP60, `$PTNL`=R10). 없으면 null */
     val receiverSignature = MutableStateFlow<String?>(null)
+    /** 0.1.33: 이번 연결의 R10 자동설정 결과(켜기·보충 중 마지막). R10 아니면 null */
+    val r10Auto = MutableStateFlow<R10AutoResult?>(null)
     /** 0.1.32: 알림 「연결 종료」처럼 화면 밖에서 연결을 멈췄을 때 한 번 */
     val stoppedOutside = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     /** 0.1.30 T23-b: 사용자 [자동 켜기 다시] */
@@ -82,6 +88,7 @@ class SurveyEngine(private val app: Context, private val settingsStrategy: (Stri
         profileFlow.value = profile
         precision.value = null
         receiverSignature.value = null
+        r10Auto.value = null
         this.ntripConfig = ntrip
         this.ntripEnabled = ntripEnabled
         while (wake.tryReceive().isSuccess) { } // 이전 세션의 낡은 깨우기 신호 제거
@@ -144,6 +151,11 @@ class SurveyEngine(private val app: Context, private val settingsStrategy: (Stri
             onSignature = { receiverSignature.value = it },
             precisionBudget = PrecisionBudget.forDevice(address),
             precisionRetry = precisionRetry,
+            r10Auto = R10AutoOptions.forProfile(profile, object : R10PortStore {
+                override fun port(): Int? = r10Port(address)
+                override fun save(port: Int) = saveR10Port(address, port)
+            }),
+            onR10Auto = { r10Auto.value = it },
         )
         sup.run()
     }

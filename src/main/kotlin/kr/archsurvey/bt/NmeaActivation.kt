@@ -11,7 +11,7 @@ import kotlin.coroutines.coroutineContext
 /**
  * 연결 직후·데이터 없음일 때 NMEA(GGA)를 켜려는 후보 명령.
  * SP60: SP80 ICD / ProMark 800 공개 문서의 `$PASHS,NME,…` 형태(포트 C≈Bluetooth 추정). SP60 실기 동작은 [현장확인].
- * R10: 공개 BT 명령 없음 → 대기·감시만(웹 UI에서 NMEA를 켜야 함).
+ * R10: 여기 후보는 없음 — 0.1.33 부터 [R10AutoConfig](Trimble DCOL 64h 바이너리)가 LinkSupervisor 에서 따로 켠다.
  */
 data class NmeaCmd(val body: String, val label: String) {
     fun line(): String = NmeaParser.build(body)
@@ -49,7 +49,7 @@ object NmeaActivation {
             NmeaCmd("PASHS,NME,GGA,A,ON", "GGA ON · 포트 A(주기 생략)"),
             NmeaCmd("PASHS,NME,GGA,B,ON", "GGA ON · 포트 B(주기 생략)"),
         )
-        DeviceProfiles.R10_ID -> emptyList() // 웹 UI 설정. 자동 명령 후보 없음
+        DeviceProfiles.R10_ID -> emptyList() // $PASH 문자열 명령 없음. R10 은 R10AutoConfig(DCOL) 가 담당
         else -> emptyList()
     }
 
@@ -60,7 +60,8 @@ object NmeaActivation {
     fun fieldChecklist(profile: DeviceProfile): String = buildString {
         // 0.1.33-r10: R10 에는 SP60 항목(SPace·도난경보·시작잠금)이 없다. 앱이 R10 에 NMEA 켜기 명령을 보낼 수 없다는 것을 분명히
         if (profile.id == DeviceProfiles.R10_ID) {
-            append("R10은 앱이 명령으로 NMEA를 켤 수 없어요 · ① 다른 컨트롤러(Trimble Access 등)·다른 앱 연결 끊기 ② R10 웹 UI(Wi-Fi 192.168.142.1) 또는 Trimble 컨트롤러: I/O 설정 → Bluetooth 포트 → NMEA GGA·GST 1 Hz 켜기, 「Maintain configuration when connection dropped」 체크, 폰을 연결한 채 저장 ③ 다시 연결")
+            // 0.1.33: 앱이 연결 때 DCOL 64h 로 블루투스 포트 출력을 자동으로 켜 본다. 이 문구는 그게 실패했을 때만 보인다
+            append("앱이 R10 블루투스 출력을 자동으로 켜 보았지만 위치(GGA)가 오지 않아요 · ① 다른 컨트롤러(Trimble Access 등)·다른 앱 연결 끊고 다시 연결 ② 그래도 안 되면 R10 웹 UI(Wi-Fi 192.168.142.1) 또는 Trimble 컨트롤러: I/O 설정 → Bluetooth 포트 → NMEA GGA·GST 1 Hz 켜기, 「Maintain configuration when connection dropped」 체크, 폰을 연결한 채 저장 ③ 다시 연결 · 자세한 결과는 진단 「R10 자동설정」")
             return@buildString
         }
         append("① 위성 LED(추적) ② 다른 폰·컨트롤러·SPace 끊기 ③ 도난경보·시작잠금 확인 ④ ")

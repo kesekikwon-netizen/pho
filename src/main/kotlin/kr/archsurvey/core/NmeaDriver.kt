@@ -75,6 +75,12 @@ class NmeaDriver(val profile: DeviceProfile) {
 
     /** GSV 위성 상세: 키 "talker:PRN" → (위성, 마지막 본 시각) */
     private val satSeen = LinkedHashMap<String, Pair<SatInfo, Long>>()
+    /**
+     * 0.1.33 Trimble GSV: 위성군을 하나의 묶음으로 번호를 이어 매긴다(예: $GPGSV 8,1..8,4 → $GLGSV 8,5..8,7) — 필드 3(보이는 위성)은
+     * **전체 합계**라 위성군별로 더하면 두 배가 된다. 다른 위성군인데 묶음 총수가 같고 번호가 이어지면 합계 방식으로 본다.
+     */
+    private var gsvCombined = false
+    private var lastGsv: GsvMessage? = null
     private companion object { const val SAT_KEEP_MS = 10_000L }
 
     /**
@@ -101,10 +107,19 @@ class NmeaDriver(val profile: DeviceProfile) {
                 is GsaMessage -> { gsa = m; lastGsaAt = nowMs }
                 is GsvMessage -> {
                     if (m.sats.isNotEmpty()) { for (q in m.sats) satSeen[m.talker + ":" + q.prn] = q to nowMs; satsChanged = true }
+                    val prev = lastGsv
+                    if (!gsvCombined && prev != null && prev.talker != m.talker && m.msgNum != null && m.msgNum > 1 &&
+                        prev.totalMsgs == m.totalMsgs && prev.msgNum == m.msgNum - 1) {
+                        gsvCombined = true
+                        inView = HashMap()
+                    }
+                    lastGsv = m
                     val v = m.satsInView ?: 0
-                    if (s0.inViewByTalker[m.talker] != v || inView != null) {
+                    val key = if (gsvCombined) "ALL" else m.talker
+                    if (s0.inViewByTalker[key] != v || inView != null) {
                         if (inView == null) inView = HashMap(s0.inViewByTalker)
-                        inView[m.talker] = v
+                        if (gsvCombined) inView.keys.retainAll(setOf("ALL"))
+                        inView[key] = v
                     }
                 }
                 is ZdaMessage -> {}

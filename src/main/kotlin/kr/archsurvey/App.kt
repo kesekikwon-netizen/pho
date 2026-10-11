@@ -9,7 +9,8 @@ import kr.archsurvey.feedback.FeedbackPlayer
 class App : Application() {
     val settings by lazy { SettingsStore(this) }
     val db by lazy { SurveyDb.get(this) }
-    val engine by lazy { SurveyEngine(this, { settings.btStrategy(it) }, { a, s -> settings.setBtStrategy(a, s) }) }
+    val engine by lazy { SurveyEngine(this, { settings.btStrategy(it) }, { a, s -> settings.setBtStrategy(a, s) },
+        r10Port = { settings.r10Port(it) }, saveR10Port = { a, p -> settings.setR10Port(a, p) }) }
     val feedback by lazy { FeedbackPlayer(this, settings) }
 
     override fun onCreate() {

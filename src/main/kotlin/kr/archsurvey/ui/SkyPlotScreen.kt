@@ -44,7 +44,16 @@ object SkyModel {
         else -> Constellation.OTHER
     }
 
-    fun label(s: SatInfo): String = constellation(s).prefix + s.prn.toString().padStart(2, '0')
+    /** 0.1.33: Trimble GSV 번호 규칙(GLONASS 65–96 → 1–32, BeiDou 101+ → 1+)으로 위성 번호 표시 */
+    fun label(s: SatInfo): String {
+        val c = constellation(s)
+        val n = when {
+            c == Constellation.GLONASS && s.prn in 65..96 -> s.prn - 64
+            c == Constellation.BEIDOU && s.prn in 101..163 -> s.prn - 100
+            else -> s.prn
+        }
+        return c.prefix + n.toString().padStart(2, '0')
+    }
 
     /** 고도·방위 → 원 안 좌표(중심 기준, 반지름 1 = 지평선). 고도/방위가 없으면 null */
     fun project(elevDeg: Int?, azDeg: Int?): Pair<Float, Float>? {

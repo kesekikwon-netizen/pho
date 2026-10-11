@@ -118,9 +118,11 @@ class R10Select0133Tests {
 }
 
 class R10Text0133Tests {
-    @Test fun r10NoDataCopy_saysAppCannotEnableNmea_noSp60Items() {
+    // 0.1.33 자동설정: 실패했을 때 보이는 문구 — 앱이 자동으로 시도했음 + 웹 UI 는 그 다음 수단
+    @Test fun r10NoDataCopy_saysAutoTriedThenWebUi_noSp60Items() {
         val r = NmeaActivation.fieldChecklist(DeviceProfiles.R10)
-        assertTrue(r, "앱이 명령으로" in r && "웹 UI" in r && "Bluetooth" in r && "Maintain configuration" in r)
+        assertTrue(r, "자동으로 켜 보았지만" in r && "웹 UI" in r && "Bluetooth" in r && "Maintain configuration" in r)
+        assertFalse("옛 문구(앱이 켤 수 없음) 제거", "켤 수 없" in r || "켤 수 없" in DeviceProfiles.R10.noDataHint)
         for (bad in listOf("SPace", "도난경보", "시작잠금")) assertFalse("R10 문구에 SP60 항목: $bad", bad in r)
         val h = DeviceProfiles.R10.noDataHint
         for (bad in listOf("SPace", "도난경보", "시작잠금")) assertFalse(bad, bad in h)

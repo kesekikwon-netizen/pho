@@ -214,12 +214,13 @@ class PrecisionNoticeTest {
         assertNull(g.onActivation(DeviceProfiles.SP60_ID, res(PrecisionOutcome.SUCCESS, setOf("GGA", "GST", "GSA"))))
     }
 
-    @Test fun r10_noGstFor10s_noticeOnce_andNoSigmaHints() {
+    // 0.1.33: R10 은 앱이 GST/GSA 를 자동 보충하므로 안내는 25초(보충이 끝날 시간) 뒤
+    @Test fun r10_noGstFor25s_noticeOnce_andNoSigmaHints() {
         val g = PrecisionNoticeGate()
         assertNull(g.onUpdate(DeviceProfiles.R10_ID, LinkState.STREAMING, setOf("GGA"), 0))
-        assertNull(g.onUpdate(DeviceProfiles.R10_ID, LinkState.STREAMING, setOf("GGA"), 9_000))
-        assertEquals(PrecisionGuide.R10_NO_GST, g.onUpdate(DeviceProfiles.R10_ID, LinkState.STREAMING, setOf("GGA"), 10_000))
-        assertNull(g.onUpdate(DeviceProfiles.R10_ID, LinkState.STREAMING, setOf("GGA"), 20_000))
+        assertNull(g.onUpdate(DeviceProfiles.R10_ID, LinkState.STREAMING, setOf("GGA"), 24_000))
+        assertEquals(PrecisionGuide.R10_NO_GST, g.onUpdate(DeviceProfiles.R10_ID, LinkState.STREAMING, setOf("GGA"), 25_000))
+        assertNull(g.onUpdate(DeviceProfiles.R10_ID, LinkState.STREAMING, setOf("GGA"), 40_000))
         assertTrue(PrecisionGuide.noSigmaHint(DeviceProfiles.R10_ID)!!.contains("GST"))
         assertTrue(PrecisionGuide.noSigmaHint(DeviceProfiles.SP60_ID)!!.contains("SPace"))
     }

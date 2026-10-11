@@ -8,9 +8,12 @@ import kr.archsurvey.device.LinkState
 object PrecisionGuide {
     /** SP60 자동 켜기 실패(NAK·5초 안에 GST 없음·횟수 상한) — 통신GNSS 확정 문구 */
     const val SP60_FAIL = "SP60이 정밀도(GST)를 보내지 않아요. 터미널/SPace에서 켜 주세요"
-    /** R10: 자동 명령 없음 → 10초 동안 GST 가 없으면 */
-    const val R10_NO_GST = "수신기가 정밀도(GST)를 보내지 않아요. R10: 웹 설정 → Bluetooth NMEA에서 GST·GSA 켜기"
-    const val R10_NO_GST_AFTER_MS = 10_000L
+    /**
+     * R10: 0.1.33 부터 앱이 GST/GSA 를 자동 보충(5 s 확인 + 포트 탐색 최대 약 20 s)한다.
+     * 그 뒤에도 GST 가 없을 때만 → 25초(자동 보충이 끝날 시간)
+     */
+    const val R10_NO_GST = "수신기가 정밀도(GST)를 보내지 않아요(앱 자동 켜기 실패). R10: 웹 설정 → Bluetooth NMEA에서 GST·GSA 켜기"
+    const val R10_NO_GST_AFTER_MS = 25_000L
 
     // 0.1.30 T23-b: 엄격 모드 + GST 없음 → 측점 막힘 창
     const val PRECISION_OFF = "수신기 정밀도 출력 꺼짐"
@@ -24,14 +27,14 @@ object PrecisionGuide {
         "고정(FIX)이지만 수신기가 정밀도(σ, GST)를 보내지 않아 엄격 모드(FIX만 저장)에서 측점할 수 없어요.\n" +
             when (deviceId) {
                 DeviceProfiles.SP60_ID -> "SP60: [자동 켜기 다시] · 안 되면 터미널/SPace에서 GST·GSA 켜기"
-                DeviceProfiles.R10_ID -> "R10: 웹UI I/O 설정 → BT 포트 → NMEA에서 GST·GSA 켜기"
+                DeviceProfiles.R10_ID -> "R10: 앱 자동 켜기가 안 되면 웹UI I/O 설정 → BT 포트 → NMEA에서 GST·GSA 켜기"
                 else -> "수신기 설정에서 NMEA GST·GSA 출력을 켜 주세요"
             } + "\n엄격 모드를 끄면 주의 표시와 함께 저장돼요(설정에서 직접 바꿔야 해요)."
 
     /** 「정밀도 값을 받지 못했어요」(NO_SIGMA) 주의에 붙이는 기기별 안내 */
     fun noSigmaHint(deviceId: String?): String? = when (deviceId) {
         DeviceProfiles.SP60_ID -> "SP60: 앱이 GST 켜기를 요청해요 · 안 되면 터미널/SPace에서 GST·GSA 켜기"
-        DeviceProfiles.R10_ID -> "R10: 웹 UI I/O 설정 → BT 포트 → NMEA에서 GST·GSA 켜기"
+        DeviceProfiles.R10_ID -> "R10: 앱이 GST 켜기를 시도해요 · 안 되면 웹 UI I/O 설정 → BT 포트 → NMEA에서 GST·GSA 켜기"
         else -> null
     }
 }

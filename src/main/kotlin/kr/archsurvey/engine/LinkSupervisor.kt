@@ -71,7 +71,16 @@ class LinkSupervisor(
     private val onSignature: (String) -> Unit = {},
     /** 0.1.33-r10: 소켓이 붙었던 세션이 끝날 때마다(오류 코드·지속 시간·바이트·RTCM 쓰기). CrashLog 에도 남긴다 */
     private val onSessionEnd: (SessionEnd) -> Unit = {},
+    /**
+     * 0.1.33: R10 블루투스 포트 출력 자동 켜기(Trimble DCOL 64h). null 이면 끔 — Engine 은 R10 일 때만 넘긴다
+     * ([kr.archsurvey.bt.R10AutoOptions.forProfile]). SP60 경로는 이 값과 무관하게 그대로.
+     */
+    private val r10Auto: kr.archsurvey.bt.R10AutoOptions? = null,
+    /** 0.1.33: R10 자동설정 결과(켜기·보충 각각). 화면 안내·진단용 */
+    private val onR10Auto: (kr.archsurvey.bt.R10AutoResult) -> Unit = {},
 ) {
+    /** 64h APPFILE 전송 번호. 연결을 넘어 1씩 증가(0–255 순환) */
+    private val dcolTx = java.util.concurrent.atomic.AtomicInteger(0)
     class SessionLost(val error: BtError, msg: String) : IOException(msg)
 
     /**
@@ -227,6 +236,11 @@ class LinkSupervisor(
         val bytesOutCmd = AtomicLong(0)
         val cmdLog = java.util.concurrent.CopyOnWriteArrayList<String>()
         val actRunning = AtomicBoolean(true)
+        // 0.1.33 R10 자동설정: 수신 스트림의 ACK/NAK/DCOL 프레임, 문장 종류별 개수(이 연결)
+        val dcolScanner = kr.archsurvey.bt.DcolScanner()
+        val dcolEvents = kotlinx.coroutines.channels.Channel<kr.archsurvey.bt.DcolEvent>(64, kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
+        val typeCounts = java.util.concurrent.ConcurrentHashMap<String, AtomicLong>()
+        val r10Port = AtomicReference<Int?>(null)
         val actEndedAt = AtomicLong(0)
         var actSummary = ""
         fun safeWrite(b: ByteArray, off: Int = 0, len: Int = b.size) {
@@ -244,6 +258,12 @@ class LinkSupervisor(
             safeWrite(b); bytesOutCmd.addAndGet(b.size.toLong())
             val line = b.toString(Charsets.US_ASCII).trim().take(80)
             if (line.isNotEmpty()) cmdLog.add("TX $line")
+        }
+        /** DCOL 바이너리 명령. RTCM 프레임 한 개를 다 쓴 뒤에만(frameLock) 쓴다 */
+        suspend fun writeDcol(b: ByteArray, label: String) {
+            frameLock.withLock { safeWrite(b) }
+            bytesOutCmd.addAndGet(b.size.toLong())
+            cmdLog.add("TX $label")
         }
         fun diagSnapshot(extra: String = ""): String {
             val rxHint = when {
@@ -283,9 +303,14 @@ class LinkSupervisor(
                         cmdLog.add("RX $snip")
                     }
                     for (line in pashr.feed(buf, n)) pashReplies.trySend(line)
+                    if (r10Auto != null) for (e in dcolScanner.feed(buf, n)) {
+                        if (e !is kr.archsurvey.bt.DcolEvent.Frame) cmdLog.add("RX $e")
+                        dcolEvents.trySend(e)
+                    }
                     val now = clock()
                     val msgs = driver.onBytes(buf, n, now)
                     if (msgs.isNotEmpty()) {
+                        for (m in msgs) typeCounts.getOrPut(sentenceType(m)) { AtomicLong(0) }.incrementAndGet()
                         val snap = driver.snapshot
                         snap.gga?.let { if (it.raw.isNotEmpty()) onGga(it.raw) }
                         onQuality(snap.quality)
@@ -309,7 +334,33 @@ class LinkSupervisor(
         launch(io) {
             try {
                 val cmds = NmeaActivation.candidates(profile)
-                val result = NmeaActivation.run(
+                val auto = r10Auto
+                val result = if (auto != null) {
+                    // 0.1.33 R10: 자연 NMEA 2 s → ENQ → 포트 17/18/19 탐색(64h) → GGA·GST·GSA·GSV
+                    val r = kr.archsurvey.bt.R10AutoConfig(
+                        send = { b, label -> writeDcol(b, label) }, events = dcolEvents,
+                        count = { typeCounts[it]?.get() ?: 0L }, clock = clock, store = auto.store, timing = auto.timing,
+                        nextTx = { dcolTx.getAndIncrement() and 0xFF },
+                        onStatus = { msg ->
+                            if (link.value.state == LinkState.CONNECTED_NO_DATA)
+                                setLink(LinkState.CONNECTED_NO_DATA, attempt, link.value.failures, msg = msg, strategy = t.strategyName)
+                        },
+                    ).enableOutput()
+                    if (r.outcome == kr.archsurvey.bt.R10AutoOutcome.PORT_FOUND) r10Port.set(r.port)
+                    if (r.outcome != kr.archsurvey.bt.R10AutoOutcome.NATURAL)
+                        CrashLog.record("진단 ${r.summary()}", RuntimeException(r.log.joinToString("\n")))
+                    runCatching { onR10Auto(r) }
+                    val anyAck = r.tried.any { "ACK" in it } || r.enq == "ACK"
+                    kr.archsurvey.bt.NmeaActResult(
+                        outcome = when {
+                            r.gotGga && r.outcome == kr.archsurvey.bt.R10AutoOutcome.NATURAL -> NmeaActOutcome.NATURAL_GGA
+                            r.gotGga || driver.snapshot.gga != null -> NmeaActOutcome.GGA_SEEN
+                            anyAck -> NmeaActOutcome.ACK_SEEN_NO_GGA
+                            else -> NmeaActOutcome.NO_RESPONSE
+                        },
+                        tried = r.tried, log = r.log, elapsedMs = r.elapsedMs,
+                    )
+                } else NmeaActivation.run(
                     cmds = cmds,
                     write = { writeCmd(it) },
                     hasGga = { driver.snapshot.gga != null },
@@ -349,6 +400,23 @@ class LinkSupervisor(
                 diagSnapshot(actSummary)
             }
         }
+        // 0.1.33 R10: GGA 는 오는데 GST/GSA 가 5 s 동안 없으면 같은 포트 탐색으로 GST·GSA·GSV 보충(연결당 1번, GGA 는 끄지 않음)
+        r10Auto?.let { auto -> launch(io) {
+            try {
+                while (isActive && (actRunning.get() || driver.snapshot.gga == null)) delay(200)
+                val r = kr.archsurvey.bt.R10AutoConfig(
+                    send = { b, label -> writeDcol(b, label) }, events = dcolEvents,
+                    count = { typeCounts[it]?.get() ?: 0L }, clock = clock, store = auto.store, timing = auto.timing,
+                    nextTx = { dcolTx.getAndIncrement() and 0xFF },
+                ).addPrecision(r10Port.get())
+                if (r.outcome != kr.archsurvey.bt.R10AutoOutcome.PRECISION_OK)
+                    CrashLog.record("진단 ${r.summary()}", RuntimeException(r.log.joinToString("\n")))
+                runCatching { onR10Auto(r) }
+            } catch (_: CancellationException) {
+            } catch (e: Exception) {
+                CrashLog.record("R10 자동설정(보충) 오류", e)
+            }
+        } }
         // 0.1.30 T23: SP60 정밀도 문장(GST/GSA) 검사·요청 — GGA 확인 뒤 따로(연결당 1번). 실패해도 세션은 그대로
         if (profile.id == kr.archsurvey.device.DeviceProfiles.SP60_ID) launch(io) {
             try {
@@ -440,6 +508,11 @@ class LinkSupervisor(
             }
         }
         Unit
+    }
+
+    private fun sentenceType(m: kr.archsurvey.core.NmeaMessage): String = when (m) {
+        is kr.archsurvey.core.GgaMessage -> "GGA"; is kr.archsurvey.core.GstMessage -> "GST"; is kr.archsurvey.core.GsaMessage -> "GSA"
+        is kr.archsurvey.core.GsvMessage -> "GSV"; is kr.archsurvey.core.ZdaMessage -> "ZDA"
     }
 
     private fun containsAscii(buf: ByteArray, len: Int, needle: String): Boolean {

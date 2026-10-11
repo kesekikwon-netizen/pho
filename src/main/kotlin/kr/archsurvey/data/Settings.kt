@@ -88,6 +88,10 @@ class SettingsStore(private val ctx: Context) {
     }
     fun clearBtStrategy(address: String) = setBtStrategy(address, null)
 
+    /** 0.1.33: R10 자동설정이 GGA 로 확인한 블루투스 포트(0-based 17–19). 다음 연결에서 먼저 시도 */
+    fun r10Port(address: String): Int? = sp.getInt("r10_port_$address", -1).takeIf { it in 17..19 }
+    fun setR10Port(address: String, port: Int) { if (port in 17..19) sp.edit().putInt("r10_port_$address", port).apply() }
+
     var project: String
         get() = sp.getString("project", "작업1") ?: "작업1"
         set(v) = sp.edit().putString("project", v.trim().ifEmpty { "작업1" }).apply()
