@@ -79,6 +79,25 @@ enum class Strategy { SECURE_SPP, INSECURE_SPP, SDP_UUID, REFLECT_CH1 }
 data class Attempt(val strategy: Strategy, val uuid: UUID? = null)
 
 /**
+ * 연결 시도 순서. 기본: SECURE → INSECURE SPP(1101) → 광고된 다른 UUID → 리플렉션 ch1.
+ * 0.1.33-r10: 페어링 기록(SDP 캐시)에 UUID 가 있는데 SPP(1101)가 없으면 광고된 UUID 를 먼저 쓴다 —
+ * 현장 R10 은 0x1103 하나만 광고해서 1101 두 번이 매번 먼저 실패했다. 캐시가 비면(모름) 예전 순서 그대로.
+ * [preferred](지난번 GGA 까지 된 방식)가 가장 앞, [exclude](무음 판명)는 뺀다(전부 빠지면 원본 유지).
+ */
+internal fun planAttempts(advertised: List<UUID>, preferred: Strategy?, exclude: Set<Strategy>): List<Attempt> {
+    val spp = listOf(Attempt(Strategy.SECURE_SPP), Attempt(Strategy.INSECURE_SPP))
+    val sdp = advertised.distinct().filter { it != BtCompat.SPP_UUID }
+        .sortedByDescending { it.toString().startsWith("0000110") }
+        .map { Attempt(Strategy.SDP_UUID, it) }
+    val sppFirst = advertised.isEmpty() || BtCompat.SPP_UUID in advertised
+    val plan = (if (sppFirst) spp + sdp else sdp + spp) + Attempt(Strategy.REFLECT_CH1)
+    // 무음 채널로 판명된 방식은 제외(모두 제외되면 원본 유지 — 연결 자체는 시도해야 함)
+    val filtered = plan.filter { it.strategy !in exclude }.ifEmpty { plan }
+    val pref = preferred?.takeUnless { it in exclude }
+    return if (pref == null) filtered else filtered.sortedBy { if (it.strategy == pref) 0 else 1 }
+}
+
+/**
  * RFCOMM(SPP) 전송 계층. 한 인스턴스 = 한 소켓. close() 는 멱등. 4단계 폴백, 성공한 방식을 반환.
  * [exclude]: BT-130(소켓 OK·무음)으로 판명된 방식은 다음 치유에서 빼고 SECURE/INSECURE SPP 부터 다시 시도한다.
  */
@@ -153,17 +172,8 @@ class BtTransport(
 
     @SuppressLint("MissingPermission")
     private fun buildPlan(dev: BluetoothDevice, preferred: Strategy?): List<Attempt> {
-        val plan = mutableListOf(Attempt(Strategy.SECURE_SPP), Attempt(Strategy.INSECURE_SPP))
-        val sdp = try { dev.uuids?.map { it.uuid }.orEmpty() } catch (_: SecurityException) { emptyList() }
-            .filter { it != BtCompat.SPP_UUID }
-            .sortedByDescending { it.toString().startsWith("0000110") }
-            .map { Attempt(Strategy.SDP_UUID, it) }
-        plan += sdp
-        plan += Attempt(Strategy.REFLECT_CH1)
-        // 무음 채널로 판명된 방식은 제외(모두 제외되면 원본 유지 — 연결 자체는 시도해야 함)
-        val filtered = plan.filter { it.strategy !in exclude }.ifEmpty { plan }
-        val pref = preferred?.takeUnless { it in exclude }
-        return if (pref == null) filtered else filtered.sortedBy { if (it.strategy == pref) 0 else 1 }
+        val advertised = try { dev.uuids?.map { it.uuid }.orEmpty() } catch (_: SecurityException) { emptyList() }
+        return planAttempts(advertised, preferred, exclude)
     }
 
     override fun close() {
