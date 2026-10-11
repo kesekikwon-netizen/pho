@@ -82,7 +82,7 @@ internal fun DigHeader(c: SurveyController) {
             HeaderIcon(Glyph.BACK, "오늘 준비(홈)", "survey_back") { c.homeOpen = true }
             // 0.1.36: 긴 작업명이 잘리던 문제 — 길이에 따라 글자를 줄이고 두 줄까지(머리줄이 조금 높아짐). 눌러서 전체 이름
             val ts = HeaderTitle.style(c.projectName)
-            Column(Modifier.weight(1f).padding(start = 2.dp, top = 4.dp, bottom = 4.dp).hClickable { c.ui.toast(c.projectName) }.semantics { contentDescription = "작업 ${c.projectName}" }) {
+            Column(Modifier.weight(1f).heightIn(min = 48.dp).padding(start = 2.dp).hClickable { c.ui.toast(c.projectName) }.semantics { contentDescription = "작업 ${c.projectName}" }, verticalArrangement = Arrangement.Center) {
                 Text(c.projectName, style = Ty.serifHead.copy(fontSize = ts.sizeSp.sp, lineHeight = (ts.sizeSp + 3).sp), color = t.ink, maxLines = ts.maxLines, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("header_title"))
                 Text("오늘 ${c.dig.todayCount()}점 · EPSG:${c.zone.epsg} · ${c.geoid.shortKo}", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("header_job"))
             }

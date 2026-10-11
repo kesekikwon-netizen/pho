@@ -135,7 +135,8 @@ class Exit0131Tests {
         backTarget(c)!!.invoke()
         val r = c.ui.confirm!!
         assertEquals(AppExit.TITLE_DEVICE, r.title)
-        assertEquals("예", r.okLabel); assertEquals("취소", r.cancelLabel)
+        // 0.1.36(의도된 변경): 현장 「기기 종료 눌러도 안 꺼진다」 → 제목 「수신기 연결 끊기」·단추 「연결 끊기」
+        assertEquals("연결 끊기", r.okLabel); assertEquals("취소", r.cancelLabel)
         assertTrue(r.body.contains("수신기 버튼")) // 전원은 앱이 끄지 않음을 알림
         assertEquals(0, p.stops); assertEquals(0, exits[0])
         c.ui.answer(true)

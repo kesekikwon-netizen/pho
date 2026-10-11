@@ -53,14 +53,15 @@ class PrecisionActivatorTest {
             when {
                 b == PrecisionCommands.PRT_QUERY -> Triple(100L, prt("B"), null)
                 "GST" in b -> Triple(100L, ack(), "GST")
+                "GSV" in b -> Triple(100L, ack(), "GSV")
                 else -> Triple(100L, ack(), "GSA")
             }
         }
         val res = r.run()
         assertEquals(PrecisionOutcome.SUCCESS, res.outcome)
         assertEquals('B', res.port)
-        // 명령 문자열 고정
-        assertEquals(listOf("PASHQ,PRT", "PASHS,NME,GST,B,ON,1", "PASHS,NME,GSA,B,ON,1"), r.sent.map { it.second })
+        // 명령 문자열 고정. 0.1.36(의도된 변경): SkyPlot 용 GSV 가 맨 뒤에 하나 더
+        assertEquals(listOf("PASHQ,PRT", "PASHS,NME,GST,B,ON,1", "PASHS,NME,GSA,B,ON,1", "PASHS,NME,GSV,B,ON,1"), r.sent.map { it.second })
         assertEquals("\$PASHQ,PRT*" + "%02X".format(NmeaParser.checksum("PASHQ,PRT")) + "\r\n", PrecisionCommands.line("PASHQ,PRT"))
         assertEquals(1, r.maxInFlight)
         // 자연 대기 5 s 뒤 첫 명령, 다음 명령은 응답 뒤
@@ -73,7 +74,7 @@ class PrecisionActivatorTest {
 
     @Test fun alreadyPresent_sendsNothing_andKeepsBudget() = runTest {
         val r = Rig(this) { error("보내면 안 됨") }
-        r.seen += setOf("GGA", "GST", "GSA")
+        r.seen += setOf("GGA", "GST", "GSA", "GSV")   // 0.1.36: GSV 까지 오면 아무것도 안 보냄
         val b = PrecisionBudget()
         val res = r.run(b)
         assertEquals(PrecisionOutcome.ALREADY_PRESENT, res.outcome)
@@ -82,7 +83,7 @@ class PrecisionActivatorTest {
 
     @Test fun onlyMissingSentenceIsRequested() = runTest {
         val r = Rig(this) { b -> if (b == PrecisionCommands.PRT_QUERY) Triple(50L, prt("A"), null) else Triple(50L, ack(), "GST") }
-        r.seen += setOf("GGA", "GSA")
+        r.seen += setOf("GGA", "GSA", "GSV")
         val res = r.run()
         assertEquals(listOf("PASHQ,PRT", "PASHS,NME,GST,A,ON,1"), r.sent.map { it.second })
         assertEquals(PrecisionOutcome.SUCCESS, res.outcome)
@@ -260,6 +261,8 @@ class PrecisionLinkTest {
             "PASHQ,PRT" in txt -> { val l = NmeaParser.build("PASHR,PRT,B,6"); s.push(l.substring(0, 9)); s.push(l.substring(9)) }
             "PASHS,NME,GST" in txt -> s.push(NmeaParser.build("PASHR,ACK") + gst())
             "PASHS,NME,GSA" in txt -> s.push(NmeaParser.build("PASHR,ACK") + NmeaParser.build("GNGSA,A,3,01,02,03,,,,,,,,,,1.8,0.9,1.5"))
+            // 0.1.36: SkyPlot 용 GSV
+            "PASHS,NME,GSV" in txt -> s.push(NmeaParser.build("PASHR,ACK") + NmeaParser.build("GPGSV,1,1,04,01,40,083,46,02,17,308,41,12,07,344,39,14,22,228,45"))
         }
     })
 
@@ -273,12 +276,13 @@ class PrecisionLinkTest {
         val res = r.results[0]
         assertEquals(PrecisionOutcome.SUCCESS, res.outcome); assertEquals('B', res.port)
         val cmds = pashLines(r.sockets[0].written.toString("US-ASCII"))
-        assertEquals(listOf("PASHQ,PRT", "PASHS,NME,GST,B,ON,1", "PASHS,NME,GSA,B,ON,1"), cmds)
+        // 0.1.36(의도된 변경): GSV 하나 더
+        assertEquals(listOf("PASHQ,PRT", "PASHS,NME,GST,B,ON,1", "PASHS,NME,GSA,B,ON,1", "PASHS,NME,GSV,B,ON,1"), cmds)
         assertTrue(cmds.all { PrecisionCommands.isAllowed(it) })
         assertNotNull(r.gnss.value.gst)
         Thread.sleep(800)
         assertEquals("연결당 한 번", 1, r.results.size)
-        assertEquals(3, pashLines(r.sockets[0].written.toString("US-ASCII")).size)
+        assertEquals(4, pashLines(r.sockets[0].written.toString("US-ASCII")).size)
     }
 
     @Test fun r10_neverSendsAnything() {
@@ -297,9 +301,11 @@ class PrecisionLinkTest {
         r.waitFor { r.sockets.size == 1 }
         r.sockets[0].push(gga())
         val frames = (0 until 60).map { rtcmFrame(1077 + (it % 3), 120, fill = it) }
+        // 0.1.36: 명령 줄 바이트를 정확히(PRT + GST·GSA·GSV) — 다 쓰기 전에 읽으면 마지막 프레임이 잘림
+        val cmdBytes = (listOf(PrecisionCommands.PRT_QUERY) + PrecisionCommands.SENTENCES.map { PrecisionCommands.enable(it, 'B') }).sumOf { PrecisionCommands.line(it).length }
         scope.launch { for (f in frames) { r.rtcm.send(f); delay(15) } }
         r.waitFor(ms = 10_000, what = "result") { r.results.isNotEmpty() }
-        r.waitFor(ms = 10_000, what = "all frames") { r.sockets[0].written.size() >= frames.sumOf { it.size } + 60 }
+        r.waitFor(ms = 10_000, what = "all frames") { r.sockets[0].written.size() >= frames.sumOf { it.size } + cmdBytes }
         // 쓴 바이트를 앞에서부터: RTCM 프레임(CRC 확인) 또는 $…CRLF 명령 줄만 있어야 한다
         val w = r.sockets[0].written.toByteArray()
         var i = 0; var nFrames = 0; val cmds = ArrayList<String>()
@@ -317,7 +323,7 @@ class PrecisionLinkTest {
             }
         }
         assertEquals(60, nFrames)
-        assertEquals(3, cmds.size)
+        assertEquals(4, cmds.size)   // 0.1.36: PRT·GST·GSA·GSV
     }
 
     @Test fun reconnect_runsAgainOnce_thenBudgetStopsThirdConnection() {
@@ -352,7 +358,7 @@ class PrecisionLinkTest {
         r.waitFor(what = "retry") { r.results.size == 2 }
         Thread.sleep(500)
         assertEquals(2, r.results.size)
-        assertEquals(listOf("PASHQ,PRT", "PASHS,NME,GST,C,ON,1", "PASHS,NME,GSA,C,ON,1"), pashLines(r.sockets[0].written.toString("US-ASCII")))
+        assertEquals(listOf("PASHQ,PRT", "PASHS,NME,GST,C,ON,1", "PASHS,NME,GSA,C,ON,1", "PASHS,NME,GSV,C,ON,1"), pashLines(r.sockets[0].written.toString("US-ASCII")))
         assertEquals(PrecisionOutcome.FAILED_TIMEOUT, r.results[1].outcome)
     }
 }

@@ -36,7 +36,8 @@ class DigExportTest {
 
     @Test fun layersAndScaleTextHeights() {
         val d100 = DigExport.drawing(pts, outs, listOf(grid), 100)
-        assertEquals(listOf("조사구역", "그리드", "트렌치", "유구", "유물", "레벨", "토층", "기준점", "기타", "점번호", "해발"), d100.layers.map { it.first })
+        // 0.1.36(의도된 변경): 「사진기준점」 레이어 추가(AprilTag)
+        assertEquals(listOf("조사구역", "그리드", "트렌치", "유구", "유물", "레벨", "토층", "기준점", "사진기준점", "기타", "점번호", "해발"), d100.layers.map { it.first })
         val texts = d100.ents.filterIsInstance<DxfWriter.EText>()
         assertTrue(texts.any { it.layer == "유물" && it.text == "유물 13" && Math.abs(it.heightM - 0.25) < 1e-9 })
         assertTrue(texts.any { it.layer == "레벨" && it.text == "바닥" })

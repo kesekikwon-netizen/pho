@@ -12,10 +12,8 @@ package kr.archsurvey.ui
  */
 object AppExit {
     const val TITLE_DEVICE = "수신기 연결 끊기"
-    const val BODY_DEVICE = "수신기 연결을 끊을까요? 블루투스·VRS 연결을 끊고 알림을 지워요.\n앱은 수신기 전원을 끌 수 없어요 — 수신기 전원 버튼을 길게 눌러 끄세요. 다음에 켜면 같은 수신기로 자동 연결해요."
+    const val BODY_DEVICE = "수신기 연결을 끊을까요? 블루투스·VRS 연결을 끊고 알림을 지워요.\n앱은 수신기 전원을 끌 수 없어요 — 수신기 버튼을 길게 눌러 전원을 끄세요. 다음에 켜면 같은 수신기로 자동 연결해요."
     const val OK_DEVICE = "연결 끊기"
-    /** 끊은 뒤 알림: 전원은 수신기에서 */
-    const val DONE_DEVICE = "수신기 연결을 끊었어요 · 수신기 전원은 수신기 버튼으로 꺼 주세요"
     const val TITLE_APP = "프로그램 종료"
     const val BODY_APP = "앱을 종료할까요? 측점은 이미 저장돼 있어요."
     const val OK_APP = "종료"
