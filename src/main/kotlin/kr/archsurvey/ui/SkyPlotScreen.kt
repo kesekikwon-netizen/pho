@@ -34,6 +34,19 @@ enum class Constellation(val labelKo: String, val prefix: String) {
 
 /** 0.1.11 SkyPlot 순수 계산(시험 가능) */
 object SkyModel {
+    const val EMPTY_GENERIC = "위성 상세(GSV)를 아직 받지 못했어요.\n수신기에서 GSV 출력을 켜면 위성 위치가 나와요."
+    /** 0.1.36 R10: 자연 NMEA 가 오면 앱이 R10 설정(64h)을 바꾸지 않으므로 웹 설정 경로를 그대로 안내 */
+    const val EMPTY_R10 = "R10이 위성 상세(GSV)를 보내지 않아요. 측량(고정·좌표)과는 상관없어요.\n" +
+        "앱은 R10 출력 설정을 바꾸지 않아요. 켜려면: R10 웹 화면(R10 Wi-Fi 접속 → 192.168.142.1) → I/O 설정 → Bluetooth 포트 → NMEA에서 GSV·GSA 1 Hz 켜기 → 「Maintain configuration when connection dropped」 체크 후 저장(폰은 연결한 채)."
+    /** 0.1.36 SP60: 앱이 연결 때 GSV 켜기($PASHS,NME,GSV)를 한 번 요청 */
+    const val EMPTY_SP60 = "SP60 위성 상세(GSV)를 기다리는 중이에요. 연결할 때 앱이 GSV 켜기를 한 번 요청해요(몇 초).\n" +
+        "계속 비어 있으면 SPace/터미널에서 NMEA GSV 출력을 켜 주세요. 측량(고정·좌표)과는 상관없어요."
+    fun emptyText(deviceId: String?): String = when (deviceId) {
+        kr.archsurvey.device.DeviceProfiles.R10_ID -> EMPTY_R10
+        kr.archsurvey.device.DeviceProfiles.SP60_ID -> EMPTY_SP60
+        else -> EMPTY_GENERIC
+    }
+
     fun constellation(s: SatInfo): Constellation = when (s.talker.uppercase()) {
         "GP" -> if (s.prn in 33..64) Constellation.SBAS else Constellation.GPS
         "GL" -> Constellation.GLONASS
@@ -90,7 +103,7 @@ fun SkyPlotScreen(c: SurveyController) {
             Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(t.raised).border(1.dp, t.line.copy(alpha = 0.4f), RoundedCornerShape(20.dp)).padding(12.dp), contentAlignment = Alignment.Center) {
                 SkyCanvas(shown, Modifier.fillMaxWidth().aspectRatio(1f).widthIn(max = 360.dp).testTag("skyplot_canvas"))
                 if (sats.isEmpty()) Text(
-                    "위성 상세(GSV)를 아직 받지 못했어요.\n수신기에서 GSV 출력을 켜면 위성 위치가 나와요.",
+                    SkyModel.emptyText(c.deviceIdProvider()),
                     style = Ty.small, color = t.inkSub, modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(t.raised).padding(10.dp).testTag("skyplot_empty"),
                 )
             }

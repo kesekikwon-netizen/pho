@@ -78,10 +78,12 @@ internal fun DigStatusPill(c: SurveyController, modifier: Modifier = Modifier) {
 internal fun DigHeader(c: SurveyController) {
     val t = T
     Column(Modifier.fillMaxWidth().background(t.bg).testTag("app_header")) {
-        Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             HeaderIcon(Glyph.BACK, "오늘 준비(홈)", "survey_back") { c.homeOpen = true }
-            Column(Modifier.weight(1f).padding(start = 2.dp)) {
-                Text(c.projectName, style = Ty.serifHead, color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("header_title"))
+            // 0.1.36: 긴 작업명이 잘리던 문제 — 길이에 따라 글자를 줄이고 두 줄까지(머리줄이 조금 높아짐). 눌러서 전체 이름
+            val ts = HeaderTitle.style(c.projectName)
+            Column(Modifier.weight(1f).padding(start = 2.dp, top = 4.dp, bottom = 4.dp).hClickable { c.ui.toast(c.projectName) }.semantics { contentDescription = "작업 ${c.projectName}" }) {
+                Text(c.projectName, style = Ty.serifHead.copy(fontSize = ts.sizeSp.sp, lineHeight = (ts.sizeSp + 3).sp), color = t.ink, maxLines = ts.maxLines, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("header_title"))
                 Text("오늘 ${c.dig.todayCount()}점 · EPSG:${c.zone.epsg} · ${c.geoid.shortKo}", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("header_job"))
             }
             DigStatusPill(c, Modifier.padding(horizontal = 4.dp))
@@ -342,5 +344,18 @@ internal fun TagCard(c: SurveyController, modifier: Modifier = Modifier) {
         if (again) Text("이 유구에서 이미 잰 번호 · 다시 재면 마지막 값으로 내보내요", style = Ty.small.copy(fontSize = 12.sp), color = t.cautionInk, maxLines = 2, modifier = Modifier.testTag("tag_again"))
         else if (done.isNotEmpty()) Text("잰 표적 ${done.size}개 · #" + done.joinToString(","), style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("tag_done"))
         else Text("표적 가운데에 폴을 세우고 재세요 · 재면 다음 번호로", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** 0.1.36 머리줄 작업명 글자 크기·줄 수(순수, 시험 가능): 짧으면 그대로 한 줄, 길면 작게 두 줄 */
+object HeaderTitle {
+    data class Style(val sizeSp: Int, val maxLines: Int)
+    fun style(name: String): Style {
+        val n = name.codePointCount(0, name.length)
+        return when {
+            n <= 8 -> Style(19, 1)
+            n <= 14 -> Style(17, 2)
+            else -> Style(15, 2)
+        }
     }
 }

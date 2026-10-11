@@ -883,7 +883,7 @@ class SurveyController(
         if (dupPrompt != null) { ui.toast(DUP_BACK_HINT); return }
         if (phase == Phase.ACQUIRING) { cancelAcquire(); return }
         if (ui.confirm != null) return
-        if (connection?.linkActive() == true) ui.ask(AppExit.deviceStep { disconnectDevice(); ui.ask(AppExit.appStep { exitApp() }) })
+        if (connection?.linkActive() == true) ui.ask(AppExit.deviceStep { disconnectDevice(); ui.toast(AppExit.DONE_DEVICE); ui.ask(AppExit.appStep { exitApp() }) })
         else ui.ask(AppExit.appStep { exitApp() })
     }
     /** 「기기 종료」 예: 보정·블루투스 끊기 + 연결 서비스(알림) 멈춤. 저장된 수신기 설정은 그대로(다음 실행 자동 연결) */

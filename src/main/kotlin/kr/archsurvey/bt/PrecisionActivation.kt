@@ -15,7 +15,9 @@ import java.util.concurrent.ConcurrentHashMap
  * 근거: SP80 ICD Rel 1.2 §3.1.67 NME · §3.2.57 PRT (형제기종). **SP60 적용은 [미확인]**, 수신기에 저장되는지도 [미확인] → 연결마다 다시 검사.
  *
  * 규칙(게이트 통과 조건 + 통신GNSS 보충, 시험으로 고정):
- * - SP60 만. 보낼 수 있는 문자열은 [PrecisionCommands.isAllowed] 세 가지 꼴뿐: `$PASHQ,PRT` · `$PASHS,NME,GST,<p>,ON,1` · `$PASHS,NME,GSA,<p>,ON,1`.
+ * - SP60 만. 보낼 수 있는 문자열은 [PrecisionCommands.isAllowed] 네 가지 꼴뿐: `$PASHQ,PRT` · `$PASHS,NME,GST,<p>,ON,1` · `$PASHS,NME,GSA,<p>,ON,1`
+ *   · (0.1.36) `$PASHS,NME,GSV,<p>,ON,1` — SkyPlot 용 위성 상세. 근거: Spectra ProMark 800 Reference Manual(같은 Ashtech $PASH 펌웨어 계열)
+ *   「$PASHS,NME」 Set 명령이 GSV 를 같은 꼴로 받고, Query 장 GSV 문장 정의(p.314). SP60 적용은 [미확인] → 성공은 문장 수신으로만 판정.
  *   NME,ALL · $PASHS,PRT · RST · INI · OUT · DIF · GGA 관련 · 1초보다 짧은 주기는 만들 수 없다.
  * - 한 번에 하나씩: PRT → (없는 것만) GST → GSA. 다음 명령은 응답(ACK/NAK/PRT) 또는 1.5 s 뒤.
  * - 포트: `$PASHR,PRT,` 로 시작하고 체크섬이 맞는 줄의 둘째 필드. A/B/C/D/I 만 받음. 그 밖·응답 없음·NAK → C 로 대체(로그).
@@ -28,16 +30,18 @@ object PrecisionCommands {
     const val FALLBACK_PORT = 'C'
     /** 통신GNSS 확정: 이 글자만 포트로 믿는다 */
     val ALLOWED_PORTS: Set<Char> = setOf('A', 'B', 'C', 'D', 'I')
-    /** 켜는 문장 순서 */
-    val SENTENCES = listOf("GST", "GSA")
+    /** 켜는 문장 순서. GSV(위성 상세, SkyPlot)는 정밀도와 상관없어 맨 뒤 */
+    val SENTENCES = listOf("GST", "GSA", "GSV")
+    /** 정밀도 판정(σ·DOP)에 쓰는 문장. GSV 는 판정·안내에 넣지 않는다(없어도 측점에는 영향 없음) */
+    val PRECISION = listOf("GST", "GSA")
 
     fun enable(sentence: String, port: Char): String {
-        require(sentence in SENTENCES) { "GST/GSA 만" }
+        require(sentence in SENTENCES) { "GST/GSA/GSV 만" }
         require(port in ALLOWED_PORTS) { "포트 A/B/C/D/I 만" }
         return "PASHS,NME,$sentence,$port,ON,1"
     }
 
-    private val ENABLE_RE = Regex("""PASHS,NME,(GST|GSA),[ABCDI],ON,1""")
+    private val ENABLE_RE = Regex("""PASHS,NME,(GST|GSA|GSV),[ABCDI],ON,1""")
     /** 이 단계가 보낼 수 있는 본문인가(`$`·체크섬 제외) */
     fun isAllowed(body: String): Boolean = body == PRT_QUERY || ENABLE_RE.matches(body)
 
@@ -152,7 +156,9 @@ data class PrecisionResult(
     val gstMissing: Boolean get() = "GST" !in seenTypes
     val failed: Boolean get() = outcome == PrecisionOutcome.FAILED_NAK || outcome == PrecisionOutcome.FAILED_TIMEOUT ||
         outcome == PrecisionOutcome.FAILED_WRITE || outcome == PrecisionOutcome.BUDGET_USED
-    fun summary(): String = "정밀도 자동요청 ${outcome.ko} · 포트 ${port ?: "-"}($portSource) · 받은 문장 ${seenTypes.sorted().joinToString("/")}"
+    /** 0.1.36: 위성 상세(GSV, SkyPlot)를 받는 중인가 */
+    val gsvSeen: Boolean get() = "GSV" in seenTypes
+    fun summary(): String = "정밀도 자동요청 ${outcome.ko} · 포트 ${port ?: "-"}($portSource) · 받은 문장 ${seenTypes.sorted().joinToString("/")} · GSV ${if (gsvSeen) "받음" else "없음"}"
 }
 
 /**
@@ -177,6 +183,7 @@ class PrecisionActivator(
         val t0 = clock()
         val sent = ArrayList<String>(); val got = ArrayList<String>(); val log = ArrayList<String>()
         fun has(t: String) = t in seenTypes()
+        fun allSeen() = PrecisionCommands.SENTENCES.all { has(it) }
         fun result(o: PrecisionOutcome, port: Char?, src: String, gstAt: Long? = null, gsaAt: Long? = null): PrecisionResult {
             log += "결과 ${o.ko} · 받은 문장 ${seenTypes().sorted()} · ${clock() - t0}ms"
             return PrecisionResult(o, port, src, sent.toList(), got.toList(), log.toList(), gstAt, gsaAt, seenTypes(), clock())
@@ -184,8 +191,8 @@ class PrecisionActivator(
         // 1) GGA 확인 뒤 5 s 자연 대기
         val until = if (userRetry) t0 else t0 + naturalWaitMs
         if (userRetry) log += "사용자 요청 [자동 켜기 다시]"
-        while (clock() < until && !(has("GST") && has("GSA"))) delay(pollMs)
-        if (has("GST") && has("GSA")) { log += "GST·GSA 이미 수신 — 명령 안 보냄"; return result(PrecisionOutcome.ALREADY_PRESENT, null, "-") }
+        while (clock() < until && !allSeen()) delay(pollMs)
+        if (allSeen()) { log += "GST·GSA·GSV 이미 수신 — 명령 안 보냄"; return result(PrecisionOutcome.ALREADY_PRESENT, null, "-") }
         val missing = PrecisionCommands.SENTENCES.filter { !has(it) }
         log += "${naturalWaitMs / 1000}초 동안 ${missing.joinToString("·")} 없음"
         if (!budget.tryAcquire()) { log += "이 수신기 자동요청 상한 ${budget.maxRuns}번을 이미 씀 — 보내지 않음"; return result(PrecisionOutcome.BUDGET_USED, null, "-") }
@@ -241,15 +248,17 @@ class PrecisionActivator(
 
         // 4) 명령 뒤 5 s 안에 실제 문장
         val cmdEnd = clock()
-        var gstAt: Long? = null; var gsaAt: Long? = null
+        var gstAt: Long? = null; var gsaAt: Long? = null; var gsvLogged = "GSV" !in missing
         val vEnd = cmdEnd + verifyWaitMs
         while (true) {
             val now = clock()
             if (gstAt == null && has("GST")) { gstAt = now; log += "명령 뒤 첫 GST ${now - cmdEnd}ms" }
             if (gsaAt == null && has("GSA")) { gsaAt = now; log += "명령 뒤 첫 GSA ${now - cmdEnd}ms" }
-            if ((gstAt != null && gsaAt != null) || now >= vEnd) break
+            if (!gsvLogged && has("GSV")) { gsvLogged = true; log += "명령 뒤 첫 GSV ${now - cmdEnd}ms" }
+            if ((gstAt != null && gsaAt != null && has("GSV")) || now >= vEnd) break
             delay(pollMs)
         }
+        if (!has("GSV")) log += "GSV 없음 — SkyPlot 은 비어 있음(측점과 무관)"
         val gst = has("GST"); val gsa = has("GSA")
         val o = when {
             gst && gsa -> PrecisionOutcome.SUCCESS
