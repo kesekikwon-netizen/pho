@@ -271,6 +271,62 @@ class ArchController(
         return true
     }
 
+    // ---------------- 0.1.35 발굴: 유구·트렌치·조사구역 윤곽 ----------------
+
+    /** 새 윤곽(유구/트렌치/조사구역) 시작. 저장소가 없으면(시험) 메모리에만 */
+    suspend fun startFeature(label: String, kind: String, featureType: String): Outline? {
+        val st = store ?: return null
+        return runCatching {
+            val id = st.startFeature(activeAreaId, label, kind, featureType)
+            Outline(id, label, activeAreaId, closed = false, finished = false, pointRowIds = emptyList(), kind = kind, featureType = featureType, history = label)
+                .also { outlines.add(it) }
+        }.onFailure { error = "유구를 만들지 못했어요" }.getOrNull()
+    }
+
+    /** 방금 저장한 점을 이 윤곽의 다음 꼭짓점으로 */
+    suspend fun attachVertexTo(outlineId: Long, rowId: Long) {
+        val st = store ?: return
+        if (rowId <= 0) return
+        val o = outlines.firstOrNull { it.id == outlineId } ?: return
+        runCatching { st.addVertex(o.id, rowId); replaceOutline(o.copy(pointRowIds = o.pointRowIds + rowId)) }
+            .onFailure { error = "외곽 꼭짓점을 저장하지 못했어요" }
+    }
+
+    /** id 로 윤곽을 끝낸다(면 닫기). 점이 모자라면 false */
+    fun finishOutlineId(id: Long, close: Boolean): Boolean {
+        val st = store ?: return false
+        val o = outlines.firstOrNull { it.id == id } ?: return false
+        val pts = verticesOf(o)
+        if (close && pts.size < 3) { error = "면으로 닫으려면 꼭짓점이 3개 이상 필요해요"; return false }
+        if (pts.size < 2) { error = "꼭짓점이 2개 이상 있어야 해요"; return false }
+        error = null
+        val sum = OutlineMath.summarize(pts, close)
+        replaceOutline(o.copy(closed = sum.closed, finished = true))
+        if (activeOutlineId == id) activeOutlineId = null
+        lastSummary = summaryText(o.label, sum)
+        scope.launch { runCatching { st.finishOutline(o.id, sum.closed) }.onFailure { error = "외곽을 저장하지 못했어요" } }
+        return true
+    }
+
+    /** 「면 닫기」 되돌리기: 다시 이어서 잴 수 있게 */
+    fun reopenOutline(id: Long) {
+        val st = store ?: return
+        val o = outlines.firstOrNull { it.id == id } ?: return
+        replaceOutline(o.copy(closed = false, finished = false))
+        scope.launch { runCatching { st.reopenOutline(id) } }
+    }
+
+    /** 유구 이름·종류만 바꾼다. 점(꼭짓점·소속)은 그대로 */
+    fun renameOutline(id: Long, label: String, featureType: String) {
+        val st = store ?: return
+        val o = outlines.firstOrNull { it.id == id } ?: return
+        val hist = kr.archsurvey.dig.FeatureNaming.withHistory(o.history.ifBlank { o.label }, label)
+        replaceOutline(o.copy(label = label, featureType = featureType, history = hist))
+        scope.launch { runCatching { st.renameFeature(id, label, hist, featureType) }.onFailure { error = "유구 이름을 저장하지 못했어요" } }
+    }
+
+    fun verticesOf(o: Outline): List<NE> = o.pointRowIds.mapNotNull { id -> ctl.points.firstOrNull { it.rowId == id } }.map { ctl.pointNE(it) }
+
     fun deleteOutline(id: Long) {
         val st = store ?: return
         scope.launch { runCatching { st.deleteOutline(id) }.onSuccess { outlines.removeAll { it.id == id }; if (activeOutlineId == id) activeOutlineId = null } }

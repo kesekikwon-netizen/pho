@@ -287,6 +287,9 @@ class SettingsStore(private val ctx: Context) {
     var positionTypes: List<String>
         get() = kr.archsurvey.arch.ArchTypes.decode(sp.getString("position_types", null))
         set(v) = sp.edit().putString("position_types", kr.archsurvey.arch.ArchTypes.encode(v)).apply()
+    /** 0.1.35 발굴 설정·작업별 선택(DigPrefs) 원본 값 */
+    fun digGet(key: String): String? = sp.getString(key, null)
+    fun digPut(key: String, value: String?) { sp.edit().apply { if (value == null) remove(key) else putString(key, value) }.apply() }
     /** 작업별로 마지막에 쓰던 발굴 구역·그리드 (없으면 null) */
     fun activeArch(project: String): Pair<Long?, Long?> =
         sp.getLong("area_$project", -1L).takeIf { it >= 0 } to sp.getLong("grid_$project", -1L).takeIf { it >= 0 }

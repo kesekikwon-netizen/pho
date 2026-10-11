@@ -83,6 +83,10 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
             onActiveChanged = { a, g -> application.settings.setActiveArch(application.settings.project, a, g) },
         )
         controller.arch.reload()
+        controller.dig.prefs = object : kr.archsurvey.dig.DigPrefs {
+            override fun get(key: String) = application.settings.digGet(key)
+            override fun put(key: String, value: String?) = application.settings.digPut(key, value)
+        }
         val bgFiles = kr.archsurvey.engine.AndroidBgFiles(app, docs, viewModelScope)
         controller.bg = kr.archsurvey.ui.bg.BackgroundController(
             projection = { controller.projection },

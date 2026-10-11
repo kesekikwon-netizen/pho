@@ -301,3 +301,34 @@ object DayKey {
         val f = java.text.SimpleDateFormat("yyyyMMdd", Locale.US); f.timeZone = tz; return f.format(java.util.Date(ms))
     }
 }
+
+/** 그리드 말뚝(칸 모서리) 목록: 「B-4 모서리」 = 칸 B-4 의 원점 쪽 모서리. 바깥 끝 줄도 포함 */
+object StakeNodes {
+    data class Node(val name: String, val ne: NE)
+    fun list(g: kr.archsurvey.arch.GridDef, max: Int = 2000): List<Node> {
+        val out = ArrayList<Node>()
+        for (j in 0..g.rows) for (i in 0..g.cols) {
+            if (out.size >= max) return out
+            out.add(Node("${kr.archsurvey.arch.CellNames.cell(i, j)} 모서리", g.toNE(i * g.spacingM, j * g.spacingM)))
+        }
+        return out
+    }
+    /** 아직 박지 않은 말뚝 중 지금 위치에서 가장 가까운 것(위치가 없으면 첫 번째) */
+    fun nearestOpen(nodes: List<Node>, done: Set<String>, cur: NE?): Node? {
+        val open = nodes.filter { it.name !in done }
+        if (cur == null) return open.firstOrNull()
+        return open.minByOrNull { hypot(it.ne.n - cur.n, it.ne.e - cur.e) }
+    }
+}
+
+/** 장부 칸: 이름 · 값 · 단위 */
+data class LedgerCell(val label: String, val value: String, val unit: String)
+
+/** 잰 직후 한 장(사용자 HTML 「저장했어요」 카드) — 화면은 이 글자만 그린다 */
+data class SavedLedger(val title: String, val chip: String, val line: String, val cells: List<LedgerCell>)
+
+object LedgerText {
+    fun m3(v: Double?) = v?.let { String.format(Locale.US, "%.3f", it) } ?: "—"
+    fun cm1(v: Double?) = v?.let { String.format(Locale.US, "%.1f", it * 100.0) } ?: "—"
+    fun signed2(v: Double?) = v?.let { (if (it < -0.0005) "−" else "+") + String.format(Locale.US, "%.2f", abs(it)) } ?: "—"
+}

@@ -190,6 +190,14 @@ class JobTests {
         assertEquals(ToolScreen.JOB_INFO, c.hub.screen); assertTrue(jc.notice!!.contains("새작업"))
     }
 
+    @Test fun newJobFormDefaultsGeoidToReceiverWithoutTouchingCurrentJob() {
+        val (c, jc, _) = setup()
+        c.geoid = kr.archsurvey.core.GeoidModel.EGM96
+        jc.openNew()
+        assertEquals(kr.archsurvey.core.GeoidModel.RECEIVER, jc.formGeoid)   // 0.1.35: 새 작업 = 수신기 값
+        assertEquals(kr.archsurvey.core.GeoidModel.EGM96, c.geoid)          // 지금 작업은 그대로
+    }
+
     @Test fun duplicateAndEmptyNamesShowError() {
         val (_, jc, p) = setup()
         jc.openNew(); jc.refresh()

@@ -173,7 +173,7 @@ class SurveyController(
     zone: KoreanTmZone = KoreanTmZone.CENTRAL,
     /** 한 점에 평균하는 측정(에폭) 횟수 기본값. 설정에서 바꾼다(0.1.9 기본 3) */
     epochsPerPoint: Int = 3,
-    private val store: PointStore? = null,
+    val store: PointStore? = null,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     /** 한 점의 측정 횟수(1~30). 설정 화면에서 바꾸면 다음 측점부터 */
@@ -242,6 +242,8 @@ class SurveyController(
     var onTypesChanged: ((List<String>) -> Unit)? = null
     /** 고고학: 발굴 구역·그리드·외곽 */
     var arch: kr.archsurvey.arch.ArchController = kr.archsurvey.arch.ArchController(this, null, scope)
+    /** 0.1.35 발굴 측량(지금 재는 것·유구·유물 번호·레벨·오늘 준비) */
+    val dig: kr.archsurvey.dig.DigController by lazy { kr.archsurvey.dig.DigController(this) }
     /** 중복 점 경고 시트 */
     var dupPrompt by mutableStateOf<DupPrompt?>(null)
     /** 전자 기포(폰 센서). null = 쓰지 않음(시험 기본) */
@@ -616,6 +618,8 @@ class SurveyController(
 
     fun onMeasure() {
         if (phase == Phase.ACQUIRING || phase == Phase.RECORDING) return
+        // 0.1.35: 「면 닫기」 미리보기 중이면 측점 단추 = 면 닫기 확인
+        if (dig.closeArmed) { dig.confirmClose(); return }
         resultStripShown = false
         val st = gv.status
         // 0.1.30 T24: 수신기 없음/끊김 → 측점 안 함(폰 위치로 대신하지 않음). 안내 + [연결] + 실패음 1번
@@ -744,14 +748,19 @@ class SurveyController(
     /** 새 점으로 저장 (디스크 + 화면). 외곽 모드면 꼭짓점으로 이어 붙인다 */
     private suspend fun commitNew(sp: SavedPoint, worst: SurveyStatus) {
         resultName = null; resurveyUndo = null
+        val legacyOutline = arch.outlineMode && sp.type == ArchTypes.OUTLINE_POINT
         val named = (if (sp.name == nextName) sp else sp.copy(name = nextName)).let { if (pendingMemo.isNotBlank()) it.copy(memo = pendingMemo.trim()) else it }
+            .let { if (legacyOutline) it.copy(digKind = kr.archsurvey.dig.DigKind.FEATURE.id) else dig.decorate(it) }
         pendingMemo = ""
         points.add(named); seq++
         var saveError: String? = null
         store?.let { st ->
             val idx = points.lastIndex
             // 저장은 즉시 디스크(Room 트랜잭션). 실패하면 화면에 알림
-            try { val id = st.save(named); points[idx] = named.copy(rowId = id); if (arch.outlineMode && named.type == ArchTypes.OUTLINE_POINT) arch.attachVertex(id) }
+            try {
+                val id = st.save(named); points[idx] = named.copy(rowId = id)
+                if (legacyOutline) arch.attachVertex(id) else { val after = dig.afterSaved(points[idx]); if (idx < points.size) points[idx] = after }
+            }
             catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; saveError = "디스크 저장에 실패했어요 — 다시 시도하세요" }
         }
         phase = Phase.RESULT; showResultStrip()
@@ -907,12 +916,15 @@ class SurveyController(
             voice?.onPointUndone()
             return
         }
+        // 0.1.35: 방금 「면 닫기」 했으면 되돌리기 = 면 닫기 취소(점은 지우지 않음)
+        if (dig.undoIsReopen && phase != Phase.RECORDING) { dig.undoClose(); phase = Phase.IDLE; return }
         if (phase == Phase.RECORDING) media?.cancelRecording()
         media?.stopPlayback(); playingVoiceId = null
         stopVoice()
         if (points.isEmpty()) return
         val gone = points.removeAt(points.lastIndex)
         if (gone.rowId > 0) arch.detachVertex(gone.rowId)
+        dig.onPointUndone()
         store?.let { st -> scope.launch { runCatching { st.hideLast() }.onFailure { message = "디스크 반영에 실패했어요" } } }
         phase = Phase.IDLE
         photos.clear(); voices.clear()

@@ -169,7 +169,7 @@ class JobController(
         autoZoneOn = on && c.gv.lon != null
         if (on) autoZone()
     }
-    fun openNew() { error = null; notice = null; newName = ""; loadForm(); c.hub.open(ToolScreen.JOB_NEW); refresh() }
+    fun openNew() { error = null; notice = null; newName = ""; loadForm(); formGeoid = kr.archsurvey.core.GeoidModel.RECEIVER /* 0.1.35: 새 작업 높이 기본 = 수신기 값(지금 작업은 그대로) */; c.hub.open(ToolScreen.JOB_NEW); refresh() }
 
     private fun run(label: String, block: suspend () -> Unit) {
         if (busy) return
@@ -228,6 +228,7 @@ class JobController(
         if (cfg != null) { c.applyJobConfig(cfg); c.settingsState?.syncZone() } else configs.save(name, c.jobConfig())
         loadForm()
         c.reloadFromStore()
+        c.dig.restoreSelection()
         list = runCatching { platform.list() }.getOrDefault(list)
         info = runCatching { platform.info(name) }.getOrNull()
     }
