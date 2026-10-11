@@ -169,7 +169,7 @@ fun NotConnectedCard(c: SurveyController, modifier: Modifier) {
     if (c.gv.status.reason != StatusReason.NOT_CONNECTED) return
     val t = T
     Column(
-        modifier.padding(horizontal = 40.dp).clip(RoundedCornerShape(18.dp)).background(t.bg.copy(alpha = 0.96f))
+        modifier.padding(horizontal = 40.dp).lift(Lift.SHEET, RoundedCornerShape(18.dp)).clip(RoundedCornerShape(18.dp)).background(t.raised)
             .border(1.dp, t.bad.copy(alpha = 0.6f), RoundedCornerShape(18.dp)).padding(16.dp).testTag("not_connected_card"),
         verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -206,29 +206,30 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
         },
     ) {
         map.Draw(ms, Modifier.fillMaxSize())
-        // 왼쪽(목업 15): 현재 좌표 X/Y/Z + 내 위치 · 전체 보기 · 확대 · 축소
+        // 왼쪽(목업 15): 현재 좌표 X/Y/Z + 내 위치 · 전체 보기 · 확대/축소 한 기둥
+        // 0.1.34: 「2D」(위치 모양)는 지도에서 빼고 환경설정 › 고급 설정 › 현재위치 모양으로(초보자 화면 정리 — 기능은 그대로)
         Column(Modifier.align(Alignment.TopStart).padding(start = 10.dp, top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!SurveyLayout.isResult(c.phase)) CoordBox(c)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ToolBtn(Glyph.LOCATE, "내 위치 고정/해제", "tool_locate", if (c.follow) MKind.PRIMARY else MKind.PLAIN) { if (c.follow) c.follow = false else c.recenter() }
                 ToolBtn(Glyph.EXTENT, "전체 보기", "tool_fit") { c.fitAll() }
-                ToolBtn(Glyph.PLUS, "확대", "tool_zoom_in") { c.zoomIn() }
-                ToolBtn(Glyph.MINUS, "축소", "tool_zoom_out") { c.zoomOut() }
-                // 0.1.14 목업 15 「2D」: 평면 지도 표시 설정 → 위치 모양(목업 22)
-                MBtn(Modifier.size(48.dp).testTag("tool_2d"), MKind.PLAIN, 16.dp, onClick = { c.markerStyleOpen = true }) { Text("2D", style = Ty.label, color = t.ink) }
+                ZoomColumn(onIn = { c.zoomIn() }, onOut = { c.zoomOut() })
             }
         }
-        // 오른쪽(목업 15): 배경지도 · 레이어 · 점 목록 / 아래로 기포 · 안테나 높이 · 더보기
+        // 오른쪽(목업 15): 배경지도 · 점 목록 / 아래로 기포 · 안테나 높이 · 더보기
+        // 0.1.34: 「레이어」 단추는 지도에서 뺌 — 배경지도 단추의 「올린 도면 보이기/숨기기」·더보기 「배경 레이어」·전체 메뉴 「배경 지도 · 레이어」에서 그대로 연다
         Column(Modifier.align(Alignment.TopEnd).padding(end = 10.dp, top = 10.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                MBtn(Modifier.height(48.dp).testTag("tool_bgmap"), MKind.PLAIN, 24.dp, onClick = { chooseMapBase(c) }) {
-                    Text("배경지도", style = Ty.label.copy(fontSize = 13.sp), color = t.ink, maxLines = 1, modifier = Modifier.padding(horizontal = 12.dp))
+                MBtn(Modifier.height(48.dp).testTag("tool_bgmap"), MKind.PLAIN, 24.dp, lift = Lift.FLOAT, onClick = { chooseMapBase(c) }) {
+                    Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        GlyphIcon(Glyph.LAYERS, t.accent, 18.dp)
+                        Text("배경지도", style = Ty.label.copy(fontSize = 13.sp), color = t.ink, maxLines = 1)
+                    }
                 }
-                ToolBtn(Glyph.LAYERS, "레이어 관리", "tool_layers") { c.bg?.openManage() ?: run { c.message = "배경 레이어는 이 빌드에 없어요" } }
                 ToolBtn(Glyph.LIST, "점 목록", "tool_points") { c.hub.open(ToolScreen.POINTS) }
             }
             c.tilt?.let { TiltBubble(it) }
-            MBtn(Modifier.size(48.dp).testTag("antenna_chip"), MKind.PLAIN, 16.dp, onClick = { c.antennaSheetOpen = true }) {
+            MBtn(Modifier.size(48.dp).testTag("antenna_chip"), MKind.PLAIN, 16.dp, lift = Lift.FLOAT, onClick = { c.antennaSheetOpen = true }) {
                 GlyphIcon(Glyph.RULER, t.accent, 18.dp)
                 Text(f3(c.antenna.inputValueM), style = Ty.coord.copy(fontSize = 12.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("antenna_input"))
             }
@@ -254,7 +255,7 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
             if (!SurveyLayout.isResult(c.phase)) {
                 val sel = c.typeIndex.coerceIn(0, (c.types.size - 1).coerceAtLeast(0))
                 val typeName = c.types.getOrElse(sel) { "—" }
-                MBtn(Modifier.height(48.dp).semantics { contentDescription = "위치 종류 $typeName. 눌러서 바꾸기" }.testTag("type_chip"), MKind.PLAIN, 24.dp, onClick = { c.quickSheetOpen = true }) {
+                MBtn(Modifier.height(48.dp).semantics { contentDescription = "위치 종류 $typeName. 눌러서 바꾸기" }.testTag("type_chip"), MKind.PLAIN, 24.dp, lift = Lift.FLOAT, onClick = { c.quickSheetOpen = true }) {
                     Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         GlyphIcon(Glyph.PIN, t.accent, 16.dp)
                         Text(typeName, style = Ty.label.copy(fontSize = 13.sp), color = t.ink, maxLines = 1)
@@ -266,7 +267,7 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
             VoicePill(c) // 0.1.28 T14 듣는 중 표시
             c.message?.let { msg ->
                 Text(msg, style = Ty.body, color = t.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.background(t.raised.copy(alpha = 0.95f), RoundedCornerShape(10.dp)).border(1.dp, t.accent, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 6.dp).testTag("message"))
+                    modifier = Modifier.lift(Lift.FLOAT, RoundedCornerShape(10.dp)).background(t.raised, RoundedCornerShape(10.dp)).border(1.dp, t.accent, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 6.dp).testTag("message"))
             }
             if (h != null) Text(
                 "위상중심 ${f3(h)} m", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub,
@@ -345,7 +346,7 @@ private fun ResultPanel(c: SurveyController) {
     val expanded = c.phase == Phase.RESULT_EXPANDED
     Column(
         Modifier.fillMaxWidth().height((SurveyDims.RESULT_PANEL_DP + if (expanded) SurveyDims.EXPANDED_EXTRA_DP else 0).dp)
-            .shadow(1.dp, shape).clip(shape).glossy(t.card, strength = 0.30f).border(1.dp, t.line, shape)
+            .lift(Lift.SHEET, shape).clip(shape).glossy(t.card, strength = 0.30f).border(1.dp, t.line.copy(alpha = 0.45f), shape)
             .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 16.dp).testTag("info_zone"),
     ) {
         if (expanded) Box(Modifier.height(SurveyDims.EXPANDED_EXTRA_DP.dp)) { ExpandedExtra(c) }
@@ -511,7 +512,7 @@ fun DrawerOverlay(c: SurveyController) {
         ) {
             val dshape = RoundedCornerShape(topEnd = 26.dp, bottomEnd = 26.dp)
             Column(
-                Modifier.width(maxWidth * 0.8f).fillMaxHeight().clip(dshape).glossy(t.card).border(1.5.dp, t.outline, dshape)
+                Modifier.width(maxWidth * 0.8f).fillMaxHeight().lift(Lift.SHEET, dshape).clip(dshape).glossy(t.card).border(1.dp, t.line.copy(alpha = 0.45f), dshape)
                     .verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 10.dp, top = 8.dp, bottom = 16.dp).testTag("drawer"),
             ) {
                 val st = c.gv.status
@@ -633,7 +634,7 @@ fun AntennaSheet(c: SurveyController) {
         Box(Modifier.fillMaxSize().background(t.scrim.copy(alpha = 0.25f)).hClickable { c.antennaSheetOpen = false })
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = maxHeight * 0.55f)
-                .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)).background(t.bg).verticalScroll(rememberScrollState())
+                .lift(Lift.SHEET, RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)).clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)).background(t.bg).verticalScroll(rememberScrollState())
                 .padding(16.dp).testTag("antenna_sheet"),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -735,7 +736,7 @@ fun TiltSheet(c: SurveyController) {
         Box(Modifier.fillMaxSize().background(t.scrim).hClickable { c.answerTilt(false) })
         val shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
         Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().clip(shape).background(t.bg).border(1.dp, t.line, shape).padding(20.dp).testTag("tilt_sheet"),
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().lift(Lift.SHEET, shape).clip(shape).background(t.bg).border(1.dp, t.line.copy(alpha = 0.45f), shape).padding(20.dp).testTag("tilt_sheet"),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("폴이 기울었어요 · ${tc.f1(a)}°", style = Ty.title, color = t.ink)

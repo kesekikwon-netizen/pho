@@ -12,9 +12,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -56,7 +59,8 @@ fun HomeScreen(c: SurveyController) {
             }
             c.message?.let { Text(it, style = Ty.body, color = t.ink, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(t.raised).border(1.dp, t.ink, RoundedCornerShape(12.dp)).padding(12.dp).testTag("home_message")) }
         }
-        HomeConnBar(c)
+        // 0.1.34: 예전 하단 연결 막대 자리에 「측량 준비」 네 칸(수신기 · VRS · 안테나 높이 · 좌표계)
+        ReadyCard(c)
     }
 }
 
@@ -71,7 +75,7 @@ private fun BigSurveyCard(onClick: () -> Unit) {
     val t = T
     val shape = RoundedCornerShape(24.dp)
     Column(
-        Modifier.fillMaxWidth().height(152.dp).clip(shape).background(t.primary).hClickable(onClick = onClick)
+        Modifier.fillMaxWidth().height(152.dp).lift(Lift.FLOAT, shape).clip(shape).background(t.primary).hClickable(onClick = onClick)
             .semantics { contentDescription = "일반 측량 시작" }.padding(20.dp).testTag("home_survey"),
     ) {
         Row(Modifier.fillMaxWidth()) {
@@ -81,6 +85,8 @@ private fun BigSurveyCard(onClick: () -> Unit) {
         }
         Spacer(Modifier.weight(1f))
         Text("일반 측량", style = Ty.title.copy(fontSize = 24.sp), color = t.onPrimary)
+        // 0.1.34: 화면당 흙색 하나 — 시작 화면과 같은 테라코타 가는 선(Strata 「조용한 도판」 강조 규칙)
+        Box(Modifier.padding(vertical = 6.dp).width(36.dp).height(2.dp).background(t.splashLine))
         Text("작업관리 · 측량 · 점 찾아가기 · 계산기", style = Ty.small, color = t.onPrimary.copy(alpha = 0.8f))
     }
 }
@@ -90,7 +96,7 @@ private fun HomeTile(g: Glyph?, title: String, sub: String, tag: String, modifie
     val t = T
     val shape = RoundedCornerShape(20.dp)
     Column(
-        modifier.height(116.dp).clip(shape).background(t.raised).border(1.dp, t.line.copy(alpha = 0.35f), shape).hClickable(onClick = onClick).padding(16.dp).testTag(tag),
+        modifier.height(116.dp).lift(Lift.CARD, shape).clip(shape).background(t.raised).border(1.dp, t.line.copy(alpha = 0.30f), shape).hClickable(onClick = onClick).padding(16.dp).testTag(tag),
     ) {
         Row(Modifier.fillMaxWidth()) {
             if (g != null) GlyphIcon(g, t.ink, 26.dp) else GearIcon(t.ink, 26.dp)
@@ -103,9 +109,13 @@ private fun HomeTile(g: Glyph?, title: String, sub: String, tag: String, modifie
     }
 }
 
-/** 홈 하단 연결 막대(목업 02): 블루투스 · 장비 · 연결 상태 | VRS 상태 */
+/**
+ * 0.1.34 「측량 준비」 카드(예전 홈 하단 연결 막대를 넓힘): 이것이 맞지 않으면 측량이 안 되거나 값이 틀리는 네 가지.
+ * 수신기 · VRS 보정 · 안테나 높이 · 좌표계. 칸마다 ✓ 또는 「확인」, 누르면 그 설정으로 간다. 안테나 높이는 기본값 그대로면 「확인」
+ * 수신기·VRS 문구와 태그(home_conn_left · home_conn_right)는 예전 막대와 같다.
+ */
 @Composable
-private fun HomeConnBar(c: SurveyController) {
+private fun ReadyCard(c: SurveyController) {
     val t = T
     val cc = c.connection
     val link = cc?.link?.collectAsState()?.value
@@ -123,17 +133,57 @@ private fun HomeConnBar(c: SurveyController) {
             nowMs = android.os.SystemClock.elapsedRealtime(),
         )
     }
-    val dot = when (bar.leftTone) { Tone.OK -> t.ok; Tone.BAD -> t.bad; Tone.CAUTION -> t.caution; else -> t.line }
-    val shape = RoundedCornerShape(16.dp)
-    Row(
-        Modifier.padding(16.dp).fillMaxWidth().heightIn(min = 56.dp).clip(shape).background(t.raised).border(1.dp, t.line.copy(alpha = 0.45f), shape)
-            .hClickable { cc?.openScreen() ?: run { c.message = "연결 화면을 열 수 없어요" } }.padding(horizontal = 16.dp).testTag("home_conn_bar"),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+    val shape = RoundedCornerShape(20.dp)
+    val antOk = c.antenna.source != kr.archsurvey.core.AntennaSource.DEFAULT
+    Column(
+        Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().lift(Lift.CARD, shape).clip(shape).background(t.raised)
+            .border(1.dp, t.line.copy(alpha = 0.30f), shape).padding(10.dp).testTag("home_ready"),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        GlyphIcon(Glyph.BT, t.ink, 20.dp)
-        Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
-        Text(bar.left, style = Ty.label.copy(fontSize = 14.sp), color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("home_conn_left"))
-        Text(bar.right, style = Ty.small.copy(fontSize = 12.sp), color = if (bar.rightTone == Tone.BAD) t.bad else t.inkSub, maxLines = 1, modifier = Modifier.testTag("home_conn_right"))
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("측량 준비", style = Ty.label.copy(fontSize = 13.sp), color = t.ink, modifier = Modifier.weight(1f))
+            val okCount = listOf(bar.leftTone == Tone.OK, bar.rightTone == Tone.OK, antOk, true).count { it }
+            Text("$okCount / 4", style = Ty.coord.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.testTag("home_ready_count"))
+        }
+        val antLabel = String.format(java.util.Locale.US, "%.2f m", c.antenna.inputValueM) + " · " + c.antennaModel.ref(c.antenna.refPointId).labelKo
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ReadyCell(Glyph.BT, "수신기", bar.left, "home_conn_left", readyOf(bar.leftTone), "home_conn_bar", Modifier.weight(1f)) { cc?.openScreen() ?: run { c.message = "연결 화면을 열 수 없어요" } }
+            ReadyCell(Glyph.WIFI, "VRS 보정", bar.right, "home_conn_right", readyOf(bar.rightTone), "home_ready_vrs", Modifier.weight(1f)) { cc?.openVrs() ?: run { c.message = "VRS 설정을 열 수 없어요" } }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ReadyCell(Glyph.RULER, "안테나 높이", antLabel, "home_ready_antenna_value", if (antOk) Ready.OK else Ready.CHECK, "home_ready_antenna", Modifier.weight(1f)) { c.antennaSheetOpen = true }
+            ReadyCell(Glyph.GLOBE, "좌표계", c.zone.labelKo, "home_ready_zone_value", Ready.OK, "home_ready_zone", Modifier.weight(1f)) { c.jobs?.openInfo() ?: run { c.message = "작업 관리는 이 빌드에 없어요" } }
+        }
+    }
+}
+
+/** 준비 칸 상태: 됨(✓) · 확인 필요(빨간 점) · 기다림(표시 없음) */
+private enum class Ready { OK, CHECK, WAIT }
+
+private fun readyOf(tone: Tone): Ready = when (tone) { Tone.OK -> Ready.OK; Tone.BAD -> Ready.CHECK; else -> Ready.WAIT }
+
+/** 준비 한 칸(높이 56dp 이상): 작은 이름 + 상태 표시 / 현재 값 한 줄. 누르면 그 설정으로 */
+@Composable
+private fun ReadyCell(g: Glyph, title: String, value: String, valueTag: String, ready: Ready, tag: String, modifier: Modifier, onClick: () -> Unit) {
+    val t = T
+    val shape = RoundedCornerShape(14.dp)
+    Column(
+        modifier.heightIn(min = 56.dp).clip(shape).background(if (ready == Ready.CHECK) t.bad.copy(alpha = 0.06f).compositeOver(t.raised) else t.chip)
+            .hClickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 7.dp)
+            .semantics { contentDescription = "$title, $value" + when (ready) { Ready.OK -> ", 됨"; Ready.CHECK -> ", 확인 필요"; Ready.WAIT -> "" } }.testTag(tag),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            GlyphIcon(g, t.ink, 14.dp)
+            Text(title, style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1, modifier = Modifier.weight(1f))
+            when (ready) {
+                Ready.OK -> Box(Modifier.testTag(tag + "_ok")) { GlyphIcon(Glyph.CHECK, t.done, 16.dp) }
+                Ready.CHECK -> Text("확인", style = Ty.small.copy(fontSize = 11.sp, lineHeight = 13.sp), color = t.onBad, maxLines = 1,
+                    modifier = Modifier.background(t.bad, RoundedCornerShape(8.dp)).padding(horizontal = 6.dp, vertical = 1.dp).testTag(tag + "_check"))
+                Ready.WAIT -> Unit
+            }
+        }
+        Text(value, style = Ty.label.copy(fontSize = 13.sp, lineHeight = 17.sp), color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp).testTag(valueTag))
     }
 }
 
@@ -146,7 +196,7 @@ fun SettingsMenuScreen(c: SurveyController) {
         AppHeader(c, "환경설정", onBack = close, backTag = "settings_menu_back")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp)) {
             Row(
-                Modifier.fillMaxWidth().height(112.dp).clip(RoundedCornerShape(24.dp)).background(t.raised).border(1.dp, t.line.copy(alpha = 0.35f), RoundedCornerShape(24.dp)).padding(20.dp),
+                Modifier.fillMaxWidth().height(112.dp).lift(Lift.CARD, RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp)).background(t.raised).border(1.dp, t.line.copy(alpha = 0.30f), RoundedCornerShape(24.dp)).padding(20.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
@@ -156,29 +206,35 @@ fun SettingsMenuScreen(c: SurveyController) {
                 GearIcon(t.ink, 44.dp)
             }
             Spacer(Modifier.height(8.dp))
-            // 0.1.14 목업 03 순서: 장비 연결 · RTK 설정 · VRS 설정 · 좌표계 설정 · 현재위치 모양 · 알림 소리·진동 · 앱 정보
+            // 0.1.34: 앞에는 「측량하려면 꼭 맞출 네 가지」만(장비 연결 · VRS · 안테나 높이 · 좌표계). 나머지는 「고급 설정」 안에 접어 둔다.
+            // 지운 항목은 없다 — 순서와 태그는 그대로, 고급 설정을 펴면 예전 줄이 모두 보인다
+            Text("측량하려면 이 네 가지만 맞추면 돼요", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp).testTag("set_essential_title"))
             val rows: List<Triple<Pair<Glyph?, String>, String, Pair<String, () -> Unit>>> = listOf(
                 Triple(Glyph.BT to "장비 연결", "GNSS 수신기 블루투스 연결 (R10 · SP60)", "set_row_device" to { c.connection?.openScreen() ?: run { c.message = "연결 화면은 이 빌드에 없어요" } }),
-                Triple(Glyph.SAT to "RTK 설정", "보정 형식(RTCM) · 마운트 호환 · GGA · 재접속", "set_row_rtk" to { c.hub.open(ToolScreen.RTK) }),
                 Triple(Glyph.WIFI to "VRS 설정", "NTRIP 서버 · 마운트포인트 · 계정", "set_row_vrs" to { c.connection?.openVrs() ?: run { c.message = "VRS 설정은 이 빌드에 없어요" } }),
+                Triple(Glyph.RULER to "안테나 높이", "모델 · 측정 기준점 · 높이", "set_row_antenna" to { c.antennaSheetOpen = true }),
                 Triple(Glyph.GLOBE to "좌표계 설정", "작업명 · 좌표계(EPSG) · 지역 · 배경맵 · Geoid → 적용하면 측량", "set_row_job" to { c.jobs?.openInfo() ?: run { c.message = "작업 관리는 이 빌드에 없어요" } }),
-                Triple(Glyph.PIN to "현재위치 모양", "현재 위치 · 점 · 목표 표시 모양과 크기", "set_row_marker" to { c.markerStyleOpen = true }),
-                Triple(Glyph.MIC to "알림 소리 · 진동", "측량 완료음 · 버튼 탭 진동 · 화면 켜두기", "set_row_alert" to { c.hub.open(ToolScreen.SETTINGS) }),
             )
             for ((head, sub, act) in rows) SettingsRow(head.first, head.second, sub, act.first, act.second)
-            SettingsRow(Glyph.INFO, "앱 정보", rememberAppVersionLabel() + " · 발굴 측량", "set_row_info", null)
-            Text("더 보기", style = Ty.label, color = t.inkSub, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
-            val more: List<Triple<Pair<Glyph?, String>, String, Pair<String, () -> Unit>>> = listOf(
-                Triple(Glyph.POLE to "IMU · 기울기", "수신기 IMU(미지원/미수신) · 폰 기포(참고용)", "set_row_imu" to { c.hub.open(ToolScreen.IMU) }),
-                Triple(Glyph.RULER to "안테나 높이", "모델 · 측정 기준점 · 높이", "set_row_antenna" to { c.antennaSheetOpen = true }),
-                Triple(Glyph.GLOBE to "GNSS 정보 · SkyPlot", "좌표 · 해 품질 · DOP · 위성 배치", "set_row_gnss" to { c.gnssInfoOpen = true }),
-                Triple(Glyph.GLOBE to "측량 설정", "지역(EPSG) · Geoid · 측정 횟수 · 폰 기포 · 소리", "set_row_survey" to { c.hub.open(ToolScreen.SETTINGS) }),
-                Triple(Glyph.LIST to "위치 종류", "발굴 위치 종류 추가 · 순서", "set_row_types" to { c.hub.open(ToolScreen.TYPES) }),
-                Triple(Glyph.LAYERS to "V월드 지적도 · 배경맵", "API 인증키 · 도메인 · 지적선 · 연결 시험", "set_row_vworld" to { c.vworld.load(); c.hub.open(ToolScreen.VWORLD) }),
-                Triple(Glyph.LAYERS to "배경 레이어", "도면 · 정사영상 올리기", "set_row_bg" to { c.bg?.openManage() ?: run { c.message = "배경 레이어는 이 빌드에 없어요" } }),
-                Triple(Glyph.FOLDER to "백업 · 복구", "ZIP · Google Drive 자동 백업·측점 업로드", "set_row_backup" to { c.backup?.openScreen() ?: run { c.message = "백업은 이 빌드에 없어요" } }),
-            )
-            for ((head, sub, act) in more) SettingsRow(head.first, head.second, sub, act.first, act.second)
+            var advanced by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+            Spacer(Modifier.height(8.dp))
+            FoldRow(if (advanced) "고급 설정 접기" else "고급 설정 · 보정 형식 · 소리 · 지도 · 백업", advanced, "set_more") { advanced = !advanced }
+            if (advanced) {
+                val more: List<Triple<Pair<Glyph?, String>, String, Pair<String, () -> Unit>>> = listOf(
+                    Triple(Glyph.SAT to "RTK 설정", "보정 형식(RTCM) · 마운트 호환 · GGA · 재접속", "set_row_rtk" to { c.hub.open(ToolScreen.RTK) }),
+                    Triple(Glyph.GLOBE to "측량 설정", "지역(EPSG) · Geoid · 측정 횟수 · 폰 기포 · 소리", "set_row_survey" to { c.hub.open(ToolScreen.SETTINGS) }),
+                    Triple(Glyph.LIST to "위치 종류", "발굴 위치 종류 추가 · 순서", "set_row_types" to { c.hub.open(ToolScreen.TYPES) }),
+                    Triple(Glyph.PIN to "현재위치 모양", "현재 위치 · 점 · 목표 표시 모양과 크기", "set_row_marker" to { c.markerStyleOpen = true }),
+                    Triple(Glyph.MIC to "알림 소리 · 진동", "측량 완료음 · 버튼 탭 진동 · 화면 켜두기", "set_row_alert" to { c.hub.open(ToolScreen.SETTINGS) }),
+                    Triple(Glyph.POLE to "IMU · 기울기", "수신기 IMU(미지원/미수신) · 폰 기포(참고용)", "set_row_imu" to { c.hub.open(ToolScreen.IMU) }),
+                    Triple(Glyph.GLOBE to "GNSS 정보 · SkyPlot", "좌표 · 해 품질 · DOP · 위성 배치", "set_row_gnss" to { c.gnssInfoOpen = true }),
+                    Triple(Glyph.LAYERS to "V월드 지적도 · 배경맵", "API 인증키 · 도메인 · 지적선 · 연결 시험", "set_row_vworld" to { c.vworld.load(); c.hub.open(ToolScreen.VWORLD) }),
+                    Triple(Glyph.LAYERS to "배경 레이어", "도면 · 정사영상 올리기", "set_row_bg" to { c.bg?.openManage() ?: run { c.message = "배경 레이어는 이 빌드에 없어요" } }),
+                    Triple(Glyph.FOLDER to "백업 · 복구", "ZIP · Google Drive 자동 백업·측점 업로드", "set_row_backup" to { c.backup?.openScreen() ?: run { c.message = "백업은 이 빌드에 없어요" } }),
+                )
+                for ((head, sub, act) in more) SettingsRow(head.first, head.second, sub, act.first, act.second)
+                SettingsRow(Glyph.INFO, "앱 정보", rememberAppVersionLabel() + " · 발굴 측량", "set_row_info", null)
+            }
             c.message?.let { Text(it, style = Ty.body, color = t.ink, modifier = Modifier.padding(top = 12.dp).testTag("settings_menu_message")) }
         }
     }

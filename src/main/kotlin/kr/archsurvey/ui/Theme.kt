@@ -9,6 +9,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.foundation.background
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -17,6 +18,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /** 테마 토큰(0.1.11 목업: 아이보리·흰 카드·검정 주 버튼). 얇은 글꼴 300/400. 색은 이 파일 한 곳에서만 정한다(지도 데이터색 제외). 굵기 Bold 이상은 쓰지 않는다. */
@@ -50,6 +52,10 @@ data class Tokens(
     val splashInk: Color = Color(0xFF141413),
     val splashLine: Color = Color(0xFFD97757),
     val splashLineDeep: Color = Color(0xFFC6613F),
+    /** 0.1.34 그림자 색(Strata Ink 141413). 알파는 [Lift] 단계가 정한다 */
+    val shadow: Color = Color(0xFF141413),
+    /** 0.1.34 「측량 준비」 카드: 끝남 ✓ 글자(Strata Done 3F6B31) */
+    val done: Color = Color(0xFF3F6B31),
 )
 
 private fun c(h: Long) = Color(0xFF000000 or h)
@@ -60,15 +66,17 @@ private fun c(h: Long) = Color(0xFF000000 or h)
  * 시스템 다크 모드와 무관하게 항상 이 토큰을 쓴다.
  */
 val LightTokens = Tokens(
-    bg = c(0xF7F6F2), card = c(0xFFFFFF), line = c(0x8A8A86), outline = c(0x767672),
-    ink = c(0x111111), inkSub = c(0x474744),
-    primary = c(0x111111), onPrimary = c(0xFFFFFF), accent = c(0x111111), accentText = c(0x111111),
+    // 0.1.34 디자인: 바탕·글자·칩·고른 면·지도 바탕을 Strata 「조용한 도판」 값(Ground FAF9F5 · Ink 141413 · Ink2 3D3D3A · Desk F0EEE6 · Oat E3DACC)으로.
+    // 경계선·입력 테두리는 현장 대비 3:1 기준 때문에 그대로, 주 버튼 검정(0.1.11)도 그대로
+    bg = c(0xFAF9F5), card = c(0xFFFFFF), line = c(0x8A8A86), outline = c(0x767672),
+    ink = c(0x141413), inkSub = c(0x3D3D3A),
+    primary = c(0x111111), onPrimary = c(0xFFFFFF), accent = c(0x141413), accentText = c(0x141413),
     fixed = c(0x146536), onFixed = c(0xFFFFFF), // 0.1.31: 측량 가능 = 초록(흰 글자 7.1:1)
     caution = c(0xF2B600), onCaution = c(0x141413),
     bad = c(0xA3123A), onBad = c(0xFFFFFF),
     scrim = Color(0x66111111),
-    raised = c(0xFFFFFF), primaryCont = c(0xECEBE6), mapBg = c(0xEDECE8),
-    ok = c(0x1E7A46), chip = c(0xEDECE7),
+    raised = c(0xFFFFFF), primaryCont = c(0xE3DACC), mapBg = c(0xF0EEE6),
+    ok = c(0x1E7A46), chip = c(0xF0EEE6),
 )
 
 val DarkTokens = Tokens(
@@ -108,6 +116,19 @@ object Fonts {
         Font(kr.archsurvey.R.font.jetbrains_mono_regular, FontWeight.Normal),
     )
 }
+
+/**
+ * 0.1.34 높이 세 단계(Strata 「밋밋함 보완」: 새 색 없이 그림자로만).
+ * CARD = 카드·판(0 1 2 .06), FLOAT = 지도 위 단추·좌표 카드·측량하기(0 2 12 .12), SHEET = 시트·창·서랍(0 8 28 .18).
+ */
+enum class Lift(val elevation: androidx.compose.ui.unit.Dp, val alpha: Float) {
+    NONE(0.dp, 0f), CARD(1.dp, 0.10f), FLOAT(4.dp, 0.18f), SHEET(12.dp, 0.24f)
+}
+
+/** [shape] 모양 그대로 [level] 높이의 그림자. clip 은 하지 않으니 뒤에 clip(shape) 을 붙인다 */
+fun Modifier.lift(level: Lift, shape: androidx.compose.ui.graphics.Shape, color: Color = LightTokens.shadow): Modifier =
+    if (level == Lift.NONE) this
+    else this.shadow(level.elevation, shape, clip = false, ambientColor = color.copy(alpha = level.alpha), spotColor = color.copy(alpha = level.alpha))
 
 /** 0.1.7: 평평한 면(그림자·광택 없음). 이전 이름을 유지해 호출부를 건드리지 않는다. */
 @Suppress("UNUSED_PARAMETER")

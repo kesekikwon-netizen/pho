@@ -135,6 +135,7 @@ class Ui0114ApplyToSurveyTest {
     @Test fun applyFromSettingsScreenNavigatesToSurvey() {
         setup()
         rule.onNodeWithTag("home_settings").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("set_more").performScrollTo().performClick(); rule.waitForIdle() // 0.1.34: 측량 설정은 고급 설정 안
         rule.onNodeWithTag("set_row_survey").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
         assertEquals("tool:JOB_INFO", c.visibleRoute())
