@@ -399,7 +399,6 @@ fun SettingsScreen(c: SurveyController) {
     val d = c.dig
     var advanced by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     ToolScaffold("설정", "settings_screen", onBack = { h.back() }) {
-        if (st == null) { Text("설정을 불러올 수 없어요", style = Ty.body, color = t.inkSub); return@ToolScaffold }
         // 0.1.35 「꼭 필요한 네 가지」: 수신기 · VRS · 폴 기본값 · 좌표계/높이. 나머지는 측점 · 발굴 · 고급(접힘)
         Text("꼭 필요한 네 가지", style = Ty.serifHead, color = t.ink)
         val cc = c.connection
@@ -410,6 +409,7 @@ fun SettingsScreen(c: SurveyController) {
         SelectRow("좌표계 · 높이", "EPSG:${c.zone.epsg} · ${c.zone.labelKo} · ${c.geoid.shortKo}" + if (d.crsLocked) " · 측량 중 잠김" else "", false, "zone_toggle") {
             c.jobs?.openInfo() ?: c.ui.toast("작업 관리를 쓸 수 없어요")
         }
+        if (st == null) { Text("나머지 설정을 불러올 수 없어요", style = Ty.body, color = t.inkSub); return@ToolScaffold }
         Text("측점", style = Ty.serifHead, color = t.ink)
         val counts = listOf(1, 3, 5, 10)
         SelectRow("측정 횟수", "${c.epochs}회 평균", false, "epochs_toggle") {

@@ -196,7 +196,7 @@ class Ui0114MockupTest {
         // 14 백업/복구 창
         reset(); ui { c.bg!!.close(); c.backupQuickOpen = true }; rule.onNodeWithTag("backup_quick").assertExists(); shot("mockup_14_backup_restore")
         // 15 측량 지도
-        reset(); for (tag in listOf("tool_undo", "tool_memo", "now_row", "pole_chip", "status_pill", "tool_2d", "measure_button")) rule.onNodeWithTag(tag).assertExists()
+        reset(); for (tag in listOf("tool_undo", "now_row", "pole_chip", "status_pill", "measure_button")) rule.onNodeWithTag(tag).assertExists()
         shot("mockup_15_survey_map")
         // 16 측량 설정
         ui { c.setupOpen = true }

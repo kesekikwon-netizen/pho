@@ -114,7 +114,7 @@ class Ui0111Test {
         rule.onNodeWithTag("home_title").assertTextEquals("발굴 측량")
         rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("측량 가능")
         rule.onNodeWithTag("home_job").assertTextContains("20261005-1040", substring = true)
-        for (i in 0 until 5) rule.onNodeWithTag("prep_$i").performScrollTo().assertExists()
+        for (id in listOf("receiver", "vrs", "pole", "crs", "bm")) rule.onNodeWithTag("prep_$id").performScrollTo().assertExists()
         rule.onNodeWithTag("prep_count").assertTextContains("/ 5", substring = true)
         rule.onAllNodesWithText("[앱 이름]", substring = true).assertCountEquals(0)
         rule.onAllNodesWithText("PDOP", substring = true).assertCountEquals(0)

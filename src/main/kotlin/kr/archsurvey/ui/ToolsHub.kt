@@ -35,7 +35,7 @@ class ToolsHub(private val c: SurveyController) {
     fun open(s: ToolScreen) {
         val cur = screen
         if (s == ToolScreen.SURVEY_HUB || s == ToolScreen.JOB_HUB) hubParent = null
-        else if (cur == ToolScreen.SURVEY_HUB || cur == ToolScreen.JOB_HUB) hubParent = cur
+        else if (cur == ToolScreen.SURVEY_HUB || cur == ToolScreen.JOB_HUB || cur == ToolScreen.SETTINGS) hubParent = cur  // 0.1.35: 설정에서 연 작업 정보·V월드·위치 종류 → 뒤로 = 설정
         if (!(s == ToolScreen.GOTO && screen == ToolScreen.GOTO)) cameFrom = if (s == ToolScreen.POINT_DETAIL || s == ToolScreen.GOTO) screen else null
         screen = s
     }

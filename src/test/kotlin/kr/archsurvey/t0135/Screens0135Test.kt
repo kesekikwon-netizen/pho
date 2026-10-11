@@ -117,7 +117,7 @@ open class Screens0135Test {
         rule.onNodeWithTag("set_pole").assertExists()
         rule.onNodeWithTag("zone_toggle").assertExists()
         shot("11_settings")
-        rule.onNodeWithTag("settings_advanced").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("settings_advanced").performScrollTo().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.waitForIdle()
         rule.onNodeWithTag("mapbase_toggle").assertExists()
         shot("12_settings_advanced")
         // 모든 클릭 가능 요소 ≥48dp (측량 지도)

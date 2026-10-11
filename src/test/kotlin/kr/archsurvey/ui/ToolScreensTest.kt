@@ -48,6 +48,10 @@ class ToolScreensTest {
         override suspend fun deleteVoice(id: Long) { vo.removeAll { it.id == id } }
     }
     private class Exp : ExportPlatform {
+        var lastBundle: Triple<Set<kr.archsurvey.export.ExportFormat>, Int, String?>? = null
+        override suspend fun exportBundle(formats: Set<kr.archsurvey.export.ExportFormat>, includePhotos: Boolean, includeVoices: Boolean, itwinKeepNames: Boolean, scale: Int, todayKey: String?): ExportOutput {
+            lastBundle = Triple(formats, scale, todayKey); return export(includePhotos, includeVoices)
+        }
         override suspend fun summary() = ExportSummary("작업1", 3, 2, 1, 3)
         override suspend fun export(includePhotos: Boolean, includeVoices: Boolean) = ExportOutput("작업1_20261004_213000.zip", 48_200, "/x/a.zip", 3, 2, 1)
         override fun share(out: ExportOutput) {}; override fun saveAs(out: ExportOutput, onDone: (Boolean) -> Unit) = onDone(true)
@@ -85,12 +89,13 @@ class ToolScreensTest {
     private lateinit var f: FakeGnssSource
     private lateinit var media: Media
 
+    private lateinit var exp: Exp
     private fun setup(points: Int = 3) {
         f = FakeGnssSource(FakeScenarios.allFixed()); media = Media()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         c = SurveyController(f, db, scope, store = Store())
         c.media = media; c.resultStripMs = Long.MAX_VALUE
-        c.exporter = ExportController(Exp(), scope)
+        exp = Exp(); c.exporter = ExportController(exp, scope)
         c.backup = BackupController(Bak(), scope)
         c.settingsState = SettingsState(c, Sett())
         c.jobs = JobController(c, Jobs(), scope)
@@ -194,5 +199,30 @@ class ToolScreensTest {
         rule.onNodeWithTag("result_voice").performClick(); rule.waitForIdle()
         assertEquals(1, c.voices.size)
         shot("t14_expanded_with_media")
+    }
+
+    /** 0.1.35: 저녁 도면 한 번에 = 도면 DXF + SHP + 야장 CSV + 점 CSV, 축척 · 오늘만 전달 */
+    @Test fun eveningExportBundleUsesScaleAndToday() {
+        setup()
+        val ex = exp
+        rule.runOnUiThread { c.exporter!!.openScreen() }; rule.waitForIdle()
+        rule.onNodeWithTag("export_scale_100").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("export_today_only").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("export_evening").performScrollTo().performClick(); rule.waitForIdle()
+        val b = ex.lastBundle!!
+        assertEquals(kr.archsurvey.export.ExportFormat.EVENING, b.first)
+        assertEquals(100, b.second)
+        assertNotNull("오늘만", b.third)
+        assertEquals(100, c.dig.drawScale)
+    }
+
+    /** 0.1.35: 설정에서 연 작업 정보 → 뒤로 = 설정(홈으로 튀지 않음) */
+    @Test fun jobInfoFromSettingsBacksToSettings() {
+        setup()
+        rule.runOnUiThread { c.hub.open(ToolScreen.SETTINGS) }; rule.waitForIdle()
+        rule.onNodeWithTag("zone_toggle").performClick(); rule.waitForIdle()
+        assertEquals(ToolScreen.JOB_INFO, c.hub.screen)
+        rule.runOnUiThread { c.hub.back() }; rule.waitForIdle()
+        assertEquals(ToolScreen.SETTINGS, c.hub.screen)
     }
 }

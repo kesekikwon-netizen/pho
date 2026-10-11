@@ -39,6 +39,20 @@ fun ExportScreen(ec: ExportController) {
             }
         }
         if (out == null) {
+            // 0.1.35 저녁 도면: 도면 DXF(레이어별 · 축척별 글자) + SHP + 야장 CSV + 점 CSV + 사진·음성 한 묶음
+            val sc = LocalSurvey.current
+            androidx.compose.runtime.LaunchedEffect(Unit) { sc?.dig?.drawScale?.let { ec.scale = it } }
+            Text("저녁 도면", style = Ty.serifHead, color = t.ink)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (k in kr.archsurvey.dig.DrawingScale.CHOICES) Choice("1:$k", ec.scale == k, Modifier.weight(1f).testTag("export_scale_$k")) { ec.scale = k; sc?.dig?.changeScale(k) }
+            }
+            CheckRow("오늘 잰 점만", ec.todayOnly, "export_today_only") { ec.todayOnly = it }
+            MBtn(Modifier.fillMaxWidth().height(64.dp).testTag("export_evening"), MKind.PRIMARY, 16.dp, onClick = { ec.runEvening() }) {
+                Text(if (ec.running) "만드는 중…" else "저녁 도면 한 번에 만들기", style = Ty.button, color = t.onPrimary)
+            }
+            Text("도면 DXF(조사구역·그리드·트렌치·유구·유물·레벨·토층·기준점 레이어, 1:${ec.scale} 글자 크기) · SHP · 야장 CSV · 점 CSV · 사진·음성",
+                style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("export_evening_note"))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.4f)))
             // hgis(Strata)에 끌어 놓을 Shape 한 벌을 한 번에(양식 고르기 없이)
             Btn(if (ec.running) "만드는 중…" else "hgis(Strata)용 SHP 바로 만들기", Modifier.fillMaxWidth().testTag("export_hgis_quick")) { ec.runHgis() }
             Text("작업 좌표계 그대로 .shp .shx .dbf .prj .cpg 한 벌 + 기준점 CSV · 폰 문서 폴더(Documents/ExcavationSurvey/hgis)에도 둬요",
