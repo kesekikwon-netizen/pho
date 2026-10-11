@@ -19,6 +19,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.text
@@ -47,6 +48,8 @@ internal fun MBtn(
     onLongClick: (() -> Unit)? = null,
     /** 0.1.30: 바탕을 이 단색으로(없으면 종류별 색) */
     solid: androidx.compose.ui.graphics.Color? = null,
+    /** 0.1.34: 지도 위에 떠 있는 단추는 [Lift.FLOAT] */
+    lift: Lift = Lift.NONE,
     onClick: () -> Unit, content: @Composable ColumnScope.() -> Unit,
 ) {
     val t = T; val shape = RoundedCornerShape(radius)
@@ -57,7 +60,7 @@ internal fun MBtn(
         else -> Modifier.border(1.dp, t.outline, shape)
     }
     Column(
-        modifier.alpha(alpha).clip(shape).glossy(bgc).then(bm).hCombinedClickable(onLongClick = onLongClick, onClick = onClick),
+        modifier.alpha(alpha).lift(lift, shape).clip(shape).glossy(bgc).then(bm).hCombinedClickable(onLongClick = onLongClick, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, content = content,
     )
 }
@@ -79,7 +82,7 @@ internal fun CoordBox(c: SurveyController, modifier: Modifier = Modifier) {
     val lat = c.gv.lat; val lon = c.gv.lon
     val p = if (lat != null && lon != null) TmProjection.forward(lat, lon, c.zone) else null
     val shape = RoundedCornerShape(14.dp)
-    Column(modifier.clip(shape).background(t.raised.copy(alpha = 0.94f)).border(1.dp, t.line.copy(alpha = 0.45f), shape).padding(horizontal = 10.dp, vertical = 6.dp).testTag("coord_line")) {
+    Column(modifier.lift(Lift.FLOAT, shape).clip(shape).background(t.raised.copy(alpha = 0.96f)).border(1.dp, t.line.copy(alpha = 0.35f), shape).padding(horizontal = 10.dp, vertical = 6.dp).testTag("coord_line")) {
         val rows = listOf(Triple("N", "X(N)", p?.northing?.let { grp3(it) }), Triple("E", "Y(E)", p?.easting?.let { grp3(it) }), Triple("H", "Z(H)", c.gv.altM?.let { grp3(it) }))
         for ((k, label, v) in rows) {
             Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -92,7 +95,22 @@ internal fun CoordBox(c: SurveyController, modifier: Modifier = Modifier) {
 
 @Composable
 internal fun ToolBtn(g: Glyph, desc: String, tag: String, kind: MKind = MKind.PLAIN, onClick: () -> Unit) {
-    MBtn(Modifier.size(48.dp).testTag(tag), kind, 16.dp, onClick = onClick) { GlyphIcon(g, if (kind == MKind.PRIMARY) T.onPrimary else T.accent, 22.dp) }
+    MBtn(Modifier.size(48.dp).semantics { contentDescription = desc }.testTag(tag), kind, 16.dp, lift = Lift.FLOAT, onClick = onClick) { GlyphIcon(g, if (kind == MKind.PRIMARY) T.onPrimary else T.accent, 22.dp) }
+}
+
+/**
+ * 0.1.34 확대·축소 한 기둥(Strata 확대 기둥과 같은 모양): 단추 둘을 한 카드에 묶어 지도 위 덩어리 수를 줄인다.
+ * 칸마다 48dp, 사이는 가는 선. 태그는 예전 그대로(tool_zoom_in · tool_zoom_out)
+ */
+@Composable
+internal fun ZoomColumn(onIn: () -> Unit, onOut: () -> Unit) {
+    val t = T
+    val shape = RoundedCornerShape(16.dp)
+    Column(Modifier.width(48.dp).lift(Lift.FLOAT, shape).clip(shape).background(t.raised).border(1.dp, t.outline, shape).testTag("zoom_column")) {
+        Box(Modifier.fillMaxWidth().height(48.dp).hClickable(onClick = onIn).semantics { contentDescription = "확대" }.testTag("tool_zoom_in"), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.PLUS, t.accent, 22.dp) }
+        Box(Modifier.padding(horizontal = 10.dp).fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.45f)))
+        Box(Modifier.fillMaxWidth().height(48.dp).hClickable(onClick = onOut).semantics { contentDescription = "축소" }.testTag("tool_zoom_out"), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.MINUS, t.accent, 22.dp) }
+    }
 }
 
 /** 하단 도구 한 칸(목업 15): 아이콘 + 짧은 글자. 폭 ≥ 48dp, 높이 = 측점 버튼 높이 */
@@ -130,7 +148,8 @@ internal fun ControlArea(c: SurveyController) {
     val strictBlock = strict && caution
     val sel = c.typeIndex.coerceIn(0, (c.types.size - 1).coerceAtLeast(0))
     val a = c.arch
-    Column(Modifier.fillMaxWidth().height(SurveyDims.CONTROL_AREA_DP.dp).background(t.card).testTag("control_area")) {
+    // 0.1.34: 지도 아래 판은 떠 있는 높이(Lift.FLOAT) 그림자로 지도 위에 얹힌 느낌. 위 가는 선은 그대로
+    Column(Modifier.fillMaxWidth().height(SurveyDims.CONTROL_AREA_DP.dp).lift(Lift.FLOAT, androidx.compose.ui.graphics.RectangleShape).background(t.card).testTag("control_area")) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.35f)))
         Row(
             Modifier.fillMaxWidth().weight(1f).padding(start = 8.dp, end = 8.dp, top = (SurveyDims.CTRL_PAD_TOP_DP - 1).dp, bottom = SurveyDims.CTRL_PAD_BOTTOM_DP.dp),
@@ -149,7 +168,7 @@ internal fun ControlArea(c: SurveyController) {
                 MBtn(
                     Modifier.width(SurveyDims.MEASURE_WIDTH_DP.dp).height(SurveyDims.MEASURE_BUTTON_DP.dp).testTag("measure_button"),
                     // 0.1.30 UX-0130-1(선택): 「수신기 연결 필요」·「측점 불가」는 반투명 대신 진회색 단색. 측정 중(busy)은 기존대로 흐리게
-                    MKind.PRIMARY, 22.dp, alpha = if (busy) 0.5f else 1f, solid = if (!busy && (notConn || dim)) t.blockedButton else null, onLongClick = { if (!busy) c.setupOpen = true },
+                    MKind.PRIMARY, 22.dp, alpha = if (busy) 0.5f else 1f, solid = if (!busy && (notConn || dim)) t.blockedButton else null, lift = if (busy || notConn || dim) Lift.NONE else Lift.FLOAT, onLongClick = { if (!busy) c.setupOpen = true },
                     onClick = {
                         when {
                             busy -> {}
@@ -206,7 +225,7 @@ internal fun QuickSheet(c: SurveyController) {
         Box(Modifier.fillMaxSize().background(t.scrim.copy(alpha = 0.3f)).hClickable { close() })
         val shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
         Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().shadow(1.dp, shape).clip(shape).glossy(t.card).border(1.5.dp, t.outline, shape)
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().lift(Lift.SHEET, shape).clip(shape).glossy(t.card).border(1.dp, t.line.copy(alpha = 0.45f), shape)
                 .padding(16.dp).testTag("quick_sheet"),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -253,7 +272,7 @@ internal fun TiltBubble(tc: TiltController, modifier: Modifier = Modifier) {
     val ang = tc.angleDeg
     val label = when (st) { TiltState.NO_DATA -> "—"; else -> "${tc.f1(ang ?: 0.0)}°" }
     Column(
-        modifier.width(48.dp).clip(RoundedCornerShape(12.dp)).background(if (over) t.caution.copy(alpha = 0.16f) else t.raised)
+        modifier.width(48.dp).lift(Lift.FLOAT, RoundedCornerShape(12.dp)).clip(RoundedCornerShape(12.dp)).background(if (over) t.caution.copy(alpha = 0.16f).compositeOver(t.raised) else t.raised)
             .border(if (over) 1.5.dp else 1.dp, if (over) t.caution else t.line, RoundedCornerShape(12.dp)).padding(vertical = 4.dp)
             .semantics { contentDescription = "폴 기울기 $label" + if (over) ", 허용 넘음" else "" }.testTag("tilt_bubble"),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp),

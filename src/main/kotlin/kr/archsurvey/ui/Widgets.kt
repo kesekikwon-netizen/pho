@@ -35,7 +35,7 @@ fun PrimaryBar(label: String, tag: String, enabled: Boolean = true, onClick: () 
     val t = T
     Box(Modifier.fillMaxWidth().padding(16.dp)) {
         Box(
-            Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(28.dp)).glossy(if (enabled) t.primary else t.chip, enabled)
+            Modifier.fillMaxWidth().height(56.dp).lift(if (enabled) Lift.FLOAT else Lift.NONE, RoundedCornerShape(28.dp)).clip(RoundedCornerShape(28.dp)).glossy(if (enabled) t.primary else t.chip, enabled)
                 .hClickable(enabled = enabled, onClick = onClick).testTag(tag),
             contentAlignment = Alignment.Center,
         ) { Text(label, style = Ty.button.copy(fontSize = 18.sp), color = if (enabled) t.onPrimary else t.inkSub) }

@@ -145,6 +145,7 @@ class Ui0112Test {
         setup()
         rule.runOnUiThread { c.settingsMenuOpen = true }; rule.waitForIdle()
         rule.onNodeWithTag("set_row_job").assertExists()
+        rule.onNodeWithTag("set_more").performScrollTo().performClick(); rule.waitForIdle() // 0.1.34: V월드는 고급 설정 안
         rule.onNodeWithTag("set_row_vworld").performScrollTo().assertExists()
         shot("08_settings_menu")
     }

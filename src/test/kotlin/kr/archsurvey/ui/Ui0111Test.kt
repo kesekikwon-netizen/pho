@@ -136,7 +136,7 @@ class Ui0111Test {
         rule.onNodeWithTag("status_main").assertTextContains("측량 가능", substring = true)
         rule.onNodeWithTag("measure_button").assertIsDisplayed()
         assertEquals(72f, rule.onNodeWithTag("measure_button").getBoundsInRoot().let { it.bottom - it.top }.value, 0.6f)
-        for (tag in listOf("tool_locate", "tool_fit", "tool_zoom_in", "tool_zoom_out", "tool_bgmap", "tool_layers", "tool_points", "type_chip", "tool_link_line", "tool_link_area", "tool_undo")) rule.onNodeWithTag(tag).assertExists()
+        for (tag in listOf("tool_locate", "tool_fit", "tool_zoom_in", "tool_zoom_out", "tool_bgmap", "tool_points", "type_chip", "tool_link_line", "tool_link_area", "tool_undo")) rule.onNodeWithTag(tag).assertExists()
         // 지도 비율(800dp): 머리글·판정 줄이 생겨도 60% 이상
         val map = rule.onNodeWithTag("map_area").getBoundsInRoot(); val root = rule.onRoot().getBoundsInRoot()
         assertTrue("지도 비율", (map.bottom - map.top).value / (root.bottom - root.top).value >= 0.6f)

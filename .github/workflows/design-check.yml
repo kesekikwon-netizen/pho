@@ -1,0 +1,87 @@
+# 디자인 변경 검증(빌드 · 단위/화면 시험 · 변경 전후 화면 캡처).
+# 같은 명령을 기준 브랜치(before)와 PR 머리(after)에 각각 돌려, 기존 실패와 이번 변경으로 생긴 실패를 나눠 본다.
+# 화면 캡처는 Robolectric(JVM, 360x800dp·xxhdpi 가정) — 실제 폰 확인이 아니다.
+name: design-check
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        side: [before, after]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 기준 커밋으로 바꾸기(before)
+        if: matrix.side == 'before'
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          if [ -z "$BASE" ]; then BASE="$(git merge-base HEAD origin/main)"; fi
+          git checkout --detach "$BASE"
+          echo "검사 커밋: $(git rev-parse HEAD)"
+      - name: 검사 커밋 기록
+        run: echo "SIDE=${{ matrix.side }} SHA=$(git rev-parse HEAD)"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Android SDK 35
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+      - name: V월드 키 파일(템플릿 그대로, 실키 없음)
+        run: cp src/main/kotlin/kr/archsurvey/map/VWorldDefaults.kt.template src/main/kotlin/kr/archsurvey/map/VWorldDefaults.kt
+      - name: 시험 · 디버그 빌드
+        id: test
+        continue-on-error: true
+        env:
+          REPORT_DIR: ${{ github.workspace }}/out/reports
+        run: |
+          mkdir -p out/reports
+          gradle testDebugUnitTest assembleDebug --continue --no-daemon 2>&1 | tee out/gradle.log
+          exit "${PIPESTATUS[0]}"
+      - name: 시험 결과 요약
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          tot = fail = err = skip = 0; bad = []
+          for f in glob.glob('build/test-results/testDebugUnitTest/*.xml'):
+              r = ET.parse(f).getroot()
+              tot += int(r.get('tests', 0)); fail += int(r.get('failures', 0)); err += int(r.get('errors', 0)); skip += int(r.get('skipped', 0))
+              for tc in r.iter('testcase'):
+                  for k in ('failure', 'error'):
+                      e = tc.find(k)
+                      if e is not None:
+                          bad.append(f"{tc.get('classname')}.{tc.get('name')} :: {(e.get('message') or '')[:300]}")
+          print(f"SUMMARY side=${{ matrix.side }} tests={tot} failures={fail} errors={err} skipped={skip}")
+          for b in sorted(bad): print("FAILED", b)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screens-${{ matrix.side }}
+          path: |
+            out/reports
+            build/reports/tests/testDebugUnitTest
+            out/gradle.log
+          if-no-files-found: warn
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.side == 'after'
+        with:
+          name: apk-debug-after
+          path: build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
+          retention-days: 14

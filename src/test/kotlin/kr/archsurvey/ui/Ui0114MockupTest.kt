@@ -155,7 +155,11 @@ class Ui0114MockupTest {
         rule.onNodeWithTag("home_screen").assertExists(); shot("mockup_02_home")
         // 03 환경설정 (목업 순서)
         ui { c.homeOpen = false; c.settingsMenuOpen = true }
-        for (tag in listOf("set_row_device", "set_row_rtk", "set_row_vrs", "set_row_job", "set_row_marker", "set_row_alert", "set_row_info")) rule.onNodeWithTag(tag).assertExists()
+        // 0.1.34: 앞에는 필수 네 줄(장비 · VRS · 안테나 높이 · 좌표계), 나머지는 「고급 설정」을 펴야 보인다
+        for (tag in listOf("set_row_device", "set_row_vrs", "set_row_antenna", "set_row_job")) rule.onNodeWithTag(tag).assertExists()
+        for (tag in listOf("set_row_rtk", "set_row_marker", "set_row_alert", "set_row_info")) rule.onNodeWithTag(tag).assertDoesNotExist()
+        rule.onNodeWithTag("set_more").performScrollTo().performClick(); rule.waitForIdle()
+        for (tag in listOf("set_row_rtk", "set_row_marker", "set_row_alert", "set_row_info")) rule.onNodeWithTag(tag).assertExists()
         shot("mockup_03_settings")
         // 03→RTK 설정
         reset(); ui { c.hub.open(ToolScreen.RTK) }; rule.onNodeWithTag("rtk_compat").assertExists(); shot("mockup_03b_rtk")
@@ -194,7 +198,8 @@ class Ui0114MockupTest {
         // 14 백업/복구 창
         reset(); ui { c.bg!!.close(); c.backupQuickOpen = true }; rule.onNodeWithTag("backup_quick").assertExists(); shot("mockup_14_backup_restore")
         // 15 측량 지도
-        reset(); for (tag in listOf("tool_link_line", "tool_link_area", "tool_undo", "tool_new_link", "type_chip", "tool_2d", "measure_button")) rule.onNodeWithTag(tag).assertExists()
+        reset(); for (tag in listOf("tool_link_line", "tool_link_area", "tool_undo", "tool_new_link", "type_chip", "measure_button")) rule.onNodeWithTag(tag).assertExists()
+        rule.onNodeWithTag("tool_2d").assertDoesNotExist() // 0.1.34: 위치 모양은 환경설정 › 고급 설정 › 현재위치 모양
         shot("mockup_15_survey_map")
         // 16 측량 설정
         ui { c.setupOpen = true }
