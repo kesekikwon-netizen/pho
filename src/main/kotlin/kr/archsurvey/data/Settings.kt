@@ -277,6 +277,10 @@ class SettingsStore(private val ctx: Context) {
     var btPin: String
         get() = sp.getString("bt_pair_pin", kr.archsurvey.bt.PairConst.DEFAULT_PIN) ?: kr.archsurvey.bt.PairConst.DEFAULT_PIN
         set(v) = sp.edit().putString("bt_pair_pin", v).apply()
+    /** 0.1.40 등록 없이 연결된 수신기("주소\t이름" 줄, 최근 5개) */
+    var directReceivers: String
+        get() = sp.getString("bt_direct_receivers", "") ?: ""
+        set(v) = sp.edit().putString("bt_direct_receivers", v).apply()
     var ntripSendGga: Boolean
         get() = sp.getBoolean("ntrip_send_gga", true)
         set(v) = sp.edit().putBoolean("ntrip_send_gga", v).apply()

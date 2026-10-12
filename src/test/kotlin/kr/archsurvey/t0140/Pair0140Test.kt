@@ -25,6 +25,8 @@ class FakeConn : ConnectionPlatform {
     var started: Pair<String, String>? = null
     var stopped = 0
     var saved: SavedConnection? = null
+    val direct = mutableListOf<Pair<String, String>>()
+    override fun rememberDirect(name: String, address: String) { direct += name to address }
     override fun bondedDevices() = devices
     override fun hasBluetoothPermission() = true
     override fun requestBluetoothPermission(onResult: (Boolean) -> Unit) = onResult(true)
@@ -66,7 +68,7 @@ class Pair0140Test {
 
     // ---------- 순수 상태 기계 ----------
     @Test fun pinVariant_setsPin_thenBondedConnects() {
-        val m = PairMachine(r10, PairList.pins("1234"))
+        val m = PairMachine(r10, PairList.pins("1234"), directFirst = false)
         assertEquals(PairAction.CreateBond("AA:11"), m.start(false))
         assertEquals("1234", m.onPairingRequest(PairConst.VARIANT_PIN))
         assertEquals(PairStep.BONDING, m.step)
@@ -79,8 +81,33 @@ class Pair0140Test {
         assertNull(m.onPairingRequest(PairConst.VARIANT_PASSKEY_CONFIRMATION)); assertEquals(PairStep.WAIT_USER, m.step)
         assertTrue(PairText.step(PairStep.WAIT_USER, m).contains("「등록」"))
     }
-    @Test fun bondFailure_retriesWith0000_thenUnbonded_thenPowerCycle_thenClearRecord() {
+    @Test fun r10_directInsecureFirst_noBond_thenBondOnlyIfDirectFails() {
         val m = PairMachine(r10, PairList.pins("1234"))
+        assertEquals(PairAction.Connect("AA:11", false), m.start(false))
+        assertEquals(PairStep.CONNECTING_UNBONDED, m.step)
+        assertTrue(PairText.step(m.step, m).contains("등록 없이 바로"))
+        m.onConnectResult(true); assertEquals(PairStep.DONE, m.step)
+        // 실패하면 그때 PIN 등록(1234 → 0000) → 그래도 안 되면 전원 안내(등록 없이 연결을 또 하지는 않음)
+        val f = PairMachine(r10, PairList.pins("1234"))
+        f.start(false)
+        assertEquals(PairAction.CreateBond("AA:11"), f.onConnectResult(false))
+        assertEquals("1234", f.onPairingRequest(PairConst.VARIANT_PIN))
+        assertEquals(PairAction.CreateBond("AA:11"), f.onBondState(PairConst.BOND_NONE, PairConst.BOND_BONDING, 1))
+        assertEquals("0000", f.onPairingRequest(PairConst.VARIANT_PIN))
+        assertEquals(PairAction.None, f.onBondState(PairConst.BOND_NONE, PairConst.BOND_BONDING, 1))
+        assertEquals(PairFix.POWER_CYCLE, f.fix)
+    }
+    @Test fun sp60_bondsFirst() { assertEquals(PairAction.CreateBond("BB:22"), PairMachine(sp60).start(false)) }
+    @Test fun unbondedPlan_insecureOnly_bondedPlanUnchanged() {
+        val u = kr.archsurvey.bt.planAttempts(emptyList(), null, emptySet(), insecureFirst = true, unbonded = true).map { it.strategy }
+        assertEquals(listOf(Strategy.INSECURE_SPP, Strategy.INSECURE_BASE, Strategy.REFLECT_CH1_INSECURE), u)
+        val b = kr.archsurvey.bt.planAttempts(emptyList(), null, emptySet(), insecureFirst = true).map { it.strategy }
+        assertEquals(listOf(Strategy.INSECURE_SPP, Strategy.SECURE_SPP, Strategy.BASE_SPP, Strategy.REFLECT_CH1), b)
+        val src = java.io.File("src/main/kotlin/kr/archsurvey/bt/BtCompat.kt").readText()
+        assertTrue(src.contains("createInsecureRfcommSocketToServiceRecord(BtCompat.BASE_UUID)") && src.contains("\"createInsecureRfcommSocket\""))
+    }
+    @Test fun bondFailure_retriesWith0000_thenUnbonded_thenPowerCycle_thenClearRecord() {
+        val m = PairMachine(r10, PairList.pins("1234"), directFirst = false)
         m.start(false); m.onPairingRequest(PairConst.VARIANT_PIN)
         assertEquals(PairAction.CreateBond("AA:11"), m.onBondState(PairConst.BOND_NONE, PairConst.BOND_BONDING, PairConst.REASON_AUTH_FAILED))
         assertEquals("0000", m.onPairingRequest(PairConst.VARIANT_PIN))
@@ -95,12 +122,12 @@ class Pair0140Test {
         assertTrue(PairText.fix(m.fix, r10.name)!!.second.contains("192.168.142.1"))
     }
     @Test fun userCancel_noAutoRetry() {
-        val m = PairMachine(r10); m.start(false)
+        val m = PairMachine(r10, directFirst = false); m.start(false)
         assertEquals(PairAction.None, m.onBondState(PairConst.BOND_NONE, PairConst.BOND_BONDING, PairConst.REASON_AUTH_CANCELED))
         assertEquals(PairFix.CANCELLED, m.fix)
     }
     @Test fun remoteDown_saysComeCloser_noUnbondedAttempt() {
-        val m = PairMachine(r10); m.start(false)
+        val m = PairMachine(r10, directFirst = false); m.start(false)
         assertEquals(PairAction.None, m.onBondState(PairConst.BOND_NONE, PairConst.BOND_BONDING, PairConst.REASON_REMOTE_DEVICE_DOWN))
         assertEquals(PairFix.NEAR, m.fix)
     }
@@ -109,7 +136,7 @@ class Pair0140Test {
         assertEquals(PairAction.Connect("AA:11", true), m.start(true))
     }
     @Test fun timeout_countsAsFailure() {
-        val m = PairMachine(r10, PairList.pins("0000")) // 설정이 0000 이면 PIN 하나
+        val m = PairMachine(r10, PairList.pins("0000"), directFirst = false) // 설정이 0000 이면 PIN 하나
         m.start(false)
         assertEquals(PairAction.Connect("AA:11", false), m.onTimeout())
     }
@@ -137,21 +164,29 @@ class Pair0140Test {
         return Triple(fc, fp, pc)
     }
 
-    @Test fun tapNewR10_pinAuto_bonded_connectsWithR10Profile_andSaves() = runTest(StandardTestDispatcher()) {
+    @Test fun tapNewR10_connectsWithoutBond_savesAndRemembers() = runTest(StandardTestDispatcher()) {
         val (fc, fp, pc) = rig(backgroundScope)
         fp.scanResults = listOf(sp60, r10)
         pc.openSheet(); runCurrent()
         assertEquals(listOf("AA:11", "BB:22"), pc.devices.map { it.address }) // 신호 센 R10 먼저
         pc.tap(pc.devices.first { it.address == "AA:11" })
-        assertEquals(listOf("AA:11"), fp.bondCalls)
-        assertEquals("1234", fp.request("AA:11", PairConst.VARIANT_PIN))
-        fc.devices = listOf(r10.name to "AA:11")
-        fp.bonded("AA:11"); runCurrent()
+        assertTrue("R10 은 등록(createBond) 없이", fp.bondCalls.isEmpty())
         assertEquals(DeviceProfiles.R10_ID to "AA:11", fc.started)
-        assertEquals(PairStep.CONNECTING, pc.step)
+        assertEquals(PairStep.CONNECTING_UNBONDED, pc.step)
         assertEquals("AA:11", fc.saved?.address); assertEquals(DeviceProfiles.R10_ID, fc.saved?.deviceId); assertTrue(fc.saved!!.preChecked)
         fc.link.value = LinkStatus(LinkState.STREAMING); advanceTimeBy(600); runCurrent()
         assertEquals(PairStep.DONE, pc.step)
+        assertEquals(listOf(r10.name to "AA:11"), fc.direct)
+    }
+
+    @Test fun sp60New_pinAuto_bonded_connects() = runTest(StandardTestDispatcher()) {
+        val (fc, fp, pc) = rig(backgroundScope)
+        fp.scanResults = listOf(sp60); pc.openSheet(); runCurrent()
+        pc.tap(sp60)
+        assertEquals(listOf("BB:22"), fp.bondCalls)
+        assertEquals("1234", fp.request("BB:22", PairConst.VARIANT_PIN))
+        fp.bonded("BB:22"); runCurrent()
+        assertEquals(DeviceProfiles.SP60_ID to "BB:22", fc.started); assertEquals(PairStep.CONNECTING, pc.step)
     }
 
     @Test fun alreadyBondedSp60_noBond_connectsAsSp60() = runTest(StandardTestDispatcher()) {
@@ -163,21 +198,22 @@ class Pair0140Test {
         assertEquals(DeviceProfiles.SP60_ID to "BB:22", fc.started)
     }
 
-    @Test fun failTwice_waitsGap_retries0000_thenUnbondedConnect_thenFixCard() = runTest(StandardTestDispatcher()) {
+    @Test fun r10DirectFails_thenBond1234_then0000_thenFixCard() = runTest(StandardTestDispatcher()) {
         val (fc, fp, pc) = rig(backgroundScope)
         fp.scanResults = listOf(r10); pc.openSheet(); runCurrent()
         pc.tap(r10)
-        fp.request("AA:11", PairConst.VARIANT_PIN); fp.failed("AA:11")
-        assertEquals(1, fp.bondCalls.size) // 바로 다시 하지 않고 잠깐 쉼
+        assertEquals(DeviceProfiles.R10_ID to "AA:11", fc.started)
+        fc.link.value = LinkStatus(LinkState.RECONNECTING, failures = 1); advanceTimeBy(1_100); runCurrent()
+        assertTrue(fc.stopped >= 1) // 등록 없이 연결 멈춤
+        assertEquals(PairStep.BONDING, pc.step)
+        advanceTimeBy(1_100); runCurrent()
+        assertEquals(1, fp.bondCalls.size)
+        assertEquals("1234", fp.request("AA:11", PairConst.VARIANT_PIN)); fp.failed("AA:11")
         advanceTimeBy(1_100); runCurrent()
         assertEquals(2, fp.bondCalls.size)
-        assertEquals("0000", fp.request("AA:11", PairConst.VARIANT_PIN))
-        fp.failed("AA:11"); runCurrent()
-        assertEquals(PairStep.CONNECTING_UNBONDED, pc.step)
-        assertEquals(DeviceProfiles.R10_ID to "AA:11", fc.started) // 등록 없이 연결(엔진의 R10 순서 = INSECURE 먼저)
-        fc.link.value = LinkStatus(LinkState.NEEDS_USER); advanceTimeBy(600); runCurrent()
+        assertEquals("0000", fp.request("AA:11", PairConst.VARIANT_PIN)); fp.failed("AA:11"); runCurrent()
         assertEquals(PairStep.FAILED, pc.step); assertEquals(PairFix.POWER_CYCLE, pc.fix)
-        assertTrue(fc.stopped >= 1)
+        assertTrue(fc.direct.isEmpty())
     }
 
     @Test fun permissionExplainedFirst_thenScan() = runTest(StandardTestDispatcher()) {
@@ -192,7 +228,7 @@ class Pair0140Test {
     @Test fun pinEditedOnlyInAdvanced_digitsOnly_used() = runTest(StandardTestDispatcher()) {
         val (_, fp, pc) = rig(backgroundScope)
         pc.changePin("98a76"); assertEquals("9876", pc.pin)
-        pc.tap(r10); assertEquals("9876", fp.request("AA:11", PairConst.VARIANT_PIN))
+        pc.tap(sp60); assertEquals("9876", fp.request("BB:22", PairConst.VARIANT_PIN))
     }
 
     @Test fun sourceUsesPublicApis_andAbortsOnlyOrdered() {

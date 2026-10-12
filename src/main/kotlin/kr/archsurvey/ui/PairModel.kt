@@ -120,7 +120,7 @@ class PairController(
             is PairAction.CreateBond -> {
                 armTimeout()
                 // 첫 시도는 바로, 실패 뒤 다른 PIN 시도는 잠깐 쉬고(스택이 앞 시도를 정리할 시간)
-                if (m.pinIndex == 0) run(m.onCreateBondResult(platform.createBond(a.address)))
+                if (m.pinIndex == 0 && !m.directTried) run(m.onCreateBondResult(platform.createBond(a.address)))
                 else scope.launch { delay(retryGapMs); if (machine === m && m.step == PairStep.BONDING) run(m.onCreateBondResult(platform.createBond(a.address))) }
             }
             is PairAction.Connect -> {
@@ -147,8 +147,11 @@ class PairController(
             while (machine === m && (m.step == PairStep.CONNECTING || m.step == PairStep.CONNECTING_UNBONDED)) {
                 val st = conn.link.value.state
                 when {
-                    st == LinkState.STREAMING || st == LinkState.CONNECTED_NO_DATA -> { m.onConnectResult(true); bump(); devices = PairList.sort(found.values.map { if (it.address.equals(m.device.address, true)) it.copy(bonded = platform.isBonded(it.address)) else it }) }
-                    st == LinkState.NEEDS_USER || (waited > 40_000L && st != LinkState.CONNECTING) || waited > 90_000L -> {
+                    st == LinkState.STREAMING || st == LinkState.CONNECTED_NO_DATA -> {
+                        if (m.step == PairStep.CONNECTING_UNBONDED) conn.rememberDirect(m.device.name, m.device.address) // 등록 없이도 자동 연결 목록에
+                        m.onConnectResult(true); bump(); devices = PairList.sort(found.values.map { if (it.address.equals(m.device.address, true)) it.copy(bonded = platform.isBonded(it.address)) else it }) }
+                    st == LinkState.NEEDS_USER || (waited > 40_000L && st != LinkState.CONNECTING) || waited > 90_000L ||
+                        (m.step == PairStep.CONNECTING_UNBONDED && waited >= 1_000L && st == LinkState.RECONNECTING && conn.link.value.failures >= 1) -> {
                         if (m.step == PairStep.CONNECTING_UNBONDED) conn.cancelConnectQuiet()
                         run(m.onConnectResult(false))
                     }

@@ -106,7 +106,9 @@ object ErrorCards {
 interface ConnectionPlatform {
     val link: StateFlow<LinkStatus>
     val ntrip: StateFlow<NtripStatus>
-    fun bondedDevices(): List<Pair<String, String>>    // (이름, 주소)
+    fun bondedDevices(): List<Pair<String, String>>    // (이름, 주소) — 0.1.40: 등록 없이 연결됐던 수신기도 포함
+    /** 0.1.40 등록 없이(insecure) 연결된 수신기를 기억 → 목록·자동 연결에 나옴 */
+    fun rememberDirect(name: String, address: String) {}
     fun hasBluetoothPermission(): Boolean
     fun requestBluetoothPermission(onResult: (Boolean) -> Unit)
     fun bluetoothEnabled(): Boolean
@@ -898,6 +900,8 @@ class ConnectionController(
         if (form.enabled && !vrsOk) ui.toast(AUTO_NO_VRS + " · " + connectProblems().joinToString(" · "))
         showProgress = false // 진행은 등록 창이 보여 줌
     }
+
+    fun rememberDirect(name: String, address: String) { runCatching { platform.rememberDirect(name, address) }; refresh() }
 
     /** 0.1.40 등록 창에서 「등록 없이 연결」이 안 됐을 때 조용히 멈춤(알림 없이) */
     fun cancelConnectQuiet() { stopAll() }

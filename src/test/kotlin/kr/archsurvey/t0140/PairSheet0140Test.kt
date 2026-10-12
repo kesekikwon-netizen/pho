@@ -49,18 +49,22 @@ class PairSheet0140Test {
         rule.onNodeWithTag("pair_dev_AA:11").assertExists(); rule.onNodeWithTag("pair_dev_BB:22").assertExists()
         shot("01_list")
         rule.onNodeWithTag("pair_dev_AA:11").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("pair_step", useUnmergedTree = true).assertTextContains("등록 없이 바로", substring = true)
+        rule.runOnIdle { assertTrue(fp.bondCalls.isEmpty()) }
+        shot("02_direct_connecting")
+        rule.runOnIdle { fc.link.value = kr.archsurvey.device.LinkStatus(kr.archsurvey.device.LinkState.NEEDS_USER) }
+        rule.waitUntil(3_000) { pc.step == PairStep.BONDING }
         rule.runOnIdle { assertEquals("1234", fp.request("AA:11", PairConst.VARIANT_PIN)) }
         rule.onNodeWithTag("pair_step", useUnmergedTree = true).assertTextContains("PIN 1234", substring = true)
-        shot("02_pairing")
+        shot("03_pin_fallback")
         rule.runOnIdle { fp.failed("AA:11") }; rule.waitForIdle()
-        rule.runOnIdle { fp.failed("AA:11") }; rule.waitForIdle()
-        rule.runOnIdle { assertEquals(PairStep.CONNECTING_UNBONDED, pc.step); fc.link.value = kr.archsurvey.device.LinkStatus(kr.archsurvey.device.LinkState.NEEDS_USER) }
+        rule.runOnIdle { fp.failed("AA:11") }
         rule.waitUntil(3_000) { pc.step == PairStep.FAILED }
         rule.onNodeWithTag("pair_fix_title", useUnmergedTree = true).assertTextEquals("R10 전원을 껐다 켜고 다시 눌러 주세요")
-        shot("03_fail_power_cycle")
+        shot("04_fail_power_cycle")
         rule.onNodeWithTag("pair_adv").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("pair_pin_0000").performScrollTo().performClick(); rule.waitForIdle()
         assertEquals("0000", pc.pin)
-        shot("04_advanced_pin")
+        shot("05_advanced_pin")
     }
 }
