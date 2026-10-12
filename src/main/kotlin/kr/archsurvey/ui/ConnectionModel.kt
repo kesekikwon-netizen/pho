@@ -776,7 +776,7 @@ class ConnectionController(
         autoRun = true
         val switched = adoptTarget(target)
         val vrsOk = connectProblems().isEmpty()
-        startNow(target.address, ntripOn = form.enabled && vrsOk)
+        if (!startNow(target.address, ntripOn = form.enabled && vrsOk)) { autoRun = false; ui.toast(notice?.title ?: ""); return false }
         ui.toast(when {
             !vrsOk -> AUTO_NO_VRS + " · " + connectProblems().joinToString(" · ")
             switched -> "수신기 자동 인식: ${target.name} (${shortName(target.profile)}) · 연결 중이에요"
@@ -874,7 +874,7 @@ class ConnectionController(
         }
         persistSafe()
         autoRun = false; autoQueue.clear() // 수동 연결: 고른 수신기만
-        startNow(addr)
+        if (!startNow(addr)) return // 0.1.42 다른 앱이 쓰는 중 → 카드 「여기서 쓰기」
         showProgress = true
     }
 
@@ -906,12 +906,95 @@ class ConnectionController(
     /** 0.1.40 등록 창에서 「등록 없이 연결」이 안 됐을 때 조용히 멈춤(알림 없이) */
     fun cancelConnectQuiet() { stopAll() }
 
-    private fun startNow(addr: String, ntripOn: Boolean = form.enabled) {
+    /** 0.1.42: 다른 앱이 이 수신기를 잡고 있으면 연결하지 않고 false(카드 「여기서 쓰기」) */
+    private fun startNow(addr: String, ntripOn: Boolean = form.enabled, force: Boolean = false): Boolean {
+        if (!force) lock?.otherHolder(addr)?.let { h ->
+            lockedBy = h; pendingStart = addr to ntripOn
+            notice = ErrorCard("LOCK", LockText.busy(h.label), "「${LockText.TAKE}」를 누르면 ${h.label} 의 연결을 끊고 여기서 연결해요.", false)
+            return false
+        }
+        lockedBy = null; pendingStart = null; bgStopped = false
         notice = null // 0.1.19: 연결 시작 뒤 사전 점검/경고 카드 지움(남은 notice 가 「다시 시도」로 남는 것 방지)
         savedThisRun = false; linkOkThisRun = false
         progressStartMs = platform.nowMs()
         platform.startReal(profile, addr, form.toConfig(), ntripOn)
         connectRequested = true
+        holdLock(addr)
+        return true
+    }
+
+    // ---------- 0.1.42 앱 사이 수신기 잠금 · 뒤로 가면 자동 연결 멈춤 ----------
+    /** VM 이 넣음(같은 서명 두 앱 사이 방송). null 이면 잠금 없음(시험·한 앱) */
+    var lock: ReceiverLock? = null
+        set(v) {
+            field = v
+            v?.onReleaseRequested = { label -> stopAll(); ui.toast(LockText.handedOver(label)) }
+            v?.onConflict = { _ -> if (!appForeground && link.value.state != kr.archsurvey.device.LinkState.STREAMING) stopAll() } // 뒤에 있고 위치도 없으면 양보
+            v?.onChanged = { lockTick++; if (waitingTake && pendingStart != null && v.otherHolder(pendingStart!!.first) == null) resumePending() }
+        }
+    var lockedBy by mutableStateOf<ReceiverLock.Holder?>(null); private set
+    var lockTick by mutableStateOf(0); private set
+    private var pendingStart: Pair<String, Boolean>? = null
+    private var waitingTake = false
+    private var heartbeatJob: kotlinx.coroutines.Job? = null
+    private fun sc() = scope ?: CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    private fun holdLock(addr: String) {
+        val l = lock ?: return
+        l.hold(addr)
+        heartbeatJob?.cancel()
+        heartbeatJob = sc().launch { while (true) { kotlinx.coroutines.delay(20_000); if (!connectRequested) break; l.heartbeat() } }
+    }
+    private fun releaseLock() { heartbeatJob?.cancel(); heartbeatJob = null; lock?.release() }
+
+    /** 「여기서 쓰기」: 다른 앱에 놓아 달라고 하고, 놓으면(또는 6초 안 답이 없으면) 여기서 연결 */
+    fun takeOver() {
+        val h = lockedBy ?: return
+        waitingTake = true
+        notice = ErrorCard("LOCK", "${h.label} 에 수신기를 넘겨 달라고 했어요", "곧 여기서 연결해요.", true)
+        lock?.askRelease(h) // 답(놓음)이 바로 올 수도 있으므로 상태를 먼저 맞춘다
+        sc().launch { kotlinx.coroutines.delay(takeOverWaitMs); if (waitingTake) resumePending() }
+    }
+    var takeOverWaitMs = 6_000L
+    private fun resumePending() {
+        waitingTake = false
+        val (a, n) = pendingStart ?: return
+        startNow(a, n, force = true); showProgress = true
+    }
+
+    var appForeground = true; private set
+    /** 뒤로 가서 자동 연결을 멈췄음(앞으로 오면 다시) */
+    var bgStopped = false; private set
+    private var bgJob: kotlinx.coroutines.Job? = null
+    /** 위치가 오던 연결이 뒤에서 끊겼을 때 다시 붙기를 기다리는 시간(그 뒤엔 멈춤) */
+    var backgroundGraceMs = 120_000L
+
+    /** Activity.onStop. 위치를 한 번도 못 받은 연결(자동 연결 시도 중)은 바로 멈추고, 측량 중이던 연결은 끊긴 채 [backgroundGraceMs] 지나면 멈춤 */
+    fun onAppBackground() {
+        appForeground = false
+        if (!connectRequested) return
+        if (!linkOkThisRun) { stopAll(); bgStopped = true; return }
+        bgJob?.cancel()
+        bgJob = sc().launch {
+            var bad = 0L
+            while (connectRequested && !appForeground) {
+                kotlinx.coroutines.delay(5_000)
+                bad = if (link.value.state == kr.archsurvey.device.LinkState.STREAMING) 0L else bad + 5_000
+                if (bad >= backgroundGraceMs) { stopAll(); bgStopped = true; break }
+            }
+        }
+    }
+
+    /** Activity.onStart. 뒤에서 멈췄던 연결을 다시(다른 앱이 쓰는 중이면 카드) */
+    fun onAppForeground() {
+        appForeground = true
+        bgJob?.cancel(); bgJob = null
+        if (bgStopped && !connectRequested) {
+            bgStopped = false
+            val a = address ?: return
+            if (!platform.hasBluetoothPermission() || !platform.bluetoothEnabled()) return
+            startNow(a, ntripOn = form.enabled && connectProblems().isEmpty())
+        }
     }
 
     fun openBluetoothSettings() = platform.openBluetoothSettings()
@@ -921,14 +1004,14 @@ class ConnectionController(
     fun disconnect() { stopAll(); ui.toast(DISCONNECTED_MSG); onFeedback?.invoke(FeedbackEvent.DISCONNECT) }
     /** 연결 시도를 멈춘다(HTML 64 「연결 취소」 — 연결 중일 때만) */
     fun cancelConnect() { stopAll(); ui.toast(CANCELLED_MSG) }
-    private fun stopAll() { platform.stopReal(); connectRequested = false; showProgress = false; autoRun = false; autoQueue.clear() }
+    private fun stopAll() { platform.stopReal(); connectRequested = false; showProgress = false; autoRun = false; autoQueue.clear(); releaseLock() }
     /**
      * 0.1.31 T27 / 0.1.32 「기기 종료」: 알림·소리 없이 보정(VRS)·블루투스를 끊고 연결 서비스를 멈춘다.
      * **저장된 마지막 수신기·보정 설정은 지우지 않는다**(다음 실행 때 같은 수신기로 자동 연결). 끊기 전에 지금 설정을 한 번 더 저장
      */
     fun stopForExit() { persistSafe(); stopAll() }
     /** 0.1.32: 알림 「연결 종료」 등 화면 밖에서 연결이 멈췄을 때(연결 중 표시로 남지 않게) */
-    fun onStoppedOutside() { connectRequested = false; showProgress = false; autoRun = false; autoQueue.clear() }
+    fun onStoppedOutside() { connectRequested = false; showProgress = false; autoRun = false; autoQueue.clear(); releaseLock() }
     /** 0.1.31 T27: 수신기 연결이 살아 있거나 연결 중이면 true(종료 창 문구) */
     fun linkActive(): Boolean = connectRequested || link.value.state != kr.archsurvey.device.LinkState.IDLE
 

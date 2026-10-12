@@ -209,6 +209,14 @@ class LinkSupervisor(
                     attempt = 0
                     continue
                 }
+                // 0.1.42: 끝없이 두드리지 않기 — 연속 실패가 상한이면 멈추고 「다시 시도」를 기다림(다른 앱·다른 폰이 수신기를 쓰는 중일 수 있음)
+                if (policy.shouldGiveUp(failures)) {
+                    setLink(LinkState.NEEDS_USER, attempt, failures, err,
+                        "연결이 ${failures}번 연속 안 돼서 자동 재연결을 멈췄어요 (오류 ${err.code}) · 수신기 전원·다른 앱/컨트롤러 연결을 확인하고 「다시 시도」", policy.shouldShowRepairHint(failures))
+                    wake.receive()
+                    attempt = 0
+                    continue
+                }
                 setLink(LinkState.RECONNECTING, attempt, failures, err,
                     "${err.title} — 자동으로 다시 연결해요 (오류 ${err.code})", policy.shouldShowRepairHint(failures))
                 delay(policy.settleMs.coerceAtLeast(300))

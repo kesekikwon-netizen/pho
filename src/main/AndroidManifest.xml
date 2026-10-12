@@ -3,6 +3,9 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- 0.1.20: 폰 GPS(지도 따라가기·저정밀 측점). 수신기 NMEA 와 별도. 런타임에 필요할 때만 요청. -->
+    <!-- 0.1.42/0.1.4: 같은 서명 앱(발굴 측량 · 사진 기준점) 사이 수신기 잠금 방송 -->
+    <permission android:name="kr.archsurvey.permission.RECEIVER_LOCK" android:protectionLevel="signature" />
+    <uses-permission android:name="kr.archsurvey.permission.RECEIVER_LOCK" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- MapLibre(옵트인) 와이파이 권한은 제거 -->

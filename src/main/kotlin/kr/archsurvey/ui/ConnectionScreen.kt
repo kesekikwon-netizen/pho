@@ -362,6 +362,8 @@ private fun DeviceSection(cc: ConnectionController, link: kr.archsurvey.device.L
             else if (on) GlyphIcon(Glyph.CHECK, t.ink, 22.dp)
         }
     }
+    // 0.1.42 다른 앱(발굴 측량/사진 기준점)이 같은 수신기를 쓰는 중이면 한 번에 넘겨받기
+    ReceiverLockCard(cc)
     // 0.1.40 앱 안에서 찾기 → 눌러서 등록(PIN 자동)+연결. 폰 블루투스 설정으로 갈 필요 없음
     PairFindButton(cc)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

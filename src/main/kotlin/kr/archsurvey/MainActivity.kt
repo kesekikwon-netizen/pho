@@ -93,6 +93,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // 0.1.42: 뒤로 가면 위치를 못 받던 자동 연결은 멈추고, 앞으로 오면 다시(두 앱이 같은 수신기를 번갈아 잡던 문제)
+    override fun onStart() { super.onStart(); runCatching { vm.controller.connection?.onAppForeground() } }
+    override fun onStop() { runCatching { vm.controller.connection?.onAppBackground() }; super.onStop() }
     override fun onResume() { super.onResume(); resumed = true; vm.controller.tilt?.resume(); vm.controller.voice?.setForeground(true) }
     override fun onPause() { resumed = false; vm.controller.voice?.setForeground(false); vm.controller.tilt?.pause(); vm.onAppBackground(); super.onPause() }
 
