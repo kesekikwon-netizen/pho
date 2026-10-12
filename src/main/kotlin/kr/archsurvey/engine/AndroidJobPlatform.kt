@@ -11,7 +11,9 @@ import kr.archsurvey.ui.JobPlatform
 import java.io.File
 
 /** [JobPlatform] 의 Android 구현. 작업 = points.project 값. 점이 아직 없는 새 작업 이름은 설정에 따로 적어 둔다. */
-class AndroidJobPlatform(private val ctx: Context, private val settings: SettingsStore, private val versionName: String) : JobPlatform {
+class AndroidJobPlatform(private val ctx: Context, private val settings: SettingsStore, private val versionName: String,
+    /** 0.1.38 새 작업 = 새 폴더 */
+    private val folders: AndroidJobFolder? = null) : JobPlatform {
     private val dao get() = SurveyDb.get(ctx).dao()
     override val current: String get() = settings.project
 
@@ -24,7 +26,18 @@ class AndroidJobPlatform(private val ctx: Context, private val settings: Setting
 
     override suspend fun info(name: String) = JobInfo(
         name, dao.liveCount(name), dao.livePhotoCount(name), dao.liveVoiceCount(name), dao.firstAt(name), dao.lastAt(name), dao.fakeCount(name),
+        folderOf(name),
     )
+
+    override fun folderOf(name: String): String? = folders?.let { f -> runCatching { f.displayOf(name) }.getOrNull() }
+    override fun groups(): List<String> = folders?.registry?.groups().orEmpty()
+
+    override suspend fun create(name: String, group: String?) {
+        val n = name.trim()
+        JobNames.problem(n, names())?.let { throw JobException(it) }
+        folders?.let { f -> f.registry.assign(n, group); runCatching { f.writer.dir(f.relOf(n)).mkdirs() } }
+        create(n)
+    }
 
     override suspend fun create(name: String) {
         val n = name.trim()
@@ -45,6 +58,8 @@ class AndroidJobPlatform(private val ctx: Context, private val settings: Setting
         File(ctx.getExternalFilesDir("Pictures") ?: File(ctx.filesDir, "Pictures"), safe(name)).deleteRecursively()
         File(ctx.getExternalFilesDir("Recordings") ?: File(ctx.filesDir, "Recordings"), safe(name)).deleteRecursively()
         settings.extraProjects = settings.extraProjects - name
+        // 0.1.38: 작업 폴더(내보내기·사진 사본)는 지우지 않고 기록만 뗀다 → 같은 이름 새 작업은 「이름 (2)」 폴더
+        folders?.registry?.forget(name)
         if (name == settings.project) {
             val rest = names().filter { it != name }
             settings.project = rest.firstOrNull() ?: "작업1"

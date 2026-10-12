@@ -70,6 +70,8 @@ class ExportService(
         drawingScale: Int = kr.archsurvey.dig.DrawingScale.DEFAULT,
         /** 0.1.35 오늘 잰 점만(yyyy-MM-dd, 폰 시간대). null = 전체 */
         todayKey: String? = null,
+        /** 0.1.38: false = 공용 hgis 폴더에 따로 두지 않음(작업 폴더 내보내기/ 로 대신) */
+        publishHgis: Boolean = true,
     ): ExportResult {
         val all = dao.pointsOf(project)
         val pts = if (todayKey == null) all else DigExport.todayOnly(all, todayKey) { kr.archsurvey.dig.DayKey.of(it) }
@@ -148,7 +150,7 @@ class ExportService(
             }
         }
         // PC 로 옮겨 hgis 에 끌어 놓기 쉽게: 위 파일(사진·음성 폴더 제외)을 공용 문서 폴더에도 한 폴더로 둔다(Android 10 이상)
-        val publicFolder = if (ExportFormat.SHP in formats || ExportFormat.HGIS_CSV in formats) publish(dir, "${safe}_$stamp") else null
+        val publicFolder = if (publishHgis && (ExportFormat.SHP in formats || ExportFormat.HGIS_CSV in formats)) publish(dir, "${safe}_$stamp") else null
         return ExportResult(dir, zip, pts.size, photoCount, voiceCount, publicFolder)
     }
 

@@ -15,14 +15,20 @@ import kr.archsurvey.ui.BackupPlatform
 import java.io.File
 import kotlin.coroutines.resume
 
-class AndroidBackupPlatform(private val ctx: Context, private val docs: DocBridge) : BackupPlatform {
+class AndroidBackupPlatform(private val ctx: Context, private val docs: DocBridge,
+    /** 0.1.38 백업 ZIP 사본을 지금 작업 폴더 백업/ 에도 */
+    private val jobFolder: AndroidJobFolder? = null, private val project: () -> String = { "" }) : BackupPlatform {
     private val svc = BackupService(ctx)
     private val versionName: String = runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "" }.getOrDefault("")
 
     private fun BackupInfo.toItem() = BackupItem(name, file.path, createdAtMs, points, photos, voices, sizeBytes)
 
     override suspend fun list() = withContext(Dispatchers.IO) { svc.list().map { it.toItem() } }
-    override suspend fun create() = withContext(Dispatchers.IO) { svc.create(versionName = versionName).toItem() }
+    override suspend fun create() = withContext(Dispatchers.IO) {
+        val b = svc.create(versionName = versionName)
+        jobFolder?.let { f -> runCatching { f.addBackup(project(), b.file) }.onFailure { kr.archsurvey.diag.CrashLog.record("작업 폴더 백업 사본", it) } }
+        b.toItem()
+    }
     override suspend fun restore(item: BackupItem) = withContext(Dispatchers.IO) { svc.restore(File(item.path), versionName).toItem() }
     override suspend fun delete(item: BackupItem) = withContext(Dispatchers.IO) { svc.delete(File(item.path)) }
 

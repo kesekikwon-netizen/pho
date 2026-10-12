@@ -45,7 +45,7 @@ open class Screens0135Test {
     protected lateinit var f: FakeGnssSource
     protected lateinit var c: SurveyController
     protected open val prefix = "p"
-    private val out = File("/workspace/survey-app/build-reports/0.1.35/screens").apply { mkdirs() }
+    private val out = File("/workspace/survey-app/build-reports/0.1.38/screens").apply { mkdirs() } // 0.1.38: 지금 코드 화면(0.1.35 폴더는 이전 기록으로 둠)
 
     private class Sett : SettingsPlatform {
         override var zone = kr.archsurvey.core.KoreanTmZone.EAST; override var poleRight = true; override var sound = true; override var vibration = true; override var keepScreenOn = true

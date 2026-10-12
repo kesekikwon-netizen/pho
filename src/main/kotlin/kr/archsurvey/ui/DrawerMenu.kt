@@ -17,39 +17,35 @@ enum class MenuAction {
     OPEN_BACKUP,
     /** 도구 화면(점 목록·찾아가기·계산기·설정·작업 관리) */
     OPEN_TOOL_POINTS, OPEN_TOOL_GOTO, OPEN_TOOL_CALC, OPEN_TOOL_SETTINGS, OPEN_JOB_NEW, OPEN_JOB_LIST, OPEN_JOB_INFO,
+    /** 0.1.38 측량한 것(유구별) · 지도에 보이기 시트 */
+    OPEN_FEATURES, OPEN_LAYERS,
 }
 
 data class MenuItem(val id: String, val label: String, val action: MenuAction, val enabled: Boolean = true, val note: String? = null)
 data class MenuSection(val title: String, val items: List<MenuItem>)
 
 /**
- * SmartTopo 2024 서랍(즐겨찾기 / 작업관리 / 일반측량)을 따른 구성. 우리 고유 기능(발굴·위치 종류·배경 레이어·장비)은
- * 같은 구조 안의 해당 그룹에 넣었다. SmartTopo에 있어도 이번 범위에 없는 항목(로그인, 다른 측량 방식 등)은 만들지 않았다.
+ * 0.1.38 메뉴 하나로 정리: 예전에는 「메뉴」 시트(7칸) → 「전체 메뉴」 서랍(16칸, 즐겨찾기 포함) 두 단계였고
+ * 같은 화면으로 가는 길이 여러 개였다(점 목록=측량한 것, 안테나 높이=설정 폴 높이, 작업 정보=홈 「작업」…).
+ * 이제 머리줄 ≡ 하나 = 이 서랍. 작업 · 측량 · 장비/설정 세 묶음, 10칸.
  */
 object DrawerMenu {
     val sections: List<MenuSection> = listOf(
-        MenuSection("즐겨찾기", listOf(
-            MenuItem("fav_points", "점 목록", MenuAction.OPEN_TOOL_POINTS),
-            MenuItem("fav_goto", "점 찾아가기", MenuAction.OPEN_TOOL_GOTO),
-            MenuItem("fav_calc", "계산기", MenuAction.OPEN_TOOL_CALC),
-        )),
-        MenuSection("작업 관리", listOf(
-            MenuItem("job_new", "새 작업 만들기", MenuAction.OPEN_JOB_NEW),
+        MenuSection("작업", listOf(
+            MenuItem("job_new", "새 작업 (새 폴더)", MenuAction.OPEN_JOB_NEW),
             MenuItem("job_open", "작업 열기 · 삭제", MenuAction.OPEN_JOB_LIST),
-            MenuItem("job_export", "작업 내보내기", MenuAction.OPEN_EXPORT),
-            MenuItem("job_info", "작업 정보", MenuAction.OPEN_JOB_INFO),
-            MenuItem("job_backup", "데이터 백업 · 복구", MenuAction.OPEN_BACKUP),
+            MenuItem("job_export", "내보내기 · 저녁 도면", MenuAction.OPEN_EXPORT),
+            MenuItem("job_backup", "백업 · 복구", MenuAction.OPEN_BACKUP),
         )),
-        MenuSection("일반 측량", listOf(
-            MenuItem("survey", "측량", MenuAction.GO_SURVEY),
-            MenuItem("types", "위치 종류", MenuAction.OPEN_TYPES),
-            MenuItem("areas", "발굴 구역 · 그리드", MenuAction.OPEN_AREAS),
-            MenuItem("bg", "배경 지도 · 레이어", MenuAction.OPEN_BG),
+        MenuSection("측량", listOf(
+            MenuItem("features", "측량한 것", MenuAction.OPEN_FEATURES),
+            MenuItem("areas", "구역 · 그리드", MenuAction.OPEN_AREAS),
+            MenuItem("layers", "지도에 보이기", MenuAction.OPEN_LAYERS),
+            MenuItem("goto", "점 찾아가기", MenuAction.OPEN_TOOL_GOTO),
         )),
-        MenuSection("환경 설정", listOf(
+        MenuSection("장비 · 설정", listOf(
             MenuItem("connection", "수신기 연결 · VRS", MenuAction.OPEN_CONNECTION),
-            MenuItem("antenna", "안테나 높이", MenuAction.OPEN_ANTENNA),
-            MenuItem("settings", "설정", MenuAction.OPEN_TOOL_SETTINGS),
+            MenuItem("settings", "설정 · 구글 드라이브", MenuAction.OPEN_TOOL_SETTINGS),
         )),
     )
     val allItems: List<MenuItem> get() = sections.flatMap { it.items }

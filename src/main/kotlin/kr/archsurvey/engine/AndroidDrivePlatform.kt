@@ -79,27 +79,43 @@ class AndroidDrivePlatform(
         try { client.revokeAccess() } catch (_: Exception) { }
     }
 
-    override suspend fun ensureAppFolder(cachedId: String?): String {
+    // 0.1.38: 네트워크·GoogleAuthUtil.getToken 은 메인 스레드에서 못 부른다(0.1.15 는 viewModelScope=메인에서 불러 실제로는 실패했을 것) → 전부 IO
+    override suspend fun ensureAppFolder(cachedId: String?): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ensureAppFolderIo(cachedId) }
+    private suspend fun ensureAppFolderIo(cachedId: String?): String {
         if (!cachedId.isNullOrBlank()) {
             if (fileExists(cachedId)) return cachedId
         }
-        val meta = JSONObject().put("name", APP_FOLDER).put("mimeType", FOLDER_MIME)
-        val created = jsonRequest("POST", "$API/files?fields=id,name", meta.toString())
-        return created.getString("id")
+        // 0.1.38: 캐시가 없으면 내 드라이브 맨 위의 같은 이름 폴더를 먼저 찾는다(매번 새 폴더가 생기지 않게)
+        return ensureFolderIo("root", APP_FOLDER)
     }
 
-    override suspend fun uploadNew(folderId: String, fileName: String, mime: String, bytes: ByteArray): DriveFileRef {
+    override suspend fun uploadNew(folderId: String, fileName: String, mime: String, bytes: ByteArray): DriveFileRef =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { uploadNewIo(folderId, fileName, mime, bytes) }
+    private fun uploadNewIo(folderId: String, fileName: String, mime: String, bytes: ByteArray): DriveFileRef {
         val meta = JSONObject().put("name", fileName).put("parents", org.json.JSONArray().put(folderId))
         val id = multipartUpload(null, meta, mime, bytes)
         return DriveFileRef(id, fileName)
     }
 
-    override suspend fun uploadOrUpdate(folderId: String, fileName: String, mime: String, bytes: ByteArray, existingFileId: String?): DriveFileRef {
+    override suspend fun uploadOrUpdate(folderId: String, fileName: String, mime: String, bytes: ByteArray, existingFileId: String?): DriveFileRef =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { uploadOrUpdateIo(folderId, fileName, mime, bytes, existingFileId) }
+    private fun uploadOrUpdateIo(folderId: String, fileName: String, mime: String, bytes: ByteArray, existingFileId: String?): DriveFileRef {
         if (!existingFileId.isNullOrBlank() && fileExists(existingFileId)) {
             multipartUpload(existingFileId, null, mime, bytes)
             return DriveFileRef(existingFileId, fileName)
         }
-        return uploadNew(folderId, fileName, mime, bytes)
+        return uploadNewIo(folderId, fileName, mime, bytes)
+    }
+
+    override suspend fun ensureFolder(parentId: String, name: String): String =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ensureFolderIo(parentId, name) }
+    private fun ensureFolderIo(parentId: String, name: String): String {
+        val esc = name.replace("\\", "\\\\").replace("'", "\\'")
+        val q = "name = '$esc' and '$parentId' in parents and mimeType = '$FOLDER_MIME' and trashed = false"
+        val found = jsonRequest("GET", "$API/files?fields=files(id,name)&spaces=drive&q=" + java.net.URLEncoder.encode(q, "UTF-8"))
+        found.optJSONArray("files")?.takeIf { it.length() > 0 }?.getJSONObject(0)?.optString("id")?.takeIf { it.isNotBlank() }?.let { return it }
+        val meta = JSONObject().put("name", name).put("mimeType", FOLDER_MIME).put("parents", org.json.JSONArray().put(parentId))
+        return jsonRequest("POST", "$API/files?fields=id,name", meta.toString()).getString("id")
     }
 
     private fun fileExists(id: String): Boolean = try {

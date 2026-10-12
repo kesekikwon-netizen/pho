@@ -46,7 +46,7 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
     var formats by mutableStateOf(kr.archsurvey.export.ExportFormat.DEFAULT)
     fun toggleFormat(f: kr.archsurvey.export.ExportFormat) { formats = if (f in formats) formats - f else formats + f; output = null }
     /** 「hgis용 SHP」 한 번 누르기: Shape 한 벌 + hgis 기준점 CSV 만 골라 바로 만든다 */
-    /** iTwin Capture XML: false(기본) = 「1호」→「Target #1」, true = 현장 이름 그대로 */
+    /** 0.1.38: 쓰지 않음(iTwin 내보내기 제거). 플랫폼 시그니처 호환용 */
     var itwinKeepNames by mutableStateOf(false)
     /** 0.1.35 도면 축척 분모(1:20/1:100/1:200) */
     var scale by mutableStateOf(kr.archsurvey.dig.DrawingScale.DEFAULT)

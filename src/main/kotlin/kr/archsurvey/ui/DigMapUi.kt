@@ -87,7 +87,7 @@ internal fun DigHeader(c: SurveyController) {
                 Text("오늘 ${c.dig.todayCount()}점 · EPSG:${c.zone.epsg} · ${c.geoid.shortKo}", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("header_job"))
             }
             DigStatusPill(c, Modifier.padding(horizontal = 4.dp))
-            HeaderIcon(Glyph.MENU, "메뉴", "gear") { c.dig.menuOpen = true }
+            HeaderIcon(Glyph.MENU, "메뉴", "gear") { c.drawerOpen = true }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.35f)))
     }

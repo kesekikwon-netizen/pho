@@ -409,6 +409,8 @@ fun SettingsScreen(c: SurveyController) {
         SelectRow("좌표계 · 높이", "EPSG:${c.zone.epsg} · ${c.zone.labelKo} · ${c.geoid.shortKo}" + if (d.crsLocked) " · 측량 중 잠김" else "", false, "zone_toggle") {
             c.jobs?.openInfo() ?: c.ui.toast("작업 관리를 쓸 수 없어요")
         }
+        // 0.1.38 구글 드라이브: 연결 한 번 · 자동 올리기 하나 · 지금 올리기
+        DriveConnectCard(c.drive, c.jobs?.currentFolder?.removePrefix("Documents/"))
         if (st == null) { Text("나머지 설정을 불러올 수 없어요", style = Ty.body, color = t.inkSub); return@ToolScaffold }
         Text("측점", style = Ty.serifHead, color = t.ink)
         val counts = listOf(1, 3, 5, 10)
@@ -459,7 +461,6 @@ fun SettingsScreen(c: SurveyController) {
                 c.vworld.load(); c.hub.open(ToolScreen.VWORLD)
             }
             SelectRow("배경지도", c.mapBase.labelKo, false, "set_mapbase") { chooseMapBase(c) }
-            SelectRow("위치 종류 목록", "${c.types.size}개", false, "set_types") { c.hub.open(ToolScreen.TYPES) }
             SelectRow("위치 모양 (지도)", "점 · 이름표 · 현재 위치", false, "set_marker") { c.markerStyleOpen = true }
             c.tilt?.let { TiltSettings(it) }
             Card {
@@ -538,6 +539,7 @@ internal fun ToggleRow(label: String, value: Boolean, tag: String, onChange: (Bo
  * 위에서부터 작업명 · 좌표계 · 지역 · 배경맵 · Geoid, 각 줄 오른쪽 ›, 아래 고정 「나가기 | 적용」.
  * 색·글꼴·아이콘은 이 앱 것(아이보리·검정). 작업 열기·삭제 목록은 그대로.
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun JobScreen(c: SurveyController) {
     val t = T; val h = c.hub
@@ -559,11 +561,18 @@ fun JobScreen(c: SurveyController) {
                     Text("작업명", style = Ty.small, color = t.inkSub)
                     OutlinedTextField(jc.newName, { jc.newName = it }, singleLine = true, label = { Text("예) 3지구-A트렌치") }, modifier = Modifier.fillMaxWidth().testTag("job_name"))
                 }
+                // 0.1.38 새 작업 = 새 폴더. 「새 폴더」(상위 폴더: 유적 이름 등)는 선택
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("상위 폴더 (선택 · 유적 이름 등으로 작업 묶기)", style = Ty.small, color = t.inkSub)
+                    OutlinedTextField(jc.newGroup, { jc.newGroup = it }, singleLine = true, label = { Text("비우면 작업 폴더만 · 예) 광령리 유적") }, modifier = Modifier.fillMaxWidth().testTag("job_group"))
+                    if (jc.groups.isNotEmpty()) androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for (g in jc.groups) Choice(g, jc.newGroup.trim() == g, Modifier.testTag("job_group_pick_$g")) { jc.newGroup = if (jc.newGroup.trim() == g) "" else g }
+                    }
+                    Text("폴더 · ${jc.newFolderPreview}", style = Ty.small, color = t.ink, modifier = Modifier.testTag("job_folder_preview"))
+                    Text("이 작업의 측점·내보내기·사진·음성·백업이 모두 이 폴더에 모여요.", style = Ty.small, color = t.inkSub)
+                }
                 JobConfigRows(c, jc, editableZone = true)
-                // 0.1.14 목업 10: 지역 자동 설정 · 코드 라이브러리(= 위치 종류)
                 ToggleRow("지역 자동 설정 (지금 위치로 원점 선택)", jc.autoZoneOn, "job_auto_zone") { jc.changeAutoZone(it) }
-                SelectRow("코드 라이브러리 (위치 종류)", "${c.types.size}개 · 눌러서 편집", false, "job_codes") { c.hub.open(ToolScreen.TYPES) }
-                Text("새 작업은 점 번호가 P-0001부터 다시 시작해요. 이전 작업의 점은 그대로 있어요. 기본값은 지금 작업의 설정이에요.", style = Ty.small, color = t.inkSub)
             }
             ToolScreen.JOB_OPEN -> {
                 Text("열려 있는 작업: ${jc.current}", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("job_current"))
@@ -571,6 +580,7 @@ fun JobScreen(c: SurveyController) {
                     Card {
                         Text(j.name + if (j.name == jc.current) "  (열려 있음)" else "", style = Ty.label, color = t.ink, modifier = Modifier.testTag("job_item_$i"))
                         Text("점 ${j.points} · 사진 ${j.photos} · 음성 ${j.voices}" + if (j.fakePoints > 0) " · 이전 시험 버전 점 ${j.fakePoints}" else "", style = Ty.small, color = t.inkSub)
+                        j.folder?.let { Text("폴더 · $it", style = Ty.small, color = t.inkSub, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.testTag("job_folder_$i")) }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Box(Modifier.weight(1f)) { Btn("열기", Modifier.fillMaxWidth().testTag("job_open_$i")) { jc.open(j.name) } }
                             Box(Modifier.weight(1f)) { Btn("삭제", Modifier.fillMaxWidth().testTag("job_delete_$i")) { jc.askDelete(j) } }
@@ -584,6 +594,7 @@ fun JobScreen(c: SurveyController) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("작업명", style = Ty.small, color = t.inkSub)
                     Text(jc.current, style = Ty.title, color = t.inkSub, modifier = Modifier.testTag("job_info_name"))
+                    (i?.folder ?: jc.currentFolder)?.let { Text("폴더 · $it", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("job_info_folder")) }
                     Box(Modifier.fillMaxWidth().height(1.dp).background(t.line))
                 }
                 // 0.1.35 X11: 점이 있는 작업은 좌표계·높이 잠금(실수로 바꾸면 도면이 어긋남). 풀기 버튼으로만
@@ -603,7 +614,6 @@ fun JobScreen(c: SurveyController) {
                     }
                     // 0.1.13 P0: 같은 화면에서 form(초안)과 라이브가 어긋나지 않게 — 적용 전 미리보기도 form*
                     Text("적용 예정 EPSG:${jc.formZone.epsg} · Geoid ${jc.formGeoid.shortKo} · 배경맵 ${jc.formMap.labelKo}", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("job_info_preview"))
-                    Text("「적용」하면 저장하고 바로 측량 화면으로 이동해요. 앱을 다시 켜도 이 작업 설정이 열려요. 「나가기」는 저장하지 않고 뒤로 가요.", style = Ty.small, color = t.inkSub)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(Modifier.weight(1f)) { Btn("작업 열기 · 삭제", Modifier.fillMaxWidth().testTag("job_to_list")) { jc.openList() } }

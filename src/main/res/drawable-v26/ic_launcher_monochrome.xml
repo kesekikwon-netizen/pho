@@ -1,28 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 자동 생성: tools/icon/gen_icon_resources.py (원본 design-system/mockups/v2/icon/final) -->
+<!-- 자동 생성: tools/icon/gen_icon_0138.py (0.1.38 어둡고 굵은 아이콘) -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="1024" android:viewportHeight="1024">
-    <group android:translateX="0" android:translateY="0">
-        <path
-            android:pathData="M256.2,632.1L251.1,633.4L246.6,636.1L244.1,638.6L241.4,643.1L240.1,648.2L240.1,651.8L241.4,656.9L244.1,661.4L246.6,663.9L249.5,665.9L252.8,667.2L256.2,667.9L293.9,668.0L297.1,679.6L302.4,691.5L309.3,702.4L317.8,712.2L327.6,720.7L338.5,727.6L350.4,732.9L362.0,736.1L362.0,772.0L362.8,777.2L365.0,782.0L368.6,785.9L371.5,787.9L376.5,789.7L381.8,789.9L385.2,789.2L388.5,787.9L392.7,784.7L395.0,782.0L396.6,778.9L397.7,775.5L398.0,772.0L398.0,736.1L409.6,732.9L421.5,727.6L432.4,720.7L442.2,712.2L450.7,702.4L456.6,693.4L462.1,681.7L465.8,669.7L445.8,675.0L422.5,679.9L417.7,685.9L412.0,691.0L405.6,695.2L398.0,698.8L398.0,683.9L384.7,685.7L377.8,685.9L370.9,684.8L367.6,683.8L362.0,681.1L362.0,698.8L356.6,696.4L352.2,693.9L348.0,691.0L343.2,686.8L339.8,683.0L336.1,677.8L333.6,673.4L331.2,668.0L348.9,668.0L346.2,662.4L345.2,659.1L344.1,652.2L344.3,645.3L346.1,632.0L331.2,632.0L334.8,624.4L339.0,618.0L344.1,612.3L350.1,607.5L355.0,584.2L360.3,564.2L348.3,567.9L336.6,573.4L325.9,580.6L317.8,587.8L309.3,597.6L302.4,608.5L297.1,620.4L293.9,632.0ZM502.0,668.0L505.5,667.7L510.5,665.9L513.4,663.9L515.9,661.4L517.9,658.5L519.2,655.2L519.9,651.8L519.9,648.0L511.8,652.1L496.3,659.1L487.0,662.7L471.5,668.0ZM381.8,510.1L376.5,510.3L371.5,512.1L367.3,515.3L365.0,518.0L363.4,521.1L362.3,524.5L362.0,528.0L362.0,558.5L370.5,534.7L374.5,525.4Z"
-            android:fillColor="#FF000000" />
-        <group android:translateX="380.0" android:translateY="650.0" android:pivotX="0" android:pivotY="0" android:rotation="45">
-        <path
-            android:pathData="M0,0C34,-44 72,-100 72,-168Q72,-198 46,-200H-46Q-72,-198 -72,-168C-72,-100 -34,-44 0,0Z"
-            android:strokeColor="#FF000000"
-            android:strokeWidth="36"
-            android:strokeLineCap="round" android:strokeLineJoin="round" />
-        <path
-            android:pathData="M-14,-200V-254M14,-200V-254"
-            android:strokeColor="#FF000000"
-            android:strokeWidth="36"
-            android:strokeLineCap="round" android:strokeLineJoin="round" />
-        <path
-            android:pathData="M-26,-254H26V-436Q26,-462 0,-462Q-26,-462 -26,-436Z"
-            android:strokeColor="#FF000000"
-            android:strokeWidth="36"
-            android:strokeLineCap="round" android:strokeLineJoin="round" />
-        </group>
+    <path android:pathData="M240.0,594.0H620.0M430.0,404.0V784.0"
+        android:strokeColor="#FFFFFF" android:strokeWidth="44.0" android:strokeLineCap="round" />
+    <path android:pathData="M310.0,594.0a120.0,120.0 0 1,0 240.0,0a120.0,120.0 0 1,0 -240.0,0Z" android:strokeColor="#FFFFFF" android:strokeWidth="44.0" />
+    <group android:translateX="430.0" android:translateY="594.0" android:rotation="45.0">
+        <path android:pathData="M0,0C40,-50 96,-120 96,-205Q96,-245 60,-250H-60Q-96,-245 -96,-205C-96,-120 -40,-50 0,0Z" android:fillColor="#FFFFFF" />
+        <path android:pathData="M-16,-248H16V-292H-16Z" android:fillColor="#FFFFFF" />
+        <path android:pathData="M-34,-360Q-34,-392 -2,-392H2Q34,-392 34,-360V-290H-34Z" android:fillColor="#FFFFFF" />
     </group>
 </vector>

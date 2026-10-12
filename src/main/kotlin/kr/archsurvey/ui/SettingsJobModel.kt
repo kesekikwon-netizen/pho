@@ -69,7 +69,9 @@ class SettingsState(private val c: SurveyController, private val p: SettingsPlat
     }
 }
 
-data class JobInfo(val name: String, val points: Int, val photos: Int, val voices: Int, val firstAtMs: Long?, val lastAtMs: Long?, val fakePoints: Int = 0)
+data class JobInfo(val name: String, val points: Int, val photos: Int, val voices: Int, val firstAtMs: Long?, val lastAtMs: Long?, val fakePoints: Int = 0,
+    /** 0.1.38 작업 폴더(화면용, 예: Documents/ExcavationSurvey/광령리 3지구). 모르면 null */
+    val folder: String? = null)
 
 class JobException(message: String) : Exception(message)
 
@@ -83,6 +85,12 @@ interface JobPlatform {
     suspend fun open(name: String)
     /** 작업과 그 점·사진·음성을 지운다. 먼저 ‘삭제 직전’ 백업을 만들고 그 이름을 돌려준다 */
     suspend fun delete(name: String): String
+    /** 0.1.38 새 작업 = 새 폴더. [group] = 상위 폴더(유적 등, 선택) */
+    suspend fun create(name: String, group: String?) = create(name)
+    /** 0.1.38 지금까지 쓴 상위 폴더 */
+    fun groups(): List<String> = emptyList()
+    /** 0.1.38 이 작업 폴더(화면용). 모르면 null */
+    fun folderOf(name: String): String? = null
 }
 
 /** 작업 이름 규칙: 앞뒤 공백 제거, 1~30자, 폴더 이름에 못 쓰는 문자 불가 */
@@ -147,6 +155,15 @@ class JobController(
     var list by mutableStateOf<List<JobInfo>>(emptyList()); private set
     var info by mutableStateOf<JobInfo?>(null); private set
     var newName by mutableStateOf("")
+    /** 0.1.38 「새 폴더」: 상위 폴더(유적 이름 등). 비우면 ExcavationSurvey 바로 아래 */
+    var newGroup by mutableStateOf("")
+    var groups by mutableStateOf<List<String>>(emptyList()); private set
+    /** 지금 작업 폴더(홈 카드·작업 정보) */
+    val currentFolder: String? get() = runCatching { platform.folderOf(current) }.getOrNull()
+    /** 새 작업 창 미리보기: 만들면 생길 폴더 */
+    val newFolderPreview: String get() = kr.archsurvey.job.JobFolders.display(kr.archsurvey.job.JobFolders.relPath(
+        newGroup.trim().takeIf { it.isNotEmpty() }?.let { kr.archsurvey.job.JobFolders.sanitize(it, "폴더") },
+        kr.archsurvey.job.JobFolders.sanitize(newName.ifBlank { "작업명" })))
     var busy by mutableStateOf(false); private set
     var error by mutableStateOf<String?>(null); private set
     var notice by mutableStateOf<String?>(null); private set
@@ -157,6 +174,7 @@ class JobController(
             list = runCatching { platform.list() }.getOrDefault(emptyList())
             info = runCatching { platform.info(platform.current) }.getOrNull()
             current = platform.current
+            groups = runCatching { platform.groups() }.getOrDefault(emptyList())
         }
     }
 
@@ -169,7 +187,7 @@ class JobController(
         autoZoneOn = on && c.gv.lon != null
         if (on) autoZone()
     }
-    fun openNew() { error = null; notice = null; newName = ""; loadForm(); formGeoid = kr.archsurvey.core.GeoidModel.RECEIVER /* 0.1.35: 새 작업 높이 기본 = 수신기 값(지금 작업은 그대로) */; c.hub.open(ToolScreen.JOB_NEW); refresh() }
+    fun openNew() { error = null; notice = null; newName = ""; newGroup = ""; loadForm(); formGeoid = kr.archsurvey.core.GeoidModel.RECEIVER /* 0.1.35: 새 작업 높이 기본 = 수신기 값(지금 작업은 그대로) */; c.hub.open(ToolScreen.JOB_NEW); refresh() }
 
     private fun run(label: String, block: suspend () -> Unit) {
         if (busy) return
@@ -193,11 +211,12 @@ class JobController(
         // 0.1.29 UX-0129-1: 새 작업은 사용자가 정한 폴 높이가 아니면 기기 기본값(R10 1.6 · SP60 1.8)으로 시작
         val pole = if (base.poleUserSet) base.poleM else kr.archsurvey.core.DevicePoleDefaults.forModel(base.antennaModelId) ?: base.poleM
         val cfg = base.copy(epsg = formZone.epsg, geoid = formGeoid, mapBase = formMap, poleM = pole)
+        val g = newGroup.trim().takeIf { it.isNotEmpty() }
         run("새 작업") {
-            platform.create(n)
+            platform.create(n, g)
             configs.save(n, cfg)
             switched(n)
-            notice = "‘$n’ 작업을 만들고 열었어요"
+            notice = "‘$n’ 작업을 만들고 열었어요" + (runCatching { platform.folderOf(n) }.getOrNull()?.let { " · 폴더 $it" } ?: "")
             c.hub.open(ToolScreen.JOB_INFO)
         }
     }

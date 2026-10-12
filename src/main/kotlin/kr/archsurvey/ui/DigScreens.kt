@@ -63,7 +63,7 @@ fun HomeToday(c: SurveyController) {
         Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("발굴 측량", style = Ty.serifHead.copy(fontSize = 20.sp), color = t.ink, modifier = Modifier.weight(1f).testTag("home_title"))
             DigStatusPill(c, Modifier.padding(horizontal = 4.dp))
-            HeaderIcon(Glyph.MENU, "설정", "home_settings") { c.hub.open(ToolScreen.SETTINGS) }
+            HeaderIcon(Glyph.MENU, "메뉴", "home_settings") { c.drawerOpen = true }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(Modifier.fillMaxWidth().height(1.5.dp).background(t.ink))
@@ -73,6 +73,8 @@ fun HomeToday(c: SurveyController) {
             }
             Text(c.projectName, style = Ty.serifTitle, color = t.ink, maxLines = 2, modifier = Modifier.testTag("home_job"))
             Text("EPSG:${c.zone.epsg} · 해발 ${c.geoid.shortKo} · ${c.points.size}점 · 유구 ${d.featureOutlines().size}", style = Ty.coord.copy(fontSize = 13.sp), color = t.inkSub, modifier = Modifier.testTag("home_job_info"))
+            // 0.1.38 새 작업 = 새 폴더: 이 작업 자료가 모이는 곳
+            c.jobs?.currentFolder?.let { Text("폴더 · $it", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 2, modifier = Modifier.testTag("home_job_folder")) }
             LedgerRow(listOf(
                 Triple("마지막 점", last?.name ?: "—", ""),
                 Triple("폴", String.format(Locale.US, "%.1f", c.antenna.inputValueM), "m"),

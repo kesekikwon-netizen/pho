@@ -131,7 +131,6 @@ internal fun backTarget(c: SurveyController): (() -> Unit)? {
         c.dig.pickerOpen -> { { c.dig.pickerOpen = false } }
         c.dig.layersOpen -> { { c.dig.saveLayers(); c.dig.layersOpen = false } }
         c.dig.statusOpen -> { { c.dig.statusOpen = false } }
-        c.dig.menuOpen -> { { c.dig.menuOpen = false } }
         c.dig.closeArmed -> { { c.dig.closeArmed = false } }
         c.pointMenuFor != null -> { { c.pointMenuFor = null } }
         c.backupQuickOpen -> { { c.backupQuickOpen = false } }
@@ -526,22 +525,16 @@ fun DrawerOverlay(c: SurveyController) {
                     Text("발굴 측량", style = Ty.small, color = t.accentText)
                 }
                 Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column {
+                    // 0.1.38: 수신기 이름·상태 칩은 머리줄 알약과 같은 정보라 뺐다. 대신 작업 폴더
+                    Column(Modifier.weight(1f)) {
                         Text(c.projectName, style = Ty.title.copy(fontSize = 18.sp), color = t.ink, maxLines = 1)
-                        Text((c.connection?.profile?.displayName ?: if (c.antennaModelId == "TRIMBLE_R10") "Trimble R10" else "Spectra SP60") + if (st.reason == StatusReason.NOT_CONNECTED) " · 연결 안 됨" else "", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.testTag("drawer_device"))
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            "${shownSt.labelKo}${st.sigmaHM?.let { " ±${f3(it)} m" } ?: ""}", style = Ty.small.copy(fontSize = 12.sp), color = fg, maxLines = 1,
-                            modifier = Modifier.background(bg, RoundedCornerShape(11.dp)).padding(horizontal = 9.dp, vertical = 3.dp).testTag("drawer_status"),
-                        )
+                        c.jobs?.currentFolder?.let { Text(it, style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 2, modifier = Modifier.testTag("drawer_folder")) }
                     }
-                    MBtn(Modifier.size(48.dp).testTag("drawer_settings"), MKind.PLAIN, 16.dp, onClick = { c.drawerOpen = false; c.hub.open(ToolScreen.SETTINGS) }) { GearIcon(t.accent, 22.dp) }
+                    // 0.1.38: 톱니(설정)는 아래 「설정 · 구글 드라이브」와 같은 곳이라 뺐다
                 }
                 for (sec in DrawerMenu.sections) {
                     Text(sec.title, style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.height(26.dp).padding(horizontal = 6.dp).wrapContentHeight(Alignment.Bottom))
-                    if (sec.title == "즐겨찾기") {
-                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) { for (it in sec.items) FavCard(c, it, Modifier.weight(1f)) }
-                    } else for (it in sec.items) DrawerRow(c, it)
+                    for (it in sec.items) DrawerRow(c, it)
                 }
                 Spacer(Modifier.height(16.dp))
                 // 0.1.31: 앱 종료(수신기 연결을 끊고 완전히 닫기 — 확인 창)
@@ -558,6 +551,8 @@ fun DrawerOverlay(c: SurveyController) {
 private fun runMenu(c: SurveyController, item: MenuItem) {
     when (item.action) {
             MenuAction.OPEN_AREAS -> { c.drawerOpen = false; c.hub.open(ToolScreen.AREAS) }
+            MenuAction.OPEN_FEATURES -> { c.drawerOpen = false; c.homeOpen = false; c.hub.open(ToolScreen.FEATURES) }
+            MenuAction.OPEN_LAYERS -> { c.drawerOpen = false; c.homeOpen = false; c.dig.layersOpen = true }
             MenuAction.OPEN_TYPES -> { c.drawerOpen = false; c.hub.open(ToolScreen.TYPES) }
             MenuAction.GO_SURVEY -> c.goToSurvey() // 0.1.14: 홈·환경설정 위에서 눌러도 측량으로
             MenuAction.OPEN_BG -> { c.drawerOpen = false; c.bg?.openManage() ?: run { c.message = "배경 레이어는 이 빌드에 없어요" } }
@@ -584,6 +579,8 @@ private fun menuGlyph(id: String): Glyph? = when (id) {
     "job_export" -> Glyph.SHARE
     "job_info" -> Glyph.INFO
     "job_backup" -> Glyph.LAYERS
+    "features" -> Glyph.LIST
+    "layers" -> Glyph.LAYERS
     "bg" -> Glyph.LAYERS
     "settings" -> Glyph.INFO
     "areas" -> Glyph.LAYERS

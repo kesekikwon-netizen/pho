@@ -25,4 +25,12 @@ class AndroidDriveSettings(private val s: SettingsStore) : DriveSettings {
     override fun pointsFileId(project: String) = s.drivePointsFileId(project)
     override fun setPointsFileId(project: String, id: String?) = s.setDrivePointsFileId(project, id)
     override fun clearIds() = s.clearDriveIds()
+    override var autoJobUpload: Boolean
+        get() = s.driveAutoJobUpload
+        set(v) { s.driveAutoJobUpload = v }
+    override var lastJobUploadAt: Long
+        get() = s.driveLastJobUploadAt
+        set(v) { s.driveLastJobUploadAt = v }
+    override fun mirrorManifest(jobRel: String) = s.driveMirrorManifest(jobRel)
+    override fun setMirrorManifest(jobRel: String, json: String) = s.setDriveMirrorManifest(jobRel, json)
 }

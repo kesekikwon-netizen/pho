@@ -111,7 +111,7 @@ fun AppHeader(
             if (c != null) {
                 // 0.1.35: 모든 화면 같은 상태 알약(측량 가능 ±H/V). PDOP·Ant.H 줄은 숨김(지금 상태 시트 · 설정 › 고급)
                 DigStatusPill(c, Modifier.padding(horizontal = 4.dp))
-                HeaderIcon(Glyph.MENU, "메뉴", menuTag) { c.dig.menuOpen = true }
+                HeaderIcon(Glyph.MENU, "메뉴", menuTag) { c.drawerOpen = true }
             }
         }
         if (!compact && c != null) {

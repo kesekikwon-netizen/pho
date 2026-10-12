@@ -37,9 +37,11 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
     val controller: SurveyController = SurveyController(application.engine, db, safeScope, epochsPerPoint = application.settings.epochsPerPoint, store = store, anchorOnFirstFix = true)
     val media = AndroidMediaPlatform(application, viewModelScope) { application.settings.project }
     val docs = kr.archsurvey.engine.DocBridge()
-    val exportPlatform = kr.archsurvey.engine.AndroidExportPlatform(application, { application.settings.project }, media.photoStore, media.voiceStore, docs)
+    /** 0.1.38 새 작업 = 새 폴더(Documents/ExcavationSurvey/[상위/]작업) */
+    val jobFolder = kr.archsurvey.engine.AndroidJobFolder(application, application.settings)
+    val exportPlatform = kr.archsurvey.engine.AndroidExportPlatform(application, { application.settings.project }, media.photoStore, media.voiceStore, docs, jobFolder)
 
-    val backupPlatform = kr.archsurvey.engine.AndroidBackupPlatform(application, docs)
+    val backupPlatform = kr.archsurvey.engine.AndroidBackupPlatform(application, docs, jobFolder) { application.settings.project }
     val driveAuth = kr.archsurvey.engine.DriveAuthBridge()
 
     /** 앱 첫 실행 화면에서 한 번: 지난번 성공 설정으로 자동 연결(설정에서 끌 수 있음) */
@@ -110,11 +112,14 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
                 val pts = SurveyDb.get(application).dao().pointsOf(project)
                 kr.archsurvey.export.Formats.pointsCsv(pts, emptyMap()).toByteArray(Charsets.UTF_8)
             },
+            jobFolder = { jobFolder.sync(application.settings.project) },
+            isOnline = { isOnline() },
+            io = kotlinx.coroutines.Dispatchers.IO,
         )
         controller.projectName = application.settings.project
         controller.settingsState = SettingsState(controller, kr.archsurvey.engine.AndroidSettingsPlatform(application.settings, { onKeepScreen(it) }, application))
         val jobCfgs = kr.archsurvey.engine.AndroidJobConfigPlatform(application.settings)
-        controller.jobs = JobController(controller, kr.archsurvey.engine.AndroidJobPlatform(application, application.settings, versionName), viewModelScope, jobCfgs)
+        controller.jobs = JobController(controller, kr.archsurvey.engine.AndroidJobPlatform(application, application.settings, versionName, jobFolder), viewModelScope, jobCfgs)
         // 0.1.12 V월드 키(암호화 저장, 비면 제품 기본 키) — 지도는 vworld.access 메모리 사본
         application.settings.ensureBuiltinMapKey()
         controller.vworld = VWorldSettingsState(kr.archsurvey.engine.AndroidMapPlatform(application.settings), viewModelScope)
@@ -165,7 +170,20 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
         it == kr.archsurvey.device.LinkState.STREAMING || it == kr.archsurvey.device.LinkState.STALE
     }
 
-    fun onAppBackground() { runCatching { controller.drive?.onAppBackground() }.onFailure { kr.archsurvey.diag.CrashLog.record("Drive 자동 백업", it) } }
+    fun onAppBackground() {
+        // 0.1.38: 앱을 내릴 때마다 작업 폴더(측점 CSV·사진·음성 사본)를 최신으로
+        val project = application.settings.project
+        viewModelScope.launch { runCatching { jobFolder.sync(project) }.onFailure { kr.archsurvey.diag.CrashLog.record("작업 폴더 정리", it) } }
+        runCatching { controller.drive?.onAppBackground() }.onFailure { kr.archsurvey.diag.CrashLog.record("Drive 자동 백업", it) }
+    }
+
+    private fun isOnline(): Boolean = runCatching {
+        val cm = application.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        if (android.os.Build.VERSION.SDK_INT >= 23) {
+            val caps = cm.getNetworkCapabilities(cm.activeNetwork ?: return false) ?: return false
+            caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) && caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        } else @Suppress("DEPRECATION") (cm.activeNetworkInfo?.isConnected == true)
+    }.getOrDefault(false)
 
     /** Activity 가 앞에 오면 MainActivity.onResume 에서 부른다(권한 통로 연결 뒤) */
     fun restoreVoice() { runCatching { controller.voice?.restore() }.onFailure { kr.archsurvey.diag.CrashLog.record("음성 저장 복원", it) } }

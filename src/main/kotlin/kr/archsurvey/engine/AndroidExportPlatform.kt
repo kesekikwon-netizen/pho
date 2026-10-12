@@ -18,6 +18,8 @@ class AndroidExportPlatform(
     private val photoStore: PhotoStore,
     private val voiceStore: VoiceStore,
     private val docs: DocBridge,
+    /** 0.1.38 내보낸 묶음을 작업 폴더 내보내기/ 에도 */
+    private val jobFolder: AndroidJobFolder? = null,
 ) : ExportPlatform {
     private val dao = SurveyDb.get(ctx).dao()
     private val svc = ExportService(ctx, dao, photoStore, voiceStore, SurveyDb.get(ctx).arch())
@@ -39,9 +41,14 @@ class AndroidExportPlatform(
         exportBundle(formats, includePhotos, includeVoices, itwinKeepNames, kr.archsurvey.dig.DrawingScale.DEFAULT, null)
 
     override suspend fun exportBundle(formats: Set<kr.archsurvey.export.ExportFormat>, includePhotos: Boolean, includeVoices: Boolean, itwinKeepNames: Boolean, scale: Int, todayKey: String?): ExportOutput {
-        val r: ExportResult = svc.export(project(), includePhotos, includeVoices, formats, itwinKeepNames, scale, todayKey)
+        val job = project()
+        val r: ExportResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            svc.export(job, includePhotos, includeVoices, formats, itwinKeepNames, scale, todayKey, publishHgis = jobFolder == null)
+        }
         lastZip = r.zip
-        return ExportOutput(r.zip.name, r.zip.length(), r.zip.path, r.pointCount, r.photoCount, r.voiceCount, r.publicFolder, r.itwinDroppedCount, r.itwinDroppedNames)
+        // 0.1.38: 공용 사본 = Documents/ExcavationSurvey/[상위/]작업/내보내기/<작업_시각>/ (예전 …/hgis/… 대신)
+        val folder = jobFolder?.let { f -> runCatching { f.addExport(job, r.dir, r.zip) }.onFailure { kr.archsurvey.diag.CrashLog.record("작업 폴더 내보내기", it) }.getOrNull() } ?: r.publicFolder
+        return ExportOutput(r.zip.name, r.zip.length(), r.zip.path, r.pointCount, r.photoCount, r.voiceCount, folder)
     }
 
     override fun share(out: ExportOutput) {

@@ -198,24 +198,6 @@ private fun Light(title: String, sub: String, ok: Boolean, tag: String, modifier
     }
 }
 
-/** 메뉴(시트 4 + 홈): 측량한 것 · 구역/그리드 · 내보내기 · 설정 */
-@Composable
-internal fun DigMenuSheet(c: SurveyController) {
-    val close = { c.dig.menuOpen = false }
-    DigSheet("메뉴", "dig_menu", close) {
-        val items = listOf<Triple<String, String, () -> Unit>>(
-            Triple("측량한 것", "menu_points") { c.hub.open(ToolScreen.FEATURES) },
-            Triple("구역 · 그리드", "menu_areas") { c.hub.open(ToolScreen.AREAS) },
-            Triple("내보내기 · 저녁 도면", "menu_export") { c.exporter?.openScreen() ?: run { c.message = "내보내기는 이 빌드에 없어요" } },
-            Triple("설정", "menu_settings") { c.hub.open(ToolScreen.SETTINGS) },
-            Triple("지도에 보이기", "menu_layers") { c.dig.layersOpen = true },
-            Triple("오늘 준비 (홈)", "menu_home") { c.homeOpen = true },
-        )
-        for ((label, tag, act) in items) Tile(label, null, false, tag, Modifier.fillMaxWidth()) { close(); act() }
-        Tile("전체 메뉴 (작업·백업·도구)", null, false, "menu_all", Modifier.fillMaxWidth()) { close(); c.drawerOpen = true }
-    }
-}
-
 /** 유구 이름 바꾸기: 점(P-번호·좌표)은 그대로, 옛 이름은 기록 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -250,6 +232,5 @@ internal fun DigOverlays(c: SurveyController) {
     if (d.pickerOpen) DigPickerSheet(c)
     if (d.layersOpen) DigLayersSheet(c)
     if (d.statusOpen) DigStatusSheet(c)
-    if (d.menuOpen) DigMenuSheet(c)
     d.renameFor?.let { RenameFeatureSheet(c, it) }
 }

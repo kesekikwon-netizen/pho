@@ -353,7 +353,21 @@ class SettingsStore(private val ctx: Context) {
     }
     fun clearDriveIds() {
         val ed = sp.edit().remove("drive_folder_id").remove("drive_email")
-        sp.all.keys.filter { it.startsWith("drive_pts_") }.forEach { ed.remove(it) }
+        sp.all.keys.filter { it.startsWith("drive_pts_") || it.startsWith("drive_mirror_") }.forEach { ed.remove(it) }
         ed.apply()
     }
+
+    // —— 0.1.38 작업 폴더 + 드라이브 자동 올리기
+    var driveAutoJobUpload: Boolean
+        get() = sp.getBoolean("drive_auto_job", false)
+        set(v) = sp.edit().putBoolean("drive_auto_job", v).apply()
+    var driveLastJobUploadAt: Long
+        get() = sp.getLong("drive_last_job", 0L)
+        set(v) = sp.edit().putLong("drive_last_job", v).apply()
+    fun driveMirrorManifest(jobRel: String): String? = sp.getString("drive_mirror_$jobRel", null)
+    fun setDriveMirrorManifest(jobRel: String, json: String) = sp.edit().putString("drive_mirror_$jobRel", json).apply()
+    /** 작업 → 폴더 상대 경로(JSON 객체) */
+    var jobFoldersJson: String
+        get() = sp.getString("job_folders", "") ?: ""
+        set(v) = sp.edit().putString("job_folders", v).apply()
 }

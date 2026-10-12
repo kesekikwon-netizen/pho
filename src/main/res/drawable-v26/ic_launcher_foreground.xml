@@ -1,59 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 자동 생성: tools/icon/gen_icon_resources.py (원본 design-system/mockups/v2/icon/final) -->
+<!-- 자동 생성: tools/icon/gen_icon_0138.py (0.1.38 어둡고 굵은 아이콘) -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="1024" android:viewportHeight="1024">
-    <path
-        android:pathData="M318,650a62,62 0 1,0 124,0a62,62 0 1,0 -124,0Z"
-        android:fillColor="#FAF9F5" />
-    <path
-        android:pathData="M380,650V588A62,62 0 0 1 442,650Z"
-        android:fillColor="#C6613F" />
-    <path
-        android:pathData="M380,650V712A62,62 0 0 1 318,650Z"
-        android:fillColor="#C6613F" />
-    <path
-        android:pathData="M318,650a62,62 0 1,0 124,0a62,62 0 1,0 -124,0Z"
-        android:strokeColor="#141413"
-        android:strokeWidth="9"
-        android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path
-        android:pathData="M258,650H502M380,528V772"
-        android:strokeColor="#141413"
-        android:strokeWidth="9"
-        android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <group android:translateX="380.0" android:translateY="650.0" android:pivotX="0" android:pivotY="0" android:rotation="45">
-        <path
-            android:pathData="M0,0C30,-40 76,-100 76,-170Q76,-202 48,-206H-48Q-76,-202 -76,-170C-76,-100 -30,-40 0,0Z"
-            android:fillColor="#F0EEE6"
-            android:strokeColor="#141413"
-            android:strokeWidth="13"
-            android:strokeLineCap="round" android:strokeLineJoin="round" />
-        <path
-            android:pathData="M0,-30V-170"
-            android:strokeColor="#141413"
-            android:strokeWidth="8"
-            android:strokeLineCap="round" android:strokeLineJoin="round"
-            android:strokeAlpha="0.55" />
-        <path
-            android:pathData="M-13,-206V-262M13,-206V-262"
-            android:strokeColor="#141413"
-            android:strokeWidth="13"
-            android:strokeLineCap="round" android:strokeLineJoin="round" />
-        <path
-            android:pathData="M-19,-262H19V-290H-19Z"
-            android:fillColor="#141413" />
-        <path
-            android:pathData="M-27,-290H27V-448Q27,-474 0,-474Q-27,-474 -27,-448Z"
-            android:fillColor="#D97757"
-            android:strokeColor="#141413"
-            android:strokeWidth="13"
-            android:strokeLineCap="round" android:strokeLineJoin="round" />
-        <path
-            android:pathData="M-12,-318V-440"
-            android:strokeColor="#FFFFFF"
-            android:strokeWidth="9"
-            android:strokeLineCap="round" android:strokeLineJoin="round"
-            android:strokeAlpha="0.35" />
+    <path android:pathData="M240.0,594.0H620.0M430.0,404.0V784.0"
+        android:strokeColor="#FFFFFF" android:strokeWidth="44.0" android:strokeLineCap="round" />
+    <path android:pathData="M310.0,594.0a120.0,120.0 0 1,0 240.0,0a120.0,120.0 0 1,0 -240.0,0Z" android:strokeColor="#FFFFFF" android:strokeWidth="44.0" />
+    <group android:translateX="430.0" android:translateY="594.0" android:rotation="45.0">
+        <path android:pathData="M0,0C40,-50 96,-120 96,-205Q96,-245 60,-250H-60Q-96,-245 -96,-205C-96,-120 -40,-50 0,0Z" android:fillColor="#FF6B2C" />
+        <path android:pathData="M-16,-248H16V-292H-16Z" android:fillColor="#9FB3C8" />
+        <path android:pathData="M-34,-360Q-34,-392 -2,-392H2Q34,-392 34,-360V-290H-34Z" android:fillColor="#FFFFFF" />
     </group>
 </vector>
