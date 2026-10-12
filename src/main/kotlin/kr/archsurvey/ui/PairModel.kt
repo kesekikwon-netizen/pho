@@ -144,16 +144,21 @@ class PairController(
         watchJob?.cancel()
         watchJob = scope.launch {
             var waited = 0L
+            var sawSocket = false // 소켓은 붙었음(CONNECTED_NO_DATA 를 본 적 있음)
             while (machine === m && (m.step == PairStep.CONNECTING || m.step == PairStep.CONNECTING_UNBONDED)) {
                 val st = conn.link.value.state
+                if (st == LinkState.CONNECTED_NO_DATA || st == LinkState.STALE) sawSocket = true
                 when {
-                    st == LinkState.STREAMING || st == LinkState.CONNECTED_NO_DATA -> {
+                    // 0.1.41: 등록 없이 연결은 위치(GGA)가 와야 성공 — 소켓만 붙고 GGA 없음(R10 현장 12:43)이면 등록으로 넘어감
+                    st == LinkState.STREAMING || (st == LinkState.CONNECTED_NO_DATA && m.step == PairStep.CONNECTING) -> {
                         if (m.step == PairStep.CONNECTING_UNBONDED) conn.rememberDirect(m.device.name, m.device.address) // 등록 없이도 자동 연결 목록에
                         m.onConnectResult(true); bump(); devices = PairList.sort(found.values.map { if (it.address.equals(m.device.address, true)) it.copy(bonded = platform.isBonded(it.address)) else it }) }
                     st == LinkState.NEEDS_USER || (waited > 40_000L && st != LinkState.CONNECTING) || waited > 90_000L ||
-                        (m.step == PairStep.CONNECTING_UNBONDED && waited >= 1_000L && st == LinkState.RECONNECTING && conn.link.value.failures >= 1) -> {
+                        (m.step == PairStep.CONNECTING_UNBONDED && waited >= 1_000L && st == LinkState.RECONNECTING && conn.link.value.failures >= 1) ||
+                        (m.step == PairStep.CONNECTING_UNBONDED && conn.link.value.error == kr.archsurvey.bt.BtError.NO_DATA) -> {
+                        val noData = conn.link.value.error == kr.archsurvey.bt.BtError.NO_DATA || sawSocket
                         if (m.step == PairStep.CONNECTING_UNBONDED) conn.cancelConnectQuiet()
-                        run(m.onConnectResult(false))
+                        run(m.onConnectResult(false, noData))
                     }
                 }
                 delay(500); waited += 500

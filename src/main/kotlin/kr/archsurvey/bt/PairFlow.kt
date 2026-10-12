@@ -52,7 +52,7 @@ object PairList {
 enum class PairStep { IDLE, BONDING, WAIT_USER, CONNECTING, CONNECTING_UNBONDED, DONE, FAILED }
 
 /** 실패 안내 단계: 1회 = 전원 껐다 켜기, 2회 이상 = R10 웹 화면에서 기록 확인 */
-enum class PairFix { NONE, RETRY, CANCELLED, POWER_CYCLE, CLEAR_RECORD, NEAR, PERMISSION, BT_OFF, LOCATION_OFF }
+enum class PairFix { NONE, RETRY, CANCELLED, POWER_CYCLE, CLEAR_RECORD, NEAR, PERMISSION, BT_OFF, LOCATION_OFF, R10_WEB_NMEA }
 
 /** 기계가 플랫폼에 시키는 일 */
 sealed class PairAction {
@@ -77,6 +77,8 @@ class PairMachine(
     /** 이번 바퀴에서 등록 없이 연결을 해 봤는지 / 등록을 해 봤는지 */
     var directTried = false; private set
     var bondTried = false; private set
+    /** 0.1.41 현장(12:43): 등록 없이 연결은 됐는데 위치(GGA)가 안 옴 */
+    var directNoData = false; private set
     var step = PairStep.IDLE; private set
     var fix = PairFix.NONE; private set
     /** 이번 기기에서 실패한 바퀴 수(다시 누르면 안내가 한 단계 깊어짐) */
@@ -88,7 +90,7 @@ class PairMachine(
     val log = mutableListOf<String>()
 
     fun start(alreadyBonded: Boolean): PairAction {
-        fix = PairFix.NONE; pinIndex = 0; pinSent = null; lastReason = null; directTried = false; bondTried = false
+        fix = PairFix.NONE; pinIndex = 0; pinSent = null; lastReason = null; directTried = false; bondTried = false; directNoData = false
         if (alreadyBonded) { step = PairStep.CONNECTING; log += "이미 등록됨 → 바로 연결"; return PairAction.Connect(device.address, true) }
         if (directFirst) { step = PairStep.CONNECTING_UNBONDED; directTried = true; log += "등록 없이 바로 연결(insecure)"; return PairAction.Connect(device.address, false) }
         step = PairStep.BONDING; bondTried = true; log += "등록 시작"
@@ -131,8 +133,9 @@ class PairMachine(
     }
 
     /** 연결 결과(연결 단계에서만 의미) */
-    fun onConnectResult(ok: Boolean): PairAction {
+    fun onConnectResult(ok: Boolean, noData: Boolean = false): PairAction {
         if (step != PairStep.CONNECTING && step != PairStep.CONNECTING_UNBONDED) return PairAction.None
+        if (!ok && noData && step == PairStep.CONNECTING_UNBONDED) { directNoData = true; log += "등록 없이 연결됐지만 위치(GGA) 없음" }
         if (ok) { step = PairStep.DONE; fix = PairFix.NONE; log += "연결됨"; return PairAction.None }
         if (step == PairStep.CONNECTING_UNBONDED) {
             if (!bondTried) { bondTried = true; step = PairStep.BONDING; log += "등록 없이 안 됨 → PIN 등록"; return PairAction.CreateBond(device.address) }
@@ -145,6 +148,7 @@ class PairMachine(
         failedRounds++
         step = PairStep.FAILED
         fix = when {
+            directNoData && device.model?.id == kr.archsurvey.device.DeviceProfiles.R10_ID -> PairFix.R10_WEB_NMEA
             reason == PairConst.REASON_REMOTE_DEVICE_DOWN && failedRounds == 1 -> PairFix.NEAR
             failedRounds <= 1 -> PairFix.POWER_CYCLE
             else -> PairFix.CLEAR_RECORD
@@ -161,9 +165,9 @@ class PairMachine(
 object PairText {
     fun step(s: PairStep, m: PairMachine?): String = when (s) {
         PairStep.IDLE -> ""
-        PairStep.BONDING -> "① 등록 중 · PIN ${m?.currentPin ?: PairConst.DEFAULT_PIN} 자동 입력"
         PairStep.WAIT_USER -> "① 폰 화면에 뜬 창에서 「등록」(또는 「확인」)을 눌러 주세요"
         PairStep.CONNECTING -> "② 연결 중 · 위치가 오면 끝"
+        PairStep.BONDING -> if (m?.directNoData == true) "① 등록 없이 연결은 됐지만 위치가 안 와 등록(PIN ${m.currentPin})으로 다시" else "① 등록 중 · PIN ${m?.currentPin ?: PairConst.DEFAULT_PIN} 자동 입력"
         PairStep.CONNECTING_UNBONDED -> if (m?.bondTried == true) "② 등록이 안 돼 등록 없이 연결해 보는 중" else "① 등록 없이 바로 연결 중(PIN 필요 없음)"
         PairStep.DONE -> "✓ 연결됐어요 · 다음부터 자동 연결"
         PairStep.FAILED -> "등록·연결 실패"
@@ -179,6 +183,8 @@ object PairText {
                 "등록 없이 연결도, PIN 1234·0000 등록도 안 됐어요. 수신기가 예전 폰 기록을 들고 있거나, 켠 직후에만 등록을 받는 설정일 수 있어요. 켜고 1분 안에 「다시」."
             PairFix.CLEAR_RECORD -> (if (r10) "R10 웹 화면에서 블루투스 기록을 확인해 주세요" else "수신기 블루투스 설정을 확인해 주세요") to
                 (if (r10) "폰 Wi-Fi 를 R10 에 연결 → 브라우저 192.168.142.1 › Bluetooth › Remotes 에서 이 폰 연결 끊기, Configuration 에서 PIN·Discoverable 확인 → 고급에서 앱 PIN 을 같은 값으로." else "수신기 PIN 을 확인해 고급 › 수신기 PIN 에 넣고 다시 눌러 주세요.")
+            PairFix.R10_WEB_NMEA -> "R10 이 이 연결로 위치를 보내지 않아요" to
+                "등록 없이 연결은 됐지만 위치(GGA)가 안 오고, 등록(PIN 1234·0000)도 안 됐어요. 폰 Wi-Fi 를 R10 에 연결 → 브라우저 192.168.142.1 › I/O Configuration › Port Configuration › Bluetooth(1·2·3 모두) 에서 NMEA GGA(가능하면 GST·GSA·GSV) 1 Hz 켜고 「Maintain configuration when connection dropped」 체크 → 「다시」."
             PairFix.PERMISSION -> "주변 기기 권한이 필요해요" to "수신기를 찾고 등록하려면 「주변 기기」 권한을 허용해 주세요."
             PairFix.BT_OFF -> "블루투스가 꺼져 있어요" to "폰 블루투스를 켜고 다시 눌러 주세요."
             PairFix.LOCATION_OFF -> "위치(GPS)가 꺼져 있어요" to "안드로이드 11 이하에서는 주변 기기를 찾을 때 위치가 켜져 있어야 해요."
