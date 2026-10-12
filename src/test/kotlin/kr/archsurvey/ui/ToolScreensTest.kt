@@ -192,6 +192,7 @@ class ToolScreensTest {
     @Test fun photosAndVoiceInExpandedResult() {
         // 0.1.35: 펼친 결과 패널 대신 잰 직후 장부 카드에 「사진」「음성 · 메모」
         setup()
+        rule.runOnUiThread { c.openPointDetail() }; rule.waitForIdle() // 0.1.45: 눌러야 열림
         rule.onNodeWithTag("point_confirm").assertExists()
         rule.onNodeWithTag("result_photo").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("result_photo").performClick(); rule.waitForIdle()

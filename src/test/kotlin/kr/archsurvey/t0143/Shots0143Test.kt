@@ -98,7 +98,7 @@ class Shots0143Test {
         val (s, c) = setup()
         shot("01_home")
         rule.runOnIdle { c.homeOpen = false }; rule.waitForIdle(); rule.runOnIdle { c.follow = false; c.fitAll() }; shot("02_map")
-        rule.runOnIdle { s.now += 2000; s.push(FixQuality.RTK_FIXED, 0.014, lat = 36.50016, lon = 127.00046); c.onMeasure() }; shot("03_point")
+        rule.runOnIdle { s.now += 2000; s.push(FixQuality.RTK_FIXED, 0.014, lat = 36.50016, lon = 127.00046); c.onMeasure(); c.openPointDetail() }; shot("03_point")
         rule.runOnIdle { c.dismissResult(); c.dig.pickerOpen = true }; shot("04_types")
         rule.runOnIdle { c.dig.pickerOpen = false; c.hub.open(ToolScreen.FEATURES) }; shot("05_points")
         rule.runOnIdle { c.hub.closeAll(); c.connection?.openScreen() }; shot("06_connection")
@@ -121,6 +121,8 @@ class Shots0143Test {
         rule.runOnIdle { c.homeOpen = false }
         rule.runOnIdle { s.now += 2000; s.push(FixQuality.RTK_FIXED, 0.014, lat = 36.50030, lon = 127.00060); c.onMeasure() }
         rule.waitForIdle()
+        rule.onNodeWithTag("point_confirm").assertDoesNotExist()
+        rule.onNodeWithTag("saved_toast").performClick(); rule.waitForIdle() // 0.1.45: 알림을 눌러야 열림
         rule.onNodeWithTag("point_confirm").assertExists()
         rule.onNodeWithTag("result_memo").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("memo_chips").assertExists()
@@ -156,5 +158,43 @@ class Shots0143Test {
         rule.onNodeWithTag("conn_diag_toggle").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("conn_diag_text").assertExists()
         rule.onNodeWithTag("pair_find").assertDoesNotExist() // 시험 기기에는 찾기 기능 없음(가짜) — 실제 앱은 PIN 1234 자동
+    }
+
+    /** 0.1.45: 측정 뒤 지도는 그대로 · 점 확인 자동으로 안 열림 · 작은 알림만 · 측정 단추 바로 다음 점 */
+    @Test fun t0145_mapStaysAfterMeasure() {
+        val (s, c) = setup()
+        rule.runOnIdle { c.homeOpen = false }; rule.waitForIdle()
+        val n = c.points.size
+        val next = c.nextName
+        rule.runOnIdle { s.now += 2000; s.push(FixQuality.RTK_FIXED, 0.014, lat = 36.50030, lon = 127.00060); c.onMeasure() }
+        rule.waitForIdle()
+        org.junit.Assert.assertEquals(n + 1, c.points.size)
+        rule.onNodeWithTag("point_confirm").assertDoesNotExist()
+        org.junit.Assert.assertFalse(c.pointDetailOpen)
+        rule.onNodeWithTag("measure_button").assertIsDisplayed()
+        rule.onNodeWithTag("saved_toast").assertIsDisplayed()
+        rule.onNodeWithTag("saved_toast_text", useUnmergedTree = true).assertTextContains(next, substring = true)
+        rule.onNodeWithTag("saved_toast_text", useUnmergedTree = true).assertTextContains("해발", substring = true)
+        org.junit.Assert.assertNotEquals("다음 점 번호 갱신", next, c.nextName)
+        // 측정 단추 한 번 = 바로 다음 점(알림이 막지 않음)
+        rule.runOnIdle { s.now += 2000; s.push(FixQuality.RTK_FIXED, 0.014, lat = 36.50040, lon = 127.00070) }
+        rule.onNodeWithTag("measure_button").performClick(); rule.waitForIdle()
+        org.junit.Assert.assertTrue(c.points.size == n + 2 || c.phase == Phase.ACQUIRING || c.dupPrompt != null)
+        rule.onNodeWithTag("point_confirm").assertDoesNotExist()
+        // ~2초 뒤 알림 사라짐
+        rule.mainClock.advanceTimeBy(2500); rule.waitForIdle()
+        rule.onNodeWithTag("saved_toast").assertDoesNotExist()
+        rule.onNodeWithTag("measure_button").assertIsDisplayed()
+    }
+
+    @Test fun t0145_toastTapOpensDetail() {
+        val (s, c) = setup()
+        rule.runOnIdle { c.homeOpen = false }
+        rule.runOnIdle { s.now += 2000; s.push(FixQuality.RTK_FIXED, 0.014, lat = 36.50030, lon = 127.00060); c.onMeasure() }
+        rule.waitForIdle()
+        rule.onNodeWithTag("saved_toast").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("point_confirm").assertExists()
+        rule.runOnIdle { c.dismissResult() }; rule.waitForIdle()
+        rule.onNodeWithTag("point_confirm").assertDoesNotExist()
     }
 }

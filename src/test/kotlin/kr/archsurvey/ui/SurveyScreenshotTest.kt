@@ -122,10 +122,11 @@ class SurveyScreenshotTest {
         check("acquiring"); shot("07_acquiring")
         adv(f, 5)
         assertEquals(Phase.RESULT, c.phase)
-        rule.onNodeWithTag("result_chip", useUnmergedTree = true).assertExists()
-        rule.onNodeWithTag("point_confirm").assertIsDisplayed() // 0.1.43 시안 ③ 점 확인
+        rule.onNodeWithTag("saved_toast").assertIsDisplayed() // 0.1.45: 작은 알림만
+        rule.onNodeWithTag("point_confirm").assertDoesNotExist() // 0.1.45: 지도 유지
         rule.onNodeWithTag("measure_button").assertIsDisplayed()
         check("result_strip", 0.4); shot("08_result_strip_min")
+        rule.runOnIdle { c.openPointDetail() }; rule.waitForIdle()
         rule.onNodeWithTag("result_voice").performScrollTo().performClick(); rule.waitForIdle()
         assertEquals(Phase.RECORDING, c.phase)
         check("recording", 0.4); shot("10_recording_mock")

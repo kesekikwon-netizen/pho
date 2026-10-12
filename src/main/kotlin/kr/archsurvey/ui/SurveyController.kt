@@ -587,7 +587,11 @@ class SurveyController(
     // ---------------- 측점 ----------------
 
     /** 결과 띠를 보이는 시간(ms). 띠가 사라져도 측점 버튼은 막히지 않고, 사진·음성·되돌리기는 계속 쓸 수 있다 */
-    var resultStripMs: Long = 8000L
+    var resultStripMs: Long = 2000L // 0.1.45: 지도 위 작은 알림 ~2초
+    /** 0.1.45: 점 자세히(점 저장·확인)는 사용자가 알림·점을 눌렀을 때만 연다 — 측정 뒤 자동으로 열지 않음 */
+    var pointDetailOpen by mutableStateOf(false)
+        private set
+    fun openPointDetail() { if (lastPoint != null) { if (phase == Phase.IDLE) phase = Phase.RESULT; pointDetailOpen = true; hideResultStrip() } }
     var resultStripShown by mutableStateOf(false)
         private set
     /** 새 결과마다 올라가는 번호. 화면(LaunchedEffect)이 이 번호로 숨김 시간을 다시 잰다 — 화면과 함께 사라지는 타이머라 따로 도는 스레드가 없다 */
@@ -620,7 +624,7 @@ class SurveyController(
         if (phase == Phase.ACQUIRING || phase == Phase.RECORDING) return
         // 0.1.35: 「면 닫기」 미리보기 중이면 측점 단추 = 면 닫기 확인
         if (dig.closeArmed) { dig.confirmClose(); return }
-        resultStripShown = false
+        resultStripShown = false; pointDetailOpen = false
         val st = gv.status
         // 0.1.30 T24: 수신기 없음/끊김 → 측점 안 함(폰 위치로 대신하지 않음). 안내 + [연결] + 실패음 1번
         if (gv.noReceiver) { blockNoReceiver(); return }
@@ -937,7 +941,7 @@ class SurveyController(
 
     /** 결과 패널의 [다음 점]: 결과 화면을 닫고 측점 준비 화면으로 */
     /** 0.1.14 목업 17 「아니요」: 결과 패널을 닫고 대기(측량은 시작하지 않음) */
-    fun dismissResult() { if (phase == Phase.RESULT || phase == Phase.RESULT_EXPANDED) phase = Phase.IDLE }
+    fun dismissResult() { pointDetailOpen = false; if (phase == Phase.RESULT || phase == Phase.RESULT_EXPANDED) phase = Phase.IDLE }
     fun nextPoint() { if (phase == Phase.RESULT || phase == Phase.RESULT_EXPANDED) { phase = Phase.IDLE; onMeasure() } }
 
     fun toggleExpand() {

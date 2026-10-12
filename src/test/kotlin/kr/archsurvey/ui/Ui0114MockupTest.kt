@@ -209,7 +209,7 @@ class Ui0114MockupTest {
         assertEquals(Phase.RESULT, c.phase)
         shot("mockup_17a_result_strip")
         // 0.1.35: 「계속 측량할까요」 패널 없음 — 장부 카드 + 측점 단추가 「다음 점」(X3)
-        ui { c.ui.hideToast() }
+        ui { c.ui.hideToast(); c.openPointDetail() }
         rule.onNodeWithTag("point_confirm").assertExists()
         rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("측정")
         shot("mockup_17_survey_result")

@@ -20,9 +20,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** 측정 직후 「점 확인」을 띄울 때(측량 화면 위, 다른 창이 없을 때) */
+/** 0.1.45: 「점 확인」은 사용자가 알림·점을 눌렀을 때만(측정 직후 자동으로 열지 않음 — 지도가 사라지지 않게) */
 internal fun pointConfirmVisible(c: SurveyController): Boolean =
-    !c.homeOpen && c.lastPoint != null && ((c.phase == Phase.RESULT && c.resultStripShown) || c.phase == Phase.RESULT_EXPANDED || c.phase == Phase.RECORDING) &&
+    c.pointDetailOpen && !c.homeOpen && c.lastPoint != null && (c.phase == Phase.RESULT || c.phase == Phase.RESULT_EXPANDED || c.phase == Phase.RECORDING) &&
         c.dupPrompt == null && c.tiltPrompt == null && c.resurveyTarget == null && c.hub.screen == null && c.connection?.open != true && c.exporter?.open != true
 
 /**

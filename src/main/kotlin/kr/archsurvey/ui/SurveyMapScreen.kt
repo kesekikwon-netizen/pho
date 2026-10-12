@@ -91,7 +91,8 @@ fun SurveyMapScreen(
         if (c.setupOpen) SetupSheet(c)
         if (c.antennaSheetOpen) AntennaSheet(c)
         if (c.hub.screen != null) ToolHost(c)
-        if (pointConfirmVisible(c)) PointConfirmScreen(c) // 0.1.43 시안 ③ 측정 직후 점 확인
+        SavedToast(c) // 0.1.45 측정 뒤 지도 위 작은 알림(탭을 막지 않음)
+        if (pointConfirmVisible(c)) PointConfirmScreen(c) // 0.1.45: 알림·점을 눌렀을 때만
         DigOverlays(c) // 0.1.35 무엇을 잴까요 · 지도에 보이기 · 지금 상태 · 메뉴 · 유구 이름 바꾸기
         c.exporter?.let { if (it.open) ExportScreen(it) }
         c.backup?.let { if (it.open) BackupScreen(it, c.drive) }
@@ -801,5 +802,23 @@ internal fun TodayPointsList(c: SurveyController) {
             Text(p.name, style = Ty.coord.copy(fontSize = 14.sp), color = t.ink, modifier = Modifier.width(76.dp))
             Text(c.dig.whatLine(p), style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         }
+    }
+}
+
+/** 0.1.45: 측정 저장 뒤 ~2초 지도 위 작은 알림 「P-0038 저장 · 해발 · ±cm」. 자기 크기만 차지해 지도·측정 단추 탭을 막지 않는다. 누르면 점 자세히 */
+@Composable
+fun SavedToast(c: SurveyController) {
+    if (!(c.phase == Phase.RESULT && c.resultStripShown && !c.pointDetailOpen && !c.homeOpen && c.hub.screen == null &&
+            c.connection?.open != true && c.exporter?.open != true && c.dupPrompt == null && c.tiltPrompt == null)) return // 다른 창 위에는 안 띄움
+    val p = c.lastPoint ?: return
+    androidx.compose.runtime.LaunchedEffect(c.resultStripSeq) { kotlinx.coroutines.delay(c.resultStripMs); c.hideResultStrip() }
+    Box(Modifier.fillMaxSize().padding(top = 72.dp), contentAlignment = Alignment.TopCenter) {
+        val h = p.groundHeightM?.let { "해발 " + String.format(java.util.Locale.US, "%.2f", it) + " m" } ?: "해발 —"
+        val s = p.sigmaHM?.let { "±" + String.format(java.util.Locale.US, "%.1f", it * 100) + " cm" } ?: "±—"
+        Row(
+            Modifier.clip(RoundedCornerShape(20.dp)).background(D.ink.copy(alpha = 0.9f)).hClickable { c.openPointDetail() }
+                .heightIn(min = 48.dp).padding(horizontal = 16.dp).semantics { contentDescription = "${p.name} 저장됨, 눌러서 자세히" }.testTag("saved_toast"),
+            verticalAlignment = Alignment.CenterVertically,
+        ) { Text("${p.name} 저장 · $h · $s", style = Ty.label, color = D.bg, maxLines = 1, modifier = Modifier.testTag("saved_toast_text")) }
     }
 }

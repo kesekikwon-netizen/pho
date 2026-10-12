@@ -65,14 +65,14 @@ class ConsecutivePointsTest {
         assertEquals("점 3개에 필요한 탭 = 측점 버튼 3번, 그 밖의 확인·다음·재시작 탭 0", 3, taps)
         assertEquals(listOf("P-0001", "P-0002", "P-0003"), names)
         assertEquals("P-0004", c.nextName)
-        rule.onNodeWithTag("next_point").assertExists() // 0.1.43 점 확인 화면의 「다음 점 재기」 = 측정 단추와 같은 한 번
+        rule.onNodeWithTag("point_confirm").assertDoesNotExist() // 0.1.45: 점 확인 자동으로 안 열림
     }
 
     @Test fun nextPointButtonOnExpandedPanelStartsAcquisitionWithOneTap() {
         val (f, spy, c) = setup(); adv(f, 3)
         rule.onNodeWithTag("measure_button").performClick(); adv(f, 5)
         // 0.1.35 X3: 장부 카드를 닫지 않아도 측점 단추(「다음 점」) 한 번 = 바로 다음 측정
-        rule.onNodeWithTag("point_confirm").assertExists()
+        rule.onNodeWithTag("point_confirm").assertDoesNotExist(); rule.onNodeWithTag("saved_toast").assertExists()
         rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("측정") // 0.1.43 시안: 늘 「측정」
         rule.onNodeWithTag("measure_button").performClick(); rule.waitForIdle()
         assertEquals(Phase.ACQUIRING, c.phase)
@@ -84,9 +84,9 @@ class ConsecutivePointsTest {
     @Test fun resultStripHidesByItselfAndNeverBlocksMeasure() {
         val (f, _, c) = setup(); adv(f, 3)
         rule.onNodeWithTag("measure_button").performClick(); adv(f, 5)
-        rule.onNodeWithTag("point_confirm").assertExists()
-        rule.runOnIdle { c.resultStripMs = 4000L; c.hideResultStrip() }; rule.waitForIdle()
-        rule.onNodeWithTag("point_confirm").assertDoesNotExist()
+        rule.onNodeWithTag("saved_toast").assertExists()
+        rule.runOnIdle { c.hideResultStrip() }; rule.waitForIdle()
+        rule.onNodeWithTag("saved_toast").assertDoesNotExist(); rule.onNodeWithTag("point_confirm").assertDoesNotExist()
         assertEquals(Phase.RESULT, c.phase)
         rule.onNodeWithTag("measure_button").performClick(); rule.waitForIdle()
         assertEquals(Phase.ACQUIRING, c.phase)
