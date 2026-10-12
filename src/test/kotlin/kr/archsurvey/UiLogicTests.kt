@@ -56,9 +56,10 @@ class DrawerMenuTest {
     private val forbidden = listOf("성토", "절토", "시공", "준공", "검측", "측설", "노선", "도로")
     @Test fun requiredEntriesExist() {
         val labels = DrawerMenu.allItems.map { it.label }
-        for (l in listOf("새 작업 만들기", "작업 열기 · 삭제", "작업 내보내기", "작업 정보", "점 목록", "데이터 백업 · 복구", "점 찾아가기", "계산기", "설정", "안테나 높이", "수신기 연결 · VRS", "위치 종류", "발굴 구역 · 그리드", "배경 지도 · 레이어"))
+        // 0.1.38: 메뉴 하나(겹치는 칸 정리). 점 목록·계산기·작업 정보·안테나 높이·위치 종류는 다른 곳과 겹쳐 뺐다
+        for (l in listOf("새 작업 (새 폴더)", "작업 열기 · 삭제", "내보내기 · 저녁 도면", "백업 · 복구", "측량한 것", "구역 · 그리드", "지도에 보이기", "점 찾아가기", "수신기 연결 · VRS", "설정 · 구글 드라이브"))
             assertTrue(l, l in labels)
-        assertTrue(DrawerMenu.sections.map { it.title }.containsAll(listOf("즐겨찾기", "작업 관리", "일반 측량", "환경 설정")))
+        assertEquals(listOf("작업", "측량", "장비 · 설정"), DrawerMenu.sections.map { it.title })
     }
     @Test fun drawerHasNoPlaceholderOrAiItemsAndNoHome() {
         assertTrue(DrawerMenu.allItems.none { it.id.startsWith("ai") || it.id == "diag" || it.id == "home" })

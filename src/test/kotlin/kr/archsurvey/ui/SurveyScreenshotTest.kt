@@ -156,11 +156,9 @@ class SurveyScreenshotTest {
     @Test fun e_gear_opens_left_drawer_and_map_still_visible() {
         val (f, c) = make(); show(c); adv(f, 3)
         rule.onNodeWithTag("drawer").assertDoesNotExist()
-        // 0.1.35: ≡ = 줄인 메뉴(아래 시트). 「전체 메뉴」에서 예전 서랍(작업·백업·도구)
+        // 0.1.38: ≡ = 메뉴 하나(서랍). 예전 「메뉴」 시트 → 「전체 메뉴」 두 단계를 합침
         rule.onNodeWithTag("gear").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("dig_menu").assertIsDisplayed()
-        shot("12a_dig_menu")
-        rule.onNodeWithTag("menu_all").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("dig_menu").assertDoesNotExist()
         rule.onNodeWithTag("drawer").assertIsDisplayed()
         val d = bounds("drawer")
         assertEquals("서랍은 왼쪽에서 시작", 0f, d.left.value, 0.6f)

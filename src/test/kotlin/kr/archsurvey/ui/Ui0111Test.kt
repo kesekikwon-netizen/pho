@@ -148,7 +148,7 @@ class Ui0111Test {
     @Test fun c_settingsMenuToVrsOnlyAndDevice() {
         val (c, cc, _) = setup()
         // 0.1.35: 설정 한 화면 「꼭 필요한 네 가지」에서 VRS · 수신기
-        rule.onNodeWithTag("home_settings").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("home_settings2").performScrollTo().performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
         rule.onNodeWithTag("settings_screen").assertIsDisplayed()
         assertTouchTargets("설정")
         shot("03_settings_menu")

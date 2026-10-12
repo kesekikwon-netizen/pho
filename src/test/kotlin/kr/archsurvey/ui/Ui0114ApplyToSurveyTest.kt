@@ -121,8 +121,8 @@ class Ui0114ApplyToSurveyTest {
     /** 서랍(≡) › 작업 정보 › 적용 */
     @Test fun applyFromDrawerNavigatesToSurvey() {
         setup()
-        rule.runOnUiThread { c.homeOpen = false; c.drawerOpen = true }; rule.waitForIdle()
-        rule.onNodeWithTag("menu_job_info").performScrollTo().performClick(); rule.waitForIdle()
+        // 0.1.38: 서랍의 「작업 정보」는 홈 「작업」 단추와 겹쳐 뺐다 → 홈 「작업」에서
+        rule.onNodeWithTag("home_job_btn").performScrollTo().performClick(); rule.waitForIdle()
         assertEquals("tool:JOB_INFO", c.visibleRoute())
         pickEast()
         rule.onNodeWithTag("job_apply").performClick(); rule.waitForIdle()
@@ -133,7 +133,7 @@ class Ui0114ApplyToSurveyTest {
     /** 환경설정 › 좌표계·측량 설정 › 지역 줄 › 작업 정보 › 적용 — 겹친 창 두 겹 */
     @Test fun applyFromSettingsScreenNavigatesToSurvey() {
         setup()
-        rule.onNodeWithTag("home_settings").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("home_settings2").performScrollTo().performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
         rule.onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
         assertEquals("tool:JOB_INFO", c.visibleRoute())
         pickEast()
@@ -160,7 +160,7 @@ class Ui0114ApplyToSurveyTest {
         setup()
         val before = c.jobConfig()
         cfgs.save("te1", before)
-        rule.onNodeWithTag("home_settings").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("home_settings2").performScrollTo().performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
         rule.onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
         pickEast()
         rule.onNodeWithTag("job_exit").performClick(); rule.waitForIdle()
@@ -213,17 +213,17 @@ class Ui0114ApplyToSurveyTest {
     /** 교차검증: 홈에서 서랍(≡) › 「측량」 → 측량(0.1.13 은 홈에 남음) */
     @Test fun drawerGoSurveyFromHomeGoesToSurvey() {
         setup()
+        // 0.1.38: 「측량」 칸은 홈 「측량 시작」과 겹쳐 뺐다. 서랍 「지도에 보이기」는 홈에서도 지도로 가서 시트를 연다
         rule.runOnUiThread { c.drawerOpen = true }; rule.waitForIdle()
-        rule.onNodeWithTag("menu_survey").performScrollTo().performClick(); rule.waitForIdle()
-        assertFalse(c.drawerOpen)
-        assertOnSurvey()
+        rule.onNodeWithTag("menu_layers").performScrollTo().performClick(); rule.waitForIdle()
+        assertFalse(c.drawerOpen); assertFalse(c.homeOpen); assertTrue(c.dig.layersOpen)
     }
 
     /** 시스템 뒤로: 작업 정보 → (적용 안 함) 환경설정 목록 → 홈. 저장 없음 */
     @Test fun systemBackFromJobInfoDoesNotSave() {
         setup()
         val before = c.jobConfig(); cfgs.save("te1", before)
-        rule.onNodeWithTag("home_settings").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("home_settings2").performScrollTo().performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
         rule.onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
         pickEast()
         rule.runOnUiThread { backTarget(c)!!.invoke() }; rule.waitForIdle()

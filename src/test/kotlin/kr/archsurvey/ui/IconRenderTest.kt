@@ -63,7 +63,8 @@ class IconRenderTest {
     }
 
     @Test fun foreground_matches_designer_png() {
-        val ref = File("/workspace/survey-app/design-system/mockups/v2/icon/final/launcher/icon_B_fg_1024.png")
+        // 0.1.38: 어둡고 굵은 새 아이콘(tools/icon/gen_icon_0138.py 가 같은 도형으로 그린 PNG)
+        val ref = File("/workspace/survey-app/build-reports/0.1.38/icon/ic_launcher_0138_fg_1024.png")
         assumeTrue(ref.exists())
         val r = BitmapFactory.decodeFile(ref.path)
         val m = Bitmap.createScaledBitmap(render(drawable(R.drawable.ic_launcher_foreground), 108f), 1024, 1024, true)
