@@ -40,7 +40,7 @@ fun SiteMapScreen(c: GcpController, env: GcpEnv) {
     val g by c.source.gnss.collectAsState()
     LaunchedEffect(g.gga) { c.onFix() }
     Column(Modifier.fillMaxSize().background(t.bg).testTag("site_map")) {
-        GcpHeader(b.site.name, "대상 ${b.objs.size} · EPSG:${b.site.epsg} ${GcpController.epsgLabel(b.site.epsg)}", c.source, onBack = { c.back() }, onPill = { c.openReceiver() }, onMenu = { c.menuOpen = true })
+        GcpHeader(b.site.name, "대상 ${b.objs.size} · ${GcpController.epsgLabel(b.site.epsg)} ${b.site.epsg}", c.source, onBack = { c.back() }, onPill = { c.openReceiver() }, onMenu = { c.menuOpen = true })
         MapArea(c, env, Modifier.weight(1f))
         ControlArea(c)
     }
@@ -55,7 +55,7 @@ fun GcpController.mapState(access: VWorldAccess): MapViewState {
         val shots = b.active(s)
         val pts = shots.mapNotNull { sh -> local(sh.lat, sh.lon)?.let { sh to it } }
         val mine = o.id == objId
-        for ((sh, p) in pts) markers += MapMarker("", p, flagged = false, sym = MapSym.TAG, label = if (mine) "#${sh.tag}" else "${o.short} #${sh.tag}")
+        for ((sh, p) in pts) markers += MapMarker("", p, flagged = false, sym = MapSym.TAG, label = if (mine) "#${sh.tag}" else null)   // 다른 대상은 둘레 이름만(겹침 줄임)
         if (pts.size >= 2) {
             val cx = pts.sumOf { it.second.x } / pts.size; val cy = pts.sumOf { it.second.y } / pts.size
             val ring = pts.map { it.second }.sortedBy { Math.atan2(it.y - cy, it.x - cx) }

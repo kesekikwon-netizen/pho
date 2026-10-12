@@ -31,7 +31,6 @@ class TestGnss(state: LinkState = LinkState.STREAMING) : GnssSource {
 
 class MemPrefs : GcpPrefs {
     override var epochs = 3
-    override var operator = ""
     override var lastEpsg = 5187
     override var volumeKey = false
     override var lastSiteId = -1L
