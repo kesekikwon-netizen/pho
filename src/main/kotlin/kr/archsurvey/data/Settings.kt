@@ -281,6 +281,10 @@ class SettingsStore(private val ctx: Context) {
     var directReceivers: String
         get() = sp.getString("bt_direct_receivers", "") ?: ""
         set(v) = sp.edit().putString("bt_direct_receivers", v).apply()
+    /** 0.1.42 「프로그램 종료」로 닫았음 → 다음 실행은 시작 화면부터(바로 디스크에 씀: 곧 프로세스를 끝내므로 commit) */
+    var cleanExit: Boolean
+        get() = sp.getBoolean("clean_exit", false)
+        set(v) { sp.edit().putBoolean("clean_exit", v).commit() }
     var ntripSendGga: Boolean
         get() = sp.getBoolean("ntrip_send_gga", true)
         set(v) = sp.edit().putBoolean("ntrip_send_gga", v).apply()

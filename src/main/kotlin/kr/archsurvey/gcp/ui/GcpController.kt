@@ -183,7 +183,7 @@ class GcpController(
         else ui.ask(AppExit.appStep { exitApp() })
     }
     fun disconnectDevice() { runCatching { connection?.stopForExit() }.onFailure { kr.archsurvey.diag.CrashLog.record("수신기 연결 끊기", it) } }
-    fun exitApp() { if (connection?.linkActive() == true) disconnectDevice(); onExitApp?.invoke() }
+    fun exitApp() { disconnectDevice(); onExitApp?.invoke() } // 0.1.4: 늘 연결·잠금 정리
 
     // ================= 유적 =================
     fun reloadSites() = scope.launch {

@@ -26,3 +26,21 @@ object AppExit {
     /** 2단계 「프로그램 종료」 */
     fun appStep(onOk: () -> Unit) = ConfirmRequest(TITLE_APP, BODY_APP, OK_APP, CANCEL, onOk = onOk)
 }
+
+/**
+ * 0.1.42(측량) · 0.1.4(사진 기준점): 「프로그램 종료」 뒤 아이콘을 누르면 예전 화면이 다시 보이던 문제.
+ * 종료 때 표시를 남기고(바로 디스크에), 다음 실행은 저장된 화면 상태를 무시하고 시작 화면(스플래시 → 홈)부터.
+ */
+interface CleanExitStore { var exited: Boolean }
+
+class CleanExit(private val store: CleanExitStore) {
+    /** 종료 직전 */
+    fun mark() { store.exited = true }
+    /** onCreate 맨 앞: true 면 이번 실행은 처음부터(저장된 화면 상태 버림). 한 번 쓰면 지움 */
+    fun consumeOnLaunch(): Boolean { val e = store.exited; if (e) store.exited = false; return e }
+}
+
+/** 종료 순서(시험으로 고정): 연결 끊기(서비스·알림·자동 재연결·앱 사이 잠금) → 표시 → 작업 닫기(최근 앱에서 빠짐) → 프로세스 종료 */
+object ExitSteps {
+    val ORDER = listOf("연결 끊기", "종료 표시", "finishAndRemoveTask", "알림 지우기", "프로세스 종료")
+}
