@@ -27,11 +27,15 @@ interface R10PortStore {
 }
 
 /** LinkSupervisor 에 넘기는 R10 자동설정 묶음. SP60·기타 수신기는 null */
-class R10AutoOptions(val store: R10PortStore, val timing: R10AutoTiming = R10AutoTiming(), val probeWhenNatural: Boolean = false) {
+class R10AutoOptions(
+    val store: R10PortStore, val timing: R10AutoTiming = R10AutoTiming(), val probeWhenNatural: Boolean = false,
+    /** 0.1.41: 양방향 확인(GETSERIAL) + 포트별로 안 되면 17·18·19 한꺼번에 길게 한 번 더 */
+    val extended: Boolean = false,
+) {
     companion object {
         /** Engine 이 쓰는 선택: R10 만 자동설정. SP60 경로는 그대로 */
         fun forProfile(profile: DeviceProfile, store: R10PortStore): R10AutoOptions? =
-            if (profile.id == DeviceProfiles.R10_ID) R10AutoOptions(store) else null
+            if (profile.id == DeviceProfiles.R10_ID) R10AutoOptions(store, extended = true) else null
     }
 }
 
@@ -60,10 +64,12 @@ data class R10AutoResult(
     val seenAfter: Set<String>,
     val elapsedMs: Long,
     val log: List<String>,
+    /** 0.1.41 GETSERIAL 응답: "RSERIAL 5411457757" · "응답없음" · "-"(안 물어봄) */
+    val twoWay: String = "-",
 ) {
     val gotGga: Boolean get() = outcome == R10AutoOutcome.NATURAL || outcome == R10AutoOutcome.PORT_FOUND
     fun summary(): String = "R10 자동설정 결과=$outcome 포트=${port ?: "-"} ENQ=$enq 시도=${tried.joinToString(", ").ifEmpty { "-" }} " +
-        "이후문장=${seenAfter.sorted().joinToString("/").ifEmpty { "-" }} ${elapsedMs}ms"
+        "이후문장=${seenAfter.sorted().joinToString("/").ifEmpty { "-" }} 양방향=$twoWay ${elapsedMs}ms"
 }
 
 /**
@@ -95,6 +101,7 @@ class R10AutoConfig(
      * true 일 때만 0.1.33 의 GST 포트 탐색 보충을 한다(시험·향후 선택용).
      */
     private val probeWhenNatural: Boolean = false,
+    private val extended: Boolean = false,
 ) {
     companion object {
         val FULL_SET = listOf("GGA", "GST", "GSA", "GSV")
@@ -151,6 +158,49 @@ class R10AutoConfig(
         return r
     }
 
+    /** 0.1.41 GETSERIAL → RSERIAL 기다림(읽기 전용, 링크가 양방향인지·수신기가 이 세션 명령을 처리하는지) */
+    private suspend fun serial(): String {
+        drain()
+        send(TrimbleDcol.getSerial(), "GETSERIAL")
+        val end = clock() + timing.ackWaitMs * 2
+        var r = "응답없음"
+        while (true) {
+            val left = end - clock()
+            if (left <= 0) break
+            val e = withTimeoutOrNull(left) { events.receive() } ?: break
+            if (e is DcolEvent.Frame && e.type == TrimbleDcol.TYPE_RSERIAL) { r = "RSERIAL " + TrimbleDcol.serialText(e.data).ifEmpty { "?" }; break }
+            if (e == DcolEvent.Nak) { r = "NAK"; break }
+        }
+        log += "TX GETSERIAL [${TrimbleDcol.hex(TrimbleDcol.getSerial())}] → $r (${age()}ms)"
+        return r
+    }
+
+    /** 0.1.41 17·18·19 한꺼번에 GGA 켜고 길게(포트 번호가 맞는데 늦게 나오는 경우·세션 포트를 모를 때) */
+    private suspend fun allPortsOnce(tried: MutableList<String>): Boolean {
+        val ports = TrimbleDcol.BT_PORTS
+        val base = count("GGA")
+        drain()
+        val pkt = TrimbleDcol.setOutputsPorts(nextTx(), ports, listOf("GGA"), true)
+        send(pkt, "64h GGA 1Hz 포트17·18·19")
+        val r = awaitReply(timing.ackWaitMs)
+        log += "TX 64h GGA 1Hz 포트17·18·19 [${TrimbleDcol.hex(pkt)}] → $r (${age()}ms)"
+        if (r == "NAK") { tried += "17-19:NAK"; return false }
+        if (waitFor("GGA", base, timing.probeWaitMs * 2)) {
+            tried += "17-19:$r→GGA ${age()}ms"
+            drain()
+            val full = TrimbleDcol.setOutputsPorts(nextTx(), ports, FULL_SET, true)
+            send(full, "64h 4종 1Hz 포트17·18·19")
+            log += "TX 64h 4종 포트17·18·19 → ${awaitReply(timing.ackWaitMs)}"
+            return true
+        }
+        drain()
+        val off = TrimbleDcol.setOutputsPorts(nextTx(), ports, listOf("GGA"), false)
+        send(off, "64h GGA 끔 포트17·18·19")
+        val ro = awaitReply(timing.ackWaitMs)
+        tried += "17-19:$r→무GGA→끔$ro"
+        return false
+    }
+
     private suspend fun observe(): Set<String> {
         val base = FULL_SET.associateWith { count(it) }
         delay(timing.settleMs)
@@ -193,17 +243,26 @@ class R10AutoConfig(
             log += "ENQ 도중 GGA 수신 — 자연 수신으로 처리"
             return R10AutoResult(R10AutoOutcome.NATURAL, null, enq, tried, emptySet(), age(), log)
         }
+        val two = if (extended) { onStatus("R10 이 명령을 받는지 확인 중(일련번호)…"); serial() } else "-"
         val (port, allNak) = probePorts("GGA", tried)
         if (port == null) {
+            if (extended && !allNak) {
+                onStatus("R10 블루투스 포트 17·18·19 한꺼번에 켜 보는 중…")
+                if (allPortsOnce(tried)) {
+                    val seen = observe()
+                    log += "포트 17·18·19 한꺼번에 켜서 GGA 수신 · 이후 문장 ${seen.sorted()} (${age()}ms)"
+                    return R10AutoResult(R10AutoOutcome.PORT_FOUND, null, enq, tried, seen, age(), log, two)
+                }
+            }
             val out = if (allNak) R10AutoOutcome.ALL_NAK else R10AutoOutcome.NOT_FOUND
-            log += "결과 $out (${age()}ms)"
-            return R10AutoResult(out, null, enq, tried, emptySet(), age(), log)
+            log += "결과 $out 양방향=$two (${age()}ms)"
+            return R10AutoResult(out, null, enq, tried, emptySet(), age(), log, two)
         }
         onStatus("R10 포트 $port 확인 · GGA·GST·GSA·GSV 켜는 중…")
         app(port, FULL_SET, on = true)
         val seen = observe()
         log += "확정 포트 $port · 이후 문장 ${seen.sorted()} (${age()}ms)"
-        return R10AutoResult(R10AutoOutcome.PORT_FOUND, port, enq, tried, seen, age(), log)
+        return R10AutoResult(R10AutoOutcome.PORT_FOUND, port, enq, tried, seen, age(), log, two)
     }
 
     /**

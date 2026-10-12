@@ -118,6 +118,8 @@ class LinkSupervisor(
 
     /** 지금까지 연속으로 실패한 횟수(안정적으로 받은 뒤 끊기면 0 부터 다시) */
     @Volatile var failures = 0; private set
+    /** 0.1.41 R10 자동설정이 GGA 를 못 받았을 때 카드에 붙일 한 줄 진단(결과·ENQ·일련번호 응답·연결 방식) */
+    @Volatile private var r10Brief = ""
     /** BT-130(소켓 OK·GGA 없음) 치유 재시도 횟수. STREAMING 되면 0 */
     @Volatile var nmeaHeals = 0; private set
 
@@ -200,7 +202,7 @@ class LinkSupervisor(
                     continue
                 }
                 if (err.needsUserAction) {
-                    val msg = if (err == BtError.NO_DATA) "${err.title} (오류 ${err.code}) · ${NmeaActivation.fieldChecklist(profile)} · 진단은 설정·장비연결에서 확인"
+                    val msg = if (err == BtError.NO_DATA) "${err.title} (오류 ${err.code}) · ${NmeaActivation.fieldChecklist(profile)}${r10Brief.takeIf { it.isNotEmpty() }?.let { " · 진단 $it" } ?: ""} · 진단은 설정·장비연결에서 확인"
                     else "${err.title} (오류 ${err.code})"
                     setLink(LinkState.NEEDS_USER, attempt, failures, err, msg, false)
                     wake.receive()
@@ -352,13 +354,14 @@ class LinkSupervisor(
                     val r = kr.archsurvey.bt.R10AutoConfig(
                         send = { b, label -> writeDcol(b, label) }, events = dcolEvents,
                         count = { typeCounts[it]?.get() ?: 0L }, clock = clock, store = auto.store, timing = auto.timing,
-                        nextTx = { dcolTx.getAndIncrement() and 0xFF },
+                        nextTx = { dcolTx.getAndIncrement() and 0xFF }, extended = auto.extended,
                         onStatus = { msg ->
                             if (link.value.state == LinkState.CONNECTED_NO_DATA)
                                 setLink(LinkState.CONNECTED_NO_DATA, attempt, link.value.failures, msg = msg, strategy = t.strategyName)
                         },
                     ).enableOutput()
                     if (r.outcome == kr.archsurvey.bt.R10AutoOutcome.PORT_FOUND) r10Port.set(r.port)
+                    r10Brief = if (r.gotGga) "" else "R10 ${r.outcome} · ENQ ${r.enq} · 일련번호 ${r.twoWay} · ${t.strategyName ?: "-"}"
                     if (r.outcome != kr.archsurvey.bt.R10AutoOutcome.NATURAL)
                         CrashLog.record("진단 ${r.summary()}", RuntimeException(r.log.joinToString("\n")))
                     runCatching { onR10Auto(r) }
@@ -491,7 +494,7 @@ class LinkSupervisor(
                         val badRate = driver.parserStats.checksumErrorRate > 0.2
                         setLink(LinkState.STALE, attempt, link.value.failures,
                             if (miss) BtError.NO_DATA else if (badRate || s.checksumErrors > 5) BtError.BAD_CHECKSUM else null,
-                            if (miss) profile.noDataHint else "데이터가 잠시 끊겼어요", strategy = t.strategyName)
+                            if (miss) profile.noDataHint + (r10Brief.takeIf { it.isNotEmpty() }?.let { " · 진단 $it" } ?: "") else "데이터가 잠시 끊겼어요", strategy = t.strategyName)
                     }
                     DataHealth.DEAD -> {
                         if (actRunning.get()) continue

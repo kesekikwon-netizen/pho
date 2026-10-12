@@ -72,6 +72,20 @@ object TrimbleDcol {
     fun setOutputs(tx: Int, port: Int, sentences: List<String>, on: Boolean): ByteArray =
         appFile(tx, sentences.map { outputRecord(SAFE_TYPES.getValue(it), port, if (on) FREQ_1HZ else FREQ_OFF) })
 
+    /**
+     * 0.1.41 양방향 확인(읽기 전용): 06h GETSERIAL → 07h RSERIAL(수신기 일련번호). 설정을 바꾸지 않는다.
+     * https://receiverhelp.trimble.com/oem-gnss/icd-command06h-getserial.html
+     */
+    const val TYPE_GETSERIAL = 0x06
+    const val TYPE_RSERIAL = 0x07
+    fun getSerial(): ByteArray = packet(TYPE_GETSERIAL, ByteArray(0))
+    /** RSERIAL 데이터 앞부분의 글자(일련번호) */
+    fun serialText(data: ByteArray): String = data.take(8).map { it.toInt() and 0xFF }.filter { it in 0x20..0x7E }.map { it.toChar() }.joinToString("").trim()
+
+    /** 0.1.41: 블루투스 포트 여러 개에 한 번에(같은 허용 범위 검사) */
+    fun setOutputsPorts(tx: Int, ports: List<Int>, sentences: List<String>, on: Boolean): ByteArray =
+        appFile(tx, ports.flatMap { p -> sentences.map { outputRecord(SAFE_TYPES.getValue(it), p, if (on) FREQ_1HZ else FREQ_OFF) } })
+
     fun hex(b: ByteArray): String = b.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
 }
 
