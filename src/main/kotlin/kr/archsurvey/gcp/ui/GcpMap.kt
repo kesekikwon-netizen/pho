@@ -124,7 +124,7 @@ private fun DrawScope.drawTiles(layers: List<TileLayerSpec>, geo: LocalProjectio
 }
 
 private fun DrawScope.drawGrid(ppm: Float, sx: (Double) -> Float, sy: (Double) -> Float) {
-    val step = if (ppm > 8f) 1.0 else if (ppm > 1.5f) 10.0 else 100.0
+    val step = listOf(1.0, 5.0, 10.0, 50.0, 100.0, 500.0, 1000.0).firstOrNull { it * ppm >= 40f } ?: 5000.0
     val c = Color(0x33141413)
     var x = Math.floor(((0 - sx(0.0)) / ppm) / step) * step
     while (sx(x) <= size.width) { drawLine(c, Offset(sx(x), 0f), Offset(sx(x), size.height), 1f); x += step }

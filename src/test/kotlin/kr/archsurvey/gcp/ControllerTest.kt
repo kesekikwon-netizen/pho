@@ -36,7 +36,7 @@ class ControllerTest {
             c.start()
             return Rig(c, files, g, p, t)
         }
-        fun m(e: Double, n: Double, h: Double = 4.0) = Measured(37.7, 128.9, e, n, h, h + 1.6, 0.006, 0.012, 3, 3)
+        fun m(e: Double, n: Double, h: Double = 4.0) = Geo.latLon(e, n).let { (la, lo) -> Measured(la, lo, e, n, h, h + 1.6, 0.006, 0.012, 3, 3) }
 
         /** 유적 + 대상 만들어 측점 화면까지 */
         fun Rig.siteWithObj(kind: ObjKind = ObjKind.FEATURE): Rig {
@@ -110,13 +110,13 @@ class ControllerTest {
         val r = rig().siteWithObj(); val c = r.c
         r.measure(1, 194884.0, 573986.0); r.measure(2, 194886.0, 573986.0)
         c.back()
-        // 수신기가 그 근처에 있으면 새 대상은 #3–6 을 제안
-        r.gnss.emit(lat = c.book!!.shots[0].lat, lon = c.book!!.shots[0].lon)
+        // 수신기가 그 근처(5 m)에 있으면 새 대상은 #3–6 을 제안
+        r.gnss.emitAt(194889.0, 573986.0)
         val here = c.here()!!
+        assertEquals(194889.0, here.first, 0.5); assertEquals(573986.0, here.second, 0.5)   // 시험용 위경도 근사
         c.openNewObj(ObjKind.FEATURE)
         val near = c.newObj!!
-        // 시험 좌표(37.7,128.9)와 표적 좌표가 달라 근처가 아닐 수 있다 → 근처면 피한 번호
-        if (Math.hypot(here.first - 194884.0, here.second - 573986.0) <= 20) assertEquals(listOf(3, 4, 5, 6), near.slots)
+        assertEquals(listOf(3, 4, 5, 6), near.slots); assertTrue(near.nearNote!!.contains("GN-001"))
         c.newObj = near.copy(slots = listOf(1, 2, 3, 4)); c.submitNewObj()
         r.measure(1, 194890.0, 573986.0)        // 6 m 옆 GN-001 도 #1
         val ask = c.ui.confirm!!; assertEquals("번호가 겹쳐요", ask.title); assertTrue(ask.body.contains("GN-001"))

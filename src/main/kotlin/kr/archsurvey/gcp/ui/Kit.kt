@@ -90,7 +90,7 @@ fun IdBox(code: String, big: Boolean = false, modifier: Modifier = Modifier) {
     val (pre, body) = kr.archsurvey.gcp.model.ObjIds.split(code)
     Row(modifier.clip(RoundedCornerShape(8.dp)).background(G.ink).padding(horizontal = if (big) 12.dp else 9.dp, vertical = if (big) 6.dp else 4.dp), verticalAlignment = Alignment.Bottom) {
         Text(pre, style = GT.mono.sz(if (big) 13.sp else 11.sp), color = Color(0xFFBDBBB3))
-        Text(body, style = GT.monoM.sz(if (big) 22.sp else 17.sp), color = Color.White)
+        Text(body, style = GT.monoM.sz(if (big) 20.sp else 17.sp), color = Color.White)
     }
 }
 
@@ -129,12 +129,12 @@ fun FixPill(src: GnssSource, onClick: () -> Unit) {
     val col = when { fixed -> G.fix; g.quality == FixQuality.RTK_FIXED && l.state == LinkState.STREAMING -> G.warn; l.state == LinkState.STREAMING -> G.todo; else -> G.sub }
     Row(
         Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(22.dp)).border(2.dp, col, RoundedCornerShape(22.dp)).background(G.card)
-            .hClickable(onClickLabel = "수신기") { onClick() }.padding(horizontal = 12.dp).testTag("fix_pill"),
+            .hClickable(onClickLabel = "수신기") { onClick() }.padding(horizontal = 10.dp).testTag("fix_pill"),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(12.dp).clip(RoundedCornerShape(6.dp)).background(col))
-        Spacer(Modifier.width(8.dp))
-        Text(text, style = GT.monoM.sz(14.sp), color = col, maxLines = 1)
+        Box(Modifier.size(10.dp).clip(RoundedCornerShape(5.dp)).background(col))
+        Spacer(Modifier.width(6.dp))
+        Text(text, style = GT.monoM.sz(13.sp), color = col, maxLines = 1)
     }
 }
 
@@ -172,9 +172,9 @@ fun GChip(label: String, on: Boolean, tag: String, modifier: Modifier = Modifier
     val shape = RoundedCornerShape(12.dp)
     Box(
         modifier.heightIn(min = 44.dp).clip(shape).background(if (on) G.ink else G.card).border(1.dp, if (on) G.ink else G.line, shape)
-            .hClickable { onClick() }.padding(horizontal = 14.dp).testTag(tag),
+            .hClickable { onClick() }.padding(horizontal = 8.dp).testTag(tag),
         contentAlignment = Alignment.Center,
-    ) { Text(label, style = GT.sans.sz(15.sp), color = if (on) Color.White else G.ink, maxLines = 1) }
+    ) { Text(label, style = GT.sans.sz(14.sp), color = if (on) Color.White else G.ink, maxLines = if ('\n' in label) 2 else 1, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
 }
 
 /** 종류 배지(유구 테라코타 · 토층 파랑 · 기타 회색) */
@@ -250,10 +250,10 @@ fun Stepper(value: String, tag: String, onMinus: () -> Unit, onPlus: () -> Unit)
 }
 
 @Composable
-fun FolderLine(text: String, warn: String? = null) {
+fun FolderLine(text: String, trailing: String? = null, warn: Boolean = false) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("▭ ", style = GT.mono.sz(12.sp), color = G.sub)
         Text(text, style = GT.mono.sz(12.sp), color = G.sub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-        if (warn != null) Text(" $warn", style = GT.mono.sz(12.sp), color = G.warn, maxLines = 1)
+        if (trailing != null) Text(" $trailing", style = GT.mono.sz(12.sp), color = if (warn) G.warn else G.ink, maxLines = 1)
     }
 }

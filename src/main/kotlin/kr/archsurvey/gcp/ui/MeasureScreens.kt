@@ -48,10 +48,10 @@ fun MeasureScreen(c: GcpController, env: GcpEnv) {
     val act = b.active(s)
     Column(Modifier.fillMaxSize().background(G.bg).testTag("measure")) {
         GHeader({ c.back() }, "measure_header", title = {
-            IdBox(o.code, big = true); Spacer(Modifier.width(10.dp))
+            IdBox(o.code); Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f).hClickable(onClickLabel = "이름 바꾸기") { c.renaming = o.name }.testTag("obj_title")) {
-                Text(o.name, style = GT.serif.sz(20.sp), color = G.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("폴 ${String.format(java.util.Locale.US, "%.1f", c.poleM())} · ${b.site.epsg}", style = GT.mono.sz(12.sp), color = G.sub)
+                Text(o.name, style = GT.serif.sz(18.sp), color = G.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("폴 ${String.format(java.util.Locale.US, "%.1f", c.poleM())} · ${b.site.epsg}", style = GT.mono.sz(12.sp), color = G.sub, maxLines = 1)
             }
         }) { FixPill(c.source) { c.openReceiver() } }
         // 차수 칩

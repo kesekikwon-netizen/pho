@@ -57,3 +57,14 @@ class MemFiles : GcpFilesPort {
 
 fun shot(id: Long, session: Long, tag: Int, e: Double, n: Double, h: Double, at: Long = id, active: Boolean = true) =
     Shot(id, session, tag, e, n, h, 37.7, 128.9, 0.006, 0.013, 10, at, active)
+
+/** 시험 좌표(EPSG:5187 E,N) → 대략의 위경도(기준점 둘레 수 km 안에서 충분) */
+object Geo {
+    private val ref = TmProjection.forward(37.7712, 128.8790, KoreanTmZone.EAST)
+    fun latLon(e: Double, n: Double): Pair<Double, Double> {
+        var la = 37.7712 + (n - ref.northing) / 110_950.0; var lo = 128.8790 + (e - ref.easting) / 88_070.0
+        repeat(6) { val p = TmProjection.forward(la, lo, KoreanTmZone.EAST); la += (n - p.northing) / 110_950.0; lo += (e - p.easting) / 88_070.0 }
+        return la to lo
+    }
+}
+fun TestGnss.emitAt(e: Double, n: Double) { val (la, lo) = Geo.latLon(e, n); emit(lat = la, lon = lo) }

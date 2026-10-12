@@ -198,23 +198,22 @@ private fun counts(c: GcpController) = c.counts()
 private fun ObjRowView(c: GcpController, r: ObjRow) {
     val shape = RoundedCornerShape(14.dp)
     Row(
-        Modifier.fillMaxWidth().clip(shape).background(G.card).border(1.dp, G.line, shape).hClickable { c.openObj(r.obj.id) }.testTag("row_${r.obj.code}"),
+        Modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(shape).background(G.card).border(1.dp, G.line, shape).hClickable { c.openObj(r.obj.id) }.testTag("row_${r.obj.code}"),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.width(4.dp).height(92.dp).background(if (r.stage == Stage.MEASURE) G.todo else Color.Transparent))
+        Box(Modifier.width(4.dp).fillMaxHeight().background(if (r.stage == Stage.MEASURE) G.todo else Color.Transparent))
         Box(Modifier.padding(start = 10.dp, end = 10.dp)) { IdBox(r.obj.code) }
-        Column(Modifier.weight(1f).padding(vertical = 10.dp).padding(end = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Column(Modifier.weight(1f).padding(vertical = 10.dp).padding(end = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(r.obj.name, style = GT.serif.sz(18.sp), color = G.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 Spacer(Modifier.width(6.dp)); KindBadge(r.obj.kind)
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val s = r.session
-                Text((s?.let { "${it.no}차 · ${it.label} · " } ?: "") + "T ${r.measured}/${r.slots}  ", style = GT.mono.sz(12.sp), color = G.sub, maxLines = 1)
-                StageChips(r.stage)
-            }
             val s = r.session
-            if (s != null) FolderLine(Names.photoFolder(r.obj, s), if (r.xmlName == null) "XML 없음" else "XML ${c.timeLabel(s.xmlSavedAt).removePrefix("오늘 ")}")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StageChips(r.stage)
+                Text("  T ${r.measured}/${r.slots}" + (s?.let { " · ${it.no}차 ${it.label}" } ?: ""), style = GT.mono.sz(12.sp), color = G.sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (s != null) FolderLine(Names.photoFolder(r.obj, s), if (r.xmlName == null) "XML 없음" else "XML ${c.timeLabel(s.xmlSavedAt).removePrefix("오늘 ")}", warn = r.xmlName == null)
         }
     }
 }
