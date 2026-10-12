@@ -24,7 +24,8 @@ class GcpViewModel(app: Application) : AndroidViewModel(app) {
         runCatching { controller.ui.fail("문제가 생겨 작업을 멈췄어요 · 진단 기록에 남겼어요") }
     })
     val antennaDb = AntennaDb.parse(app.assets.open("antenna_db.json").bufferedReader().use { it.readText() })
-    val controller: GcpController = GcpController(GcpRepo(application.gcpDb.dao()), AndroidGcpFiles(application), application.engine, AndroidGcpPrefs(application), antennaDb, safeScope)
+    val controller: GcpController = GcpController(GcpRepo(application.gcpDb.dao()), AndroidGcpFiles(application), application.engine, AndroidGcpPrefs(application), antennaDb, safeScope,
+        addressLookup = { la, lo -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { kr.archsurvey.gcp.engine.VWorldAddress.lookup(application.settings.mapKey, la, lo) } })
     val connection = ConnectionController(platform, safeScope)
     private val versionName: String = runCatching { app.packageManager.getPackageInfo(app.packageName, 0).versionName ?: "" }.getOrDefault("")
     val env = GcpEnv(

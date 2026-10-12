@@ -43,3 +43,4 @@ same kr/archsurvey/ui/ConnectionModel.kt
 same kr/archsurvey/ui/CorrectionDefaults.kt
 same kr/archsurvey/ui/FeedbackHub.kt
 same kr/archsurvey/ui/TileImages.kt
+ui/CanvasMapSurface.kt (0.1.1, 측량 앱 지도 그리기 그대로)

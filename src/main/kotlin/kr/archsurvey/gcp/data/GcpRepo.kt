@@ -13,35 +13,26 @@ class GcpRepo(private val dao: GcpDao, private val clock: () -> Long = System::c
         return SiteBook(s, dao.objs(siteId).map { it.model() }, dao.sessions(siteId).map { it.model() }, dao.shots(siteId).map { it.model() })
     }
 
-    /** 새 유적. 약호 문제면 예외 메시지(IllegalArgumentException) */
-    suspend fun createSite(name: String, codeRaw: String, epsg: Int): Site {
-        val code = ObjIds.normalizeCode(codeRaw)
-        ObjIds.codeProblem(code, dao.sites().map { it.code })?.let { throw IllegalArgumentException(it) }
-        require(name.isNotBlank()) { "유적 이름을 넣으세요" }
+    /** 새 유적(이름은 고른 것, 겹치면 (2)…). */
+    suspend fun createSite(name: String, epsg: Int): Site {
+        require(name.isNotBlank()) { "유적 이름을 고르세요" }
         require(epsg in 5185..5188) { "좌표계는 EPSG 5185~5188 중에서 고르세요" }
-        val id = dao.insertSite(SiteRow(name = name.trim(), code = code, epsg = epsg, createdAt = clock()))
+        val nm = SiteNames.unique(name.trim(), dao.sites().map { it.name })
+        val id = dao.insertSite(SiteRow(name = nm, epsg = epsg, createdAt = clock()))
         return dao.site(id)!!.model()
     }
 
-    /** 새 대상 + 1차. [slots] = 1차 표적 칸(근처 번호 겹침을 피해 고른 번호) */
-    suspend fun createObj(siteId: Long, kind: ObjKind, name: String, operator: String, sessionLabel: String, slots: List<Int>): Obj {
-        val site = dao.site(siteId) ?: throw IllegalStateException("유적이 없어요")
-        val seq = ObjIds.nextSeq(dao.seqs(siteId, operator))
-        val code = ObjIds.format(site.code, operator, seq)
+    suspend fun usedNos(siteId: Long, kind: ObjKind): Set<Int> = dao.usedNos(siteId, kind.id).toSet()
+
+    /** 새 대상 + 1차. 같은 종류·같은 호수가 있으면 IllegalArgumentException */
+    suspend fun createObj(siteId: Long, kind: ObjKind, no: Int, sessionLabel: String, slots: List<Int>): Obj {
+        dao.site(siteId) ?: throw IllegalStateException("유적이 없어요")
+        require(ObjNames.valid(no)) { "호수는 1~${ObjNames.MAX_NO}" }
+        if (no in usedNos(siteId, kind)) throw IllegalArgumentException("${ObjNames.label(kind, no)} 은(는) 이미 있어요 · 다음 번호 ${ObjNames.next(usedNos(siteId, kind))}")
         val now = clock()
-        val id = dao.insertObj(ObjRow(siteId = siteId, seq = seq, code = code, kind = kind.id, name = name.trim(), operator = operator, createdAt = now))
+        val id = dao.insertObj(ObjRow(siteId = siteId, kind = kind.id, no = no, createdAt = now))
         dao.insertSession(SessionRow(objId = id, no = 1, label = sessionLabel, slots = slots.joinToString(","), createdAt = now, changedAt = now))
         return dao.obj(id)!!.model()
-    }
-
-    /** 이름 바꾸기: ID 는 그대로, 옛 이름은 목록.csv 「옛 이름」 에 남김 */
-    suspend fun renameObj(objId: Long, newName: String): Obj {
-        val o = dao.obj(objId) ?: throw IllegalStateException("대상이 없어요")
-        val nn = newName.trim(); require(nn.isNotEmpty()) { "이름을 넣으세요" }
-        if (nn == o.name) return o.model()
-        val olds = (o.oldNames.split('\n').filter { it.isNotBlank() } + o.name).distinct().filter { it != nn }
-        dao.updateObj(o.copy(name = nn, oldNames = olds.joinToString("\n")))
-        return dao.obj(objId)!!.model()
     }
 
     suspend fun createSession(objId: Long, label: String, slots: List<Int>): Session {

@@ -75,8 +75,8 @@ class AndroidGcpFiles(private val ctx: Context, private val zone: ZoneId = ZoneI
         val files = listOf(File(dir, r.xmlName), File(dir, Names.txtName(o, s, book.site.epsg))).filter { it.exists() }
         if (files.isEmpty()) return false
         val send = Intent(Intent.ACTION_SEND_MULTIPLE).setType("text/xml").putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(files.map { uri(it) }))
-            .putExtra(Intent.EXTRA_SUBJECT, "${o.code} ${o.name} ${s.no}차 iTwin 기준점").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        return runCatching { ctx.startActivity(Intent.createChooser(send, "${o.code} XML 보내기").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+            .putExtra(Intent.EXTRA_SUBJECT, "${o.name} ${s.no}차 iTwin 기준점").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        return runCatching { ctx.startActivity(Intent.createChooser(send, "${o.name} XML 보내기").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
     }
 
     override fun shareZip(plan: HandoffPlan): Boolean {
@@ -102,7 +102,6 @@ class AndroidGcpFiles(private val ctx: Context, private val zone: ZoneId = ZoneI
 class AndroidGcpPrefs(ctx: Context) : GcpPrefs {
     private val p = ctx.getSharedPreferences("gcp", Context.MODE_PRIVATE)
     override var epochs: Int get() = p.getInt("epochs", 10).coerceIn(1, 100); set(v) { p.edit().putInt("epochs", v).apply() }
-    override var operator: String get() = p.getString("operator", "") ?: ""; set(v) { p.edit().putString("operator", v).apply() }
     override var lastEpsg: Int get() = p.getInt("lastEpsg", 5186); set(v) { p.edit().putInt("lastEpsg", v).apply() }
     override var volumeKey: Boolean get() = p.getBoolean("volumeKey", false); set(v) { p.edit().putBoolean("volumeKey", v).apply() }
     override var lastSiteId: Long get() = p.getLong("lastSite", -1); set(v) { p.edit().putLong("lastSite", v).apply() }

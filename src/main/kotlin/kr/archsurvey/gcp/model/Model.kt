@@ -2,19 +2,46 @@ package kr.archsurvey.gcp.model
 
 /**
  * 사진 기준점 장부(유적 → 대상 → 차수 → 표적). Android 의존 없음(JVM 시험).
- * 대상 ID(GN-A012)는 만들 때 한 번 정하고 바꾸지 않는다 — 이름이 바뀌어도 폴더·파일·사진 폴더·목록이 ID 로 이어진다.
+ * 대상 = 종류 + 호수(만들 때 고르고 바꾸지 않음). 폴더·파일·사진 폴더·목록이 모두 「012호_주거지」로 이어진다.
  */
+/** 0.1.1: 대상 종류(큰 타일로 고름). 토층만 번호 대신 글자(A—A′) */
 enum class ObjKind(val id: String, val ko: String) {
-    FEATURE("feature", "유구"), SECTION("section", "토층"), OTHER("other", "기타");
+    DWELLING("dwelling", "주거지"), PIT("pit", "수혈"), DITCH("ditch", "구"), POSTHOLE("posthole", "주혈"),
+    BUILDING("building", "건물지"), TOMB("tomb", "무덤"), KILN("kiln", "가마"), SECTION("section", "토층"), OTHER("other", "기타");
+    val lettered: Boolean get() = this == SECTION
     companion object { fun of(id: String?) = entries.firstOrNull { it.id == id } ?: OTHER }
 }
 
-data class Site(val id: Long, val name: String, val code: String, val epsg: Int, val createdAt: Long)
+/** 유적: 이름 + 좌표계만(0.1.1 약호 없앰) */
+data class Site(val id: Long, val name: String, val epsg: Int, val createdAt: Long)
 
-data class Obj(
-    val id: Long, val siteId: Long, val seq: Int, val code: String, val kind: ObjKind, val name: String,
-    val oldNames: List<String> = emptyList(), val createdAt: Long = 0L, val operator: String = "",
-)
+/**
+ * 대상 = 종류 + 호수(1–999, 토층은 1=A, 2=B …). 한 유적에서 (종류, 호수)는 하나뿐 — 바꾸지 않는다.
+ * 폴더·파일 이름은 이 둘로만 만든다(012호_주거지, A_토층). 안쪽 고유 번호는 [id](DB).
+ */
+data class Obj(val id: Long, val siteId: Long, val kind: ObjKind, val no: Int, val createdAt: Long = 0L) {
+    /** 화면 이름: 12호 주거지 / A—A′ 토층 */
+    val name: String get() = ObjNames.label(kind, no)
+    /** 짧은 이름(지도·목록): 12호 / A—A′ */
+    val short: String get() = ObjNames.short(kind, no)
+    /** 폴더·파일 머리: 012호_주거지 / A_토층 */
+    val code: String get() = ObjNames.folder(kind, no)
+}
+
+object ObjNames {
+    const val MAX_NO = 999
+    fun letter(no: Int): String { var n = no.coerceAtLeast(1); val sb = StringBuilder(); while (n > 0) { n--; sb.insert(0, 'A' + n % 26); n /= 26 }; return sb.toString() }
+    fun label(kind: ObjKind, no: Int) = if (kind.lettered) "${letter(no)}—${letter(no)}′ 토층" else "${no}호 ${kind.ko}"
+    fun short(kind: ObjKind, no: Int) = if (kind.lettered) "${letter(no)}—${letter(no)}′" else "${no}호"
+    fun folder(kind: ObjKind, no: Int) = if (kind.lettered) "${letter(no)}_토층" else "${no.toString().padStart(3, '0')}호_${kind.ko}"
+    /** 다음 번호: 쓴 번호 중 가장 큰 것 + 1(999 를 넘으면 빈 번호 중 가장 작은 것) */
+    fun next(used: Collection<Int>): Int {
+        val m = (used.maxOrNull() ?: 0) + 1
+        if (m <= MAX_NO) return m
+        return (1..MAX_NO).firstOrNull { it !in used } ?: MAX_NO
+    }
+    fun valid(no: Int) = no in 1..MAX_NO
+}
 
 /** 차수. [slots] = 화면에 놓은 표적 번호(실제 태그 번호) 순서. 잰 번호는 [Shot] 에 */
 data class Session(
@@ -55,40 +82,15 @@ object Pipeline {
     fun canMarkPhoto(activeTags: Int, minTargets: Int = MIN_TARGETS) = activeTags >= minTargets
 }
 
-/** 대상 ID: 유적 약호 + (작업자 글자) + 세 자리 일련번호. 예) GN-A012, 작업자 없음 GN-012 */
-object ObjIds {
-    private val CODE = Regex("^[A-Z][A-Z0-9]{0,3}$")
-    val OPERATORS = listOf("", "A", "B", "C", "D")
-
-    /** 유적 약호 검사(대문자로 바꾼 뒤). 문제 문구 또는 null */
-    fun codeProblem(raw: String, taken: Collection<String>): String? {
-        val c = normalizeCode(raw)
-        return when {
-            c.isEmpty() -> "약호를 넣으세요 (예: GN)"
-            !CODE.matches(c) -> "약호는 영문 대문자로 시작하는 1~4글자예요 (예: GN, YY2)"
-            taken.any { it.equals(c, true) } -> "이미 쓰는 약호예요 — 다른 글자를 고르세요"
-            else -> null
-        }
-    }
-    fun normalizeCode(raw: String) = raw.trim().uppercase().filter { it in 'A'..'Z' || it in '0'..'9' }
-
-    fun format(siteCode: String, operator: String, seq: Int): String = "$siteCode-$operator${seq.toString().padStart(3, '0')}"
-
-    /** 같은 유적·같은 작업자 글자에서 다음 번호. 지운 대상 번호도 다시 쓰지 않는다(지운 것도 [seqs] 에 넣을 것) */
-    fun nextSeq(seqs: Collection<Int>): Int = (seqs.maxOrNull() ?: 0) + 1
-
-    /** ID 상자 그림용: 「GN-」 + 「A002」 */
-    fun split(code: String): Pair<String, String> = code.indexOf('-').let { if (it < 0) "" to code else code.substring(0, it + 1) to code.substring(it + 1) }
-}
-
 /** 파일·폴더 이름. 대상명에서 공백·—·′ 등은 빼고(2호수혈, BB토층), ID 를 맨 앞에 */
 object Names {
     fun safe(name: String): String = name.filter { it in '0'..'9' || it in 'A'..'Z' || it in 'a'..'z' || it in '가'..'힣' || it == '_' }.ifEmpty { "대상" }
 
     /** 유적 폴더: 이름 그대로(공백 허용), 경로에 못 쓰는 글자만 뺌 */
-    fun siteFolder(site: Site): String = site.name.trim().replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "").trim().ifEmpty { site.code }
+    fun siteFolder(site: Site): String = site.name.trim().replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "").trim().ifEmpty { "유적" }
 
-    fun objFolder(o: Obj) = "${o.code}_${safe(o.name)}"
+    /** 012호_주거지 / A_토층 */
+    fun objFolder(o: Obj) = o.code
     fun photoFolder(o: Obj, s: Session) = "${objFolder(o)}_${s.no}차"
     fun xmlName(o: Obj, s: Session, epsg: Int) = "${photoFolder(o, s)}_EPSG$epsg.xml"
     fun txtName(o: Obj, s: Session, epsg: Int) = "${photoFolder(o, s)}_EPSG$epsg.txt"
@@ -99,34 +101,14 @@ object Names {
     fun siteRel(site: Site) = "$ROOT/${siteFolder(site)}"
 }
 
-/** + 유구 다음 5호 / + 토층 다음 C—C′ */
-object AutoNumber {
-    private val FEATURE_NO = Regex("^\\s*(\\d+)\\s*호")
-    private val SECTION_LETTER = Regex("^\\s*([A-Z]{1,2})\\s*[—–\\-]")
-    val FEATURE_SUBTYPES = listOf("수혈", "주거지", "구", "주혈", "소성유구", "유구")
-    val SESSION_LABELS = listOf("검출면", "중간", "완토", "바닥", "기타")
-
-    fun nextFeatureNo(names: Collection<String>): Int = (names.mapNotNull { FEATURE_NO.find(it)?.groupValues?.get(1)?.toIntOrNull() }.maxOrNull() ?: 0) + 1
-    fun featureName(no: Int, subtype: String) = "${no}호 ${subtype.trim().ifEmpty { "유구" }}"
-
-    fun nextSectionLetter(names: Collection<String>): String {
-        val used = names.mapNotNull { SECTION_LETTER.find(it)?.groupValues?.get(1) }
-        val max = used.maxWithOrNull(compareBy({ it.length }, { it })) ?: return "A"
-        return inc(max)
-    }
-    private fun inc(s: String): String {
-        val last = s.last()
-        return if (last < 'Z') s.dropLast(1) + (last + 1) else if (s.length == 1) "AA" else inc(s.dropLast(1)) + "A"
-    }
-    fun sectionName(letter: String) = "$letter—$letter′ 토층"
-    fun otherName(no: Int) = "기타 $no"
-}
+/** 차수 이름(타일) */
+object SessionLabels { val ALL = listOf("검출면", "중간", "완토", "바닥") ; fun next(prev: String?) = ALL.getOrElse(ALL.indexOf(prev) + 1) { ALL.last() } }
 
 /** 표적 점검 3가지: 최소 3개(Pipeline) · 다시 잰 값이 2 cm 넘게 다름 · 20 m 안 진행 중 대상과 번호 겹침 */
 object TargetChecks {
     const val MOVED_M = 0.02
     const val CLASH_RADIUS_M = 20.0
-    const val MAX_TAG = 9999
+    const val MAX_TAG = 999
 
     fun distance3d(a: Shot, e: Double, n: Double, h: Double): Double {
         val dx = a.e - e; val dy = a.n - n; val dz = a.h - h
@@ -162,10 +144,10 @@ object TargetChecks {
         return out
     }
 
-    fun validTag(n: Int) = n in 0..MAX_TAG
+    fun validTag(n: Int) = n in 1..MAX_TAG
 }
 
-/** ID 카드 QR 내용: GN-A002|2차|EPSG5187|T1-4 */
+/** ID 카드 QR 내용: 012호_주거지|2차|EPSG5187|T1-4 (사진 폴더 이름과 같은 머리) */
 object QrPayload {
     fun of(code: String, sessionNo: Int, epsg: Int, tags: List<Int>): String = "$code|${sessionNo}차|EPSG$epsg|T${ranges(tags)}"
 
@@ -176,5 +158,46 @@ object QrPayload {
         for (x in s.drop(1)) { if (x == b + 1) b = x else { out += if (a == b) "$a" else "$a-$b"; a = x; b = x } }
         out += if (a == b) "$a" else "$a-$b"
         return out.joinToString(",")
+    }
+}
+
+/** V월드 주소(getAddress) 결과 중 이름 짓기에 쓰는 칸 */
+data class AddressParts(val sido: String, val sigungu: String, val beopjeong: String, val haengjeong: String)
+
+/**
+ * 0.1.1 유적 이름을 글자 입력 없이: 지금 위치 주소로 만든 이름 + 최근 유적 이름 + 「유적 날짜」 중 고르고, 필요하면 「N지구」를 붙인다.
+ */
+object SiteNames {
+    private val DISTRICT = Regex("\\s*\\d+\\s*지구$")
+
+    /** 강릉시 → 강릉, 양평군 → 양평, 수원시 팔달구 → 수원, 중구 → 중구 */
+    fun city(sigungu: String): String {
+        val first = sigungu.trim().split(' ').firstOrNull().orEmpty()
+        return if ((first.endsWith("시") || first.endsWith("군")) && first.length >= 3) first.dropLast(1) else first
+    }
+    fun base(name: String) = name.replace(DISTRICT, "").trim()
+
+    fun suggest(addr: AddressParts?, recent: List<String>, today: java.time.LocalDate): List<String> {
+        val out = LinkedHashSet<String>()
+        if (addr != null) {
+            val c = city(addr.sigungu)
+            val dong = addr.beopjeong.trim().ifEmpty { addr.haengjeong.trim() }
+            if (dong.isNotEmpty()) { if (c.isNotEmpty()) out += "$c $dong 유적"; out += "$dong 유적" }
+            val h = addr.haengjeong.trim()
+            if (h.isNotEmpty() && h != dong && c.isNotEmpty()) out += "$c $h 유적"
+            if (dong.isEmpty() && c.isNotEmpty()) out += "$c 유적"
+        }
+        recent.map { base(it) }.filter { it.isNotEmpty() }.forEach { out += it }
+        out += "유적 $today"
+        return out.toList().take(8)
+    }
+
+    fun withDistrict(base: String, district: Int?): String = if (district == null || district <= 0) base.trim() else "${base.trim()} ${district}지구"
+
+    /** 이미 있는 이름이면 「(2)」, 「(3)」… */
+    fun unique(name: String, taken: Collection<String>): String {
+        if (taken.none { it == name }) return name
+        var i = 2; while (taken.any { it == "$name ($i)" }) i++
+        return "$name ($i)"
     }
 }

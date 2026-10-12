@@ -20,20 +20,19 @@ data class SiteBook(val site: Site, val objs: List<Obj>, val sessions: List<Sess
 
 /** 목록.csv — PC 쪽에서 사진 폴더와 맞춰 보는 장부. UTF-8 BOM(엑셀) · CRLF · 차수마다 한 줄 */
 object ListCsv {
-    val HEADER = listOf("ID", "대상", "종류", "차수", "차수 이름", "날짜", "표적 번호", "XML 파일", "사진 폴더", "상태", "작업자", "마지막 저장", "옛 이름")
+    val HEADER = listOf("폴더", "대상", "종류", "차수", "차수 이름", "날짜", "표적 번호", "XML 파일", "사진 폴더", "상태", "마지막 저장")
 
     fun write(book: SiteBook, zone: ZoneId, min: Int = Pipeline.MIN_TARGETS): String {
         val day = DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(zone)
         val stamp = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(zone)
         val sb = StringBuilder("\uFEFF").append(HEADER.joinToString(",") { q(it) }).append("\r\n")
-        for (o in book.objs.sortedBy { it.code }) for (s in book.sessionsOf(o)) {
+        for (o in book.objs.sortedWith(ObjOrder)) for (s in book.sessionsOf(o)) {
             val tags = book.active(s).map { it.tag }
             val st = book.stage(s, min)
             val row = listOf(
                 o.code, o.name, o.kind.ko, "${s.no}차", s.label, day.format(Instant.ofEpochMilli(s.createdAt)),
                 tags.joinToString(" "), if (tags.isEmpty()) "" else "${Names.objFolder(o)}/${Names.xmlName(o, s, book.site.epsg)}",
-                Names.photoFolder(o, s), st.ko, o.operator, s.xmlSavedAt?.let { stamp.format(Instant.ofEpochMilli(it)) } ?: "",
-                o.oldNames.joinToString(" / "),
+                Names.photoFolder(o, s), st.ko, s.xmlSavedAt?.let { stamp.format(Instant.ofEpochMilli(it)) } ?: "",
             )
             sb.append(row.joinToString(",") { q(it) }).append("\r\n")
         }
@@ -60,7 +59,7 @@ object Handoff {
     fun select(book: SiteBook, scope: HandoffScope, now: Long, zone: ZoneId, min: Int = Pipeline.MIN_TARGETS): List<Pair<Obj, Session>> {
         val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
         fun isToday(t: Long?) = t != null && Instant.ofEpochMilli(t).atZone(zone).toLocalDate() == today
-        return book.objs.sortedBy { it.code }.flatMap { o -> book.sessionsOf(o).map { o to it } }.filter { (_, s) ->
+        return book.objs.sortedWith(ObjOrder).flatMap { o -> book.sessionsOf(o).map { o to it } }.filter { (_, s) ->
             val has = book.active(s).isNotEmpty()
             when (scope) {
                 HandoffScope.PENDING -> book.stage(s, min) == Stage.HANDOFF
@@ -72,12 +71,12 @@ object Handoff {
 
     fun count(book: SiteBook, scope: HandoffScope, now: Long, zone: ZoneId, min: Int = Pipeline.MIN_TARGETS) = select(book, scope, now, zone, min).size
 
-    fun zipName(site: Site, scope: HandoffScope, now: Long, zone: ZoneId, operator: String): String {
+    fun zipName(site: Site, scope: HandoffScope, now: Long, zone: ZoneId): String {
         val d = DateTimeFormatter.ofPattern("yyyyMMdd").withZone(zone).format(Instant.ofEpochMilli(now))
-        return "${Names.safe(site.name)}_${scope.fileWord}_$d" + (if (operator.isNotBlank()) "_$operator" else "") + ".zip"
+        return "${Names.safe(site.name)}_${scope.fileWord}_$d.zip"
     }
 
-    fun plan(book: SiteBook, scope: HandoffScope, now: Long, zone: ZoneId, operator: String, min: Int = Pipeline.MIN_TARGETS): HandoffPlan {
+    fun plan(book: SiteBook, scope: HandoffScope, now: Long, zone: ZoneId, min: Int = Pipeline.MIN_TARGETS): HandoffPlan {
         val sel = select(book, scope, now, zone, min)
         val entries = ArrayList<Pair<String, String>>()
         entries += Names.listCsvName(book.site) to ListCsv.write(book, zone, min)
@@ -89,6 +88,9 @@ object Handoff {
         }
         val mark = sel.filter { (_, s) -> book.stage(s, min).let { it == Stage.HANDOFF || it == Stage.DONE } }.map { it.second.id }
         val noPhoto = sel.filter { (_, s) -> s.photoDoneAt == null }.map { (o, s) -> Names.photoFolder(o, s) }
-        return HandoffPlan(zipName(book.site, scope, now, zone, operator), entries, sel.map { it.second.id }, mark, noPhoto)
+        return HandoffPlan(zipName(book.site, scope, now, zone), entries, sel.map { it.second.id }, mark, noPhoto)
     }
 }
+
+/** 목록 순서: 호수 대상(종류 순, 번호 순) 다음 토층(글자 순) — 폴더 이름 정렬과 같다 */
+val ObjOrder: Comparator<Obj> = compareBy<Obj>({ it.kind.lettered }, { if (it.kind.lettered) 0 else it.no }, { it.kind.ordinal }, { it.no })

@@ -4,18 +4,18 @@ import android.content.Context
 import androidx.room.*
 import kr.archsurvey.gcp.model.*
 
-@Entity(tableName = "site", indices = [Index(value = ["code"], unique = true)])
+/** 0.1.1: 약호 없앰. 이름은 한 폰 안에서 하나뿐(폴더 이름) */
+@Entity(tableName = "site", indices = [Index(value = ["name"], unique = true)])
 data class SiteRow(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val name: String, val code: String, val epsg: Int, val createdAt: Long,
+    val name: String, val epsg: Int, val createdAt: Long,
 )
 
-/** 대상. [deleted] 는 쓰지 않음(0.1.0 에는 지우기 없음) — 번호를 다시 쓰지 않으려고 칸만 둔다 */
-@Entity(tableName = "obj", indices = [Index(value = ["siteId"]), Index(value = ["code"], unique = true)])
+/** 대상 = 종류 + 호수. 한 유적에서 (종류, 호수) 하나뿐. [deleted] 는 쓰지 않음(지우기 없음) — 번호를 다시 쓰지 않으려고 칸만 둔다 */
+@Entity(tableName = "obj", indices = [Index(value = ["siteId"]), Index(value = ["siteId", "kind", "no"], unique = true)])
 data class ObjRow(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val siteId: Long, val seq: Int, val code: String, val kind: String, val name: String,
-    val oldNames: String = "", val operator: String = "", val createdAt: Long, val deleted: Boolean = false,
+    val siteId: Long, val kind: String, val no: Int, val createdAt: Long, val deleted: Boolean = false,
 )
 
 @Entity(tableName = "session", indices = [Index(value = ["objId"])])
@@ -40,7 +40,7 @@ interface GcpDao {
     @Insert suspend fun insertSite(r: SiteRow): Long
 
     @Query("SELECT * FROM obj WHERE siteId = :siteId AND deleted = 0") suspend fun objs(siteId: Long): List<ObjRow>
-    @Query("SELECT seq FROM obj WHERE siteId = :siteId AND operator = :op") suspend fun seqs(siteId: Long, op: String): List<Int>
+    @Query("SELECT no FROM obj WHERE siteId = :siteId AND kind = :kind") suspend fun usedNos(siteId: Long, kind: String): List<Int>
     @Query("SELECT * FROM obj WHERE id = :id") suspend fun obj(id: Long): ObjRow?
     @Insert suspend fun insertObj(r: ObjRow): Long
     @Update suspend fun updateObj(r: ObjRow)
@@ -60,21 +60,22 @@ interface GcpDao {
     suspend fun replaceShot(r: ShotRow): Long { deactivate(r.sessionId, r.tag); return insertShot(r) }
 }
 
-@Database(entities = [SiteRow::class, ObjRow::class, SessionRow::class, ShotRow::class], version = 1, exportSchema = true)
+@Database(entities = [SiteRow::class, ObjRow::class, SessionRow::class, ShotRow::class], version = 2, exportSchema = true)
 abstract class GcpDb : RoomDatabase() {
     abstract fun dao(): GcpDao
 
     companion object {
         @Volatile private var inst: GcpDb? = null
         fun get(c: Context): GcpDb = inst ?: synchronized(this) {
-            inst ?: Room.databaseBuilder(c.applicationContext, GcpDb::class.java, "gcp.db").build().also { inst = it }
+            inst ?: // 0.1.0 은 폰에 설치된 적 없음(사용자 기기 확인 전) → 1→2 는 새로 만든다
+                Room.databaseBuilder(c.applicationContext, GcpDb::class.java, "gcp.db").fallbackToDestructiveMigrationFrom(1).build().also { inst = it }
         }
     }
 }
 
 // ---- 장부 행 ↔ 모델 ----
-fun SiteRow.model() = Site(id, name, code, epsg, createdAt)
-fun ObjRow.model() = Obj(id, siteId, seq, code, ObjKind.of(kind), name, oldNames.split('\n').filter { it.isNotBlank() }, createdAt, operator)
+fun SiteRow.model() = Site(id, name, epsg, createdAt)
+fun ObjRow.model() = Obj(id, siteId, ObjKind.of(kind), no, createdAt)
 fun SessionRow.model() = Session(id, objId, no, label, slots.split(',').mapNotNull { it.trim().toIntOrNull() }, createdAt, photoDoneAt, deliveredAt, changedAt, xmlSavedAt)
 fun ShotRow.model() = Shot(id, sessionId, tag, e, n, h, lat, lon, sigmaH, sigmaU, epochs, measuredAt, active, poleM, apcM, device, note)
 fun Session.row() = SessionRow(id, objId, no, label, slots.joinToString(","), createdAt, photoDoneAt, deliveredAt, changedAt, xmlSavedAt)
