@@ -1,0 +1,100 @@
+package kr.archsurvey.engine
+
+import kr.archsurvey.App
+import kr.archsurvey.bt.BtCompat
+import kr.archsurvey.device.DeviceProfile
+import kr.archsurvey.ntrip.MountInfo
+import kr.archsurvey.ntrip.NtripConfig
+import kr.archsurvey.ui.ConnectionPlatform
+import kr.archsurvey.ui.NtripForm
+import kr.archsurvey.ui.SavedConnection
+
+/** [ConnectionPlatform] 의 Android 구현. 권한 팝업은 Activity 가 [permissionRequester] 로 채워 준다. */
+class AndroidConnectionPlatform(private val app: App) : ConnectionPlatform {
+    /** (요청할 권한들, 결과 콜백). MainActivity 가 설정 */
+    var permissionRequester: ((Array<String>, (Boolean) -> Unit) -> Unit)? = null
+
+    override val link get() = app.engine.link
+    override val ntrip get() = app.engine.ntrip
+
+    override fun bondedDevices() = BtCompat.bonded(app).map { it.name to it.address }
+    override fun hasBluetoothPermission() = BtCompat.hasConnectPermission(app) && BtCompat.hasScanPermission(app)
+    override fun requestBluetoothPermission(onResult: (Boolean) -> Unit) {
+        val perms = (BtCompat.runtimePermissions().toList() + listOfNotNull(BtCompat.notificationPermission())).toTypedArray()
+        val r = permissionRequester
+        if (r == null) onResult(hasBluetoothPermission()) else r(perms) { onResult(hasBluetoothPermission()) }
+    }
+    override fun bluetoothEnabled() = BtCompat.isEnabled(app)
+    override fun openBluetoothSettings() = BtCompat.openBluetoothSettings(app)
+    override fun openAppSettings() = BtCompat.openAppSettings(app)
+
+    override fun startReal(profile: DeviceProfile, address: String, ntrip: NtripConfig, ntripEnabled: Boolean) {
+        val s = app.settings
+        s.deviceId = profile.id; s.setBtAddress(profile.id, address)
+        // 0.1.32: 보정 켜짐은 이번 연결에만 넘긴다(자동 연결에서 VRS 입력이 모자라 이번만 끈 것을 저장값으로 남기지 않음). 저장은 save()
+        s.saveNtrip(ntrip)
+        app.engine.setNtripOptions(s.ntripSendGga, s.ntripAutoRetry)
+        SurveyConnectionService.start(app, profile.id, address, ntripEnabled)
+    }
+    override fun stopReal() { SurveyConnectionService.stop(app); app.engine.stop() }
+
+    override fun loadSaved(): SavedConnection {
+        val s = app.settings
+        val id = s.deviceId
+        return SavedConnection(id, id?.let { s.btAddressFor(it) }, NtripForm.from(s.loadNtrip(), s.ntripEnabled), id?.let { s.preChecked(it) } ?: false)
+    }
+    override fun save(s: SavedConnection) {
+        val st = app.settings
+        s.deviceId?.let { st.deviceId = it; st.setBtAddress(it, s.address); st.setPreChecked(it, s.preChecked) }
+        st.saveNtrip(s.ntrip.toConfig()); st.ntripEnabled = s.ntrip.enabled
+        s.deviceId?.let { st.saveNtripFor(it, s.ntrip.toConfig(), s.ntrip.enabled) } // 0.1.32 기기별 보정
+    }
+
+    // 0.1.32 수신기별 기억·자동 인식
+    override fun savedFor(deviceId: String): SavedConnection? {
+        val s = app.settings
+        val addr = s.btAddressFor(deviceId)
+        val nt = s.loadNtripFor(deviceId)
+        if (addr == null && nt == null) return null
+        val form = nt?.let { (c, on) -> NtripForm.from(c, on) } ?: NtripForm(host = "")
+        return SavedConnection(deviceId, addr, form, s.preChecked(deviceId))
+    }
+    override fun deviceTypeFor(address: String): String? = app.settings.deviceTypeFor(address)
+    override fun markLinkOk(address: String, deviceId: String) {
+        app.settings.setDeviceTypeFor(address, deviceId); app.settings.setLinkOkAt(address, System.currentTimeMillis())
+    }
+    override fun receiverSignature(): String? = app.engine.receiverSignature.value
+
+    override suspend fun fetchMounts(cfg: NtripConfig): List<MountInfo> = app.engine.fetchMountPoints(cfg)
+    override fun hostProfile(host: String): NtripForm? {
+        val s = app.settings
+        val (u, port, mount) = s.hostProfile(host) ?: return null
+        return NtripForm(host = host.trim(), port = port.toString(), mount = mount, user = u, password = s.hostPassword(host))
+    }
+    override fun markSuccess(form: NtripForm) {
+        val s = app.settings
+        s.lastConnectOkAt = System.currentTimeMillis()
+        if (form.enabled) s.saveHostProfile(form.toConfig())
+    }
+    override fun hadSuccess() = app.settings.lastConnectOkAt > 0L
+    override fun ntripOptions() = app.settings.ntripSendGga to app.settings.ntripAutoRetry
+    override fun applyNtripOptions(sendGga: Boolean, autoRetry: Boolean) {
+        app.settings.ntripSendGga = sendGga; app.settings.ntripAutoRetry = autoRetry
+        app.engine.setNtripOptions(sendGga, autoRetry)
+    }
+    override fun diagnostics(): String = diagnosticsFrom(kr.archsurvey.diag.CrashLog.read())
+    override fun retryNtrip() = app.engine.retryNtripNow()
+    override var autoConnect: Boolean
+        get() = app.settings.autoConnect
+        set(v) { app.settings.autoConnect = v }
+    override var correctionUserSet: Boolean
+        get() = app.settings.correctionUserSet
+        set(v) { app.settings.correctionUserSet = v }
+}
+
+/** 오류 기록에서 연결 진단(NMEA 활성화·블루투스·보정) 블록만 최근 4건 골라 짧게 돌려준다 */
+internal fun diagnosticsFrom(log: String): String =
+    log.split(Regex("(?m)^(?==== )")).filter { b ->
+        listOf("NMEA", "블루투스", "보정", "연결", "진단", "BT-130", "치유", "PASH").any { it in b }
+    }.takeLast(6).joinToString("\n") { it.trim().lines().take(16).joinToString("\n") }.takeLast(5000)
+        .let { kr.archsurvey.diag.CrashLog.redact(it) } // 0.1.18: 진단 화면에도 비밀번호가 나오지 않게
