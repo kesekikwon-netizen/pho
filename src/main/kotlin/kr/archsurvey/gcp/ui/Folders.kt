@@ -3,6 +3,7 @@ package kr.archsurvey.gcp.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -227,73 +228,70 @@ private fun StepRow(no: Int, title: String, sub: String, done: Boolean, now: Boo
 
 // =============================== 표적 재기 ===============================
 @Composable
-fun TargetsScreen(c: GcpController) {
-    val b = c.book ?: return; val o = c.obj ?: return; val s = c.session ?: return
+fun TargetsScreen(c: GcpController, env: GcpEnv = GcpEnv()) {
+    val o = c.obj ?: return; val s = c.session ?: return
     c.poleTick
+    val g by c.source.gnss.collectAsState()
+    LaunchedEffect(g.gga) { c.onFix() }
+    LaunchedEffect(o.id, s.id) { c.focusObj() }
     val shots = c.activeShots()
     val locked = c.locked()
-    val next = if (locked) null else c.nextTag()
-    Box(Modifier.fillMaxSize().background(G.bg).testTag("targets")) {
-        Column(Modifier.fillMaxSize()) {
-            GTopBar(o.name, { c.back() }, c)
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
-                Text("표적 재기", style = Ty.label.copy(fontSize = 30.sp, fontWeight = FontWeight.Black), color = G.ink, modifier = Modifier.padding(top = 6.dp))
-                Text("${s.no}차 · ${s.label}" + (if (locked) " · 앞 차수 · 보기만" else ""), style = Ty.label.copy(fontSize = 14.sp), color = if (locked) G.warn else G.sub)
-                Text(when {
-                    shots.size >= Pipeline.MIN_TARGETS -> "${shots.size}개 재었어요. ${Pipeline.MIN_TARGETS}개부터 사진으로 넘어갈 수 있어요."
-                    else -> "${shots.size}개 재었어요. ${Pipeline.MIN_TARGETS}개부터 사진으로 넘어가요. 누르면 그 번호를 재요 · 길게 누르면 다시 재기/번호 바꾸기."
-                }, style = Ty.label.copy(fontSize = 14.sp), color = G.ink, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp).testTag("targets_note"))
-                Box(Modifier.fillMaxWidth().height(2.dp).background(G.ink))
-                s.slots.forEachIndexed { i, tag ->
-                    val shot = c.shotOf(tag)
-                    val isNext = tag == next && shot == null
-                    Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).background(if (isNext) G.sel else G.bg)
-                        .hCombinedClickable(onLongClick = { c.onTargetLong(i) }) { c.onTargetTap(tag) }
-                        .semantics { contentDescription = "Target $tag" + if (shot != null) " · 잰 것, 다시 재려면 길게" else " · 누르면 바로 측점, 길게 = 번호 바꾸기" }
-                        .padding(horizontal = 6.dp, vertical = 8.dp).testTag("qtag_$tag"), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)).background(if (shot != null) G.ink else G.white).border(1.5.dp, if (shot != null || isNext) G.ink else G.lineStrong, RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
-                            Text("$tag", style = Ty.ledger.copy(fontSize = if (tag >= 100) 16.sp else 20.sp), color = if (shot != null) G.white else G.ink)
-                        }
-                        Column(Modifier.weight(1f).padding(start = 14.dp)) {
-                            Text("Target #$tag", style = Ty.label.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold), color = G.ink)
-                            if (shot != null) Text("X ${String.format(Locale.US, "%.2f", shot.n)}  Y ${String.format(Locale.US, "%.2f", shot.e)}", style = Ty.coord.copy(fontSize = 11.sp), color = G.sub, maxLines = 1)
-                        }
-                        when {
-                            shot != null -> Text("✓ " + (shot.sigmaH?.let { String.format(Locale.US, "%.1f cm", it * 100) } ?: "σ 없음"), style = Ty.coord.copy(fontSize = 15.sp), color = G.ok, modifier = Modifier.testTag("qtag_done_$tag"))
-                            isNext -> Text("지금 잴 표적", style = Ty.label.copy(fontSize = 14.sp, fontWeight = FontWeight.Bold), color = G.ink)
-                            else -> Text("아직", style = Ty.label.copy(fontSize = 14.sp), color = G.sub)
-                        }
+    val next = if (locked || c.measuringTag != null) null else c.nextTag()
+    Column(Modifier.fillMaxSize().background(G.bg).testTag("targets")) {
+        GTopBar("${o.name} · ${s.no}차", { c.back() }, c)
+        // 0.1.7: 위성 + 지적 지도를 크게(잰 표적 · 내 위치). 재는 중은 지도 위 작은 띠
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            MapArea(c, env, Modifier.fillMaxSize())
+            if (c.measuringTag != null) MeasuringChip(c, Modifier.align(Alignment.TopCenter).padding(top = 10.dp, start = 76.dp, end = 76.dp))
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(G.line))
+        Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("표적 ${shots.size}/${s.slots.size}" + (if (shots.size < Pipeline.MIN_TARGETS) " · ${Pipeline.MIN_TARGETS}개부터 사진" else " · 사진 가능") + (if (locked) " · 앞 차수 보기만" else ""),
+                style = Ty.label.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold), color = if (locked) G.warn else G.ink, modifier = Modifier.weight(1f).testTag("targets_note"))
+            Text("폴 ${String.format(Locale.US, "%.1f", c.poleM())} m", style = Ty.coord.copy(fontSize = 13.sp), color = G.ink,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(G.chip).hClickable(onClickLabel = "폴 높이") { c.poleOpen = true }.padding(horizontal = 8.dp, vertical = 6.dp).testTag("pole_chip"))
+            Spacer(Modifier.width(6.dp))
+            Text("${c.prefs.epochs}회", style = Ty.coord.copy(fontSize = 13.sp), color = G.ink,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(G.chip).hClickable(onClickLabel = "평균 횟수") { val l = GcpController.EPOCH_CHOICES; c.setEpochs(l[(l.indexOf(c.prefs.epochs) + 1).mod(l.size)]) }.padding(horizontal = 8.dp, vertical = 6.dp).testTag("epochs_chip"))
+        }
+        // 표적 한 줄(누르면 그 번호 재기 · 길게 = 다시 재기/번호 바꾸기)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp).testTag("qtag_row"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            s.slots.forEachIndexed { i, tag ->
+                val shot = c.shotOf(tag)
+                val now = c.measuringTag == tag
+                val isNext = tag == next && shot == null
+                Column(Modifier.width(68.dp).height(60.dp).clip(RoundedCornerShape(12.dp))
+                    .background(when { now -> G.dot; shot != null -> G.ink; isNext -> G.sel; else -> G.white })
+                    .border(if (isNext) 2.dp else 1.dp, if (isNext || shot != null) G.ink else G.lineStrong, RoundedCornerShape(12.dp))
+                    .hCombinedClickable(onLongClick = { c.onTargetLong(i) }) { c.onTargetTap(tag) }
+                    .semantics { contentDescription = "Target $tag" + if (shot != null) " · 잰 것, 다시 재려면 길게" else " · 누르면 바로 측점, 길게 = 번호 바꾸기" }
+                    .testTag("qtag_$tag"), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    Text("$tag", style = Ty.ledger.copy(fontSize = if (tag >= 100) 18.sp else 22.sp), color = if (shot != null || now) G.white else G.ink)
+                    when {
+                        now -> Text("재는 중", style = Ty.small.copy(fontSize = 10.sp), color = G.white)
+                        shot != null -> Text("✓ " + (shot.sigmaH?.let { String.format(Locale.US, "%.1f", it * 100) } ?: "σ?"), style = Ty.coord.copy(fontSize = 11.sp), color = G.white, modifier = Modifier.testTag("qtag_done_$tag"))
+                        isNext -> Text("다음", style = Ty.small.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold), color = G.ink)
                     }
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(G.line))
-                }
-                if (!locked) Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).hClickable(onClickLabel = "표적 더하기") { c.openAddSlot() }.padding(horizontal = 6.dp).testTag("add_slot"), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)).border(1.5.dp, G.lineStrong, RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) { Text("+", style = Ty.title.copy(fontSize = 24.sp), color = G.ink) }
-                    Text("표적 더하기", style = Ty.label.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold), color = G.ink, modifier = Modifier.padding(start = 14.dp))
-                }
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    InfoBox("폴 높이", String.format(Locale.US, "%.1f m", c.poleM()), "pole_chip", Modifier.weight(1f)) { c.poleOpen = true }
-                    InfoBox("평균", "${c.prefs.epochs}회", "epochs_chip", Modifier.weight(1f)) {
-                        val l = GcpController.EPOCH_CHOICES; c.setEpochs(l[(l.indexOf(c.prefs.epochs) + 1).mod(l.size)])
-                    }
-                }
-                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).hClickable(onClickLabel = "지도") { c.go(Screen.MAP) }.testTag("targets_map"), verticalAlignment = Alignment.CenterVertically) {
-                    Text("지도에서 표적 자리 보기", style = Ty.label.copy(fontSize = 15.sp, fontWeight = FontWeight.Bold), color = G.ink, modifier = Modifier.weight(1f))
-                    GlyphIcon(Glyph.CHEVRON_RIGHT, G.ink, 18.dp)
                 }
             }
-            Box(Modifier.fillMaxWidth().height(1.dp).background(G.line))
-            Box(Modifier.padding(14.dp)) { MeasureBig(c) }
+            if (!locked) Box(Modifier.size(width = 52.dp, height = 60.dp).clip(RoundedCornerShape(12.dp)).border(1.dp, G.lineStrong, RoundedCornerShape(12.dp))
+                .hClickable(onClickLabel = "표적 더하기") { c.openAddSlot() }.testTag("add_slot"), contentAlignment = Alignment.Center) { Text("+", style = Ty.title.copy(fontSize = 24.sp), color = G.ink) }
         }
-        if (c.measuringTag != null) MeasuringOverlay(c)
+        Box(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) { MeasureBig(c) }
     }
 }
 
+/** 지도 위 작은 진행 띠(화면을 가리지 않음): 표적 N · 7/10 · 막대 · 멈춤 */
 @Composable
-private fun InfoBox(label: String, value: String, tag: String, modifier: Modifier, onClick: () -> Unit) {
-    Column(modifier.clip(RoundedCornerShape(14.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(14.dp)).hClickable(onClickLabel = label) { onClick() }.padding(14.dp).testTag(tag)) {
-        Text(label, style = Ty.small.copy(fontSize = 12.sp), color = G.sub)
-        Text(value, style = Ty.ledger.copy(fontSize = 22.sp), color = G.ink)
+fun MeasuringChip(c: GcpController, modifier: Modifier = Modifier) {
+    val total = c.prefs.epochs
+    val done = (c.progress.coerceIn(0f, 1f) * total).toInt().coerceIn(0, total)
+    Column(modifier.clip(RoundedCornerShape(14.dp)).background(G.dark.copy(alpha = 0.92f)).padding(horizontal = 14.dp, vertical = 8.dp).testTag("measuring"), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("표적 ${c.measuringTag} · $done / $total · 폴 고정", style = Ty.label.copy(fontSize = 14.sp, fontWeight = FontWeight.Bold), color = G.onDark, maxLines = 1, modifier = Modifier.testTag("measuring_count"))
+        Spacer(Modifier.height(6.dp))
+        Box(Modifier.width(180.dp).height(5.dp).clip(RoundedCornerShape(3.dp)).background(G.onDark.copy(alpha = 0.3f))) {
+            Box(Modifier.fillMaxWidth(c.progress.coerceIn(0f, 1f)).fillMaxHeight().background(G.onDark))
+        }
     }
 }
 
@@ -320,36 +318,6 @@ fun MeasureBig(c: GcpController) {
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text(label, style = Ty.label.copy(fontSize = 21.sp, fontWeight = FontWeight.Bold), color = G.onDark, maxLines = 1, modifier = Modifier.testTag("measure_label"))
         Text(sub, style = Ty.small.copy(fontSize = 12.sp), color = G.onDark, maxLines = 1, modifier = Modifier.testTag("measure_sub"))
-    }
-}
-
-/** 재는 중(시안 「7 / 10 · 폴을 움직이지 마세요」). FIX 가 끊기면 측정기가 멈추고 이유를 알린다(저장 안 함) */
-@Composable
-fun MeasuringOverlay(c: GcpController) {
-    val o = c.obj
-    val p = rememberPill(c.source)
-    val total = c.prefs.epochs
-    val done = (c.progress.coerceIn(0f, 1f) * total).toInt().coerceIn(0, total)
-    Column(Modifier.fillMaxSize().background(G.bg).hClickable {}.testTag("measuring"), horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("${o?.name ?: ""} · 표적 ${c.measuringTag}", style = Ty.label.copy(fontSize = 17.sp, fontWeight = FontWeight.Bold), color = G.ink, modifier = Modifier.weight(1f))
-            GcpPill(c.source) {}
-        }
-        Spacer(Modifier.weight(0.6f))
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text("$done", style = Ty.ledger.copy(fontSize = 96.sp), color = G.ink, modifier = Modifier.testTag("measuring_count"))
-            Text(" / $total", style = Ty.ledger.copy(fontSize = 30.sp), color = G.sub, modifier = Modifier.padding(bottom = 18.dp))
-        }
-        Box(Modifier.padding(horizontal = 40.dp).fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(G.line)) {
-            Box(Modifier.fillMaxWidth(c.progress.coerceIn(0f, 1f)).fillMaxHeight().background(G.ink))
-        }
-        Spacer(Modifier.height(28.dp))
-        Text("폴을 움직이지\n마세요", style = Ty.label.copy(fontSize = 34.sp, lineHeight = 42.sp, fontWeight = FontWeight.Black), color = G.ink, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(14.dp))
-        Text("FIX 값이 ${total}번 모이면 저장해요.\nFIX 가 끊기면 저장하지 않고 멈춰요.", style = Ty.label.copy(fontSize = 15.sp), color = G.sub, textAlign = TextAlign.Center)
-        p.sub?.takeIf { p.tone == PTone.FIXED }?.let { Text("지금 정밀도 ${it.removePrefix("±")} cm", style = Ty.coord.copy(fontSize = 14.sp), color = G.ok, modifier = Modifier.padding(top = 10.dp)) }
-        Spacer(Modifier.weight(1f))
-        Btn("멈추기", "measure_stop", Modifier.padding(16.dp).fillMaxWidth(), primary = false, height = 68.dp) { c.cancelMeasure() }
     }
 }
 

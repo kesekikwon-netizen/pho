@@ -43,10 +43,10 @@ fun SiteMapScreen(c: GcpController, env: GcpEnv) {
         GTopBar(b.site.name + " · 지도", { c.back() }, c, onMenu = { c.menuOpen = true })
         Box(Modifier.weight(1f)) {
             MapArea(c, env, Modifier.fillMaxSize())
+            if (c.measuringTag != null) MeasuringChip(c, Modifier.align(Alignment.TopCenter).padding(top = 10.dp, start = 76.dp, end = 76.dp))
         }
         ControlArea(c)
     }
-    if (c.measuringTag != null) MeasuringOverlay(c)
 }
 
 /** 지도에 그릴 것: 대상마다 지금 차수 표적(검은 표적 모양 + #번호) · 대상 둘레 점선 + 이름 · 내 위치 */

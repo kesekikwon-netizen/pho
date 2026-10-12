@@ -173,7 +173,7 @@ fun GcpRoot(c: GcpController, env: GcpEnv) {
                 Screen.SITES -> SitesScreen(c)
                 Screen.OBJECTS -> ObjectsScreen(c)
                 Screen.OBJ -> ObjScreen(c)
-                Screen.TARGETS -> TargetsScreen(c)
+                Screen.TARGETS -> TargetsScreen(c, env)
                 Screen.MAP -> SiteMapScreen(c, env)
                 Screen.ID_CARD -> IdCardScreen(c)
                 Screen.SETTINGS -> SettingsScreen(c, env)

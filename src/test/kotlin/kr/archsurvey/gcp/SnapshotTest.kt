@@ -148,10 +148,18 @@ class SnapshotTest {
         rule.mainClock.advanceTimeBy(1500); rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("FIX 기다리는 중"); shot("m06b-targets-float-blocked")
         rule.runOnIdle { r.prefs.epochs = 10; r.gnss.emitAt(194890.0, 573975.0); c.onTargetTap(4) }
         rule.runOnIdle { repeat(7) { r.gnss.emitAt(194890.0, 573975.0) } }
-        rule.onNodeWithTag("measuring").assertIsDisplayed(); shot("m07-measuring")
-        rule.onNodeWithTag("measure_stop").performClick(); rule.onNodeWithTag("targets").assertIsDisplayed()
+        rule.onNodeWithTag("measuring").assertIsDisplayed(); rule.onNodeWithTag("map_area").assertIsDisplayed()   // 0.1.7: 지도 위 작은 띠 · 지도 그대로
+        rule.onNodeWithTag("measuring_count", useUnmergedTree = true).assertTextContains("/ 10", substring = true); shot("m07-measuring-on-map")
+        rule.runOnIdle { c.cancelMeasure() }; rule.onNodeWithTag("targets").assertIsDisplayed()
         rule.runOnIdle { c.onTargetLong(0) }; shot("m06c-remeasure-confirm")
-        rule.runOnIdle { c.ui.answer(false); c.openAddSlot() }; shot("m06d-add-target-number")
+        rule.runOnIdle { c.ui.answer(false) }
+        // 0.1.7: 저장 뒤 화면·창 없음, 다음 표적이 바로 골라짐
+        rule.runOnIdle { r.measure(4, 194953.0, 574012.0) }
+        rule.onNodeWithTag("targets").assertIsDisplayed(); rule.onNodeWithTag("map_area").assertIsDisplayed()
+        assertNull(c.ui.confirm); assertEquals(Screen.TARGETS, c.screen)
+        rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("표적 5 재기")
+        shot("m06e-after-save-next-target", keepToast = true)
+        rule.runOnIdle { c.openAddSlot() }; shot("m06d-add-target-number")
     }
 
     @Test fun s08_id_card_with_qr() {

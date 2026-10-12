@@ -473,7 +473,7 @@ class GcpController(
             val out = writeFiles(s.id)
             onFeedback?.invoke(FeedbackEvent.SURVEY_OK)
             val left = (session?.slots ?: emptyList()).count { shotOf(it) == null }
-            if (out?.ok == true) ui.ok("Target #$tag 저장 · XML 저장됨" + if (left > 0) " · 남은 표적 $left" else "")
+            if (out?.ok == true) ui.ok("#$tag 저장 · XML" + (if (left > 0) " · 다음 #${nextTag()}" else " · ${activeShots().size}개 · 더 재도 돼요"))   // 0.1.7: 화면 그대로 · 다음 표적 자동
             else ui.fail("Target #$tag 은(는) 장부에 저장됐지만 XML 을 쓰지 못했어요 — ${out?.error ?: "알 수 없음"}")
         }
     }
