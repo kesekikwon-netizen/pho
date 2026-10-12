@@ -102,7 +102,10 @@ object Fonts {
     val sans = FontFamily(
         Font(kr.archsurvey.R.font.noto_sans_kr_light, FontWeight.Light),
         Font(kr.archsurvey.R.font.noto_sans_kr_regular, FontWeight.Normal),
-        Font(kr.archsurvey.R.font.noto_sans_kr_regular, FontWeight.Medium),
+        // 0.1.43 사용자 시안(10-12): 제목·단추 굵게 — Noto Sans KR 500/700 (같은 KS X 1001 글자만, OFL)
+        Font(kr.archsurvey.R.font.noto_sans_kr_medium, FontWeight.Medium),
+        Font(kr.archsurvey.R.font.noto_sans_kr_bold, FontWeight.SemiBold),
+        Font(kr.archsurvey.R.font.noto_sans_kr_bold, FontWeight.Bold),
     )
     /** 0.1.35 숫자: IBM Plex Mono 400/500 (가는 글씨는 JetBrains Mono Light 유지) */
     val mono = FontFamily(

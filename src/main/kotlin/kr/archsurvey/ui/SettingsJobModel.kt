@@ -185,7 +185,7 @@ class JobController(
     val effectiveName: String get() = if (nameManual) newName.trim() else builtName
     /** 유적 칩: 지금 작업의 유적 + 최근 유적(위치→행정동 이름은 이 앱에 주소 API 가 없어 아직 못 함 — 마지막 쓴 것으로 대신) */
     val siteChips: List<String> get() = (listOfNotNull(currentSite) + groups).distinct().take(6)
-    private val currentSite: String? get() = currentFolder?.removePrefix(kr.archsurvey.job.JobFolders.PUBLIC_PARENT + "/")?.let { kr.archsurvey.job.JobFolders.split(it).first }
+    val currentSite: String? get() = currentFolder?.removePrefix(kr.archsurvey.job.JobFolders.PUBLIC_PARENT + "/")?.let { kr.archsurvey.job.JobFolders.split(it).first }
     fun pickSite(sv: String?) { newGroupTyping = false; newSite = sv.orEmpty(); newNo = kr.archsurvey.job.NewJobName.nextNo(newSite, newStage, list.map { it.name }) }
     fun pickStage(st: kr.archsurvey.job.SurveyStage) { newStage = st; newNo = kr.archsurvey.job.NewJobName.nextNo(newSite, st, list.map { it.name }) }
     private var noTouched = false

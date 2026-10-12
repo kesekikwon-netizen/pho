@@ -50,110 +50,13 @@ private fun LedgerRow(cells: List<Triple<String, String, String>>, tagPrefix: St
     }
 }
 
-/** ① 오늘 준비: 작업명(명조) · 장부(마지막 점/폴/정밀도) · 측량 시작 · 작업 · 5단계 · 바로 가기 4 */
-@Composable
-fun HomeToday(c: SurveyController) {
-    val t = T
-    rememberTick()
-    val d = c.dig
-    val steps = d.prepSteps(ntripNow())
-    val done = kr.archsurvey.dig.TodayPrep.doneCount(steps)
-    val last = c.points.lastOrNull()
-    Column(Modifier.fillMaxSize().background(t.bg).testTag("home_screen")) {
-        Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("발굴 측량", style = Ty.serifHead.copy(fontSize = 20.sp), color = t.ink, modifier = Modifier.weight(1f).testTag("home_title"))
-            DigStatusPill(c, Modifier.padding(horizontal = 4.dp))
-            HeaderIcon(Glyph.MENU, "메뉴", "home_settings") { c.drawerOpen = true }
-        }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            // 0.1.39 「새 작업」 한 번에: 홈 맨 위 큰 단추(예전: ≡ → 메뉴 → 새 작업 → … 여러 번)
-            MBtn(Modifier.fillMaxWidth().height(64.dp).testTag("home_new_job"), MKind.PRIMARY, 18.dp, onClick = { c.jobs?.openNew() ?: c.ui.toast("작업 관리를 쓸 수 없어요") }) {
-                Text("+ 새 작업", style = Ty.button.copy(fontSize = 20.sp, fontWeight = FontWeight.Medium), color = t.onPrimary)
-            }
-            Box(Modifier.fillMaxWidth().height(1.5.dp).background(t.ink))
-            Row {
-                Text("이어서 측량", style = Ty.small, color = t.inkSub, modifier = Modifier.weight(1f))
-                last?.let { Text(SimpleDateFormat("M월 d일 HH:mm", Locale.KOREA).format(Date(it.measuredAtMs)) + " 저장", style = Ty.small, color = t.inkSub) }
-            }
-            Text(c.projectName, style = Ty.serifTitle, color = t.ink, maxLines = 2, modifier = Modifier.testTag("home_job"))
-            Text("EPSG:${c.zone.epsg} · 해발 ${c.geoid.shortKo} · ${c.points.size}점 · 유구 ${d.featureOutlines().size}", style = Ty.coord.copy(fontSize = 13.sp), color = t.inkSub, modifier = Modifier.testTag("home_job_info"))
-            // 0.1.38 새 작업 = 새 폴더: 이 작업 자료가 모이는 곳
-            c.jobs?.currentFolder?.let { Text("폴더 · $it", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 2, modifier = Modifier.testTag("home_job_folder")) }
-            LedgerRow(listOf(
-                Triple("마지막 점", last?.name ?: "—", ""),
-                Triple("폴", String.format(Locale.US, "%.1f", c.antenna.inputValueM), "m"),
-                Triple("수평 정밀도", c.gv.status.sigmaHM?.let { String.format(Locale.US, "%.1f", it * 100) } ?: "—", "cm"),
-            ), "home_ledger")
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                MBtn(Modifier.weight(1f).height(64.dp).testTag("home_survey"), MKind.PRIMARY, 18.dp, onClick = { c.goToSurvey() }) {
-                    Text("측량 시작", style = Ty.button.copy(fontSize = 20.sp, fontWeight = FontWeight.Medium), color = t.onPrimary)
-                }
-                MBtn(Modifier.width(110.dp).height(64.dp).testTag("home_job_btn"), MKind.PLAIN, 18.dp, onClick = { c.jobs?.openInfo() ?: c.hub.open(ToolScreen.JOB_INFO) }) { Text("작업", style = Ty.label.copy(fontSize = 16.sp), color = t.ink) }
-            }
-            // 0.1.39 작업 카드: 다른 작업 열기(새 작업은 바로 위 큰 단추 — 같은 단추를 두 번 두지 않음)
-            MBtn(Modifier.fillMaxWidth().height(56.dp).testTag("home_card_open"), MKind.PLAIN, 16.dp, onClick = { c.jobs?.openList() }) { Text("다른 작업 열기", style = Ty.label, color = t.ink) }
-            Box(Modifier.fillMaxWidth().height(1.5.dp).background(t.ink))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("오늘 준비", style = Ty.serifHead, color = t.ink, modifier = Modifier.weight(1f))
-                Text("$done / ${steps.size}", style = Ty.coord.copy(fontSize = 14.sp), color = t.inkSub, modifier = Modifier.testTag("prep_count"))
-            }
-            steps.forEachIndexed { i, s -> PrepRow(c, i, s) }
-            Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.5f)))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Shortcut(Glyph.LIST, "측량한 것", "home_points", Modifier.weight(1f)) { c.homeOpen = false; c.hub.open(ToolScreen.FEATURES) }
-                Shortcut(Glyph.GRID, "구역·그리드", "home_areas", Modifier.weight(1f)) { c.homeOpen = false; c.hub.open(ToolScreen.AREAS) }
-                Shortcut(Glyph.SHARE, "내보내기", "home_export", Modifier.weight(1f)) { c.exporter?.openScreen() }
-                Shortcut(Glyph.INFO, "설정", "home_settings2", Modifier.weight(1f)) { c.hub.open(ToolScreen.SETTINGS) }
-            }
-            Spacer(Modifier.height(12.dp))
-        }
-    }
-}
-
-@Composable
-private fun PrepRow(c: SurveyController, i: Int, s: kr.archsurvey.dig.PrepStep) {
-    val t = T
-    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("prep_${s.id}"), verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier.size(28.dp).clip(CircleShape).background(if (s.state == StepState.DONE) t.raised else t.bg)
-                .border(if (s.state == StepState.TODO) 1.dp else 1.8.dp, when (s.state) { StepState.DONE -> t.ink; StepState.NEXT -> t.primary; StepState.TODO -> t.outline }, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            when (s.state) {
-                StepState.DONE -> GlyphIcon(Glyph.CHECK, t.ink, 16.dp)
-                StepState.NEXT -> Box(Modifier.size(10.dp).clip(CircleShape).background(t.primary))
-                StepState.TODO -> Text("${i + 1}", style = Ty.small, color = t.inkSub)
-            }
-        }
-        Column(Modifier.weight(1f).padding(start = 12.dp)) {
-            Text(s.title, style = Ty.label.copy(fontSize = 16.sp, fontWeight = if (s.state == StepState.NEXT) FontWeight.Medium else FontWeight.Normal), color = if (s.state == StepState.NEXT) t.accentText else t.ink)
-            Text(s.sub, style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 2, modifier = Modifier.testTag("prep_${s.id}_sub"))
-        }
-        s.action?.let { a ->
-            MBtn(Modifier.height(48.dp).widthIn(min = 72.dp).testTag("prep_${s.id}_act"), MKind.PLAIN, 14.dp, onClick = { prepAction(c, s.id) }) {
-                Text(a, style = Ty.label, color = t.ink, modifier = Modifier.padding(horizontal = 12.dp))
-            }
-        }
-    }
-}
-
-private fun prepAction(c: SurveyController, id: String) {
+internal fun prepAction(c: SurveyController, id: String) {
     when (id) {
         "receiver" -> c.connection?.openScreen()
         "vrs" -> c.connection?.openVrs()
         "pole" -> c.dig.confirmPole()
         "crs" -> c.hub.open(ToolScreen.JOB_INFO)
         "bm" -> { c.dig.select(DigKind.BM); c.goToSurvey() }
-    }
-}
-
-@Composable
-private fun Shortcut(g: Glyph, label: String, tag: String, modifier: Modifier, onClick: () -> Unit) {
-    val t = T
-    Column(modifier.heightIn(min = 76.dp).clip(RoundedCornerShape(14.dp)).hClickable(onClick = onClick).padding(6.dp).testTag(tag), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(t.chip), contentAlignment = Alignment.Center) { GlyphIcon(g, t.ink, 22.dp) }
-        Spacer(Modifier.height(6.dp))
-        Text(label, style = Ty.small.copy(fontSize = 12.sp), color = t.ink, maxLines = 1)
     }
 }
 

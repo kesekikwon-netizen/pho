@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,64 +62,97 @@ private fun Tile(title: String, sub: String?, on: Boolean, tag: String, modifier
     }
 }
 
-/** 「무엇을 잴까요?」: 최근 3개 · 종류 8 타일 · 유구 선택/새 가번호 · 레벨 종류 · 기준점 이름 · 사용자 종류 */
+internal fun kindGlyph(k: DigKind): Glyph = when (k) {
+    DigKind.FEATURE -> Glyph.FACE; DigKind.ARTIFACT -> Glyph.ARTIFACT; DigKind.LEVEL -> Glyph.LEVEL; DigKind.SECTION -> Glyph.SECTION
+    DigKind.TRENCH -> Glyph.TRENCH; DigKind.STAKE -> Glyph.STAKE; DigKind.BM -> Glyph.BM; DigKind.AREA -> Glyph.AREA
+}
+
+/** 0.1.43 시안 ④ 「무엇을 잴까요」: 종류 8줄(아이콘·설명·개수) · 그 밖에(기타 점) · 어느 유구(칩 + 새 유구 가-N). 고르면 바로 바뀜 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun DigPickerSheet(c: SurveyController) {
     val d = c.dig
     val close = { d.pickerOpen = false }
     val scope = rememberCoroutineScope()
-    DigSheet("무엇을 잴까요?", "dig_picker", close) {
-        if (d.recent.isNotEmpty()) {
-            SectionTitle("최근 · 한 번에 바꾸기")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                d.recent.take(3).forEachIndexed { i, ch ->
-                    val name = when (ch.kind) { DigKind.LEVEL -> "레벨 · ${ch.level?.labelKo ?: ""}"; else -> ch.kind.labelKo }
-                    Tile(name, d.featureName(ch.featureId), false, "recent_$i", Modifier.weight(1f)) { d.select(ch.kind, ch.featureId, ch.level); close() }
+    androidx.activity.compose.BackHandler { close() }
+    Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().background(Color(0x99706F6B)).hClickable { close() }.testTag("dig_picker_scrim"))
+        val shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
+        Column(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.88f).clip(shape).background(D.bg)
+                .verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).testTag("dig_picker"),
+        ) {
+            Box(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 8.dp), contentAlignment = Alignment.Center) { Box(Modifier.width(40.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(D.line)) }
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("무엇을 잴까요", style = DTy.serifM.copy(fontSize = 24.sp), color = D.ink, modifier = Modifier.weight(1f))
+                Text("고르면 바로 바뀝니다", style = DTy.small, color = D.sub)
+                Box(Modifier.size(48.dp).clip(CircleShape).hClickable { close() }.testTag("dig_picker_close"), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.CLOSE, D.sub, 16.dp) }
+            }
+            DRule()
+            for (k in DigKind.entries) {
+                val on = d.kind == k
+                val n = c.points.count { DigKind.resolve(it.digKind, it.type) == k }
+                Column {
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 56.dp).background(if (on) D.sel else Color.Transparent).hClickable {
+                            d.select(k); if (k != DigKind.FEATURE && k != DigKind.ARTIFACT && k != DigKind.LEVEL && k != DigKind.BM) close()
+                        }.padding(horizontal = 10.dp, vertical = 6.dp).testTag("kind_${k.id}"),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.width(34.dp)) { GlyphIcon(kindGlyph(k), D.ink, 22.dp) }
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(k.labelKo, style = DTy.bodyB.copy(fontSize = 16.sp), color = D.ink)
+                            Text(k.subKo, style = DTy.tiny, color = D.sub)
+                        }
+                        Text("$n", style = DTy.monoS, color = D.sub, modifier = Modifier.testTag("kind_count_${k.id}"))
+                    }
+                    if (k != DigKind.entries.last()) DRule(false)
                 }
             }
-        }
-        SectionTitle("종류")
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), maxItemsInEachRow = 2) {
-            for (k in DigKind.entries) Tile(k.labelKo, k.subKo, d.kind == k, "kind_${k.id}", Modifier.weight(1f)) {
-                d.select(k); if (k != DigKind.FEATURE && k != DigKind.ARTIFACT && k != DigKind.LEVEL && k != DigKind.BM) close()
+            DRule()
+            val custom = c.types.filter { DigKind.fromPositionType(it) == null }
+            FlowRow(Modifier.padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("그 밖에 ·", style = DTy.small, color = D.sub, modifier = Modifier.padding(vertical = 12.dp))
+                val list = custom.ifEmpty { listOf("기타") }
+                list.forEach { n ->
+                    val on = d.kind == null && c.typeName == n
+                    Text(if (n == "기타") "기타 점" else n, style = DTy.small.copy(fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline), color = D.accent,
+                        modifier = Modifier.heightIn(min = 44.dp).hClickable { d.selectCustomType(n); close() }.padding(horizontal = 4.dp, vertical = 12.dp).testTag("type_custom_$n"))
+                }
             }
-        }
-        val k = d.kind
-        if (k == DigKind.FEATURE || k == DigKind.ARTIFACT || k == DigKind.LEVEL) {
-            SectionTitle(if (k == DigKind.FEATURE) "어느 유구를 잴까요" else "유구 (안에 있으면 자동)")
-            val list = d.featureOutlines().sortedByDescending { !it.finished }
-            if (k != DigKind.FEATURE) Tile("자동 · 닫힌 유구 안이면 그 유구", null, d.featureId == null, "feature_auto", Modifier.fillMaxWidth()) { d.chooseFeature(null); close() }
-            for (o in list.take(12)) {
-                val sub = (if (o.finished) (if (o.closed) "면 닫힘" else "선") else "재는 중") + " · 경계점 ${o.pointRowIds.size}"
-                Tile(o.label, sub, d.featureId == o.id, "feature_${o.id}", Modifier.fillMaxWidth()) { d.chooseFeature(o.id); close() }
-            }
-            if (k == DigKind.FEATURE) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Tile("새 유구 ${d.nextFeatureName()}", if (d.provisional) "가번호 · 나중에 이름 바꾸기" else "번호 자동", false, "feature_new", Modifier.weight(1f)) {
+            val k = d.kind
+            if (k == DigKind.FEATURE || k == DigKind.ARTIFACT || k == DigKind.LEVEL) {
+                DSectionLabel(if (k == DigKind.FEATURE) "어느 유구" else "어느 유구 (안에 있으면 자동)")
+                Spacer(Modifier.height(10.dp))
+                val list = d.featureOutlines().sortedBy { it.id }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (k != DigKind.FEATURE) DChip("자동", d.featureId == null, "feature_auto") { d.chooseFeature(null); close() }
+                    for (o in list.takeLast(12)) {
+                        val sub = (if (o.finished) (if (o.closed) "닫힘" else "선") else "재는 중") + " · ${o.pointRowIds.size}점"
+                        DChip(o.label, d.featureId == o.id, "feature_${o.id}", serif = true, sub = sub) { d.chooseFeature(o.id); close() }
+                    }
+                    if (k == DigKind.FEATURE) DChip("+ 새 유구 ${d.nextFeatureName()}", false, "feature_new", dashed = true, serif = true) {
                         scope.launch { if (d.newFeature() == null) d.chooseFeature(null); close() }
                     }
                 }
+                if (k == DigKind.FEATURE) Text(if (d.provisional) "새 유구는 가번호로 시작하고, 이름은 나중에 바꿀 수 있어요." else "새 유구는 번호가 자동으로 붙어요.", style = DTy.small, color = D.sub, modifier = Modifier.padding(top = 10.dp))
             }
-        }
-        if (k == DigKind.LEVEL) {
-            SectionTitle("레벨 종류")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (lv in LevelKind.entries) Tile(lv.labelKo, null, d.level == lv, "level_${lv.id}", Modifier.weight(1f)) { d.chooseLevel(lv); close() }
+            if (k == DigKind.LEVEL) {
+                DSectionLabel("레벨 종류", Modifier.padding(top = 12.dp))
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (lv in LevelKind.entries) DChip(lv.labelKo, d.level == lv, "level_${lv.id}", Modifier.weight(1f)) { d.chooseLevel(lv); close() }
+                }
             }
-        }
-        if (k == DigKind.BM) {
-            SectionTitle("기준점 이름 (처음 잰 값 = 기준, 다음부터 확인)")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (n in listOf("BM-1", "BM-2", "BM-3")) Tile(n, if (c.points.any { it.digKind == "bm" && it.digTag == n }) "기준값 있음" else "처음", d.bmName == n, "bm_$n", Modifier.weight(1f)) { d.bmName = n; d.select(DigKind.BM); close() }
+            if (k == DigKind.BM) {
+                DSectionLabel("기준점 (처음 잰 값 = 기준, 다음부터 확인)")
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (n in listOf("BM-1", "BM-2", "BM-3")) DChip(n, d.bmName == n, "bm_$n", Modifier.weight(1f), sub = if (c.points.any { it.digKind == "bm" && it.digTag == n }) "기준값" else null) { d.bmName = n; d.select(DigKind.BM); close() }
+                }
             }
-        }
-        val custom = c.types.filter { DigKind.fromPositionType(it) == null }
-        if (custom.isNotEmpty()) {
-            SectionTitle("그 밖의 종류")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                custom.forEach { n -> Tile(n, null, d.kind == null && c.typeName == n, "type_custom_$n", Modifier) { d.selectCustomType(n); close() } }
-            }
+            Spacer(Modifier.height(24.dp))
         }
     }
 }

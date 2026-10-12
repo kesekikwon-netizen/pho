@@ -5,124 +5,128 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kr.archsurvey.export.ExportFormat
 
+/** 시안 ⑨ 내보내기 표의 한 줄: 양식 · 이름 · 확장자 · 받는 곳 */
+private data class ExportLine(val f: ExportFormat?, val name: String, val ext: String, val to: String)
+
+private val MAIN_LINES = listOf(
+    ExportLine(ExportFormat.DRAWING_DXF, "도면 · 레이어별", ".dxf", "Trowel · CAD"),
+    ExportLine(ExportFormat.SHP, "유구 · 점 Shape", ".shp .dbf .prj", "Strata (hgis)"),
+    ExportLine(ExportFormat.CSV, "점 목록", ".csv", "보고서 · 엑셀"),
+    ExportLine(ExportFormat.FIELD_CSV, "야장", ".csv", "현장 기록"),
+    ExportLine(null, "사진 · 음성 메모", "photos/ voices/", "함께 묶음"),
+)
+private val MORE = listOf(ExportFormat.GEOJSON, ExportFormat.KML, ExportFormat.HGIS_CSV, ExportFormat.DXF, ExportFormat.REPORT)
+
+/** 만들 파일 개수(사진·음성 묶음은 1개로 셈) */
+internal fun exportFileCount(ec: ExportController): Int = ec.formats.size + if (ec.includePhotos || ec.includeVoices) 1 else 0
+
 /**
- * 0.1.14 작업 전송(목업 11 양식 선택 → 12 전송 방식).
- * 1) 양식 체크(여러 개) + 사진/음성 → 「적용 (n)」 = ZIP 만들기
- * 2) 전송 방식: 무선 전송(공유 시트) / 장치 내 저장(문서 선택기) → 「전송」
+ * 0.1.43 시안 ⑨ 내보내기: 작업 요약 · 도면 축척(1:20/1:100/1:200) · 오늘 잰 것만 · 들어가는 파일 체크 표 · 다른 형식 접기 ·
+ * 저장 위치 · 「파일 N개 만들기」 → 공유 / 파일로 저장. (iTwin XML 은 이 앱에 없음)
  */
 @Composable
 fun ExportScreen(ec: ExportController) {
-    val t = T
     val s = ec.summary
     val out = ec.output
-    ToolScaffold("작업 전송", "export_screen", onBack = { ec.close() }, bottom = {
-        if (out == null) DualBar("취소", "export_cancel", { ec.close() },
-            if (ec.running) "만드는 중…" else "적용 (${ec.formats.size})", "export_run", !ec.running && (s?.points ?: 0) > 0 && ec.formats.isNotEmpty()) { ec.run() }
-        else DualBar("취소", "export_method_cancel", { ec.close() }, "전송", "export_send", true) { ec.send() }
-    }) {
-        if (s == null) Text("불러오는 중…", style = Ty.body, color = t.inkSub)
-        else {
-            Text("작업 ${s.project} · 점 ${s.points}개 · 사진 ${s.photos}장 · 음성 ${s.voices}개", style = Ty.body, color = t.ink, modifier = Modifier.testTag("export_summary"))
-            if (s.fakePoints > 0) {
-                Text("이전 시험 버전에서 수신기 없이 만든 점이 ${s.fakePoints}개 들어 있어요. 실측 데이터와 섞이지 않게 확인하세요.", style = Ty.small, color = t.bad, modifier = Modifier.testTag("export_fake_warning"))
+    val sc = LocalSurvey.current
+    LaunchedEffect(Unit) {
+        sc?.dig?.drawScale?.let { ec.scale = it }
+        if (ec.formats == ExportFormat.DEFAULT) ec.formats = ExportFormat.EVENING // 시안 기본: 도면·Shape·점 목록·야장
+    }
+    ToolScaffold("내보내기", "export_screen", onBack = { ec.close() }, bottom = {
+        DBottomBar {
+            if (out == null) DPrimary(if (ec.running) "만드는 중…" else "파일 ${exportFileCount(ec)}개 만들기", "export_run", Modifier.weight(1f),
+                enabled = !ec.running && (s?.points ?: 0) > 0 && ec.formats.isNotEmpty()) { ec.run() }
+            else {
+                DSecondary("파일로 저장", "export_save", Modifier.weight(1f)) { ec.saveAs() }
+                DPrimary("공유하기", "export_share", Modifier.weight(1.4f)) { ec.share() }
             }
         }
+    }) {
+        Text(s?.project ?: sc?.projectName ?: "", style = DTy.serifM.copy(fontSize = 22.sp), color = D.ink, modifier = Modifier.testTag("export_title"))
+        if (s == null) Text("불러오는 중…", style = DTy.small, color = D.sub)
+        else Text("점 ${s.points} · 유구 ${sc?.dig?.featureOutlines()?.size ?: 0} · 사진 ${s.photos} · 음성 ${s.voices} · EPSG:${sc?.zone?.epsg ?: ""}", style = DTy.monoS, color = D.sub, modifier = Modifier.testTag("export_summary"))
+        if ((s?.fakePoints ?: 0) > 0) Text("이전 시험 버전에서 수신기 없이 만든 점이 ${s!!.fakePoints}개 들어 있어요. 실측 데이터와 섞이지 않게 확인하세요.", style = DTy.small, color = D.bad, modifier = Modifier.testTag("export_fake_warning"))
+        DRule()
         if (out == null) {
-            // 0.1.35 저녁 도면: 도면 DXF(레이어별 · 축척별 글자) + SHP + 야장 CSV + 점 CSV + 사진·음성 한 묶음
-            val sc = LocalSurvey.current
-            androidx.compose.runtime.LaunchedEffect(Unit) { sc?.dig?.drawScale?.let { ec.scale = it } }
-            Text("저녁 도면", style = Ty.serifHead, color = t.ink)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (k in kr.archsurvey.dig.DrawingScale.CHOICES) Choice("1:$k", ec.scale == k, Modifier.weight(1f).testTag("export_scale_$k")) { ec.scale = k; sc?.dig?.changeScale(k) }
-            }
-            CheckRow("오늘 잰 점만", ec.todayOnly, "export_today_only") { ec.todayOnly = it }
-            MBtn(Modifier.fillMaxWidth().height(64.dp).testTag("export_evening"), MKind.PRIMARY, 16.dp, onClick = { ec.runEvening() }) {
-                Text(if (ec.running) "만드는 중…" else "저녁 도면 한 번에 만들기", style = Ty.button, color = t.onPrimary)
-            }
-            Text("도면 DXF(조사구역·그리드·트렌치·유구·유물·레벨·토층·기준점 레이어, 1:${ec.scale} 글자 크기) · SHP · 야장 CSV · 점 CSV · 사진·음성",
-                style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("export_evening_note"))
-            Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.4f)))
-            // hgis(Strata)에 끌어 놓을 Shape 한 벌을 한 번에(양식 고르기 없이)
-            Btn(if (ec.running) "만드는 중…" else "hgis(Strata)용 SHP 바로 만들기", Modifier.fillMaxWidth().testTag("export_hgis_quick")) { ec.runHgis() }
-            Text("작업 좌표계 그대로 .shp .shx .dbf .prj .cpg 한 벌 + 기준점 CSV · 폰 문서 폴더(Documents/ExcavationSurvey/hgis)에도 둬요",
-                style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("export_hgis_note"))
-            Text("추출할 양식을 고르세요 · 여러 개 선택 가능", style = Ty.small, color = t.inkSub)
-            Column {
-                for (f in ExportFormat.entries) {
-                    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).hClickable { ec.toggleFormat(f) }.testTag("export_fmt_${f.id}"), verticalAlignment = Alignment.CenterVertically) {
-                        androidx.compose.material3.Checkbox(f in ec.formats, { ec.toggleFormat(f) },
-                            colors = androidx.compose.material3.CheckboxDefaults.colors(checkedColor = t.primary, checkmarkColor = t.onPrimary))
-                        Text(f.labelKo, style = Ty.body, color = t.ink, modifier = Modifier.weight(1f))
-                        Text(f.ext, style = Ty.coord.copy(fontSize = 12.sp), color = t.inkSub)
+            DSectionLabel("도면 축척 · 글자 크기가 맞춰집니다")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.width(230.dp)) {
+                    DSeg(kr.archsurvey.dig.DrawingScale.CHOICES.map { "1:$it" }, kr.archsurvey.dig.DrawingScale.CHOICES.indexOf(ec.scale), "export_scale", height = 52.dp) { i ->
+                        val k = kr.archsurvey.dig.DrawingScale.CHOICES[i]; ec.scale = k; sc?.dig?.changeScale(k)
                     }
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.2f)))
+                }
+                Row(Modifier.weight(1f).heightIn(min = 52.dp).hClickable { ec.todayOnly = !ec.todayOnly }.padding(start = 14.dp).testTag("export_today_only"), verticalAlignment = Alignment.CenterVertically) {
+                    DCheck(ec.todayOnly)
+                    Text("  오늘 잰 것만", style = DTy.body, color = D.ink)
                 }
             }
-            CheckRow("사진 포함 (photos/)", ec.includePhotos, "export_photos") { ec.includePhotos = it }
-            CheckRow("음성 메모 포함 (voices/)", ec.includeVoices, "export_voices") { ec.includeVoices = it }
-            Text("공사·지적용 양식(목업의 공공측량·물량산출 등)과 캘리브레이션 파일은 발굴 기록 범위 밖이라 넣지 않았어요.", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("export_scope_note"))
-            var filesOpen by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-            FoldRow("파일 설명", filesOpen, "export_files_toggle") { filesOpen = !filesOpen }
-            if (filesOpen) Card {
-                Text("기본 양식 points.csv — 모든 항목 (UTF-8, 엑셀 한글 가능)", style = Ty.small, color = t.inkSub)
-                Text("캐드 points.dxf — 점·번호·표고 (단위 m, X=동 Y=북)", style = Ty.small, color = t.inkSub)
-                Text("점 보고서 point_report.csv — 번호·종류·좌표·표고·정밀도·시각", style = Ty.small, color = t.inkSub)
-                Text("구글어스 points.kml — 경위도 + 지면 높이", style = Ty.small, color = t.inkSub)
-                Text("Shape points_EPSG.shp/.shx/.dbf/.prj/.cpg — hgis·QGIS용 점 (작업 좌표계 5186/5187 등, 표고 Z, 한글 UTF-8)", style = Ty.small, color = t.inkSub)
-                Text("hgis 기준점 hgis_control_points_EPSG.csv — hgis 「CSV 기준점」 양식", style = Ty.small, color = t.inkSub)
-                Text("GeoJSON points.geojson — 경위도 + 속성", style = Ty.small, color = t.inkSub)
-                Text("README.txt — 파일 설명", style = Ty.small, color = t.inkSub)
+            Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.Bottom) {
+                Text("들어가는 파일", style = DTy.h2, color = D.ink, modifier = Modifier.weight(1f))
+                Text("눌러서 빼기", style = DTy.tiny, color = D.sub)
             }
+            DTableHead(listOf("" to 0.5f, "파일" to 2.4f, "받는 곳" to 2f), alignEndFrom = 99)
+            for (l in MAIN_LINES) {
+                val on = if (l.f != null) l.f in ec.formats else (ec.includePhotos || ec.includeVoices)
+                ExportCheckRow(on, l.name, l.ext, l.to, "export_fmt_${l.f?.id ?: "media"}") {
+                    if (l.f != null) ec.toggleFormat(l.f) else { val v = !on; ec.includePhotos = v; ec.includeVoices = v }
+                }
+            }
+            var more by remember { mutableStateOf(false) }
+            Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).hClickable { more = !more }.testTag("export_more"), verticalAlignment = Alignment.CenterVertically) {
+                Text("다른 형식", style = DTy.bodyB, color = D.ink)
+                Text("  GeoJSON · KML · hgis 기준점 CSV", style = DTy.small, color = D.sub, modifier = Modifier.weight(1f))
+                GlyphIcon(if (more) Glyph.CHEVRON_DOWN else Glyph.CHEVRON_RIGHT, D.sub, 14.dp)
+            }
+            if (more) for (f in MORE) ExportCheckRow(f in ec.formats, f.labelKo, f.ext, "", "export_fmt_${f.id}") { ec.toggleFormat(f) }
+            DRule(false)
+            val folder = sc?.jobs?.currentFolder?.let { it.replace("Documents/", "폰 문서 › ").replace("/", " › ") + " › 내보내기" } ?: "폰 문서 › ExcavationSurvey › 내보내기"
+            Text("저장 위치 · $folder", style = DTy.small, color = D.sub, modifier = Modifier.testTag("export_where"))
         }
         ec.error?.let { ErrorCardView(ErrorCard("-", it, "다시 시도하거나, 계속 안 되면 화면을 캡처해 알려 주세요.", false), "export_error") }
         if (out != null) {
-            Text("전송 방식", style = Ty.title, color = t.ink)
-            MethodCard(Glyph.SHARE, "무선 전송", "이메일 · 메신저 · 주변 기기 공유", ec.methodShare, "export_method_share") { ec.methodShare = true }
-            MethodCard(Glyph.FOLDER, "장치 내 저장", "저장할 폴더를 직접 골라요", !ec.methodShare, "export_method_save") { ec.methodShare = false }
-            Text(out.fileName, style = Ty.body, color = t.ink, modifier = Modifier.testTag("export_filename"))
+            Text("파일을 만들었어요", style = DTy.h2, color = D.ink, modifier = Modifier.testTag("export_done"))
+            Text(out.fileName, style = DTy.mono, color = D.ink, modifier = Modifier.testTag("export_filename"))
+            Text("${ec.formats.size}개 양식 · ${ExportController.sizeText(out.sizeBytes)} · 점 ${out.points}개 · 사진 ${out.photos}장 · 음성 ${out.voices}개", style = DTy.small, color = D.sub, modifier = Modifier.testTag("export_result_counts"))
             out.publicFolder?.let { folder ->
-                Card {
-                    Text("hgis용 폴더: 내장 저장공간/$folder", style = Ty.body, color = t.ink, modifier = Modifier.testTag("export_public_folder"))
-                    Text("USB로 PC에 연결해 이 폴더를 PC에 복사한 뒤, 안의 points_EPSG.shp 를 hgis 지도에 끌어 놓으세요. ZIP으로 보냈다면 압축을 먼저 푸세요.",
-                        style = Ty.small, color = t.inkSub)
-                }
+                Text("hgis용 폴더: 내장 저장공간/$folder", style = DTy.body, color = D.ink, modifier = Modifier.testTag("export_public_folder"))
+                Text("USB로 PC에 연결해 이 폴더를 PC에 복사한 뒤, 안의 points_EPSG.shp 를 hgis 지도에 끌어 놓으세요.", style = DTy.small, color = D.sub)
             }
-            Text("${ec.formats.size}개 양식 · ${ExportController.sizeText(out.sizeBytes)} · 점 ${out.points}개 · 사진 ${out.photos}장 · 음성 ${out.voices}개", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("export_result_counts"))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.weight(1f)) { Btn("공유하기", Modifier.fillMaxWidth().testTag("export_share")) { ec.share() } }
-                Box(Modifier.weight(1f)) { Btn("파일로 저장", Modifier.fillMaxWidth().testTag("export_save")) { ec.saveAs() } }
-            }
-            Btn("양식 다시 고르기", Modifier.fillMaxWidth().testTag("export_again")) { ec.openScreen() }
-            ec.notice?.let { Text(it, style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("export_notice")) }
+            DSecondary("파일 다시 고르기", "export_again", Modifier.fillMaxWidth().height(52.dp)) { ec.openScreen() }
+            ec.notice?.let { Text(it, style = DTy.small, color = D.sub, modifier = Modifier.testTag("export_notice")) }
         }
     }
 }
 
 @Composable
-private fun MethodCard(g: Glyph, title: String, sub: String, on: Boolean, tag: String, onClick: () -> Unit) {
-    val t = T
-    val shape = RoundedCornerShape(16.dp)
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(shape).background(t.raised).border(if (on) 1.5.dp else 1.dp, if (on) t.ink else t.line.copy(alpha = 0.45f), shape)
-            .hClickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp).testTag(tag),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        GlyphIcon(g, t.ink, 20.dp)
-        Column(Modifier.weight(1f)) {
-            Text(title, style = Ty.label.copy(fontSize = 16.sp), color = t.ink)
-            Text(sub, style = Ty.small, color = t.inkSub)
+internal fun DCheck(on: Boolean) {
+    Box(Modifier.size(24.dp).clip(RoundedCornerShape(4.dp)).background(if (on) D.ink else D.card).border(1.5.dp, D.ink, RoundedCornerShape(4.dp)), contentAlignment = Alignment.Center) {
+        if (on) GlyphIcon(Glyph.CHECK, Color.White, 18.dp)
+    }
+}
+
+@Composable
+private fun ExportCheckRow(on: Boolean, name: String, ext: String, to: String, tag: String, onClick: () -> Unit) {
+    Column {
+        Row(Modifier.fillMaxWidth().heightIn(min = 58.dp).hClickable(onClick = onClick).padding(vertical = 8.dp, horizontal = 4.dp).testTag(tag), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(0.5f)) { DCheck(on) }
+            Column(Modifier.weight(2.4f)) {
+                Text(name, style = DTy.body.copy(fontWeight = FontWeight.Medium), color = D.ink)
+                Text(ext, style = DTy.monoS, color = D.sub)
+            }
+            Text(to, style = DTy.body, color = D.ink, modifier = Modifier.weight(2f))
         }
-        if (on) GlyphIcon(Glyph.CHECK, t.ink, 20.dp)
+        DRule(false)
     }
 }

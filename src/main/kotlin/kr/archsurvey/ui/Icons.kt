@@ -57,7 +57,9 @@ fun GearIcon(color: Color, size: Dp = 26.dp) {
 
 enum class Glyph { PLUS, MINUS, LOCATE, UNDO, CHEVRON_UP, CHEVRON_DOWN, MIC, CLOSE, CAMERA, RULER, LAYERS, LIST, CHECK, EXTENT, BT, PIN, SAT, BATT, FOLDER, SHARE, INFO, CALC, HOME,
     /** 0.1.11 목업 화면용 */
-    MENU, BACK, CHEVRON_RIGHT, SEARCH, POLYLINE, POLYGON, GRID, POLE, WIFI, GLOBE }
+    MENU, BACK, CHEVRON_RIGHT, SEARCH, POLYLINE, POLYGON, GRID, POLE, WIFI, GLOBE,
+    /** 0.1.43 시안(10-12) */
+    SLIDERS, EXPORT, FACE, ARTIFACT, LEVEL, SECTION, TRENCH, STAKE, BM, AREA }
 
 @Composable
 fun GlyphIcon(g: Glyph, color: Color, size: Dp = 22.dp) {
@@ -141,6 +143,23 @@ fun GlyphIcon(g: Glyph, color: Color, size: Dp = 22.dp) {
                 drawOval(color, Offset(w * .32f, w * .12f), androidx.compose.ui.geometry.Size(w * .36f, w * .76f), style = Stroke(sw))
                 drawLine(color, Offset(w * .12f, w * .5f), Offset(w * .88f, w * .5f), sw, cap)
             }
+            Glyph.SLIDERS -> {
+                drawLine(color, Offset(w * .14f, w * .34f), Offset(w * .86f, w * .34f), sw, cap); drawLine(color, Offset(w * .14f, w * .66f), Offset(w * .86f, w * .66f), sw, cap)
+                drawCircle(color, w * .09f, Offset(w * .62f, w * .34f)); drawCircle(color, w * .09f, Offset(w * .36f, w * .66f))
+            }
+            Glyph.EXPORT -> {
+                drawLine(color, Offset(w * .18f, w * .16f), Offset(w * .18f, w * .84f), sw, cap)
+                drawLine(color, Offset(w * .34f, w * .5f), Offset(w * .84f, w * .5f), sw, cap)
+                drawPath(Path().apply { moveTo(w * .64f, w * .3f); lineTo(w * .84f, w * .5f); lineTo(w * .64f, w * .7f) }, color, style = Stroke(sw, cap = cap))
+            }
+            Glyph.FACE -> drawPath(Path().apply { moveTo(w * .3f, w * .22f); lineTo(w * .84f, w * .3f); lineTo(w * .7f, w * .78f); lineTo(w * .16f, w * .7f); close() }, color, style = Stroke(sw, cap = cap))
+            Glyph.ARTIFACT -> { drawCircle(color, w * .36f, Offset(w * .5f, w * .5f), style = Stroke(sw * .8f)); drawLine(color, Offset(w * .5f, w * .32f), Offset(w * .5f, w * .68f), sw, cap); drawLine(color, Offset(w * .42f, w * .38f), Offset(w * .5f, w * .32f), sw, cap) }
+            Glyph.LEVEL -> { drawLine(color, Offset(w * .1f, w * .55f), Offset(w * .56f, w * .55f), sw, cap); drawLine(color, Offset(w * .33f, w * .32f), Offset(w * .33f, w * .78f), sw, cap); drawCircle(color, w * .05f, Offset(w * .78f, w * .4f)) }
+            Glyph.SECTION -> { drawLine(color, Offset(w * .1f, w * .5f), Offset(w * .9f, w * .5f), sw, cap); drawLine(color, Offset(w * .1f, w * .34f), Offset(w * .1f, w * .66f), sw, cap); drawLine(color, Offset(w * .9f, w * .34f), Offset(w * .9f, w * .66f), sw, cap) }
+            Glyph.TRENCH -> drawRect(color, Offset(w * .1f, w * .3f), androidx.compose.ui.geometry.Size(w * .8f, w * .4f), style = Stroke(sw * .8f, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(w * .1f, w * .06f))))
+            Glyph.STAKE -> { drawLine(color, Offset(w * .5f, w * .16f), Offset(w * .5f, w * .84f), sw * 1.2f, cap); drawLine(color, Offset(w * .16f, w * .5f), Offset(w * .84f, w * .5f), sw * 1.2f, cap) }
+            Glyph.BM -> { val tri = Path().apply { moveTo(w * .5f, w * .14f); lineTo(w * .9f, w * .84f); lineTo(w * .1f, w * .84f); close() }; drawPath(tri, Color(0xFFC9A227)); drawPath(tri, color, style = Stroke(sw * .8f)) }
+            Glyph.AREA -> drawRect(color, Offset(w * .1f, w * .28f), androidx.compose.ui.geometry.Size(w * .8f, w * .44f), style = Stroke(sw * .8f, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(w * .16f, w * .06f, w * .03f, w * .06f))))
             Glyph.RULER -> { drawLine(color, Offset(w * .5f, w * .1f), Offset(w * .5f, w * .9f), sw, cap); drawLine(color, Offset(w * .3f, w * .1f), Offset(w * .7f, w * .1f), sw, cap); drawLine(color, Offset(w * .3f, w * .9f), Offset(w * .7f, w * .9f), sw, cap) }
         }
     }

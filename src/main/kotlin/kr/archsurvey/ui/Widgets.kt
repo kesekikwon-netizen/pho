@@ -17,14 +17,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** 전체 화면 도구 화면 공통 틀: 상단 제목 + 뒤로 + 스크롤 본문 + (선택) 하단 고정 영역 */
+/** 전체 화면 도구 화면 공통 틀: 0.1.43 시안 머리줄(‹ 굵은 제목 · 오른쪽 글자 · 굵은 선) + 스크롤 본문 + (선택) 하단 고정 영역 */
 @Composable
-fun ToolScaffold(title: String, tag: String, onBack: () -> Unit, bottom: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
-    val t = T
-    Column(Modifier.fillMaxSize().background(t.bg).testTag(tag)) {
-        // 0.1.11: 목업 공통 머리글(← 제목 · 상태 알약 · ≡ / 작업명 · PDOP·H·V · Ant.H)
-        AppHeader(LocalSurvey.current, title, onBack = onBack, backTag = "tool_back")
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
+fun ToolScaffold(title: String, tag: String, onBack: () -> Unit, bottom: (@Composable () -> Unit)? = null, right: String? = null, close: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxSize().background(D.bg).testTag(tag)) {
+        DTopBar(title, onBack, backTag = "tool_back", close = close, right = right?.let { r -> { Text(r, style = DTy.small, color = D.sub, maxLines = 1, modifier = Modifier.testTag("${tag}_right")) } })
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
         bottom?.invoke()
     }
 }

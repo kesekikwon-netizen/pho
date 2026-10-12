@@ -73,23 +73,19 @@ internal fun DigStatusPill(c: SurveyController, modifier: Modifier = Modifier) {
     }
 }
 
-/** 위 한 줄: ‹ 작업명(명조) / 오늘 n점 · EPSG · 높이 | 상태 알약 | ≡ */
+/** 0.1.43 시안 ②: ‹ 작업명(굵게) / 오늘 n점 · EPSG | 상태 알약(● FIX 1.4 cm). 메뉴는 홈 ≡ 에서 */
 @Composable
 internal fun DigHeader(c: SurveyController) {
-    val t = T
-    Column(Modifier.fillMaxWidth().background(t.bg).testTag("app_header")) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.fillMaxWidth().background(D.bg).testTag("app_header")) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(start = 4.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             HeaderIcon(Glyph.BACK, "오늘 준비(홈)", "survey_back") { c.homeOpen = true }
-            // 0.1.36: 긴 작업명이 잘리던 문제 — 길이에 따라 글자를 줄이고 두 줄까지(머리줄이 조금 높아짐). 눌러서 전체 이름
             val ts = HeaderTitle.style(c.projectName)
             Column(Modifier.weight(1f).heightIn(min = 48.dp).padding(start = 2.dp).hClickable { c.ui.toast(c.projectName) }.semantics { contentDescription = "작업 ${c.projectName}" }, verticalArrangement = Arrangement.Center) {
-                Text(c.projectName, style = Ty.serifHead.copy(fontSize = ts.sizeSp.sp, lineHeight = (ts.sizeSp + 3).sp), color = t.ink, maxLines = ts.maxLines, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("header_title"))
-                Text("오늘 ${c.dig.todayCount()}점 · EPSG:${c.zone.epsg} · ${c.geoid.shortKo}", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("header_job"))
+                Text(c.projectName, style = DTy.h1.copy(fontSize = (ts.sizeSp + 1).sp, lineHeight = (ts.sizeSp + 5).sp), color = D.ink, maxLines = ts.maxLines, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("header_title"))
+                Text("오늘 ${c.dig.todayCount()}점 · EPSG:${c.zone.epsg}", style = DTy.monoS, color = D.sub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("header_job"))
             }
-            DigStatusPill(c, Modifier.padding(horizontal = 4.dp))
-            HeaderIcon(Glyph.MENU, "메뉴", "gear") { c.drawerOpen = true }
+            D43StatusPill(c, Modifier.padding(start = 6.dp))
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.35f)))
     }
 }
 
@@ -114,43 +110,41 @@ internal fun DigCauseLine(c: SurveyController) {
     }
 }
 
-/** 「지금 재는 것」 + 폴 칩 */
+/** 0.1.43 시안 ②: 「재는 것」 드롭다운(누르면 무엇을 잴까요) */
 @Composable
 internal fun NowRow(c: SurveyController) {
-    val t = T
     val (head, tail) = c.dig.nowLine()
-    Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(
-            Modifier.weight(1f).height(60.dp).clip(RoundedCornerShape(14.dp)).background(t.raised).border(1.dp, t.outline, RoundedCornerShape(14.dp))
-                .hClickable { c.dig.pickerOpen = true }.padding(horizontal = 14.dp)
-                .semantics { contentDescription = "지금 재는 것 $head ${tail ?: ""}. 눌러서 바꾸기" }.testTag("now_row"),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text("지금 재는 것", style = Ty.small.copy(fontSize = 11.sp), color = t.inkSub, maxLines = 1)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(head, style = Ty.label.copy(fontSize = 17.sp, fontWeight = FontWeight.Medium), color = t.ink, maxLines = 1, modifier = Modifier.testTag("now_kind"))
-                    if (tail != null) Text(" · $tail", style = Ty.label.copy(fontSize = 17.sp, fontWeight = FontWeight.Medium), color = t.accentText, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("now_target"))
-                }
-            }
-            GlyphIcon(Glyph.CHEVRON_DOWN, t.inkSub, 18.dp)
-        }
-        Column(
-            Modifier.width(72.dp).height(60.dp).clip(RoundedCornerShape(14.dp)).background(if (c.dig.poleConfirmedToday) t.raised else t.primaryCont)
-                .border(1.dp, if (c.dig.poleConfirmedToday) t.outline else t.primary, RoundedCornerShape(14.dp))
-                .hClickable { c.antennaSheetOpen = true }.semantics { contentDescription = "폴 높이 ${String.format(Locale.US, "%.1f", c.antenna.inputValueM)} 미터. 눌러서 바꾸기" }.testTag("pole_chip"),
-            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
-        ) {
-            Text(String.format(Locale.US, "%.1f", c.antenna.inputValueM), style = Ty.ledger.copy(fontSize = 20.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("antenna_input"))
-            Text("폴 m", style = Ty.small.copy(fontSize = 11.sp), color = t.inkSub)
-        }
+    Row(
+        Modifier.fillMaxWidth().height(58.dp).clip(RoundedCornerShape(10.dp)).background(D.card).border(1.dp, D.line, RoundedCornerShape(10.dp))
+            .hClickable { c.dig.pickerOpen = true }.padding(horizontal = 14.dp)
+            .semantics { contentDescription = "지금 재는 것 $head ${tail ?: ""}. 눌러서 바꾸기" }.testTag("now_row"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("재는 것", style = DTy.small, color = D.sub, maxLines = 1)
+        Spacer(Modifier.width(10.dp))
+        Text(head, style = DTy.body.copy(fontSize = 17.sp, fontWeight = FontWeight.Medium), color = D.ink, maxLines = 1, modifier = Modifier.testTag("now_kind"))
+        if (tail != null) Text(" · $tail", style = DTy.body.copy(fontSize = 17.sp, fontWeight = FontWeight.Medium), color = D.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).testTag("now_target"))
+        Spacer(Modifier.weight(1f))
+        GlyphIcon(Glyph.CHEVRON_DOWN, D.sub, 18.dp)
     }
 }
 
-/** 아래 조작부: 되돌리기 · 면 닫기(유구)/메모 · 측량하기(72dp 이상, 단추 안 진행) */
+/** 지금 위치 값(지도 아래 3칸): 해발 = 수신기 해발 − 안테나 위상중심 높이 */
+internal fun liveCells(c: SurveyController): List<Triple<String, String, String>> {
+    val g = c.gv
+    val apc = c.antennaResult?.totalToApcM ?: c.antenna.inputValueM
+    val h = if (g.noReceiver) null else g.altM?.let { it - apc }
+    fun cm(v: Double?) = v?.let { String.format(Locale.US, "%.1f", it * 100) } ?: "—"
+    return listOf(
+        Triple("해발", h?.let { String.format(Locale.US, "%.2f", it) } ?: "—", "m"),
+        Triple("수평 · 수직", if (g.noReceiver) "—" else "${cm(g.status.sigmaHM)}·${cm(g.sigmaVM)}", "cm"),
+        Triple("폴", String.format(Locale.US, "%.2f", c.antenna.inputValueM), "m"),
+    )
+}
+
+/** 0.1.43 시안 ②: 다음 점 · 기포 / 해발·수평수직·폴 / 재는 것 / [되돌리기][면 닫기][사진] + 큰 「측정」 */
 @Composable
 internal fun DigControlArea(c: SurveyController) {
-    val t = T
     val busy = c.phase == Phase.ACQUIRING
     val status = c.gv.status.status
     val notConn = c.gv.noReceiver
@@ -159,13 +153,32 @@ internal fun DigControlArea(c: SurveyController) {
     val strictBlock = strict && caution
     val blocked = status == SurveyStatus.UNAVAILABLE
     val feature = c.dig.kind == DigKind.FEATURE
-    Column(Modifier.fillMaxWidth().background(t.bg).testTag("control_area")) {
+    rememberTick()
+    Column(Modifier.fillMaxWidth().background(D.bg).padding(horizontal = 16.dp).testTag("control_area")) {
+        Row(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("다음 점", style = DTy.small, color = D.sub)
+            Spacer(Modifier.width(8.dp))
+            Text(c.nextName, style = DTy.monoBig.copy(fontSize = 22.sp), color = D.ink, modifier = Modifier.weight(1f).testTag("next_name"))
+            c.tilt?.let { tc ->
+                val a = tc.angleDeg
+                if (a != null && tc.state != TiltState.OFF && tc.state != TiltState.NO_SENSOR) {
+                    val over = tc.state == TiltState.OVER
+                    Box(Modifier.size(9.dp).clip(CircleShape).background(if (over) D.caution else D.fix))
+                    Text(" 기포 ${String.format(Locale.US, "%.1f", a)}°", style = DTy.small, color = if (over) D.caution else D.fix, modifier = Modifier.testTag("bubble_deg"))
+                }
+            }
+        }
+        DRule()
+        DMetrics(liveCells(c), "live")
+        Spacer(Modifier.height(10.dp))
         NowRow(c)
-        Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             val side: @Composable RowScope.() -> Unit = {
-                SideBtn(Glyph.UNDO, if (c.dig.undoIsReopen) "닫기 취소" else "되돌리기", "tool_undo") { c.askUndo() }
-                if (feature) SideBtn(Glyph.POLYGON, if (c.dig.closeArmed) "취소" else "면 닫기", "tool_close_area", on = c.dig.closeArmed) { c.dig.armClose() }
-                else SideBtn(Glyph.MIC, if (c.voiceSeconds > 0) "녹음 끝" else "메모", "tool_memo") { c.toggleVoice() }
+                DIconTile(Glyph.UNDO, if (c.dig.undoIsReopen) "닫기 취소" else "되돌리기", "tool_undo", Modifier.width(64.dp)) { c.askUndo() }
+                if (feature) DIconTile(Glyph.FACE, if (c.dig.closeArmed) "취소" else "면 닫기", "tool_close_area", Modifier.width(64.dp), on = c.dig.closeArmed) { c.dig.armClose() }
+                else DIconTile(Glyph.MIC, if (c.voiceSeconds > 0) "녹음 끝" else "메모", "tool_memo", Modifier.width(64.dp)) { c.toggleVoice() }
+                DIconTile(Glyph.CAMERA, "사진", "tool_photo", Modifier.width(64.dp)) { if (c.lastPoint != null) c.addPhotoCamera() else c.ui.toast("점을 잰 뒤 사진을 붙일 수 있어요") }
             }
             val measure: @Composable RowScope.() -> Unit = {
                 val dim = blocked || strictBlock
@@ -173,46 +186,41 @@ internal fun DigControlArea(c: SurveyController) {
                 val label: String; val sub: String
                 when {
                     armed -> { label = "면 닫기 확인"; sub = c.dig.closePreview() ?: "" }
-                    busy -> { label = "재는 중 ${c.measureCount.coerceAtMost(c.epochs)}/${c.epochs}"; sub = "폴을 세운 채 · 누르면 중지" }
+                    busy -> { label = "재는 중 ${c.measureCount.coerceAtMost(c.epochs)}/${c.epochs}"; sub = "누르면 중지" }
                     notConn -> { label = MEASURE_NO_RECEIVER; sub = "눌러서 연결" }
-                    strictBlock -> { label = "FIX 기다리는 중"; sub = "엄격 · FLOAT 저장 잠김" }
+                    strictBlock -> { label = "FIX 기다리는 중"; sub = "FLOAT 저장 잠김" }
                     blocked -> { label = "측점 불가"; sub = c.gv.status.reason.textKo }
-                    c.phase == Phase.RESULT || c.phase == Phase.RESULT_EXPANDED -> { label = "다음 점"; sub = "누르면 바로 재요 · " + c.dig.measureSub() }
-                    caution -> { label = "주의 측점"; sub = c.dig.measureSub() + " · 확인 후" }
-                    else -> { label = "측량하기"; sub = c.dig.measureSub() }
+                    caution -> { label = "주의 측정"; sub = c.dig.measureSub() }
+                    else -> { label = "측정"; sub = "" }
                 }
                 Box(
-                    Modifier.weight(1f).height(84.dp).clip(RoundedCornerShape(18.dp))
-                        .background(if (!busy && (notConn || dim) && !armed) t.blockedButton else t.primary)
+                    Modifier.weight(1f).height(76.dp).clip(RoundedCornerShape(12.dp))
+                        .background(if (!busy && (notConn || dim) && !armed) t43Blocked else D.primary)
                         .hCombinedClickable(onLongClick = { if (!busy && !armed) c.setupOpen = true }) { if (busy) c.cancelAcquire() else if (notConn && !armed) { c.connection?.openScreen() ?: c.onMeasure() } else c.onMeasure() }
                         .testTag("measure_button"),
                     contentAlignment = Alignment.Center,
                 ) {
                     if (busy) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(c.progress.coerceIn(0f, 1f)).height(6.dp).background(Color.White.copy(alpha = 0.85f)).testTag("measure_progress"))
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(label, style = Ty.button.copy(fontSize = 22.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium), color = t.onPrimary, maxLines = 1, textAlign = TextAlign.Center,
+                        Text(label, style = DTy.button.copy(fontSize = if (label.length <= 3) 24.sp else 19.sp, lineHeight = 26.sp), color = Color.White, maxLines = 1, textAlign = TextAlign.Center,
                             modifier = Modifier.testTag(if (notConn || dim) "measure_disabled_reason" else "measure_label"))
-                        if (sub.isNotEmpty()) Text(sub, style = Ty.small.copy(fontSize = 12.sp, lineHeight = 15.sp), color = t.onPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 8.dp).testTag("measure_sub"))
+                        if (sub.isNotEmpty()) Text(sub, style = DTy.tiny, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 8.dp).testTag("measure_sub"))
                     }
                 }
             }
             if (c.poleOnRight) { side(); measure() } else { measure(); side() }
         }
     }
+    DFootLine(listOf(mapHint(c), "${c.epochs}회 평균", c.currentNE()?.let { "X ${String.format(Locale.US, "%,.1f", it.e)} Y ${String.format(Locale.US, "%,.1f", it.n)}" } ?: "X — Y —"), "map_foot")
 }
 
-@Composable
-private fun RowScope.SideBtn(g: Glyph, label: String, tag: String, on: Boolean = false, onClick: () -> Unit) {
-    val t = T
-    Column(
-        Modifier.width(76.dp).height(84.dp).clip(RoundedCornerShape(16.dp)).background(if (on) t.primaryCont else t.raised)
-            .border(if (on) 2.dp else 1.dp, if (on) t.primary else t.outline, RoundedCornerShape(16.dp)).hClickable(onClickLabel = label, onClick = onClick).testTag(tag),
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
-    ) {
-        GlyphIcon(g, t.ink, 22.dp)
-        Spacer(Modifier.height(6.dp))
-        Text(label, style = Ty.label.copy(fontSize = 13.sp), color = t.ink, maxLines = 1)
-    }
+private val t43Blocked = Color(0xFF5C5B57)
+
+internal fun mapHint(c: SurveyController): String = when {
+    c.phase == Phase.ACQUIRING -> "폴을 세운 채 움직이지 마세요"
+    c.gv.noReceiver -> "수신기를 연결하세요"
+    c.gv.displayStatus != SurveyStatus.FIXED -> "FIX를 기다려요"
+    else -> "점 위에 폴을 세우고 「측정」"
 }
 
 /** 잰 직후 한 장(장부): ✓ P-0038 저장했어요 [고정] / 무엇 한 줄 / 해발 · 수평·수직 · 폴 / 사진 · 음성·메모. 다음 누름 = 다음 측정 */

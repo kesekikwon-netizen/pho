@@ -74,7 +74,6 @@ fun SurveyMapScreen(
                     }
                 } else {
                     MapArea(c, map, Modifier.weight(1f))
-                    DigInfoZone(c)
                     DigControlArea(c)
                 }
             }
@@ -92,6 +91,7 @@ fun SurveyMapScreen(
         if (c.setupOpen) SetupSheet(c)
         if (c.antennaSheetOpen) AntennaSheet(c)
         if (c.hub.screen != null) ToolHost(c)
+        if (pointConfirmVisible(c)) PointConfirmScreen(c) // 0.1.43 시안 ③ 측정 직후 점 확인
         DigOverlays(c) // 0.1.35 무엇을 잴까요 · 지도에 보이기 · 지금 상태 · 메뉴 · 유구 이름 바꾸기
         c.exporter?.let { if (it.open) ExportScreen(it) }
         c.backup?.let { if (it.open) BackupScreen(it, c.drive) }
@@ -228,24 +228,25 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
         },
     ) {
         map.Draw(ms, Modifier.fillMaxSize())
-        // 왼쪽(목업 15): 현재 좌표 X/Y/Z + 내 위치 · 전체 보기 · 확대 · 축소
-        Column(Modifier.align(Alignment.TopStart).padding(start = 10.dp, top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ToolBtn(Glyph.LOCATE, "내 위치 고정/해제", "tool_locate", if (c.follow) MKind.PRIMARY else MKind.PLAIN) { if (c.follow) c.follow = false else c.recenter() }
-                ToolBtn(Glyph.PLUS, "확대", "tool_zoom_in") { c.zoomIn() }
-                ToolBtn(Glyph.MINUS, "축소", "tool_zoom_out") { c.zoomOut() }
-            }
-        }
-        // 오른쪽(목업 15): 배경지도 · 레이어 · 점 목록 / 아래로 기포 · 안테나 높이 · 더보기
-        Column(Modifier.align(Alignment.TopEnd).padding(end = 10.dp, top = 10.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ToolBtn(Glyph.LAYERS, "지도에 보이기", "tool_layers") { c.dig.layersOpen = true }
-            ToolBtn(Glyph.EXTENT, "전체 보기", "tool_fit") { c.fitAll() }
-            c.tilt?.let { TiltBubble(it) }
-        }
-        // 0.1.35 지도 위 카드: 말뚝 찾아가기 · 기준점 확인 결과
-        Column(Modifier.align(Alignment.TopCenter).padding(top = 10.dp, start = 64.dp, end = 64.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // 0.1.43 시안 ②: 위 「재는 것」 띠 + 레이어 / 오른쪽 가운데 내 위치(어두움) · + − 맞춤 / 왼쪽 아래 축척
+        Column(Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 12.dp, end = 72.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            MapNowBanner(c)
             StakeCard(c)
             BmResultCard(c)
+        }
+        Column(Modifier.align(Alignment.TopEnd).padding(end = 12.dp, top = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            MapSquareBtn(Glyph.LAYERS, "지도에 보이기", "tool_layers") { c.dig.layersOpen = true }
+            GlyphIcon(Glyph.CHEVRON_UP, D.ink, 18.dp)
+        }
+        Column(Modifier.align(Alignment.CenterEnd).padding(end = 12.dp, top = 40.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            MapSquareBtn(Glyph.LOCATE, "내 위치 고정/해제", "tool_locate", dark = c.follow || true, selected = c.follow) { if (c.follow) c.follow = false else c.recenter() }
+            Column(Modifier.width(48.dp).clip(RoundedCornerShape(10.dp)).background(D.card).border(1.dp, D.line, RoundedCornerShape(10.dp))) {
+                MapGroupBtn("확대", "tool_zoom_in") { GlyphIcon(Glyph.PLUS, D.ink, 18.dp) }
+                Box(Modifier.fillMaxWidth().height(1.dp).background(D.hair))
+                MapGroupBtn("축소", "tool_zoom_out") { GlyphIcon(Glyph.MINUS, D.ink, 18.dp) }
+                Box(Modifier.fillMaxWidth().height(1.dp).background(D.hair))
+                MapGroupBtn("전체 보기", "tool_fit") { Text("맞춤", style = DTy.tiny.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium), color = D.ink) }
+            }
         }
         Column(Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 6.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             // 0.1.12 V월드: 키 없음 안내 · 오류 · 출처 표시(약관)
@@ -274,6 +275,40 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
                 modifier = Modifier.background(t.bg.copy(alpha = 0.85f), RoundedCornerShape(8.dp)).padding(horizontal = 6.dp, vertical = 1.dp).testTag("scale_label"))
         }
     }
+}
+
+/** 0.1.43 지도 위 「재는 것」 띠(시안: ● 유구 경계 · 가-2 | 4번째 점 · 처음 점을 누르면 닫혀요) */
+@Composable
+internal fun MapNowBanner(c: SurveyController) {
+    val (head, tail) = c.dig.nowLine()
+    val hint = c.dig.measureSub().let { m -> if (c.dig.kind == kr.archsurvey.dig.DigKind.FEATURE && (c.dig.selectedFeature?.pointRowIds?.size ?: 0) >= 3) "$m · 처음 점을 누르면 닫혀요" else m }
+    Row(
+        Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(10.dp)).background(D.card).border(1.dp, D.line, RoundedCornerShape(10.dp))
+            .hClickable { c.dig.pickerOpen = true }.padding(horizontal = 12.dp, vertical = 8.dp).testTag("map_now_banner"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(D.accentLight))
+        Text("  " + head + (tail?.let { " · $it" } ?: ""), style = DTy.small.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), color = D.ink, maxLines = 1)
+        Box(Modifier.padding(horizontal = 8.dp).width(1.dp).height(16.dp).background(D.line))
+        Text(hint, style = DTy.small, color = D.sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun MapSquareBtn(g: Glyph, desc: String, tag: String, dark: Boolean = false, selected: Boolean = false, onClick: () -> Unit) {
+    Box(
+        Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)).background(if (dark) D.dark else D.card).border(if (selected) 2.dp else 1.dp, if (selected) D.accentLight else if (dark) D.dark else D.line, RoundedCornerShape(10.dp))
+            .hClickable(onClick = onClick).semantics { contentDescription = desc }.testTag(tag),
+        contentAlignment = Alignment.Center,
+    ) { GlyphIcon(g, if (dark) Color.White else D.ink, 22.dp) }
+}
+
+@Composable
+private fun MapGroupBtn(desc: String, tag: String, content: @Composable () -> Unit) {
+    val c = LocalSurvey.current
+    Box(Modifier.fillMaxWidth().height(46.dp).hClickable {
+        when (tag) { "tool_zoom_in" -> c?.zoomIn(); "tool_zoom_out" -> c?.zoomOut(); else -> c?.fitAll() }
+    }.semantics { contentDescription = desc }.testTag(tag), contentAlignment = Alignment.Center) { content() }
 }
 
 // ---------------- 정보 영역 (좌표 / 취득 / 결과 띠 / 녹음) ----------------
