@@ -82,7 +82,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) {
             // 0.1.35: 오늘 폴 높이를 아직 확인하지 않았으면 「오늘 준비」(홈)부터, 했으면 마지막 작업 지도로 바로
             // 0.1.42: 「프로그램 종료」 뒤 실행이면 지난 지도 화면이 아니라 홈부터(작업은 그대로 열려 있어 「이어서 측량」 한 번)
-            vm.controller.homeOpen = freshAfterExit || !vm.resumeJob || !vm.controller.dig.poleConfirmedToday
+            vm.controller.homeOpen = !vm.resumeJob || !vm.controller.dig.poleConfirmedToday || freshAfterExit
             if (vm.resumeJob) vm.controller.ui.toast(vm.resumeNotice())
             // 0.1.39: 처음 설치(작업이 없음)면 새 작업 화면부터 — 고르기만으로 만들고 바로 측량
             else vm.controller.jobs?.openNew()
@@ -102,6 +102,8 @@ class MainActivity : ComponentActivity() {
      */
     private fun exitCompletely() {
         exitRequested = true
+        // 연결 서비스가 혹시 남아 있으면 바로 멈춤(새로 띄우지 않는 stopService — 포그라운드 알림도 같이 사라짐)
+        runCatching { stopService(android.content.Intent(this, kr.archsurvey.engine.SurveyConnectionService::class.java)) }
         runCatching { cleanExit.mark() }
         finishAndRemoveTask()
         runCatching { (getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager).cancel(kr.archsurvey.engine.SurveyConnectionService.NOTI_ID) }

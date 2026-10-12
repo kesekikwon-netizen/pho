@@ -35,6 +35,17 @@ class Exit0142Test {
         assertFalse("종료 뒤 자동 재연결 없음", cc.connectRequested)
     }
 
+    @Test fun exitWithoutLink_stillReleasesLock() = runTest(StandardTestDispatcher()) {
+        val w = Wire(); val fc = FakeConn()
+        val cc = ConnectionController(fc, backgroundScope)
+        cc.lock = ReceiverLock(w.Bus(), "kr.archsurvey.field", "발굴 측량", { 0L })
+        val other = ReceiverLock(w.Bus(), "kr.archsurvey.gcp", "사진 기준점", { 0L })
+        cc.lock!!.hold("AA:11")
+        assertNotNull(other.otherHolder("AA:11"))
+        cc.onStoppedOutside()
+        assertNull(other.otherHolder("AA:11")); assertFalse(cc.connectRequested)
+    }
+
     @Test fun mainActivity_exitOrder_andFreshStart() {
         val src = java.io.File("src/main/kotlin/kr/archsurvey/MainActivity.kt").readText()
         val body = src.substringAfter("private fun exitCompletely()").substringBefore("\n    }\n")
@@ -43,6 +54,7 @@ class Exit0142Test {
         assertTrue(src.contains("onExitApp = { exitCompletely() }"))
         assertTrue("종료 뒤 실행은 저장 상태 버림", src.contains("freshAfterExit = cleanExit.consumeOnLaunch()") && src.contains("if (freshAfterExit) null else savedInstanceStateRaw"))
         val ctl = listOf("src/main/kotlin/kr/archsurvey/ui/SurveyController.kt", "src/main/kotlin/kr/archsurvey/gcp/ui/GcpController.kt").map { java.io.File(it) }.first { it.exists() }.readText()
-        assertTrue("종료는 늘 연결 정리", Regex("""fun exitApp\(\) \{\s*disconnectDevice\(\)""").containsMatchIn(ctl))
+        assertTrue("종료는 늘 연결·잠금 정리", ctl.contains("if (connection?.linkActive() == true) disconnectDevice() else runCatching { connection?.onStoppedOutside() }"))
+        assertTrue("서비스 정지 먼저", body.indexOf("stopService(") in 0 until body.indexOf("finishAndRemoveTask()"))
     }
 }
