@@ -55,6 +55,6 @@ class Exit0142Test {
         assertTrue("종료 뒤 실행은 저장 상태 버림", src.contains("freshAfterExit = cleanExit.consumeOnLaunch()") && src.contains("if (freshAfterExit) null else savedInstanceStateRaw"))
         val ctl = listOf("src/main/kotlin/kr/archsurvey/ui/SurveyController.kt", "src/main/kotlin/kr/archsurvey/gcp/ui/GcpController.kt").map { java.io.File(it) }.first { it.exists() }.readText()
         assertTrue("종료는 늘 연결·잠금 정리", ctl.contains("if (connection?.linkActive() == true) disconnectDevice() else runCatching { connection?.onStoppedOutside() }"))
-        assertTrue("서비스 정지 먼저", body.indexOf("stopService(") in 0 until body.indexOf("finishAndRemoveTask()"))
+        assertTrue("서비스 정지 먼저", body.indexOf("stopSafely(") in 0 until body.indexOf("finishAndRemoveTask()"))
     }
 }
