@@ -60,40 +60,67 @@ internal fun prepAction(c: SurveyController, id: String) {
     }
 }
 
-/** ③ 측량한 것: 유구별 · 날짜별 · 종류별 / 기준점 확인 카드 / 확인 필요(고정 아님) / 이름 바꾸기 / 내보내기 */
+/** 0.1.43 시안 ⑤ 측량한 것: 요약 · 유구별/날짜별/종류별 · 확인 필요 띠 · 유구 표(점·FIX·면적) · 고른 유구의 점 표 */
 @Composable
 fun FeaturesScreen(c: SurveyController) {
-    val t = T
     val d = c.dig
     var mode by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(0) }
+    val cards = d.featureCards()
+    var selId by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableLongStateOf(cards.firstOrNull { it.open }?.id ?: cards.lastOrNull()?.id ?: -1L) }
     ToolScaffold("측량한 것", "features_screen", onBack = { c.hub.back() }, bottom = {
-        Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MBtn(Modifier.weight(1f).height(56.dp).testTag("features_all_points"), MKind.PLAIN, 16.dp, onClick = { c.hub.open(ToolScreen.POINTS) }) { Text("점 목록 전체", style = Ty.label, color = t.ink) }
-            MBtn(Modifier.weight(1f).height(56.dp).testTag("features_export"), MKind.PRIMARY, 16.dp, onClick = { c.exporter?.openScreen() }) { Text("내보내기", style = Ty.label, color = t.onPrimary) }
+        DBottomBar {
+            DSecondary("점 목록 전체", "features_all_points", Modifier.weight(1f)) { c.hub.open(ToolScreen.POINTS) }
+            DPrimary("내보내기", "features_export", Modifier.weight(1.4f)) { c.exporter?.openScreen() }
         }
     }) {
-        Text("점 ${c.points.size} · 유구 ${d.featureOutlines().size} · 유물 ${c.points.count { it.artifactNo != null }} · 오늘 ${d.todayCount()}", style = Ty.coord.copy(fontSize = 13.sp), color = t.inkSub, modifier = Modifier.testTag("features_summary"))
-        Seg(listOf("유구별", "날짜별", "종류별"), mode, "features_mode") { mode = it }
+        Text("점 ${c.points.size}   유구 ${cards.size}   유물 ${c.points.count { it.artifactNo != null }}   오늘 ${d.todayCount()}", style = DTy.monoS, color = D.sub, modifier = Modifier.testTag("features_summary"))
+        DSeg(listOf("유구별", "날짜별", "종류별"), mode, "features_mode") { mode = it }
         val flagged = c.points.filter { PointCaution.displayStatus(it) != SurveyStatus.FIXED }
         if (flagged.isNotEmpty()) {
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(t.caution.copy(alpha = 0.18f)).border(1.dp, t.cautionInk, RoundedCornerShape(14.dp)).padding(12.dp).testTag("features_flagged")) {
-                Text("확인 필요 · 고정(FIX) 아님 ${flagged.size}점", style = Ty.label.copy(fontWeight = FontWeight.Medium), color = t.ink)
-                Text(flagged.takeLast(6).joinToString(" · ") { it.name }, style = Ty.coord.copy(fontSize = 13.sp), color = t.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(D.cautionBg).border(1.dp, D.caution.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                .hClickable { flagged.firstOrNull()?.let { c.hub.openDetail(it) } }.padding(horizontal = 14.dp, vertical = 14.dp).testTag("features_flagged"), verticalAlignment = Alignment.CenterVertically) {
+                Text("▲  확인 필요 · FIX 아닌 점 ${flagged.size}개 " + flagged.take(3).joinToString(" ") { it.name }, style = DTy.body, color = D.caution, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("보기", style = DTy.bodyB, color = D.caution)
             }
         }
         when (mode) {
             0 -> {
+                DTableHead(listOf("유구" to 3f, "점" to 0.8f, "FIX" to 1.2f, "면적" to 1.6f))
+                if (cards.isEmpty()) Text("아직 유구가 없어요 · 측량 화면의 「재는 것」을 유구 경계로 두고 재세요", style = DTy.small, color = D.sub, modifier = Modifier.testTag("features_empty"))
+                for (fc in cards) DTableRow(listOf(fc.name to 3f, "${fc.total}" to 0.8f, "${fc.fixedCount}/${fc.total}" to 1.2f, (fc.areaSqm?.let { f2(it) + " ㎡" } ?: "—") to 1.6f),
+                    "feature_card_${fc.id}", selected = fc.id == selId, sub = if (fc.open) "재는 중" else if (fc.closed) "경계 닫힘" else "선",
+                    subColor = if (fc.open) D.accent else D.sub, firstStyle = DTy.serif.copy(fontSize = 20.sp),
+                    colors = if (fc.fixedCount < fc.total) mapOf(2 to D.caution) else emptyMap(), onLongClick = { d.renameFor = fc.id }) { selId = fc.id }
+                val others = c.points.filter { p -> p.featureId == null && c.arch.outlines.none { p.rowId in it.pointRowIds } }
+                if (others.isNotEmpty()) {
+                    val fx = others.count { PointCaution.displayStatus(it) == SurveyStatus.FIXED }
+                    DTableRow(listOf("유구 밖" to 3f, "${others.size}" to 0.8f, "$fx/${others.size}" to 1.2f, "—" to 1.6f), "features_others",
+                        sub = others.groupBy { DigKind.resolve(it.digKind, it.type)?.labelKo ?: "기타" }.map { (k, v) -> "$k ${v.size}" }.joinToString(" · "),
+                        firstStyle = DTy.bodyB, colors = if (fx < others.size) mapOf(2 to D.caution) else emptyMap())
+                }
+                DRule()
+                cards.firstOrNull { it.id == selId }?.let { fc ->
+                    val pts = c.points.filter { p -> p.featureId == fc.id || c.arch.outlines.any { it.id == fc.id && p.rowId in it.pointRowIds } }
+                    DSectionLabel("${fc.name}의 점", Modifier.padding(top = 8.dp))
+                    DTableHead(listOf("번호" to 2f, "해발 m" to 1.6f, "수평 cm" to 1.4f, "시각" to 1.2f))
+                    for (p in pts) DTableRow(listOf(p.name to 2f, ((p.groundMslM ?: p.groundHeightM)?.let { String.format(java.util.Locale.US, "%.2f", it) } ?: "—") to 1.6f,
+                        (p.sigmaHM?.let { String.format(java.util.Locale.US, "%.1f", it * 100) } ?: "—") to 1.4f,
+                        java.text.SimpleDateFormat("HH:mm", java.util.Locale.KOREA).format(java.util.Date(p.measuredAtMs)) to 1.2f), "features_pt_${p.name}",
+                        firstStyle = DTy.monoS.copy(fontSize = 15.sp), monoFrom = 0, colors = mapOf(3 to D.sub), compact = true) { c.hub.openDetail(p) }
+                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        DSecondary("이름 바꾸기", "feature_rename_${fc.id}", Modifier.weight(1f), height = 50.dp) { d.renameFor = fc.id }
+                        DSecondary(if (fc.open) "이어서 재기" else "다시 열어 재기", "feature_continue_${fc.id}", Modifier.weight(1f), height = 50.dp) {
+                            if (!fc.open && fc.closed) c.arch.reopenOutline(fc.id)
+                            d.select(DigKind.FEATURE, fc.id); c.hub.closeAll(); c.goToSurvey()
+                        }
+                    }
+                }
                 val bms = c.points.filter { DigKind.resolve(it.digKind, it.type) == DigKind.BM }
                 if (bms.isNotEmpty()) {
                     val tod = d.bmToday
                     Card("기준점 · 확인", (bms.groupBy { it.digTag.ifBlank { it.name } }.map { (n, l) -> "$n ${l.size}회" }.joinToString(" · ")) +
                         " · 오늘 " + when (tod) { true -> "통과"; false -> "차이 큼"; null -> "아직" }, "features_bm") {}
                 }
-                val cards = d.featureCards()
-                if (cards.isEmpty()) Text("아직 유구가 없어요 · 지도에서 「지금 재는 것」을 유구 경계로 두고 재세요", style = Ty.body, color = t.inkSub, modifier = Modifier.testTag("features_empty"))
-                for (fc in cards) FeatureCardView(c, fc)
-                val others = c.points.filter { p -> p.featureId == null && c.arch.outlines.none { p.rowId in it.pointRowIds } && DigKind.resolve(p.digKind, p.type) != DigKind.BM }
-                if (others.isNotEmpty()) Card("유구 밖 · 그 밖의 점 ${others.size}", others.takeLast(8).joinToString(" · ") { it.name + (it.artifactNo?.let { n -> "(유물 $n)" } ?: "") }, "features_others") {}
             }
             1 -> {
                 val byDay = c.points.groupBy { kr.archsurvey.dig.DayKey.of(it.measuredAtMs) }.toSortedMap(compareByDescending { it })
@@ -109,11 +136,11 @@ fun FeaturesScreen(c: SurveyController) {
 
 @Composable
 private fun Card(title: String, sub: String, tag: String, onClick: () -> Unit) {
-    val t = T
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(t.raised).border(1.dp, t.outline, RoundedCornerShape(14.dp)).hClickable(onClick = onClick).padding(12.dp).testTag(tag)) {
-        Text(title, style = Ty.serifHead.copy(fontSize = 17.sp), color = t.ink)
-        Text(sub, style = Ty.small.copy(fontSize = 13.sp), color = t.inkSub, maxLines = 3, overflow = TextOverflow.Ellipsis)
+    Column(Modifier.fillMaxWidth().hClickable(onClick = onClick).padding(vertical = 10.dp, horizontal = 4.dp).testTag(tag)) {
+        Text(title, style = DTy.bodyB, color = D.ink)
+        Text(sub, style = DTy.small, color = D.sub, maxLines = 3, overflow = TextOverflow.Ellipsis)
     }
+    DRule(false)
 }
 
 @Composable

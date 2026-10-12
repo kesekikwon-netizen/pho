@@ -207,24 +207,15 @@ fun ConnectionScreen(cc: ConnectionController) {
     val p = cc.profile
     val vrsOnly = cc.section == ConnSection.VRS
     Column(Modifier.fillMaxSize().background(t.bg).testTag("connection_screen")) {
-        AppHeader(LocalSurvey.current, if (vrsOnly) "VRS 설정" else "장비 연결", onBack = { cc.leaveScreen() }, backTag = "conn_back")
+        DTopBar(if (vrsOnly) "VRS 설정" else "장비 연결", { cc.leaveScreen() }, backTag = "conn_back")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            // 맨 위: 지금 상태 한 줄(색 점·글자) — 오류 카드는 아래에 둔다
+            // 0.1.43 시안 ⑥: 큰 상태 글자 + 작은 보정·시도 줄, 그 아래 가로 5단계
             val live = link.state == LinkState.STREAMING
-            val dot = when (link.state) { LinkState.STREAMING -> t.ok; LinkState.IDLE -> t.line; LinkState.NEEDS_USER -> t.bad; else -> t.caution }
-            Row(
-                Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(16.dp)).background(t.raised).border(1.dp, t.line.copy(alpha = 0.4f), RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Box(Modifier.size(10.dp).clip(androidx.compose.foundation.shape.CircleShape).background(dot))
-                Column(Modifier.weight(1f)) {
-                    Text(linkText(link.state) + (if (link.attempt > 0) " · 시도 ${link.attempt}회" else ""), style = Ty.label, color = t.ink, modifier = Modifier.testTag("conn_link_state"))
-                    if (cc.form.enabled) Text("보정: " + ntripText(ntrip.state), style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("conn_ntrip_state"))
-                    if (link.message.isNotBlank()) Text(link.message, style = Ty.small, color = t.inkSub)
-                }
-                if (live) GlyphIcon(Glyph.CHECK, t.ok, 22.dp)
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(linkText(link.state), style = DTy.h1, color = if (live) D.fix else if (link.state == LinkState.NEEDS_USER) D.bad else D.ink, modifier = Modifier.testTag("conn_link_state"))
+                Text("  " + (if (cc.form.enabled) "보정 " + ntripText(ntrip.state) else "VRS 끔") + " · 시도 ${link.attempt}회", style = DTy.small, color = D.sub, modifier = Modifier.padding(bottom = 3.dp).testTag("conn_ntrip_state"))
             }
-            // 0.1.18 HTML: 연결 단계(블루투스 → … → 고정) 대기/진행 중/완료/실패를 화면 안에서도 보여 줌
+            if (link.message.isNotBlank()) Text(link.message, style = DTy.small, color = D.sub)
             if (!vrsOnly) ConnStepsInline(cc, link, ntrip)
             // 0.1.18 HTML 실패 카드: 원인과 해결 방법(블루투스 단계 실패일 때). BT-130(위치 없음)은 아래 기존 카드
             ConnectFailCopy.headline(p, link)?.takeIf { cc.connectRequested }?.let { ErrorCardView(it, "conn_fail_card") }
@@ -234,22 +225,11 @@ fun ConnectionScreen(cc: ConnectionController) {
             if (!vrsOnly) DeviceSection(cc, link)
             VrsSection(cc, ntrip, vrsOnly)
 
-            // 앱을 열 때 자동 연결
-            Row(
-                Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(16.dp)).background(t.raised).border(1.dp, t.line.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
-                    .toggleable(cc.autoConnect, role = androidx.compose.ui.semantics.Role.Switch) { cc.changeAutoConnect(it) }.padding(horizontal = 16.dp, vertical = 8.dp).testTag("conn_auto_row"),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("앱 시작 때 자동 연결", style = Ty.label, color = t.ink)
-                    Text("한 번 연결에 성공하면 수신기·VRS 설정을 저장하고, 앱을 열 때 바로 연결해요", style = Ty.small, color = t.inkSub)
-                }
-                Switch(cc.autoConnect, null, modifier = Modifier.testTag("conn_auto"), colors = blackSwitch())
-            }
+            if (!vrsOnly) ConnHelpSection(cc, link)
+            DLeaderRow("앱 시작 때 자동 연결", null, "conn_auto_row", toggle = cc.autoConnect) { cc.changeAutoConnect(!cc.autoConnect) }
             Spacer(Modifier.height(8.dp))
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.35f)))
-        Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        DBottomBar {
             val running = cc.connectRequested && link.state != LinkState.IDLE
             if (vrsOnly) {
                 if (running) MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_disconnect"), MKind.PLAIN, 28.dp, onClick = { cc.disconnect() }) {
@@ -273,11 +253,10 @@ fun ConnectionScreen(cc: ConnectionController) {
                         Text("지도로 가기", style = Ty.label.copy(fontSize = 16.sp), color = t.onPrimary)
                     }
                 }
-                ConnPhase.IDLE, ConnPhase.FAILED -> MBtn(Modifier.weight(1f).height(56.dp).testTag("conn_connect"), MKind.PRIMARY, 28.dp, onClick = { cc.connect() }) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        GlyphIcon(Glyph.BT, t.onPrimary, 18.dp)
-                        Text(cc.connectLabel(), style = Ty.label.copy(fontSize = 16.sp), color = t.onPrimary, modifier = Modifier.testTag("conn_connect_label"))
-                    }
+                ConnPhase.IDLE, ConnPhase.FAILED -> Row(Modifier.weight(1f).height(58.dp).clip(RoundedCornerShape(10.dp)).background(D.primary).hClickable { cc.connect() }.testTag("conn_connect"),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                    GlyphIcon(Glyph.BT, Color.White, 18.dp)
+                    Text("  " + cc.connectLabel(), style = DTy.button, color = Color.White, modifier = Modifier.testTag("conn_connect_label"))
                 }
             }
         }
@@ -290,22 +269,30 @@ private fun ConnStepsInline(cc: ConnectionController, link: kr.archsurvey.device
     val t = T
     val q = LocalSurvey.current?.gv?.quality?.code ?: 0
     val states = ConnectSteps.compute(link, ntrip, cc.form.enabled, q)
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(t.raised).border(1.dp, t.line.copy(alpha = 0.4f), RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 10.dp).testTag("conn_steps"),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        for ((i, label) in ConnectSteps.labels.withIndex()) {
-            val st = states[i]
-            val bg = when (st) { StepState.FAIL -> t.bad; StepState.DONE -> t.ink; StepState.ACTIVE -> t.fixed; else -> t.chip }
-            val fg = when (st) { StepState.FAIL, StepState.DONE, StepState.ACTIVE -> t.onPrimary; else -> t.inkSub }
-            Row(Modifier.fillMaxWidth().heightIn(min = 32.dp).testTag("conn_step_$i"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box(Modifier.size(24.dp).clip(androidx.compose.foundation.shape.CircleShape).background(bg), contentAlignment = Alignment.Center) {
-                    Text(if (st == StepState.DONE) "✓" else "${i + 1}", style = Ty.small.copy(fontSize = 12.sp), color = fg)
+    Column(Modifier.fillMaxWidth().testTag("conn_steps")) {
+        Box(Modifier.fillMaxWidth().height(64.dp)) {
+            Box(Modifier.fillMaxWidth().padding(horizontal = 36.dp).padding(top = 13.dp).height(1.dp).background(D.line))
+            Row(Modifier.fillMaxWidth()) {
+                for ((i, _) in ConnectSteps.labels.withIndex()) {
+                    val label = listOf("블루투스", "위치 수신", "VRS 접속", "보정 수신", "FIX").getOrElse(i) { "" }
+                    val st = states[i]
+                    val ring = when (st) { StepState.FAIL -> D.bad; StepState.DONE -> D.fix; StepState.ACTIVE -> D.accentLight; else -> D.line }
+                    Column(Modifier.weight(1f).testTag("conn_step_$i"), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(Modifier.size(26.dp).clip(androidx.compose.foundation.shape.CircleShape).background(if (st == StepState.DONE) D.fix else D.card).border(1.5.dp, ring, androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
+                            when (st) {
+                                StepState.DONE -> Text("✓", style = DTy.tiny, color = Color.White)
+                                StepState.ACTIVE -> Box(Modifier.size(9.dp).clip(androidx.compose.foundation.shape.CircleShape).background(D.accentLight))
+                                StepState.FAIL -> Text("!", style = DTy.tiny, color = D.bad)
+                                else -> Text("${i + 1}", style = DTy.tiny, color = D.sub)
+                            }
+                        }
+                        Text(label, style = DTy.tiny, color = if (st == StepState.ACTIVE) D.ink else D.sub, maxLines = 1, modifier = Modifier.padding(top = 6.dp))
+                        Text(ConnPhases.stateKo(st), style = DTy.tiny.copy(fontSize = 1.sp), color = Color.Transparent, modifier = Modifier.testTag("conn_step_state_$i"))
+                    }
                 }
-                Text(label, style = Ty.body, color = t.ink, modifier = Modifier.weight(1f))
-                Text(ConnPhases.stateKo(st), style = Ty.small, color = if (st == StepState.FAIL) t.bad else t.inkSub, modifier = Modifier.testTag("conn_step_state_$i"))
             }
         }
+        DRule()
     }
 }
 
@@ -320,23 +307,22 @@ internal fun blackSwitch() = androidx.compose.material3.SwitchDefaults.colors(
 private fun DeviceSection(cc: ConnectionController, link: kr.archsurvey.device.LinkStatus) {
     val t = T
     val p = cc.profile
-    Row(Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(28.dp)).background(t.chip).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        for (d in DeviceProfiles.all) {
+    Row(Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(10.dp)).background(D.card).border(1.dp, D.line, RoundedCornerShape(10.dp))) {
+        for ((i, d) in DeviceProfiles.all.withIndex()) {
             val on = d.id == p.id
-            Box(
-                Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(24.dp)).background(if (on) t.raised else Color.Transparent)
-                    .then(if (on) Modifier.border(1.dp, t.line.copy(alpha = 0.5f), RoundedCornerShape(24.dp)) else Modifier)
-                    .hClickable { cc.selectProfile(d) }.testTag("conn_model_${d.id}"),
-                contentAlignment = Alignment.Center,
-            ) { Text(d.displayName.replace("Spectra Precision", "Spectra").replace(" ", " · "), style = Ty.label.copy(fontSize = 15.sp), color = if (on) t.ink else t.inkSub, maxLines = 1) }
+            if (i > 0) Box(Modifier.width(1.dp).fillMaxHeight().background(D.line))
+            Box(Modifier.weight(1.4f).fillMaxHeight().then(if (on) Modifier.clip(RoundedCornerShape(10.dp)).background(D.sel).border(1.8.dp, D.ink, RoundedCornerShape(10.dp)) else Modifier)
+                .hClickable { cc.selectProfile(d) }.testTag("conn_model_${d.id}"), contentAlignment = Alignment.Center) {
+                Text(d.displayName.replace("Spectra Precision", "Spectra"), style = if (on) DTy.bodyB else DTy.body, color = D.ink, maxLines = 1)
+            }
         }
-        // 목업 04 「기타」: 다른 수신기는 통신 검증 전이라 지원하지 않음(누르면 안내)
-        Box(
-            Modifier.weight(0.7f).fillMaxHeight().clip(RoundedCornerShape(24.dp)).hClickable { cc.ui.fail("기타 수신기는 아직 지원하지 않아요 · R10 · SP60 만 연결돼요") }.testTag("conn_model_other"),
-            contentAlignment = Alignment.Center,
-        ) { Text("기타", style = Ty.label.copy(fontSize = 15.sp), color = t.inkSub.copy(alpha = 0.6f), maxLines = 1) }
+        Box(Modifier.width(1.dp).fillMaxHeight().background(D.line))
+        // 「기타」: 다른 수신기는 통신 검증 전이라 지원하지 않음(누르면 안내)
+        Box(Modifier.weight(0.8f).fillMaxHeight().hClickable { cc.ui.fail("기타 수신기는 아직 지원하지 않아요 · R10 · SP60 만 연결돼요") }.testTag("conn_model_other"), contentAlignment = Alignment.Center) {
+            Text("기타", style = DTy.body, color = D.ink, maxLines = 1)
+        }
     }
-    Text("등록된 장비 (폰 블루투스)", style = Ty.small.copy(fontSize = 13.sp), color = t.inkSub, modifier = Modifier.padding(top = 4.dp))
+    DSectionLabel("등록된 장비 · 폰 블루투스", Modifier.padding(top = 4.dp))
     if (cc.bonded.isEmpty()) {
         Text(if (cc.pair != null) "등록된 기기가 없어요. 아래 「주변 수신기 찾기」를 누르세요." else "등록된 기기가 없어요. 먼저 폰의 블루투스 설정에서 수신기를 등록하세요.", style = Ty.small, color = t.inkSub)
         for ((i, st) in p.pairingSteps.withIndex()) Text("${i + 1}. $st", style = Ty.small, color = t.inkSub)
@@ -344,50 +330,57 @@ private fun DeviceSection(cc: ConnectionController, link: kr.archsurvey.device.L
     for ((name, addr) in cc.bonded) {
         val on = addr == cc.address
         val isLive = on && (link.state == LinkState.STREAMING || link.state == LinkState.CONNECTED_NO_DATA)
-        val shape = RoundedCornerShape(16.dp)
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(shape).background(t.raised).border(if (on) 1.5.dp else 1.dp, if (on) t.ink else t.line.copy(alpha = 0.45f), shape)
-                .hClickable { cc.selectAddress(addr) }.padding(horizontal = 14.dp, vertical = 8.dp).testTag("conn_bonded_$addr"),
+            Modifier.fillMaxWidth().heightIn(min = 56.dp).background(if (on) D.sel else Color.Transparent)
+                .hClickable { cc.selectAddress(addr) }.padding(horizontal = 12.dp, vertical = 6.dp).testTag("conn_bonded_$addr"),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(t.chip), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.POLE, t.ink, 20.dp) }
+            GlyphIcon(Glyph.POLE, D.ink, 20.dp)
             Column(Modifier.weight(1f)) {
-                Text(name, style = Ty.label.copy(fontSize = 16.sp), color = t.ink, maxLines = 1)
-                Text(addr + if (isLive) " · 연결됨" else if (on) " · 선택됨" else "", style = Ty.coord.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1)
+                Text(name.replace(", ", " · "), style = DTy.bodyB.copy(fontSize = 17.sp), color = D.ink, maxLines = 1)
+                Text(addr, style = DTy.monoS.copy(fontSize = 11.sp), color = D.sub, maxLines = 1)
             }
-            if (isLive) Row(
-                Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).background(t.ok.copy(alpha = 0.12f)).border(1.5.dp, t.ok, RoundedCornerShape(16.dp)).padding(start = 8.dp, end = 12.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) { GlyphIcon(Glyph.CHECK, t.ok, 16.dp); Text("연결됨", style = Ty.label.copy(fontSize = 12.sp), color = t.ink) }
-            else if (on) GlyphIcon(Glyph.CHECK, t.ink, 22.dp)
+            if (isLive) Text("연결됨", style = DTy.small, color = D.fix) else if (on) Text("고름", style = DTy.small, color = D.ink)
         }
+        DRule(false)
     }
     // 0.1.42 다른 앱(발굴 측량/사진 기준점)이 같은 수신기를 쓰는 중이면 한 번에 넘겨받기
     ReceiverLockCard(cc)
     // 0.1.40 앱 안에서 찾기 → 눌러서 등록(PIN 자동)+연결. 폰 블루투스 설정으로 갈 필요 없음
     PairFindButton(cc)
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        // 목업 04 🔍: 폰에 등록된 장비 목록을 다시 읽고 결과를 알려 줌
-        Btn("등록 목록 새로 읽기", Modifier.weight(1f).testTag("conn_refresh")) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("등록 목록 새로 읽기", style = DTy.small, color = D.sub, modifier = Modifier.heightIn(min = 44.dp).hClickable {
             cc.refresh()
             if (cc.bonded.isEmpty()) cc.ui.fail("등록된 장비가 없어요 · 위 「주변 수신기 찾기」를 누르세요") else cc.ui.ok("등록된 장비 ${cc.bonded.size}개를 찾았어요")
-        }
-        Btn("폰 블루투스 설정", Modifier.weight(1f).testTag("conn_bt_settings_top")) { cc.openBluetoothSettings() }
+        }.padding(vertical = 12.dp).testTag("conn_refresh"))
+        Text("폰 블루투스 설정", style = DTy.small, color = D.sub, modifier = Modifier.heightIn(min = 44.dp).hClickable { cc.openBluetoothSettings() }.padding(vertical = 12.dp).testTag("conn_bt_settings_top"))
     }
-    Text(if (cc.pair != null) "새 수신기는 「주변 수신기 찾기」에서 누르면 등록(PIN 1234 자동)하고 바로 연결해요." else "새 수신기는 폰의 블루투스 설정에서 먼저 등록(페어링)해요.", style = Ty.small, color = t.inkSub)
-    FoldRow("처음 연결 도움말", cc.showHelp, "conn_help_toggle") { cc.showHelp = !cc.showHelp }
+}
+
+/** 0.1.43 시안 ⑥ 아래쪽: 처음 연결 도움말 · 진단 기록(0.1.41~42 진단 카드를 여기로) · 연결 전 확인 · 자동 연결 */
+@Composable
+private fun ConnHelpSection(cc: ConnectionController, link: kr.archsurvey.device.LinkStatus) {
+    val t = T
+    val p = cc.profile
+    DLeaderRow("처음 연결 도움말", null, "conn_help_toggle") { cc.showHelp = !cc.showHelp }
     if (cc.showHelp) {
         Btn("블루투스 설정 열기", Modifier.fillMaxWidth().testTag("conn_bt_settings")) { cc.openBluetoothSettings() }
-        Text(p.pinNote, style = Ty.small, color = t.inkSub)
-        Text(p.portNote, style = Ty.small, color = t.inkSub)
+        Text(p.pinNote, style = DTy.small, color = D.sub)
+        Text(p.portNote, style = DTy.small, color = D.sub)
+        for ((i, st) in p.pairingSteps.withIndex()) Text("${i + 1}. $st", style = DTy.small, color = D.sub)
     }
-    // 0.1.11 P0(통신): 진단 기록 — 연결 방식·오류 코드·NMEA 자동 켜기 시도와 ACK
-    FoldRow("진단 기록 · 연결 방식 · NMEA 자동 켜기", cc.showDiag, "conn_diag_toggle") { cc.showDiag = !cc.showDiag }
-    if (cc.showDiag) Card {
-        Text("연결 방식 " + (link.strategy ?: "—") + " · 상태 " + linkText(link.state) + (link.error?.let { " · 오류 ${it.code}" } ?: "") + " · 시도 ${link.attempt}회", style = Ty.small, color = t.ink, modifier = Modifier.testTag("conn_diag_link"))
+    Column {
+        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).hClickable { cc.showDiag = !cc.showDiag }.testTag("conn_diag_toggle"), verticalAlignment = Alignment.CenterVertically) {
+            Text("진단 기록", style = DTy.body, color = D.ink); Text("  문의할 때 공유", style = DTy.tiny, color = D.sub, modifier = Modifier.weight(1f))
+            GlyphIcon(Glyph.CHEVRON_RIGHT, D.sub, 12.dp)
+        }
+        DRule(false)
+    }
+    if (cc.showDiag) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("연결 방식 " + (link.strategy ?: "—") + " · 상태 " + linkText(link.state) + (link.error?.let { " · 오류 ${it.code}" } ?: "") + " · 시도 ${link.attempt}회", style = DTy.small, color = D.ink, modifier = Modifier.testTag("conn_diag_link"))
         val d = remember(link, cc.showDiag) { cc.diagnostics() }
-        Text(d.ifBlank { "아직 기록된 진단이 없어요. 연결을 시도하면 SP60 NMEA 자동 켜기 명령·응답(ACK)이 여기에 남아요." }, style = Ty.coord.copy(fontSize = 11.sp, lineHeight = 15.sp), color = t.inkSub, modifier = Modifier.testTag("conn_diag_text"))
-        Text("전체 기록 공유: 환경설정 › 좌표계 · 측량 설정 › 오류 기록", style = Ty.small, color = t.inkSub)
+        Text(d.ifBlank { "아직 기록된 진단이 없어요. 연결을 시도하면 NMEA 자동 켜기 명령·응답(ACK)과 위치 문장(GGA) 수신 여부가 여기에 남아요." }, style = DTy.monoS.copy(fontSize = 11.sp, lineHeight = 15.sp), color = D.sub, modifier = Modifier.testTag("conn_diag_text"))
+        Text("전체 기록 공유: 설정 › 버전 · 오류 기록", style = DTy.small, color = D.sub)
     }
     // 연결 전 확인: 모두 체크했으면 한 줄로 접는다
     val allChecked = cc.checks.isNotEmpty() && cc.checks.all { it }
@@ -467,7 +460,7 @@ private fun FormSelect(value: String, tag: String, onClick: () -> Unit) {
 @Composable
 private fun VrsSection(cc: ConnectionController, ntrip: kr.archsurvey.engine.NtripStatus, vrsOnly: Boolean) {
     val t = T
-    if (!vrsOnly) Text("VRS(NTRIP) 보정", style = Ty.small.copy(fontSize = 13.sp), color = t.inkSub, modifier = Modifier.padding(top = 8.dp))
+    if (!vrsOnly) { VrsSummary(cc); return }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(t.raised).border(1.dp, t.line.copy(alpha = 0.4f), RoundedCornerShape(18.dp)).padding(horizontal = 16.dp, vertical = 4.dp)) {
         Column {
             Row(
@@ -634,5 +627,27 @@ fun ErrorCardView(card: ErrorCard, tag: String) {
         Text(card.title, style = Ty.label, color = t.ink)
         Text(card.action, style = Ty.body, color = t.ink)
         Text(if (card.code == "-") "" else "오류 ${card.code}" + if (card.autoRetry) " · 자동 재시도 중" else "", style = Ty.small, color = t.inkSub)
+    }
+}
+
+/** 0.1.43 시안 ⑥ VRS 카드: 서버 · 마운트 · 아이디 · 보내기 요약 + 「고치기」(VRS 설정 화면 · 고르는 방식) */
+@Composable
+private fun VrsSummary(cc: ConnectionController) {
+    val f = cc.form
+    Column(Modifier.testTag("conn_vrs_summary")) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("VRS 보정 · NTRIP", style = DTy.small, color = D.sub)
+            Box(Modifier.weight(1f).padding(horizontal = 8.dp).height(1.dp).background(D.hair))
+            Text("고치기", style = DTy.body.copy(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline), color = D.accent,
+                modifier = Modifier.heightIn(min = 40.dp).hClickable { cc.openVrs() }.padding(vertical = 8.dp).testTag("conn_vrs_edit"))
+        }
+        for ((k, v) in listOf("서버" to (if (f.host.isBlank()) "—" else "${f.host}:${f.port}"), "마운트" to f.mount.ifBlank { "—" }, "아이디" to f.user.ifBlank { "—" },
+                "보내기" to (if (!f.enabled) "VRS 끔" else (if (cc.sendGga) "내 위치(GGA) 켬" else "내 위치(GGA) 끔") + (if (cc.autoRetry) " · 끊기면 다시 접속" else "")))) {
+            Row(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+                Text(k, style = DTy.small, color = D.sub, modifier = Modifier.width(80.dp))
+                Text(v, style = if (k == "보내기") DTy.bodyB.copy(fontSize = 15.sp) else DTy.mono, color = D.ink, modifier = Modifier.testTag("conn_vrs_$k"))
+            }
+        }
+        DRule(false)
     }
 }

@@ -394,69 +394,61 @@ private fun PickRow(label: String, value: String?, tag: String, onClick: () -> U
 
 // ---------------- 설정 ----------------
 
+/** 0.1.43 시안 ⑩ 설정: 꼭 필요한 것 · 측정 · 발굴 · 지도 · 보관 · 버전. 모든 값은 줄 누르기 → 고르기 창(숫자 입력 없음) */
 @Composable
 fun SettingsScreen(c: SurveyController) {
-    val t = T; val h = c.hub
+    val h = c.hub
     val st = c.settingsState
     val d = c.dig
-    var advanced by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
-    ToolScaffold("설정", "settings_screen", onBack = { h.back() }) {
-        // 0.1.35 「꼭 필요한 네 가지」: 수신기 · VRS · 폴 기본값 · 좌표계/높이. 나머지는 측점 · 발굴 · 고급(접힘)
-        Text("꼭 필요한 네 가지", style = Ty.serifHead, color = t.ink)
-        val cc = c.connection
-        SelectRow("수신기", if (c.gv.noReceiver) "연결 안 됨 · 눌러서 연결" else "연결됨 · ${c.gv.quality.labelKo}", false, "set_receiver") { cc?.openScreen() ?: c.ui.toast("연결 화면을 열 수 없어요") }
-        SelectRow("VRS 보정", if (cc?.form?.enabled == true) "켜짐" else "꺼짐", false, "set_vrs") { cc?.openVrs() ?: c.ui.toast("VRS 설정을 열 수 없어요") }
-        SelectRow("폴 높이", String.format(java.util.Locale.US, "%.1f m · 기본 R10 1.6 · SP60 1.8 (0.1 m 단위)", c.antenna.inputValueM), false, "set_pole") { c.antennaSheetOpen = true }
-        // 0.1.13 P0-2A: CRS·Geoid·배경맵은 작업 정보에서만 편집. 0.1.35 X11: 점이 있으면 잠김(작업 정보에서 길게 눌러 풀기)
-        SelectRow("좌표계 · 높이", "EPSG:${c.zone.epsg} · ${c.zone.labelKo} · ${c.geoid.shortKo}" + if (d.crsLocked) " · 측량 중 잠김" else "", false, "zone_toggle") {
-            c.jobs?.openInfo() ?: c.ui.toast("작업 관리를 쓸 수 없어요")
+    val cc = c.connection
+    var ftypesOpen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    var driveOpen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    @Composable fun group(title: String, right: String? = null, first: Boolean = false) {
+        Column(Modifier.padding(top = 4.dp)) {
+            if (!first) DRule()
+            Row(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = DTy.bodyB, color = D.ink, modifier = Modifier.weight(1f)); right?.let { Text(it, style = DTy.tiny, color = D.sub) }
+            }
         }
-        // 0.1.38 구글 드라이브: 연결 한 번 · 자동 올리기 하나 · 지금 올리기
-        DriveConnectCard(c.drive, c.jobs?.currentFolder?.removePrefix("Documents/"))
-        if (st == null) { Text("나머지 설정을 불러올 수 없어요", style = Ty.body, color = t.inkSub); return@ToolScaffold }
-        Text("측점", style = Ty.serifHead, color = t.ink)
+    }
+    ToolScaffold("설정", "settings_screen", onBack = { h.back() }, right = "이 작업에 저장") {
+        group("꼭 필요한 것", "측량 전에 한 번", first = true)
+        val model = cc?.profile?.displayName?.let { HeaderModel.shortModel(it) } ?: "수신기"
+        DLeaderRow("수신기", model + " · " + if (c.gv.noReceiver) "연결 안 됨" else c.gv.quality.labelKo, "set_receiver") { cc?.openScreen() ?: c.ui.toast("연결 화면을 열 수 없어요") }
+        DLeaderRow("VRS 보정", if (cc?.form?.enabled == true) (cc.form.host.substringBefore('.').ifBlank { "VRS" } + " · 켬") else "끔", "set_vrs") { cc?.openVrs() ?: c.ui.toast("VRS 설정을 열 수 없어요") }
+        DLeaderRow("폴 높이", String.format(java.util.Locale.US, "%.2f m", c.antenna.inputValueM), "set_pole") { c.antennaSheetOpen = true }
+        // 좌표계·높이는 작업 정보에서만 편집. 점이 있으면 잠김
+        DLeaderRow("좌표계 · 높이", "${c.zone.epsg} · ${c.geoid.shortKo}" + if (d.crsLocked) " · 잠김" else "", "zone_toggle") { c.jobs?.openInfo() ?: c.ui.toast("작업 관리를 쓸 수 없어요") }
+        if (st == null) { Text("나머지 설정을 불러올 수 없어요", style = DTy.body, color = D.sub); return@ToolScaffold }
+        group("측정")
         val counts = listOf(1, 3, 5, 10)
-        SelectRow("측정 횟수", "${c.epochs}회 평균", false, "epochs_toggle") {
+        DLeaderRow("한 점 측정 횟수", "${c.epochs}회 평균", "epochs_toggle") {
             c.ui.choose(ChoiceRequest("한 점 측정 횟수", counts.map { "${it}회" + if (it == 3) " (기본)" else "" }, counts.indexOf(c.epochs), "epochs",
-                "측점 버튼을 누르면 이 횟수만큼 위치를 받아 평균해 저장해요. 각 측정값과 편차는 점 상세에서 볼 수 있어요.") { st.setEpochs(counts[it]) })
+                "측정 단추를 누르면 이 횟수만큼 위치를 받아 평균해 저장해요. 각 측정값과 편차는 점 확인에서 볼 수 있어요.") { st.setEpochs(counts[it]) })
         }
-        Card {
-            ToggleRow("엄격 모드 (FIX만 저장)", st.requireFixed, "set_strict_quality") { st.changeRequireFixed(it) }
-            Text("켜면 RTK 고정(FIX)만 측점해요. FLOAT·보정 오래됨·정밀도 낮음은 저장이 잠겨요. 끄면(기본) 주의 상태도 확인 후 저장할 수 있어요.", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("set_strict_note"))
+        DLeaderRow("FIX일 때만 저장", null, "set_strict_quality", toggle = st.requireFixed) { st.changeRequireFixed(!st.requireFixed) }
+        DLeaderRow("측정 단추 자리", if (c.poleOnRight) "오른손" else "왼손", "pole_side") {
+            c.ui.choose(ChoiceRequest("측정 단추 자리 (폴 쪽)", listOf("오른손", "왼손"), if (c.poleOnRight) 0 else 1, "pole", null) { st.setPoleRight(it == 0) })
         }
-        Card {
-            Text("측점 버튼 위치 (폴 쪽)", style = Ty.label, color = t.ink)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Choice("오른쪽", c.poleOnRight, Modifier.weight(1f).testTag("pole_right")) { st.setPoleRight(true) }
-                Choice("왼쪽", !c.poleOnRight, Modifier.weight(1f).testTag("pole_left")) { st.setPoleRight(false) }
-            }
-            ToggleRow("볼륨 아래 키로 측점", d.volumeKey, "set_volume_key") { d.changeVolumeKey(it) }
-            Text("화면이 켜져 있고 측량 지도가 보일 때만 동작해요. 장갑 낀 손·한 손 측량용 (실기기 시험 전)", style = Ty.small, color = t.inkSub)
+        DLeaderRow("볼륨 아래 키로 측정", null, "set_volume_key", toggle = d.volumeKey) { d.changeVolumeKey(!d.volumeKey) }
+        val tols = listOf(2, 3, 5)
+        DLeaderRow("기준점 허용 차이", "${Math.round(d.bmTolM * 100)} cm", "set_bm_tol") {
+            c.ui.choose(ChoiceRequest("기준점 확인 허용 차이", tols.map { "$it cm" + if (it == 3) " (기본)" else "" }, tols.indexOfFirst { kotlin.math.abs(d.bmTolM - it / 100.0) < 1e-6 }, "set_bm_tol", null) { d.changeBmTol(tols[it] / 100.0) })
         }
-        // 0.1.28 T14 음성 「저장」(기본 끔)
+        c.tilt?.let { TiltSettings(it) }
         c.voice?.let { VoiceSettingsCard(it) }
-        Text("발굴", style = Ty.serifHead, color = t.ink)
-        Card {
-            Text("유물 번호", style = Ty.label, color = t.ink)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (m in kr.archsurvey.dig.ArtifactMode.entries) Choice(m.labelKo, d.artifactMode == m, Modifier.weight(1f).testTag("set_art_${m.id}")) { d.changeArtifactMode(m) }
-            }
-            ToggleRow("새 유구는 가번호(가-1)로 시작", d.provisional, "set_provisional") { d.changeProvisional(it) }
-            Text("기준점 확인 허용 차이", style = Ty.label, color = t.ink)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (cm in listOf(2, 3, 5)) Choice("$cm cm" + if (cm == 3) " (기본)" else "", kotlin.math.abs(d.bmTolM - cm / 100.0) < 1e-6, Modifier.weight(1f).testTag("set_bm_tol_$cm")) { d.changeBmTol(cm / 100.0) }
-            }
-            Text("도면 축척 (내보내기 글자 크기)", style = Ty.label, color = t.ink)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (sc in kr.archsurvey.dig.DrawingScale.CHOICES) Choice("1:$sc", d.drawScale == sc, Modifier.weight(1f).testTag("set_scale_$sc")) { d.changeScale(sc); c.exporter?.scale = sc }
-            }
+        group("발굴")
+        val arts = kr.archsurvey.dig.ArtifactMode.entries
+        DLeaderRow("유물 번호", d.artifactMode.labelKo, "set_art") {
+            c.ui.choose(ChoiceRequest("유물 번호", arts.map { it.labelKo }, arts.indexOf(d.artifactMode), "set_art", null) { d.changeArtifactMode(arts[it]) })
         }
-        var typesText by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(d.featureTypes.joinToString(", ")) }
-        Card {
-            // 0.1.39 한 손가락: 눌러서 켜고 끄기(바로 저장). 목록에 없는 것만 「직접 입력」
-            Text("유구 종류 · 눌러서 켜기/끄기", style = Ty.label, color = t.ink)
+        DLeaderRow("새 유구는 가번호로", null, "set_provisional", toggle = d.provisional) { d.changeProvisional(!d.provisional) }
+        DLeaderRow("쓰는 유구 종류", "${d.featureTypes.size}가지", "set_ftypes") { ftypesOpen = !ftypesOpen }
+        if (ftypesOpen) {
+            var typesText by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(d.featureTypes.joinToString(", ")) }
+            Text("눌러서 켜기/끄기 · 바로 저장", style = DTy.small, color = D.sub)
             ChipFlow {
-                for (ty in OneFingerTypes.catalog(d.featureTypes)) Choice(ty, ty in d.featureTypes, Modifier.testTag("set_ftype_$ty")) {
+                for (ty in OneFingerTypes.catalog(d.featureTypes)) DChip(ty, ty in d.featureTypes, "set_ftype_$ty") {
                     d.setFeatureTypes(OneFingerTypes.toggle(d.featureTypes, ty)); typesText = d.featureTypes.joinToString(", ")
                 }
             }
@@ -467,37 +459,38 @@ fun SettingsScreen(c: SurveyController) {
                 Btn("유구 종류 저장", Modifier.fillMaxWidth().testTag("set_feature_types_save")) { d.setFeatureTypes(typesText.split(',', '\n')); typesText = d.featureTypes.joinToString(", "); c.ui.ok("유구 종류 ${d.featureTypes.size}개") }
             }
         }
-        SelectRow("고급 · 문제 있을 때만", if (advanced) "접기" else "펼치기", advanced, "settings_advanced") { advanced = !advanced }
-        if (advanced) {
-            SelectRow("V월드 키 · 지적 스타일", if (c.vworld.hasKey) "키 있음 · 가려 둠" else "키 없음 · 설정으로", false, "mapbase_toggle") {
-                c.vworld.load(); c.hub.open(ToolScreen.VWORLD)
-            }
-            SelectRow("배경지도", c.mapBase.labelKo, false, "set_mapbase") { chooseMapBase(c) }
-            SelectRow("위치 모양 (지도)", "점 · 이름표 · 현재 위치", false, "set_marker") { c.markerStyleOpen = true }
-            c.tilt?.let { TiltSettings(it) }
-            Card {
-                ToggleRow("소리", st.sound, "set_sound") { st.changeSound(it) }
-                ToggleRow("진동 (알림 · 버튼 탭)", st.vibration, "set_vibration") { st.changeVibration(it) }
-                ToggleRow("화면 항상 켜두기", st.keepScreenOn, "set_keepscreen") { st.changeKeepScreenOn(it) }
-            }
-            Card {
-                Text(if (c.gv.status.reason == kr.archsurvey.core.StatusReason.NOT_CONNECTED) "수신기 연결 안 됨" else "수신기 연결됨 · ${c.gv.quality.labelKo}", style = Ty.label, color = t.ink, modifier = Modifier.testTag("set_fake_state"))
-                Text(HeaderModel.metrics(c.gv), style = Ty.coord.copy(fontSize = 12.sp), color = t.inkSub)
-            }
-            SelectRow("오류 기록", if (st.showCrash) "닫기" else "보기 · 공유", st.showCrash, "crash_toggle") { if (st.showCrash) st.showCrash = false else st.openCrash() }
-            if (st.showCrash) Card {
-                val txt = st.crashText
-                Text(if (txt.isBlank()) "기록된 오류가 없어요." else "최근 오류 기록 (문의할 때 ‘공유’로 보내 주세요)", style = Ty.label, color = t.ink)
-                if (txt.isNotBlank()) Text(txt.takeLast(4000), style = Ty.coord.copy(fontSize = 12.sp, lineHeight = 16.sp), color = t.ink, modifier = Modifier.testTag("crash_text"))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(Modifier.weight(1f)) { Btn("공유", Modifier.fillMaxWidth().testTag("crash_share")) { st.shareCrash() } }
-                    Box(Modifier.weight(1f)) { Btn("지우기", Modifier.fillMaxWidth().testTag("crash_clear")) {
-                        c.ui.ask(ConfirmRequest("오류 기록을 지울까요?", "지운 기록은 되살릴 수 없어요.", "지우기") { st.clearCrash() })
-                    } }
-                }
+        val scales = kr.archsurvey.dig.DrawingScale.CHOICES
+        DLeaderRow("도면 축척", "1:${d.drawScale}", "set_scale") {
+            c.ui.choose(ChoiceRequest("도면 축척 (내보내기 글자 크기)", scales.map { "1:$it" }, scales.indexOf(d.drawScale), "set_scale", null) { d.changeScale(scales[it]); c.exporter?.scale = scales[it] })
+        }
+        group("지도")
+        DLeaderRow("배경지도", c.mapBase.labelKo, "set_mapbase") { chooseMapBase(c) }
+        DLeaderRow("V월드 키 · 지적 스타일", if (c.vworld.hasKey) "키 있음" else "키 없음", "mapbase_toggle") { c.vworld.load(); c.hub.open(ToolScreen.VWORLD) }
+        DLeaderRow("위치 표시", "점 · 이름표", "set_marker") { c.markerStyleOpen = true }
+        DLeaderRow("화면 켜 두기", null, "set_keepscreen", toggle = st.keepScreenOn) { st.changeKeepScreenOn(!st.keepScreenOn) }
+        group("보관", "점은 잴 때마다 폰에 저장")
+        val dr = c.drive
+        DLeaderRow("구글 드라이브", if (dr?.email.isNullOrBlank()) "연결 안 함" else if (dr?.autoBackup == true) "자동 백업 켬" else "연결됨", "set_drive") { driveOpen = !driveOpen }
+        if (driveOpen) DriveConnectCard(c.drive, c.jobs?.currentFolder?.removePrefix("Documents/"))
+        DLeaderRow("백업 · 복구", "${c.backup?.items?.size ?: 0}개 · " + backupLabel(c).removePrefix("백업 "), "set_backup") { c.backupQuickOpen = true }
+        DLeaderRow("소리 · 진동", null, "set_sound", toggle = st.sound || st.vibration) { val v = !(st.sound || st.vibration); st.changeSound(v); st.changeVibration(v) }
+        DRule()
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(rememberAppVersionLabel(), style = DTy.small, color = D.sub, modifier = Modifier.weight(1f).testTag("app_version"))
+            Text("오류 기록 보내기", style = DTy.small.copy(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline), color = D.accent,
+                modifier = Modifier.heightIn(min = 44.dp).hClickable { if (st.showCrash) st.showCrash = false else st.openCrash() }.padding(vertical = 12.dp).testTag("crash_toggle"))
+        }
+        if (st.showCrash) Card {
+            val txt = st.crashText
+            Text(if (txt.isBlank()) "기록된 오류가 없어요." else "최근 오류 기록 (문의할 때 ‘공유’로 보내 주세요)", style = Ty.label, color = D.ink)
+            if (txt.isNotBlank()) Text(txt.takeLast(4000), style = DTy.monoS.copy(fontSize = 12.sp, lineHeight = 16.sp), color = D.ink, modifier = Modifier.testTag("crash_text"))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) { Btn("공유", Modifier.fillMaxWidth().testTag("crash_share")) { st.shareCrash() } }
+                Box(Modifier.weight(1f)) { Btn("지우기", Modifier.fillMaxWidth().testTag("crash_clear")) {
+                    c.ui.ask(ConfirmRequest("오류 기록을 지울까요?", "지운 기록은 되살릴 수 없어요.", "지우기") { st.clearCrash() })
+                } }
             }
         }
-        Text(rememberAppVersionLabel() + " · 발굴 측량 · 실기기 시험 전 버전", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("app_version").padding(vertical = 8.dp))
     }
 }
 
@@ -511,7 +504,7 @@ private fun TiltSettings(tc: TiltController) {
         return
     }
     val summary = if (tc.enabled) "켜짐 · 허용 ${tc.f1(tc.limitDeg)}° · ${tc.policy.labelKo}" else "꺼짐"
-    SelectRow("전자 기포 (폰 센서)", summary, open, "tilt_toggle") { open = !open }
+    DLeaderRow("전자 기포", if (tc.enabled) "${tc.f1(tc.limitDeg)}° · ${tc.policy.labelKo}" else "끔", "tilt_toggle") { open = !open }
     if (!open) return
     Card {
         Text(TiltCopy.NOTE, style = Ty.small, color = t.ink, modifier = Modifier.testTag("tilt_copy"))
@@ -557,11 +550,16 @@ fun JobScreen(c: SurveyController) {
     val t = T; val h = c.hub
     val jc = c.jobs
     if (jc == null) { Box(Modifier.fillMaxSize().background(t.bg)) { Text("작업 관리를 쓸 수 없어요", style = Ty.body, color = t.inkSub, modifier = Modifier.padding(24.dp)) }; return }
-    val title = when (h.screen) { ToolScreen.JOB_NEW -> "새 작업"; ToolScreen.JOB_OPEN -> "작업 열기 · 삭제"; else -> "작업 정보 확인" }
-    ToolScaffold(title, "job_screen", onBack = { h.back() }, bottom = {
+    val title = when (h.screen) { ToolScreen.JOB_NEW -> "새 작업"; ToolScreen.JOB_OPEN -> "작업"; else -> "작업 정보 확인" }
+    ToolScaffold(title, "job_screen", onBack = { h.back() }, close = h.screen == ToolScreen.JOB_NEW,
+        right = if (h.screen == ToolScreen.JOB_OPEN) "폰 문서 › ExcavationSurvey" else null, bottom = {
         when (h.screen) {
             // 0.1.39: 큰 단추 하나 — 작업+폴더를 만들고 바로 측량 지도로
-            ToolScreen.JOB_NEW -> PrimaryBar(if (jc.busy) "만드는 중…" else "만들고 측량 시작", "job_create", !jc.busy) { jc.create() }
+            ToolScreen.JOB_NEW -> DBottomBar { DPrimary(if (jc.busy) "만드는 중…" else "만들고 측량 시작", "job_create", Modifier.weight(1f), enabled = !jc.busy) { jc.create() } }
+            ToolScreen.JOB_OPEN -> DBottomBar {
+                DSecondary("백업 · 복구", "job_backup", Modifier.weight(1f)) { c.backupQuickOpen = true }
+                DPrimary("+ 새 작업", "job_new", Modifier.weight(1.9f)) { jc.openNew() }
+            }
             ToolScreen.JOB_INFO -> DualBar("나가기", "job_exit", { h.back() }, "적용", "job_apply", !jc.busy) { jc.applyInfo() }
             else -> {}
         }
@@ -570,35 +568,49 @@ fun JobScreen(c: SurveyController) {
         jc.error?.let { ErrorCardView(ErrorCard("-", it, "이름이나 값을 바꾸거나 다시 시도하세요.", false), "job_error") }
         when (h.screen) {
             ToolScreen.JOB_NEW -> {
-                // 0.1.39 한 화면 · 고르기만: 유적 칩 → 조사 단계 → 지구 번호 → (날짜 자동) → 좌표계 타일. 키보드는 「직접 입력」에서만
-                Card {
-                    Text("만들 작업", style = Ty.small, color = t.inkSub)
-                    Text(jc.effectiveName.ifBlank { "이름을 고르세요" }, style = Ty.title, color = t.ink, modifier = Modifier.testTag("job_built_name"))
-                    Text("폴더 · ${jc.newFolderPreview}", style = Ty.small, color = t.inkSub, maxLines = 2, modifier = Modifier.testTag("job_folder_preview"))
+                // 0.1.43 시안 ⑧: 미리보기 · 유적 칩 · 단계 칸 · 지구 −/+ · 원점 4칸 · 자세히. 키보드는 「직접 입력」에서만
+                Column(Modifier.testTag("job_preview")) {
+                    Text("만들 작업", style = DTy.tiny, color = D.sub)
+                    Text(jc.effectiveName.ifBlank { "이름을 고르세요" }, style = DTy.serif.copy(fontSize = 26.sp), color = D.ink, modifier = Modifier.testTag("job_built_name"))
+                    Text(jc.newFolderPreview.removePrefix("Documents/").let { "문서/$it" }, style = DTy.monoS, color = D.sub, maxLines = 2, modifier = Modifier.testTag("job_folder_preview"))
+                    Spacer(Modifier.height(10.dp)); DRule()
                 }
-                Text("유적 (상위 폴더)", style = Ty.label, color = t.ink)
-                ChipFlow {
-                    for (g in jc.siteChips) Choice(g, !jc.newGroupTyping && jc.newSite == g, Modifier.testTag("job_site_$g")) { jc.pickSite(g) }
-                    Choice("없음", !jc.newGroupTyping && jc.newSite.isBlank(), Modifier.testTag("job_site_none")) { jc.pickSite(null) }
-                    Choice("+ 새 유적", jc.newGroupTyping, Modifier.testTag("job_site_new")) { jc.startNewGroup() }
+                DSectionLabel("유적 · 상위 폴더")
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (g in jc.siteChips) DChip(g, !jc.newGroupTyping && jc.newSite == g, "job_site_$g", serif = true) { jc.pickSite(g) }
+                    DChip("없음", !jc.newGroupTyping && jc.newSite.isBlank(), "job_site_none") { jc.pickSite(null) }
+                    DChip("+ 새 유적", jc.newGroupTyping, "job_site_new", dashed = true) { jc.startNewGroup() }
                 }
                 if (jc.newGroupTyping) OutlinedTextField(jc.newSite, { jc.newSite = it }, singleLine = true, label = { Text("새 유적 이름 · 예) 강릉 교동") }, modifier = Modifier.fillMaxWidth().testTag("job_group"))
-                Text("조사 단계", style = Ty.label, color = t.ink)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (st in kr.archsurvey.job.SurveyStage.entries) Choice(st.labelKo, jc.newStage == st, Modifier.weight(1f).height(56.dp).testTag("job_stage_${st.name}")) { jc.pickStage(st) }
+                DSectionLabel("조사 단계")
+                val stages = kr.archsurvey.job.SurveyStage.entries
+                Box(Modifier.testTag("job_stage")) {
+                    DSeg(stages.map { it.labelKo }, stages.indexOf(jc.newStage), "job_stage_seg") { jc.pickStage(stages[it]) }
+                    Row(Modifier.matchParentSize()) { for (st in stages) Box(Modifier.weight(1f).fillMaxHeight().hClickable { jc.pickStage(st) }.testTag("job_stage_${st.name}")) }
                 }
-                Text("구역 · 지구 번호 (날짜 ${jc.mmdd} 자동)", style = Ty.label, color = t.ink)
-                BigNumberPicker(jc.newNo, 1..kr.archsurvey.job.NewJobName.MAX_NO, "job_no", "지구") { jc.setNo(it) }
-                Text("좌표계", style = Ty.label, color = t.ink)
-                val zones = kr.archsurvey.core.KoreanTmZone.entries
-                for (row in zones.chunked(2)) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (z in row) {
-                        val rec = jc.recommendedZone == z
-                        Choice(z.labelKo.substringBefore(" (") + " " + z.epsg + if (rec) " · 추천" else "", jc.formZone == z, Modifier.weight(1f).height(56.dp).testTag("job_zone_${z.epsg}")) { jc.formZone = z }
+                DSectionLabel("지구 번호 · 날짜 ${jc.mmdd.let { if (it.length == 4) it.take(2) + "-" + it.drop(2) else it }}는 저절로")
+                Row(Modifier.fillMaxWidth().testTag("job_no"), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    DSecondary("−", "job_no_m1", Modifier.width(52.dp), height = 52.dp) { jc.setNo((jc.newNo - 1).coerceAtLeast(1)) }
+                    Row(Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(10.dp)).background(D.card).border(1.dp, D.line, RoundedCornerShape(10.dp)).testTag("job_no_value"),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                        Text("${jc.newNo}", style = DTy.mono.copy(fontSize = 24.sp), color = D.ink); Text(" 지구", style = DTy.small, color = D.sub)
                     }
+                    DSecondary("+", "job_no_p1", Modifier.width(52.dp), height = 52.dp) { jc.setNo((jc.newNo + 1).coerceAtMost(kr.archsurvey.job.NewJobName.MAX_NO)) }
                 }
-                Text(if (jc.recommendedZone != null) "추천 = 지금 위치(경도)로 고른 원점" else "위치가 아직 없어 지금 작업 좌표계를 골라 두었어요", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("job_zone_note"))
-                FoldRow("자세히 (높이 · 배경지도 · 직접 입력)", jc.newDetailsOpen, "job_details") { jc.newDetailsOpen = !jc.newDetailsOpen }
+                DSectionLabel("좌표계 · 원점")
+                val zones = kr.archsurvey.core.KoreanTmZone.entries
+                Box {
+                    DSeg(zones.map { "${it.epsg}" }, zones.indexOf(jc.formZone), "job_zone_seg", height = 58.dp,
+                        subs = zones.map { it.labelKo.substringBefore(" (").substringBefore("원점").trim() + if (jc.recommendedZone == it) "·추천" else "" }) { jc.formZone = zones[it] }
+                    Row(Modifier.matchParentSize()) { for (z in zones) Box(Modifier.weight(1f).fillMaxHeight().hClickable { jc.formZone = z }.testTag("job_zone_${z.epsg}")) }
+                }
+                Text(if (jc.recommendedZone != null) "지금 위치(경도)로 추천 원점을 표시했어요. 첫 점을 재면 잠깁니다." else "아직 위치가 없어 고른 원점으로 둡니다. 첫 점을 재면 잠깁니다.", style = DTy.small, color = D.sub, modifier = Modifier.testTag("job_zone_note"))
+                DRule(false)
+                Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).hClickable { jc.newDetailsOpen = !jc.newDetailsOpen }.testTag("job_details"), verticalAlignment = Alignment.CenterVertically) {
+                    Text("높이 ${jc.formGeoid.shortKo} · 배경지도 ${jc.formMap.labelKo}", style = DTy.body, color = D.ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text(if (jc.newDetailsOpen) "접기 ⌃" else "자세히 ›", style = DTy.small, color = D.accent)
+                }
+                DRule(false)
                 if (jc.newDetailsOpen) {
                     JobConfigRows(c, jc, editableZone = true)
                     TypeFallbackRow(jc.nameManual, "job_manual") { jc.nameManual = !jc.nameManual; if (jc.nameManual && jc.newName.isBlank()) jc.newName = jc.builtName }
@@ -606,19 +618,36 @@ fun JobScreen(c: SurveyController) {
                 }
             }
             ToolScreen.JOB_OPEN -> {
-                Text("열려 있는 작업: ${jc.current}", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("job_current"))
-                for ((i, j) in jc.list.withIndex()) {
-                    Card {
-                        Text(j.name + if (j.name == jc.current) "  (열려 있음)" else "", style = Ty.label, color = t.ink, modifier = Modifier.testTag("job_item_$i"))
-                        Text("점 ${j.points} · 사진 ${j.photos} · 음성 ${j.voices}" + if (j.fakePoints > 0) " · 이전 시험 버전 점 ${j.fakePoints}" else "", style = Ty.small, color = t.inkSub)
-                        j.folder?.let { Text("폴더 · $it", style = Ty.small, color = t.inkSub, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.testTag("job_folder_$i")) }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Box(Modifier.weight(1f)) { Btn("열기", Modifier.fillMaxWidth().testTag("job_open_$i")) { jc.open(j.name) } }
-                            Box(Modifier.weight(1f)) { Btn("삭제", Modifier.fillMaxWidth().testTag("job_delete_$i")) { jc.askDelete(j) } }
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text("최근 작업", style = DTy.bodyB, color = D.ink); Text(" ${jc.list.size}개", style = DTy.tiny, color = D.sub, modifier = Modifier.weight(1f))
+                    Text("길게 누르면 지우기", style = DTy.tiny, color = D.sub)
+                }
+                Text("열려 있는 작업: ${jc.current}", style = DTy.tiny.copy(fontSize = 1.sp), color = androidx.compose.ui.graphics.Color.Transparent, modifier = Modifier.testTag("job_current"))
+                Column {
+                    DTableHead(listOf("작업" to 3f, "점" to 0.8f, "마지막" to 1.6f))
+                    val today = kr.archsurvey.dig.DayKey.of(System.currentTimeMillis())
+                    for ((i, j) in jc.list.withIndex()) {
+                        val site = j.folder?.removePrefix("Documents/ExcavationSurvey/")?.split("/")?.takeIf { it.size >= 2 }?.first()
+                        val sub = listOfNotNull(site ?: "유적 없음", if (j.name == jc.current) "열려 있음" else null, if (j.points == 0) "빈 작업" else "사진 ${j.photos}" + if (j.voices > 0) " · 음성 ${j.voices}" else "",
+                            if (j.fakePoints > 0) "시험 점 ${j.fakePoints}" else null).joinToString(" · ")
+                        val last = j.lastAtMs?.let { if (kr.archsurvey.dig.DayKey.of(it) == today) "오늘 " + SimpleDateFormat("HH:mm", Locale.KOREA).format(Date(it)) else SimpleDateFormat("MM-dd", Locale.KOREA).format(Date(it)) } ?: "—"
+                        DTableRow(listOf(j.name to 3f, "${j.points}" to 0.8f, last to 1.6f), "job_item_$i", selected = j.name == jc.current, sub = sub,
+                            firstStyle = DTy.serif.copy(fontSize = 19.sp), colors = mapOf(2 to D.sub), onLongClick = { jc.askDelete(j) }) { jc.open(j.name) }
+                        // 옛 시험 호환: 열기·삭제 단추(보이지 않게 작은 글자 대신 줄 누르기/길게 누르기로 대신함)
+                        Row(Modifier.height(0.dp)) {
+                            Box(Modifier.size(0.dp).hClickable { jc.open(j.name) }.testTag("job_open_$i")); Box(Modifier.size(0.dp).hClickable { jc.askDelete(j) }.testTag("job_delete_$i"))
                         }
                     }
                 }
-                Btn("+ 새 작업 만들기", Modifier.fillMaxWidth().testTag("job_new")) { jc.openNew() }
+                val dr = c.drive
+                Row(Modifier.fillMaxWidth().padding(top = 6.dp).height(IntrinsicSize.Min).testTag("job_status")) {
+                    for ((k, v) in listOf("자동 저장" to "잴 때마다", "백업" to "${c.backup?.items?.size ?: 0}개 · " + backupLabel(c).removePrefix("백업 "),
+                            "구글 드라이브" to (if (dr?.email.isNullOrBlank()) "연결 안 함" else if (dr?.autoBackup == true) "자동 백업 켬" else "연결됨"))) {
+                        if (k != "자동 저장") Box(Modifier.width(1.dp).fillMaxHeight().background(D.line))
+                        Column(Modifier.weight(1f).padding(horizontal = 8.dp)) { Text(k, style = DTy.bodyB.copy(fontSize = 14.sp), color = D.ink); Text(v, style = DTy.tiny, color = D.sub, maxLines = 1) }
+                    }
+                }
+                Text("작업을 지우기 전에는 언제나 백업 파일을 먼저 만들어 둡니다.", style = DTy.small, color = D.sub)
             }
             else -> {
                 val i = jc.info

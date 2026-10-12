@@ -236,7 +236,6 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
         }
         Column(Modifier.align(Alignment.TopEnd).padding(end = 12.dp, top = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             MapSquareBtn(Glyph.LAYERS, "지도에 보이기", "tool_layers") { c.dig.layersOpen = true }
-            GlyphIcon(Glyph.CHEVRON_UP, D.ink, 18.dp)
         }
         Column(Modifier.align(Alignment.CenterEnd).padding(end = 12.dp, top = 40.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             MapSquareBtn(Glyph.LOCATE, "내 위치 고정/해제", "tool_locate", dark = c.follow || true, selected = c.follow) { if (c.follow) c.follow = false else c.recenter() }
@@ -281,7 +280,7 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
 @Composable
 internal fun MapNowBanner(c: SurveyController) {
     val (head, tail) = c.dig.nowLine()
-    val hint = c.dig.measureSub().let { m -> if (c.dig.kind == kr.archsurvey.dig.DigKind.FEATURE && (c.dig.selectedFeature?.pointRowIds?.size ?: 0) >= 3) "$m · 처음 점을 누르면 닫혀요" else m }
+    val hint = c.dig.measureSub().let { m -> if (tail != null && m.startsWith("$tail · ")) m.removePrefix("$tail · ") else m }.let { m -> if (c.dig.kind == kr.archsurvey.dig.DigKind.FEATURE && (c.dig.selectedFeature?.pointRowIds?.size ?: 0) >= 3) "$m · 처음 점을 누르면 닫혀요" else m }
     Row(
         Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(10.dp)).background(D.card).border(1.dp, D.line, RoundedCornerShape(10.dp))
             .hClickable { c.dig.pickerOpen = true }.padding(horizontal = 12.dp, vertical = 8.dp).testTag("map_now_banner"),

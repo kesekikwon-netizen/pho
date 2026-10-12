@@ -114,7 +114,7 @@ fun DMetrics(cells: List<Triple<String, String, String>>, tagPrefix: String, top
                 Column(Modifier.weight(1f).padding(start = if (i == 0) 0.dp else 12.dp, end = 6.dp).testTag("${tagPrefix}_$i")) {
                     Text(k, style = DTy.tiny, color = D.sub, maxLines = 1)
                     Row(verticalAlignment = Alignment.Bottom) {
-                        Text(v, style = if (big) DTy.monoBig else DTy.monoBig.copy(fontSize = 20.sp), color = D.ink, maxLines = 1)
+                        Text(v, style = DTy.monoBig.copy(fontSize = (if (big) 24 else 20).let { f -> if (v.length >= 7) f - 4 else if (v.length >= 6) f - 2 else f }.sp), color = D.ink, maxLines = 1, softWrap = false)
                         if (u.isNotEmpty()) Text(" $u", style = DTy.small, color = D.sub, modifier = Modifier.padding(bottom = 3.dp))
                     }
                 }
@@ -209,13 +209,13 @@ fun DTableHead(cols: List<Pair<String, Float>>, alignEndFrom: Int = 1) {
 fun DTableRow(
     cells: List<Pair<String, Float>>, tag: String, selected: Boolean = false, sub: String? = null, subColor: Color = D.sub,
     firstStyle: TextStyle = DTy.body, monoFrom: Int = 1, alignEndFrom: Int = 1, colors: Map<Int, Color> = emptyMap(),
-    onLongClick: (() -> Unit)? = null, onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null, compact: Boolean = false, onClick: (() -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxWidth()) {
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 52.dp).background(if (selected) D.sel else Color.Transparent)
+            Modifier.fillMaxWidth().heightIn(min = if (compact) 44.dp else 52.dp).background(if (selected) D.sel else Color.Transparent)
                 .then(if (onClick != null || onLongClick != null) Modifier.hCombinedClickable(onLongClick = onLongClick) { onClick?.invoke() } else Modifier)
-                .padding(horizontal = 4.dp, vertical = 8.dp).testTag(tag),
+                .padding(horizontal = 4.dp, vertical = if (compact) 2.dp else 8.dp).testTag(tag),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             cells.forEachIndexed { i, (s, w) ->
@@ -233,7 +233,7 @@ fun DTableRow(
 @Composable
 fun DLeaderRow(label: String, value: String?, tag: String, toggle: Boolean? = null, onClick: () -> Unit) {
     Column {
-        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).hClickable(onClick = onClick).padding(vertical = 6.dp).testTag(tag), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).hClickable(onClick = onClick).padding(vertical = 4.dp).testTag(tag), verticalAlignment = Alignment.CenterVertically) {
             Text(label, style = DTy.body, color = D.ink, maxLines = 1)
             Canvas(Modifier.weight(1f).height(2.dp).padding(horizontal = 8.dp)) {
                 drawLine(D.line, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(2f, 4f)))

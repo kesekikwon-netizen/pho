@@ -22,8 +22,9 @@ import kr.archsurvey.bt.PairText
 internal fun PairFindButton(cc: ConnectionController) {
     val t = T
     val p = cc.pair ?: return
-    MBtn(Modifier.fillMaxWidth().height(64.dp).testTag("pair_find"), MKind.PRIMARY, 18.dp, onClick = { p.openSheet() }) {
-        Text("주변 수신기 찾기 · 눌러서 바로 연결", style = Ty.label.copy(fontSize = 17.sp), color = t.onPrimary, modifier = Modifier.padding(horizontal = 12.dp))
+    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).hClickable { p.openSheet() }.padding(horizontal = 8.dp).testTag("pair_find"), verticalAlignment = Alignment.CenterVertically) {
+        Text("+ 주변 수신기 찾기", style = DTy.bodyB, color = D.accent)
+        Text("   PIN 1234 자동", style = DTy.tiny, color = D.sub)
     }
 }
 

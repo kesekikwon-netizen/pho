@@ -119,7 +119,7 @@ internal fun DCheck(on: Boolean) {
 @Composable
 private fun ExportCheckRow(on: Boolean, name: String, ext: String, to: String, tag: String, onClick: () -> Unit) {
     Column {
-        Row(Modifier.fillMaxWidth().heightIn(min = 58.dp).hClickable(onClick = onClick).padding(vertical = 8.dp, horizontal = 4.dp).testTag(tag), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).hClickable(onClick = onClick).padding(vertical = 4.dp, horizontal = 4.dp).testTag(tag), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(0.5f)) { DCheck(on) }
             Column(Modifier.weight(2.4f)) {
                 Text(name, style = DTy.body.copy(fontWeight = FontWeight.Medium), color = D.ink)

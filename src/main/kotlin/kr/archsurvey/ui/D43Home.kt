@@ -133,7 +133,7 @@ private fun homeHint(c: SurveyController, steps: List<kr.archsurvey.dig.PrepStep
     else -> "준비됐어요 · 「이어서 측량」을 누르세요."
 }
 
-private fun backupLabel(c: SurveyController): String {
+internal fun backupLabel(c: SurveyController): String {
     val b = c.backup?.items?.maxByOrNull { it.createdAtMs }
     return if (b != null) "백업 " + SimpleDateFormat("HH:mm", Locale.KOREA).format(Date(b.createdAtMs)) else "백업 —"
 }
