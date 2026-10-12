@@ -20,6 +20,7 @@ import kr.archsurvey.feedback.bindEngineFeedback
 class SurveyViewModel(app: Application) : AndroidViewModel(app) {
     private val application = app as App
     val platform = AndroidConnectionPlatform(application)
+    private val pairPlatform = kr.archsurvey.bt.AndroidPairPlatform(application) { platform.permissionRequester }
     val db = AntennaDb.parse(app.assets.open("antenna_db.json").bufferedReader().use { it.readText() })
 
     private var connection: ConnectionController? = null
@@ -72,6 +73,8 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
         }
         connection = cc
         controller.connection = cc
+        // 0.1.40 앱 안 수신기 찾기·등록(PIN 자동)+연결
+        cc.pair = PairController(pairPlatform, cc, safeScope, pinSetting = { application.settings.btPin }, pinSave = { application.settings.btPin = it })
         // 시작 시 이미 고른 프로필이 있으면 안테나도 맞춤
         kr.archsurvey.data.AntennaDb.antennaIdForProfile(cc.profile.id)?.let { controller.setAntennaModel(it) }
         controller.setTypesList(application.settings.positionTypes)
@@ -188,5 +191,5 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
     /** Activity 가 앞에 오면 MainActivity.onResume 에서 부른다(권한 통로 연결 뒤) */
     fun restoreVoice() { runCatching { controller.voice?.restore() }.onFailure { kr.archsurvey.diag.CrashLog.record("음성 저장 복원", it) } }
 
-    override fun onCleared() { controller.voice?.release(); controller.tilt?.pause(); media.stopPlayback(); media.cancelRecording() }
+    override fun onCleared() { pairPlatform.release(); controller.voice?.release(); controller.tilt?.pause(); media.stopPlayback(); media.cancelRecording() }
 }

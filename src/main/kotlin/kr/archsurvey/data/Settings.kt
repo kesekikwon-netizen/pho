@@ -273,6 +273,10 @@ class SettingsStore(private val ctx: Context) {
         get() = sp.getBoolean("voice_online_ok", false)
         set(v) = sp.edit().putBoolean("voice_online_ok", v).apply()
     /** 0.1.11 VRS 「GGA 전송」(기본 켬) */
+    /** 0.1.40 앱 안 수신기 등록 PIN(기본 1234, 연결 화면 › 주변 수신기 › 고급에서만 바꿈) */
+    var btPin: String
+        get() = sp.getString("bt_pair_pin", kr.archsurvey.bt.PairConst.DEFAULT_PIN) ?: kr.archsurvey.bt.PairConst.DEFAULT_PIN
+        set(v) = sp.edit().putString("bt_pair_pin", v).apply()
     var ntripSendGga: Boolean
         get() = sp.getBoolean("ntrip_send_gga", true)
         set(v) = sp.edit().putBoolean("ntrip_send_gga", v).apply()
