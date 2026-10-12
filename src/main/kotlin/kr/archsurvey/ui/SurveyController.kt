@@ -892,7 +892,7 @@ class SurveyController(
     }
     /** 「프로그램 종료」 예: 혹시 남은 연결도 끊고 앱 닫기(음성·기울기는 ViewModel.onCleared 가 정리) */
     fun exitApp() {
-        if (connection?.linkActive() == true) disconnectDevice()
+        disconnectDevice() // 0.1.42: 늘 — 서비스·알림·자동 재연결·앱 사이 수신기 잠금까지 정리
         onExitApp?.invoke()
     }
 
