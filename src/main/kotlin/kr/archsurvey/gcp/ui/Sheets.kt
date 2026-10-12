@@ -204,9 +204,9 @@ fun NewSiteSheet(c: GcpController, f: NewSiteForm) {
 @Composable
 fun MenuSheet(c: GcpController) {
     BottomSheet("메뉴", "menu_sheet", onClose = { c.menuOpen = false }) {
-        Tile("대상 고르기", false, "menu_objs", Modifier.fillMaxWidth(), sub = "측점 · 사진 · 전달 필요 한눈에") { c.menuOpen = false; c.objListOpen = true }
-        Tile("PC로 넘기기", false, "menu_handoff", Modifier.fillMaxWidth(), sub = "전달 필요 ${c.handoffCount(HandoffScope.PENDING)} · zip 하나로 공유") { c.menuOpen = false; c.handoffOpen = true }
-        Tile("유적 목록", false, "menu_sites", Modifier.fillMaxWidth()) { c.menuOpen = false; c.back() }
+        Tile("유적 지도", false, "menu_map", Modifier.fillMaxWidth(), sub = "위성 + 지적 · 모든 폴더의 표적 자리") { c.menuOpen = false; c.go(Screen.MAP); c.fitAll() }
+        Tile("PC로 보내기", false, "menu_handoff", Modifier.fillMaxWidth(), sub = "보낼 폴더 ${c.handoffCount(HandoffScope.PENDING)} · zip 하나로 공유") { c.menuOpen = false; c.handoffOpen = true }
+        Tile("유적 바꾸기", false, "menu_sites", Modifier.fillMaxWidth()) { c.menuOpen = false; c.openSitePicker() }
         Tile("설정", false, "menu_settings", Modifier.fillMaxWidth(), sub = "수신기 · VRS · 폴 · 평균") { c.menuOpen = false; c.go(Screen.SETTINGS) }
     }
 }

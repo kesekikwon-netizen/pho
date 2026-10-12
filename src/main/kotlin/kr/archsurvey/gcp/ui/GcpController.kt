@@ -57,7 +57,8 @@ interface GcpFilesPort {
     fun whereLabel(site: Site): String
 }
 
-enum class Screen { SITES, MAP, ID_CARD, SETTINGS }
+/** 0.1.5: 유적 → 폴더 목록(OBJECTS) → 폴더 안(OBJ) → 표적 재기(TARGETS). 지도(MAP)는 「지도에서 보기」로 */
+enum class Screen { SITES, OBJECTS, OBJ, TARGETS, MAP, ID_CARD, SETTINGS }
 
 /** 유적 목록 카드 한 장 */
 data class SiteCard(val site: Site, val objCount: Int, val counts: Map<Stage, Int>, val lastAt: Long?)
@@ -150,7 +151,12 @@ class GcpController(
     // ---- 설정 ----
     var advancedOpen by mutableStateOf(false)
 
-    fun start() { reloadSites() }
+    /** 0.1.5: 마지막에 쓴 유적이 있으면 그 폴더 목록부터(시안 「폴더 = 첫 화면」) */
+    fun start() = scope.launch {
+        reloadSites().join()
+        val last = prefs.lastSiteId
+        if (last > 0 && sites.any { it.site.id == last } && screen == Screen.SITES) openSite(last)
+    }
 
     // ================= 이동 =================
     fun go(s: Screen) { if (screen != s) stack = stack + s }
@@ -162,7 +168,7 @@ class GcpController(
             numPick != null -> { numPick = null; return true }
             newSession != null -> { newSession = null; return true }
             sessionSheetOpen -> { sessionSheetOpen = false; return true }
-            newObj != null -> { newObj = if (newObj?.step == NewObjStep.NUMBER) newObj?.copy(step = NewObjStep.KIND) else null; return true }
+            newObj != null -> { newObj = null; return true }
             objListOpen -> { objListOpen = false; return true }
             newSite?.typed != null -> { newSite = newSite?.copy(typed = null); return true }
             newSite != null -> { newSite = null; return true }
@@ -228,7 +234,7 @@ class GcpController(
         val last = b.objs.maxByOrNull { o -> b.sessionsOf(o).maxOfOrNull { it.changedAt } ?: o.createdAt }
         objId = last?.id; sessionId = last?.let { b.current(it)?.id }
         projection = null; anchorMap(); fitAll()
-        stack = listOf(Screen.SITES, Screen.MAP)
+        stack = listOf(Screen.SITES, Screen.OBJECTS)
     }
 
     /** 장부 다시 읽기(저장·차수 바꾼 뒤) */
@@ -276,7 +282,10 @@ class GcpController(
         val (slots, note) = suggestFor(null)
         objListOpen = false
         newObj = NewObjForm(slots = slots, nearNote = note)
+        pickKind(lastKind())   // 0.1.5: 한 화면 — 종류·번호가 처음부터 골라져 있음
     }
+    /** 마지막에 만든 대상 종류(없으면 주거지) */
+    private fun lastKind(): ObjKind = book?.objs?.maxByOrNull { it.createdAt }?.kind ?: ObjKind.DWELLING
 
     /** 종류 타일을 누르면 바로 번호 단계(다음 번호가 미리 골라져 있음) */
     fun pickKind(k: ObjKind) { val f = newObj ?: return; val used = usedNos(k); newObj = f.copy(step = NewObjStep.NUMBER, kind = k, used = used, no = ObjNames.next(used)) }
@@ -313,8 +322,13 @@ class GcpController(
         objId = id
         sessionId = book?.objs?.firstOrNull { it.id == id }?.let { book?.current(it)?.id }
         objListOpen = false
-        if (screen != Screen.MAP) stack = listOf(Screen.SITES, Screen.MAP)
+        if (screen != Screen.MAP) stack = listOf(Screen.SITES, Screen.OBJECTS, Screen.OBJ)
         focusObj()
+    }
+    /** 폴더 안 → 표적 재기 */
+    fun openTargets() { if (session == null) return; go(Screen.TARGETS) }
+    /** 폴더 목록 → 유적 고르기 */
+    fun openSitePicker() { stack = listOf(Screen.SITES); reloadSites()
     }
 
     fun pickSession(id: Long) { sessionId = id; sessionSheetOpen = false }
@@ -399,7 +413,7 @@ class GcpController(
 
     /** 볼륨 아래 키(설정에서 켰을 때) = 큰 측량 단추 */
     fun onVolumeKey(): Boolean {
-        if (!prefs.volumeKey || screen != Screen.MAP || measuringTag != null || ui.confirm != null || obj == null) return false
+        if (!prefs.volumeKey || (screen != Screen.MAP && screen != Screen.TARGETS) || measuringTag != null || ui.confirm != null || obj == null) return false
         onMeasureButton(); return true
     }
 

@@ -40,10 +40,13 @@ fun SiteMapScreen(c: GcpController, env: GcpEnv) {
     val g by c.source.gnss.collectAsState()
     LaunchedEffect(g.gga) { c.onFix() }
     Column(Modifier.fillMaxSize().background(t.bg).testTag("site_map")) {
-        GcpHeader(b.site.name, "대상 ${b.objs.size} · ${GcpController.epsgLabel(b.site.epsg)} ${b.site.epsg}", c.source, onBack = { c.back() }, onPill = { c.openReceiver() }, onMenu = { c.menuOpen = true })
-        MapArea(c, env, Modifier.weight(1f))
+        GTopBar(b.site.name + " · 지도", { c.back() }, c, onMenu = { c.menuOpen = true })
+        Box(Modifier.weight(1f)) {
+            MapArea(c, env, Modifier.fillMaxSize())
+        }
         ControlArea(c)
     }
+    if (c.measuringTag != null) MeasuringOverlay(c)
 }
 
 /** 지도에 그릴 것: 대상마다 지금 차수 표적(검은 표적 모양 + #번호) · 대상 둘레 점선 + 이름 · 내 위치 */
@@ -121,10 +124,10 @@ fun MapArea(c: GcpController, env: GcpEnv, modifier: Modifier) {
 private fun MapBtn(g: Glyph, desc: String, tag: String, on: Boolean = false, onClick: () -> Unit) {
     val t = T
     Box(
-        Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(if (on) t.primary else t.raised).then(if (on) Modifier else Modifier.border(1.dp, t.outline, RoundedCornerShape(16.dp)))
+        Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(if (on) G.dark else t.raised).then(if (on) Modifier else Modifier.border(1.dp, t.outline, RoundedCornerShape(16.dp)))
             .hClickable(onClickLabel = desc) { onClick() }.semantics { contentDescription = desc }.testTag(tag),
         contentAlignment = Alignment.Center,
-    ) { GlyphIcon(g, if (on) t.onPrimary else t.primary, 24.dp) }
+    ) { GlyphIcon(g, if (on) G.onDark else G.dark, 24.dp) }
 }
 
 /** 화면 1 cm ≈ 실제 m (측량 앱 scaleText 와 같은 생각) */
@@ -166,10 +169,10 @@ private fun NowRow(c: GcpController) {
         ) {
             Column(Modifier.weight(1f)) {
                 val st = if (o != null && s != null) c.stageNow() else null
-                Text("지금 재는 것" + (st?.let { " · ${it.ko}" } ?: ""), style = Ty.small.copy(fontSize = 11.sp), color = if (st == Stage.MEASURE || st == null) t.inkSub else t.accentText, maxLines = 1, modifier = Modifier.testTag("now_stage"))
+                Text("지금 재는 것" + (st?.let { " · ${it.ko}" } ?: ""), style = Ty.small.copy(fontSize = 11.sp), color = if (st == Stage.MEASURE || st == null) t.inkSub else G.dot, maxLines = 1, modifier = Modifier.testTag("now_stage"))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(o?.name ?: "대상을 고르세요", style = Ty.label.copy(fontSize = 17.sp, fontWeight = FontWeight.Medium), color = t.ink, maxLines = 1, modifier = Modifier.testTag("now_obj"))
-                    if (s != null) Text(" · ${s.no}차 ${s.label}", style = Ty.label.copy(fontSize = 17.sp, fontWeight = FontWeight.Medium), color = t.accentText, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("now_session"))
+                    if (s != null) Text(" · ${s.no}차 ${s.label}", style = Ty.label.copy(fontSize = 17.sp, fontWeight = FontWeight.Medium), color = G.dot, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("now_session"))
                 }
             }
             GlyphIcon(Glyph.CHEVRON_DOWN, t.inkSub, 18.dp)
@@ -194,7 +197,7 @@ private fun TargetRow(c: GcpController, s: Session) {
     Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 8.dp).testTag("qtag_row"), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.width(52.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text("Target", style = Ty.label.copy(fontSize = 12.sp), color = t.ink, maxLines = 1)
-            Text("${c.activeShots().size}/${s.slots.size}", style = Ty.coord.copy(fontSize = 13.sp), color = if (c.activeShots().size >= Pipeline.MIN_TARGETS) t.fixed else t.accentText, maxLines = 1, modifier = Modifier.testTag("qtag_count"))
+            Text("${c.activeShots().size}/${s.slots.size}", style = Ty.coord.copy(fontSize = 13.sp), color = if (c.activeShots().size >= Pipeline.MIN_TARGETS) G.ok else G.dot, maxLines = 1, modifier = Modifier.testTag("qtag_count"))
             if (locked) Text("잠김", style = Ty.small.copy(fontSize = 10.sp), color = t.inkSub)
         }
         val cell: @Composable (Int, Int, Modifier) -> Unit = { i, tag, m ->
@@ -202,18 +205,18 @@ private fun TargetRow(c: GcpController, s: Session) {
             val now = c.measuringTag == tag
             Box(
                 m.height(60.dp).clip(RoundedCornerShape(14.dp))
-                    .background(if (now) t.primary else if (shot != null) t.primaryCont else t.raised)
-                    .border(if (shot != null || now) 2.dp else 1.dp, if (shot != null || now) t.primary else t.outline, RoundedCornerShape(14.dp))
+                    .background(if (now) G.dark else if (shot != null) G.sel else t.raised)
+                    .border(if (shot != null || now) 2.dp else 1.dp, if (shot != null || now) G.dark else t.outline, RoundedCornerShape(14.dp))
                     .hCombinedClickable(onLongClick = { c.onTargetLong(i) }) { c.onTargetTap(tag) }
                     .semantics { contentDescription = "Target $tag" + if (shot != null) " · 잰 것, 다시 재려면 길게" else " · 누르면 바로 측점, 길게 = 번호 바꾸기" }
                     .testTag("qtag_$tag"),
                 contentAlignment = Alignment.Center,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("$tag", style = Ty.ledger.copy(fontSize = if (tag >= 100) 22.sp else 28.sp), color = if (now) t.onPrimary else t.ink, maxLines = 1)
-                    if (shot != null && !now) Text("✓", style = Ty.label.copy(fontSize = 18.sp), color = t.primary, modifier = Modifier.testTag("qtag_done_$tag"))
+                    Text("$tag", style = Ty.ledger.copy(fontSize = if (tag >= 100) 22.sp else 28.sp), color = if (now) G.onDark else t.ink, maxLines = 1)
+                    if (shot != null && !now) Text("✓", style = Ty.label.copy(fontSize = 18.sp), color = G.dark, modifier = Modifier.testTag("qtag_done_$tag"))
                 }
-                if (now) Text("재는 중", style = Ty.small.copy(fontSize = 10.sp), color = t.onPrimary, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp))
+                if (now) Text("재는 중", style = Ty.small.copy(fontSize = 10.sp), color = G.onDark, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp))
             }
         }
         if (many) Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -224,7 +227,7 @@ private fun TargetRow(c: GcpController, s: Session) {
             Modifier.size(width = 48.dp, height = 60.dp).clip(RoundedCornerShape(14.dp)).background(t.raised).border(1.dp, t.outline, RoundedCornerShape(14.dp))
                 .hClickable(onClickLabel = "표적 더하기") { c.openAddSlot() }.testTag("add_slot"),
             contentAlignment = Alignment.Center,
-        ) { Text("+", style = Ty.title.copy(fontSize = 28.sp), color = t.primary) }
+        ) { Text("+", style = Ty.title.copy(fontSize = 28.sp), color = G.dark) }
     }
 }
 
@@ -232,8 +235,8 @@ private fun TargetRow(c: GcpController, s: Session) {
 private fun RowScope.SideBtn(g: Glyph, label: String, tag: String, on: Boolean = false, onClick: () -> Unit) {
     val t = T
     Column(
-        Modifier.width(76.dp).height(84.dp).clip(RoundedCornerShape(16.dp)).background(if (on) t.primaryCont else t.raised)
-            .border(if (on) 2.dp else 1.dp, if (on) t.primary else t.outline, RoundedCornerShape(16.dp)).hClickable(onClickLabel = label, onClick = onClick).testTag(tag),
+        Modifier.width(76.dp).height(84.dp).clip(RoundedCornerShape(16.dp)).background(if (on) G.sel else t.raised)
+            .border(if (on) 2.dp else 1.dp, if (on) G.dark else t.outline, RoundedCornerShape(16.dp)).hClickable(onClickLabel = label, onClick = onClick).testTag(tag),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
     ) {
         GlyphIcon(g, t.ink, 22.dp)
@@ -264,14 +267,14 @@ private fun MeasureButton(c: GcpController, modifier: Modifier) {
     }
     val dim = !busy && !noObj && (locked || (blocked && !notConn))
     Box(
-        modifier.height(84.dp).clip(RoundedCornerShape(18.dp)).background(if (dim || (notConn && !noObj && !busy)) t.blockedButton else t.primary)
+        modifier.height(84.dp).clip(RoundedCornerShape(18.dp)).background(if (dim || (notConn && !noObj && !busy)) G.lineStrong else G.dark)
             .hClickable(onClickLabel = label) { if (!locked || busy) c.onMeasureButton() }.testTag("measure_button"),
         contentAlignment = Alignment.Center,
     ) {
         if (busy) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(c.progress.coerceIn(0f, 1f)).height(6.dp).background(Color.White.copy(alpha = 0.85f)).testTag("measure_progress"))
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(label, style = Ty.button.copy(fontSize = 22.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium), color = t.onPrimary, maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.testTag("measure_label"))
-            Text(sub, style = Ty.small.copy(fontSize = 12.sp, lineHeight = 15.sp), color = t.onPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 8.dp).testTag("measure_sub"))
+            Text(label, style = Ty.button.copy(fontSize = 22.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium), color = G.onDark, maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.testTag("measure_label"))
+            Text(sub, style = Ty.small.copy(fontSize = 12.sp, lineHeight = 15.sp), color = G.onDark, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 8.dp).testTag("measure_sub"))
         }
     }
 }

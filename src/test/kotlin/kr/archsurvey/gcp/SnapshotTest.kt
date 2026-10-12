@@ -71,7 +71,7 @@ class SnapshotTest {
         org.junit.Assume.assumeTrue("V월드 키 없음", key.length >= 20)
         TileImages.networkEnabled = true
         val r = busy(); val c = r.c; c0 = c
-        rule.runOnIdle { c.fitAll() }
+        rule.runOnIdle { c.go(Screen.MAP); c.fitAll() }
         ui = c.ui
         rule.setContent { SurveyTheme { GcpRoot(c, GcpEnv(mapAccess = { kr.archsurvey.map.VWorldAccess(key, "") })) } }
         // 타일은 IO 에서 받는다 — 몇 초 기다리며 다시 그린다
@@ -102,76 +102,99 @@ class SnapshotTest {
     }
     private var c0: GcpController? = null
 
-    @Test fun s03_map_screen_states_offline() {
+    /** 0.1.5: 시안 번호(02–10)와 같은 이름으로 남겨 나란히 비교한다 */
+    @Test fun s02_folder_list() {
+        val r = busy(); val c = r.c
+        rule.runOnIdle { c.back() }
+        show(c)
+        rule.onNodeWithTag("objects").assertIsDisplayed(); rule.onNodeWithTag("obj_001호_수혈").assertIsDisplayed()
+        rule.onNodeWithTag("folder_count", useUnmergedTree = true).assertTextContains("폴더 3개", substring = true)
+        shot("m02-folder-list")
+        rule.onNodeWithTag("stage_photo").performClick(); shot("m02b-folder-list-filter-photo")
+    }
+
+    @Test fun s03_new_object_and_number() {
+        val r = busy(); val c = r.c
+        rule.runOnIdle { c.back() }
+        show(c)
+        rule.onNodeWithTag("obj_new").performClick(); rule.onNodeWithTag("newobj").assertIsDisplayed()
+        rule.onNodeWithTag("newobj_name", useUnmergedTree = true).assertTextEquals("2호 주거지")   // 마지막 종류 · 다음 번호
+        shot("m03-new-object")
+        rule.onNodeWithTag("objno_display").performClick()
+        rule.onNodeWithTag("col0_1").performClick(); rule.onNodeWithTag("col1_2").performClick(); rule.onNodeWithTag("col2_7").performClick()
+        rule.onNodeWithTag("numpad_value", useUnmergedTree = true).assertTextEquals("127"); shot("m04-number-127")
+        rule.onNodeWithTag("numpad_ok").performClick(); rule.onNodeWithTag("newobj_name", useUnmergedTree = true).assertTextEquals("127호 주거지")
+        rule.onNodeWithTag("kind_section").performScrollTo().performClick(); shot("m03b-new-object-section-letters")
+    }
+
+    @Test fun s05_folder_inside_stages() {
         val r = busy(); val c = r.c
         show(c)
-        rule.onNodeWithTag("site_map").assertIsDisplayed(); rule.onNodeWithTag("qtag_1").assertIsDisplayed()
-        rule.onNodeWithTag("now_obj", useUnmergedTree = true).assertTextEquals("1호 수혈")
-        shot("03-map-measure-fix")
+        rule.onNodeWithTag("obj_screen").assertIsDisplayed(); rule.onNodeWithTag("obj_title", useUnmergedTree = true).assertTextEquals("1호 수혈")
+        shot("m05-folder-inside-measure")
+        rule.runOnIdle { c.openObj(c.book!!.objs[1].id) }; shot("m05b-folder-inside-photo")
+        rule.runOnIdle { c.openObj(c.book!!.objs[2].id) }; shot("m05c-folder-inside-send")
+        rule.onNodeWithTag("tool_session").performClick(); shot("m05d-session-picker")
+    }
+
+    @Test fun s06_targets_and_measuring() {
+        val r = busy(); val c = r.c
+        rule.runOnIdle { c.openObj(c.book!!.objs[1].id); c.openTargets() }
+        show(c)
+        rule.onNodeWithTag("targets").assertIsDisplayed(); rule.onNodeWithTag("qtag_done_1", useUnmergedTree = true).assertExists()
+        rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("표적 4 재기")
+        shot("m06-targets")
         rule.runOnIdle { val (la, lo) = Geo.latLon(194890.0, 573975.0); r.gnss.emit(q = kr.archsurvey.core.FixQuality.RTK_FLOAT, lat = la, lon = lo) }
-        rule.mainClock.advanceTimeBy(1500); rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("FIX 기다리는 중"); shot("04-map-float-blocked")
-        rule.runOnIdle { r.gnss.emitAt(194890.0, 573975.0); c.onTargetLong(1) }
-        shot("05-remeasure-confirm")
-        rule.runOnIdle { c.ui.answer(false); r.measure(1, 194884.215, 573986.140, 4.192) }
-        shot("06-target-moved")
-        rule.runOnIdle { c.ui.answer(false); c.openObj(c.book!!.objs[2].id) }
-        shot("07-map-photo-stage")
+        rule.mainClock.advanceTimeBy(1500); rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("FIX 기다리는 중"); shot("m06b-targets-float-blocked")
+        rule.runOnIdle { r.prefs.epochs = 10; r.gnss.emitAt(194890.0, 573975.0); c.onTargetTap(4) }
+        rule.runOnIdle { repeat(7) { r.gnss.emitAt(194890.0, 573975.0) } }
+        rule.onNodeWithTag("measuring").assertIsDisplayed(); shot("m07-measuring")
+        rule.onNodeWithTag("measure_stop").performClick(); rule.onNodeWithTag("targets").assertIsDisplayed()
+        rule.runOnIdle { c.onTargetLong(0) }; shot("m06c-remeasure-confirm")
+        rule.runOnIdle { c.ui.answer(false); c.openAddSlot() }; shot("m06d-add-target-number")
     }
 
-    @Test fun s08_pickers_obj_kind_number_session_target() {
-        val r = busy(); val c = r.c
-        show(c)
-        rule.onNodeWithTag("now_row").performClick(); rule.onNodeWithTag("obj_sheet").assertIsDisplayed(); shot("08-picker-objects")
-        rule.onNodeWithTag("obj_new").performClick(); rule.onNodeWithTag("kind_dwelling").assertIsDisplayed(); shot("09-picker-kind-tiles")
-        rule.onNodeWithTag("kind_dwelling").performClick(); rule.onNodeWithTag("objno_value", useUnmergedTree = true).assertTextEquals("2"); shot("10-picker-number")
-        rule.onNodeWithTag("objno_display").performClick(); rule.onNodeWithTag("key_1").performClick(); rule.onNodeWithTag("key_2").performClick(); rule.onNodeWithTag("key_7").performClick()
-        rule.onNodeWithTag("numpad_value", useUnmergedTree = true).assertTextEquals("127"); shot("11-picker-numpad-127")
-        rule.onNodeWithTag("numpad_ok").performClick(); rule.onNodeWithTag("objno_value", useUnmergedTree = true).assertTextEquals("127")
-        rule.runOnIdle { c.newObj = null; c.newObj = NewObjForm(); c.pickKind(ObjKind.SECTION) }; shot("12-picker-section-letters")
-        rule.runOnIdle { c.newObj = null }
-        rule.onNodeWithTag("tool_session").performClick(); shot("13-picker-session")
-        rule.onNodeWithTag("session_new").performClick(); shot("14-picker-new-session")
-        rule.runOnIdle { c.newSession = null }
-        rule.onNodeWithTag("add_slot").performClick(); rule.onNodeWithTag("numpad_value", useUnmergedTree = true).assertTextEquals("5"); shot("15-picker-target-number")
-    }
-
-    @Test fun s16_sites_and_new_site_picker() {
-        val r = ControllerTest.rig(kr.archsurvey.gcp.model.AddressParts("강원특별자치도", "강릉시", "성남동", "중앙동"))
-        show(r.c)
-        rule.onNodeWithTag("sites").assertIsDisplayed(); shot("16-sites-empty")
-        rule.runOnIdle { r.gnss.emit(lat = 37.7519, lon = 128.8961) }
-        rule.onNodeWithTag("site_new").performClick()
-        shot("17-picker-new-site")
-        rule.onNodeWithTag("site_sug_0").assertExists(); rule.onNodeWithTag("district_2").performScrollTo().performClick()
-        rule.onNodeWithTag("epsg_5187").performScrollTo(); shot("17b-picker-new-site-district-epsg")
-        rule.onNodeWithTag("newsite_ok").performClick(); rule.onNodeWithTag("site_map").assertIsDisplayed()
-        rule.onNodeWithTag("header_title", useUnmergedTree = true).assertTextEquals("강릉 성남동 유적 2지구")
-        rule.runOnIdle { r.c.back() }; shot("18-sites-one")
-    }
-
-    @Test fun s19_id_card_with_qr() {
+    @Test fun s08_id_card_with_qr() {
         val r = busy(); val c = r.c
         rule.runOnIdle { c.openObj(c.book!!.objs[1].id); c.openIdCard() }
         show(c)
         rule.onNodeWithTag("idcard_folder", useUnmergedTree = true).assertTextEquals("A_토층_1차")
         rule.onNodeWithTag("idcard_qr").assertIsDisplayed()
-        shot("19-id-card")
+        shot("m08-id-card")
     }
 
-    @Test fun s20_menu_handoff_pole() {
-        val r = busy(); show(r.c)
-        rule.onNodeWithTag("menu").performClick(); shot("20-menu")
-        rule.onNodeWithTag("menu_handoff").performClick(); rule.onNodeWithTag("handoff_zip", useUnmergedTree = true).assertExists(); shot("21-handoff")
-        rule.onNodeWithTag("handoff_all").performClick()
-        assertEquals(1, r.files.zips.size); assertEquals(HandoffScope.ALL, r.c.handoffScope)
-        rule.onNodeWithTag("pole_chip").performClick(); shot("22-pole")
+    @Test fun s09_handoff() {
+        val r = busy(); val c = r.c
+        rule.runOnIdle { c.back() }
+        show(c)
+        rule.onNodeWithTag("to_handoff").performClick(); rule.onNodeWithTag("handoff_zip", useUnmergedTree = true).assertExists(); shot("m09-handoff")
+        rule.onNodeWithTag("handoff_all").performClick(); shot("m09b-handoff-all")
+        rule.onNodeWithTag("handoff_send").performClick()
+        assertEquals(1, r.files.zips.size); assertEquals(HandoffScope.ALL, c.handoffScope)
     }
 
-    @Test fun s23_settings_and_advanced() {
-        val r = busy(); show(r.c)
-        rule.runOnIdle { r.c.go(Screen.SETTINGS) }
-        rule.onNodeWithTag("pole_value").assertTextEquals("1.6 m"); shot("23-settings")
-        rule.onNodeWithTag("advanced_toggle").performClick(); rule.onNodeWithTag("set_vworld").performScrollTo(); shot("24-settings-advanced")
-        rule.onNodeWithTag("exit").performScrollTo().performClick(); shot("25-exit-confirm")
+    @Test fun s10_sites_and_new_site_picker() {
+        val r = ControllerTest.rig(kr.archsurvey.gcp.model.AddressParts("강원특별자치도", "강릉시", "성남동", "중앙동"))
+        show(r.c)
+        rule.onNodeWithTag("sites").assertIsDisplayed(); shot("m10a-sites-empty")
+        rule.runOnIdle { r.gnss.emit(lat = 37.7519, lon = 128.8961) }
+        rule.onNodeWithTag("site_new").performClick()
+        shot("m10b-new-site")
+        rule.onNodeWithTag("site_sug_0").assertExists(); rule.onNodeWithTag("district_2").performScrollTo().performClick()
+        rule.onNodeWithTag("newsite_ok").performClick(); rule.onNodeWithTag("objects").assertIsDisplayed()
+        rule.onNodeWithTag("site_name", useUnmergedTree = true).assertTextEquals("강릉 성남동 유적 2지구")
+        rule.runOnIdle { r.c.openSitePicker() }; shot("m10-sites")
+    }
+
+    @Test fun s11_map_menu_pole_settings() {
+        val r = busy(); val c = r.c
+        rule.runOnIdle { c.go(Screen.MAP) }
+        show(c)
+        rule.onNodeWithTag("site_map").assertIsDisplayed(); rule.onNodeWithTag("qtag_1").assertIsDisplayed(); shot("m11-map-offline")
+        rule.onNodeWithTag("menu").performClick(); shot("m12-menu")
+        rule.runOnIdle { c.menuOpen = false; c.poleOpen = true }; shot("m13-pole")
+        rule.runOnIdle { c.poleOpen = false; c.go(Screen.SETTINGS) }
+        rule.onNodeWithTag("pole_value").assertTextEquals("1.6 m"); shot("m14-settings")
+        rule.onNodeWithTag("exit").performScrollTo().performClick(); shot("m15-exit-confirm")
     }
 }

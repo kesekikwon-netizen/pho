@@ -22,7 +22,7 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class ControllerTest {
-    class Rig(val c: GcpController, val files: MemFiles, val gnss: TestGnss, val prefs: MemPrefs, var t: Long)
+    class Rig(val c: GcpController, val files: MemFiles, val gnss: TestGnss, val prefs: MemPrefs, var t: Long, val repo: GcpRepo? = null)
 
     companion object {
         val antennaDb by lazy { AntennaDb.parse(File("src/main/assets/antenna_db.json").readText()) }
@@ -32,10 +32,11 @@ class ControllerTest {
             var t = 1_791_766_800_000L   // 2026-10-12 10:00 KST
             val clock = { t++ }
             val files = MemFiles(); val g = TestGnss(); val p = MemPrefs()
-            val c = GcpController(GcpRepo(db.dao(), clock), files, g, p, antennaDb, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined), Dispatchers.Unconfined, clock = clock,
+            val repo = GcpRepo(db.dao(), clock)
+            val c = GcpController(repo, files, g, p, antennaDb, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined), Dispatchers.Unconfined, clock = clock,
                 addressLookup = { _, _ -> addr })
             c.start()
-            return Rig(c, files, g, p, t)
+            return Rig(c, files, g, p, t, repo)
         }
         fun m(e: Double, n: Double, h: Double = 4.0) = Geo.latLon(e, n).let { (la, lo) -> Measured(la, lo, e, n, h, h + 1.6, 0.006, 0.012, 3, 3) }
 
@@ -51,7 +52,7 @@ class ControllerTest {
     @Test fun createSite_byPickingOnly_andObjects_kindTileNextNumber_uniquePerKind() {
         val r = rig().siteWithObj()
         val c = r.c
-        assertEquals(Screen.MAP, c.screen)
+        assertEquals(Screen.OBJ, c.screen)   // 0.1.5: 만들면 폴더 안
         assertEquals("1호 수혈", c.obj!!.name); assertEquals("001호_수혈", c.obj!!.code)
         assertEquals(listOf(1, 2, 3, 4), c.session!!.slots); assertEquals("검출면", c.session!!.label)
         // 같은 종류는 다음 번호, 다른 종류는 1호부터
@@ -64,7 +65,7 @@ class ControllerTest {
         c.openNewObj(); c.pickKind(ObjKind.DWELLING); assertEquals(13, c.newObj!!.no); c.pickObjNo(12); c.submitNewObj()
         assertTrue(c.ui.toast!!.contains("이미 있어요")); assertNotNull(c.newObj); c.newObj = null
         c.openNewObj(); c.pickKind(ObjKind.SECTION); assertEquals(1, c.newObj!!.no); c.submitNewObj(); assertEquals("A—A′ 토층", c.obj!!.name); assertEquals("A_토층", c.obj!!.code)
-        c.back(); assertEquals(Screen.SITES, c.screen)
+        c.back(); assertEquals(Screen.OBJECTS, c.screen); c.back(); assertEquals(Screen.SITES, c.screen)
         assertEquals(1, c.sites.size); assertEquals(4, c.sites[0].objCount)
         // 같은 이름 유적은 (2)
         c.openNewSite(); c.newSite = c.newSite!!.copy(base = "강릉 유적"); c.submitNewSite()
@@ -113,7 +114,7 @@ class ControllerTest {
         assertEquals(4, c.nextTag())
         c.openIdCard(); assertEquals(Screen.ID_CARD, c.screen)
         assertEquals("001호_수혈|1차|EPSG5187|T1-4", c.qr())
-        c.markPhotoDone(); assertEquals(Screen.MAP, c.screen)
+        c.markPhotoDone(); assertEquals(Screen.OBJ, c.screen)
         assertEquals(Stage.HANDOFF, c.stageNow())
         assertEquals(mapOf(Stage.MEASURE to 0, Stage.PHOTO to 0, Stage.HANDOFF to 1, Stage.DONE to 0), c.counts())
         c.sendHandoff(HandoffScope.PENDING)
@@ -223,5 +224,20 @@ class ControllerTest {
         r.measure(1, 1.0, 1.0)
         assertTrue(r.c.ui.toast!!.contains("XML 을 쓰지 못했어요")); assertNull(r.c.session!!.xmlSavedAt)
         assertNotNull(r.c.shotOf(1))
+    }
+
+    /** 0.1.5 시안 흐름: 폴더 목록 → 폴더 안 → 표적 재기 · 지도는 따로 · 다시 켜면 마지막 유적 폴더 목록 */
+    @Test fun folderFlow_0105_navigation_and_resume() {
+        val r = rig().siteWithObj(); val c = r.c
+        assertEquals(listOf(Screen.SITES, Screen.OBJECTS, Screen.OBJ), c.stack)
+        c.openTargets(); assertEquals(Screen.TARGETS, c.screen)
+        c.go(Screen.MAP); assertEquals(Screen.MAP, c.screen); c.back(); assertEquals(Screen.TARGETS, c.screen)
+        c.back(); c.back(); assertEquals(Screen.OBJECTS, c.screen)
+        c.openNewObj(); assertEquals(ObjKind.PIT, c.newObj!!.kind); assertEquals(2, c.newObj!!.no)   // 마지막 종류 · 다음 번호가 처음부터
+        c.back(); assertNull(c.newObj)
+        c.openSitePicker(); assertEquals(Screen.SITES, c.screen)
+        // 앱을 다시 켠 것처럼: 같은 장부 · 같은 설정 → 마지막 유적 폴더 목록
+        val c2 = GcpController(r.repo!!, r.files, r.gnss, r.prefs, antennaDb, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined), Dispatchers.Unconfined)
+        c2.start(); assertEquals(Screen.OBJECTS, c2.screen); assertEquals(c.book!!.site.id, c2.book!!.site.id)
     }
 }

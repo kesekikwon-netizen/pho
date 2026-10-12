@@ -29,31 +29,34 @@ import kr.archsurvey.ui.*
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 
-// =============================== 유적 목록 ===============================
+// =============================== 유적 고르기(0.1.5 시안 10) ===============================
 @Composable
 fun SitesScreen(c: GcpController) {
-    val t = T
-    Column(Modifier.fillMaxSize().background(t.bg).testTag("sites")) {
-        GcpHeader("사진 기준점", "iTwin Capture 표적 측점", c.source, onBack = null, onPill = { c.openReceiver() }, onMenu = { c.go(Screen.SETTINGS) })
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (c.sites.isEmpty()) Caption("유적이 없어요. 아래 「+ 새 유적」을 누르면 지금 위치의 동 이름으로 이름을 골라 드려요.", tag = "sites_empty")
-            for (sc in c.sites) {
-                val pend = (sc.counts[Stage.MEASURE] ?: 0) + (sc.counts[Stage.PHOTO] ?: 0) + (sc.counts[Stage.HANDOFF] ?: 0)
-                Row(
-                    Modifier.fillMaxWidth().heightIn(min = 76.dp).clip(RoundedCornerShape(16.dp)).background(t.raised).border(1.dp, t.outline, RoundedCornerShape(16.dp))
-                        .hClickable(onClickLabel = sc.site.name) { c.openSite(sc.site.id) }.padding(horizontal = 16.dp, vertical = 10.dp).testTag("site_${sc.site.id}"),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(sc.site.name, style = Ty.serifHead.copy(fontSize = 19.sp), color = t.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text("대상 ${sc.objCount} · EPSG:${sc.site.epsg} · ${c.timeLabel(sc.lastAt)}", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1)
-                    }
-                    if (pend > 0) Text("남음 $pend", style = Ty.label.copy(fontSize = 13.sp), color = t.accentText, modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(t.chip).padding(horizontal = 8.dp, vertical = 4.dp))
-                    else if (sc.objCount > 0) Text("끝", style = Ty.label.copy(fontSize = 13.sp), color = t.fixed)
-                }
-            }
+    Column(Modifier.fillMaxSize().background(G.bg).testTag("sites")) {
+        GTopBar("사진 기준점", null, c, onMenu = { c.go(Screen.SETTINGS) }, brand = true)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp).padding(top = 6.dp), verticalAlignment = Alignment.Bottom) {
+            Text("유적", style = Ty.label.copy(fontSize = 26.sp, fontWeight = FontWeight.Black), color = G.ink, modifier = Modifier.weight(1f))
+            Text("최근 순", style = Ty.small.copy(fontSize = 13.sp), color = G.sub, modifier = Modifier.padding(bottom = 4.dp))
         }
-        Row(Modifier.fillMaxWidth().padding(10.dp)) { Btn("+ 새 유적", "site_new", Modifier.weight(1f), height = 72.dp, sub = "이름 · 좌표계를 골라요") { c.openNewSite() } }
+        Box(Modifier.padding(horizontal = 18.dp).padding(top = 8.dp).fillMaxWidth().height(2.dp).background(G.ink))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            if (c.sites.isEmpty()) Text("유적이 없어요. 아래 「+ 새 유적」을 누르면 지금 위치의 동 이름으로 이름을 골라 드려요.", style = Ty.label.copy(fontSize = 15.sp), color = G.sub, modifier = Modifier.padding(20.dp).testTag("sites_empty"))
+            for (sc in c.sites.sortedByDescending { it.lastAt ?: it.site.createdAt }) {
+                val pend = (sc.counts[Stage.MEASURE] ?: 0) + (sc.counts[Stage.PHOTO] ?: 0) + (sc.counts[Stage.HANDOFF] ?: 0)
+                Row(Modifier.fillMaxWidth().heightIn(min = 76.dp).hClickable(onClickLabel = sc.site.name) { c.openSite(sc.site.id) }.padding(horizontal = 18.dp, vertical = 12.dp).testTag("site_${sc.site.id}"),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(sc.site.name, style = Ty.label.copy(fontSize = 20.sp, fontWeight = FontWeight.Bold), color = G.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text("폴더 ${sc.objCount} · ${GcpController.epsgLabel(sc.site.epsg)}원점 ${sc.site.epsg}" + (sc.lastAt?.let { " · " + c.timeLabel(it) } ?: ""), style = Ty.small.copy(fontSize = 13.sp), color = G.sub, maxLines = 1)
+                    }
+                    if (pend > 0) Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(9.dp).clip(androidx.compose.foundation.shape.CircleShape).background(G.dot)); Text(" 남음 $pend", style = Ty.label.copy(fontSize = 14.sp, fontWeight = FontWeight.Bold), color = G.ink) }
+                    else if (sc.objCount > 0) Text("끝", style = Ty.label.copy(fontSize = 14.sp, fontWeight = FontWeight.Bold), color = G.ok)
+                }
+                Box(Modifier.padding(horizontal = 18.dp).fillMaxWidth().height(1.dp).background(G.line))
+            }
+            Text("새 유적은 지금 위치의 동 이름·최근 이름·오늘 날짜 중에서 고르고, 원점(좌표계)은 수신기 위치로 미리 골라 둡니다.", style = Ty.label.copy(fontSize = 13.sp), color = G.sub, modifier = Modifier.padding(18.dp))
+        }
+        BottomBar { Btn("+ 새 유적", "site_new", Modifier.weight(1f), height = 68.dp, sub = "이름 · 좌표계를 골라요") { c.openNewSite() } }
     }
 }
 
@@ -72,11 +75,11 @@ fun IdCardScreen(c: GcpController) {
     val matrix = remember(qr) { QrMatrix.of(qr) }
     val ink = Color(0xFF111111)
     Column(Modifier.fillMaxSize().background(Color.White).windowInsetsPadding(WindowInsets.systemBars).padding(horizontal = 18.dp, vertical = 14.dp).testTag("idcard"), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("사진 세트 첫 장으로 이 화면을 찍으세요", style = Ty.label.copy(fontSize = 14.sp), color = T.inkSub, textAlign = TextAlign.Center)
+        Text("이 화면을 사진 세트의 첫 장으로 찍으세요", style = Ty.label.copy(fontSize = 15.sp, fontWeight = FontWeight.Bold), color = ink, textAlign = TextAlign.Center)
         Spacer(Modifier.height(14.dp))
         Text(b.site.name, style = Ty.label.copy(fontSize = 18.sp), color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(o.name, style = Ty.serifTitle.copy(fontSize = 44.sp, lineHeight = 50.sp), color = ink, maxLines = 1, modifier = Modifier.testTag("idcard_name"))
-        Text("${s.no}차 · ${s.label}", style = Ty.label.copy(fontSize = 26.sp, fontWeight = FontWeight.Medium), color = ink)
+        Text(o.name, style = Ty.label.copy(fontSize = 46.sp, lineHeight = 52.sp, fontWeight = FontWeight.Black), color = ink, maxLines = 1, modifier = Modifier.testTag("idcard_name"))
+        Text("${s.no}차 · ${s.label}", style = Ty.label.copy(fontSize = 26.sp, fontWeight = FontWeight.Bold), color = ink)
         Spacer(Modifier.height(16.dp))
         Canvas(Modifier.size(220.dp).testTag("idcard_qr")) {
             val n = matrix.size; if (n == 0) return@Canvas
@@ -88,6 +91,7 @@ fun IdCardScreen(c: GcpController) {
         Text(Names.photoFolder(o, s), style = Ty.ledger.copy(fontSize = 20.sp), color = ink, modifier = Modifier.testTag("idcard_folder"))
         val d = DateTimeFormatter.ofPattern("yyyy-MM-dd").format(Instant.ofEpochMilli(s.createdAt).atZone(c.zone))
         Text("표적 #${QrPayload.ranges(b.active(s).map { it.tag })} (${b.active(s).size}개) · $d", style = Ty.coord.copy(fontSize = 13.sp), color = T.inkSub)
+        Text("화면 밝기를 가장 밝게 해 두었어요", style = Ty.small.copy(fontSize = 12.sp), color = T.inkSub, modifier = Modifier.padding(top = 6.dp))
         Spacer(Modifier.weight(1f))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Btn("닫기", "idcard_close", Modifier.weight(0.8f), primary = false, height = 64.dp) { c.back() }
@@ -167,19 +171,22 @@ fun GcpRoot(c: GcpController, env: GcpEnv) {
         Box(Modifier.fillMaxSize().background(T.bg).windowInsetsPadding(WindowInsets.systemBars)) {
             when (c.screen) {
                 Screen.SITES -> SitesScreen(c)
+                Screen.OBJECTS -> ObjectsScreen(c)
+                Screen.OBJ -> ObjScreen(c)
+                Screen.TARGETS -> TargetsScreen(c)
                 Screen.MAP -> SiteMapScreen(c, env)
                 Screen.ID_CARD -> IdCardScreen(c)
                 Screen.SETTINGS -> SettingsScreen(c, env)
             }
             if (c.menuOpen) MenuSheet(c)
             if (c.objListOpen) ObjListSheet(c)
-            c.newObj?.let { NewObjSheet(c, it) }
+            c.newObj?.let { NewObjScreen(c, it) }
             if (c.sessionSheetOpen) SessionSheet(c)
             c.newSession?.let { NewSessionSheet(c, it) }
             c.newSite?.let { NewSiteSheet(c, it) }
-            if (c.handoffOpen) HandoffSheet(c)
+            if (c.handoffOpen) HandoffScreen(c)
             if (c.poleOpen) PoleSheet(c)
-            c.numPick?.let { NumPickSheet(c, it) }
+            c.numPick?.let { NumPickScreen(c, it) }
             c.connection?.let { cc -> ConnectionHost(cc, g.quality, g.gga?.satellites ?: 0) }
             FeedbackOverlays(c.ui)
         }
