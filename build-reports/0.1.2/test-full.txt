@@ -1,0 +1,62 @@
+
+> Configure project :
+WARNING: keystore.properties 없음 -> release APK 를 debug 키로 서명합니다 (배포 금지).
+
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :preBuild UP-TO-DATE
+> Task :preDebugBuild UP-TO-DATE
+> Task :generateDebugBuildConfig UP-TO-DATE
+> Task :checkDebugAarMetadata UP-TO-DATE
+> Task :generateDebugResValues UP-TO-DATE
+> Task :mapDebugSourceSetPaths UP-TO-DATE
+> Task :generateDebugResources UP-TO-DATE
+> Task :mergeDebugResources UP-TO-DATE
+> Task :packageDebugResources UP-TO-DATE
+> Task :parseDebugLocalResources UP-TO-DATE
+> Task :createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :extractDeepLinksDebug UP-TO-DATE
+> Task :processDebugMainManifest UP-TO-DATE
+> Task :processDebugManifest UP-TO-DATE
+> Task :processDebugManifestForPackage UP-TO-DATE
+> Task :processDebugResources UP-TO-DATE
+> Task :javaPreCompileDebug UP-TO-DATE
+> Task :preDebugUnitTestBuild UP-TO-DATE
+> Task :javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :mergeDebugShaders UP-TO-DATE
+> Task :compileDebugShaders NO-SOURCE
+> Task :generateDebugAssets UP-TO-DATE
+> Task :mergeDebugAssets UP-TO-DATE
+> Task :packageDebugUnitTestForUnitTest UP-TO-DATE
+> Task :generateDebugUnitTestConfig UP-TO-DATE
+> Task :kspDebugKotlin
+> Task :compileDebugKotlin
+> Task :compileDebugJavaWithJavac UP-TO-DATE
+> Task :processDebugJavaRes UP-TO-DATE
+> Task :bundleDebugClassesToRuntimeJar
+> Task :bundleDebugClassesToCompileJar
+> Task :kspDebugUnitTestKotlin
+> Task :compileDebugUnitTestKotlin
+> Task :compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :processDebugUnitTestJavaRes UP-TO-DATE
+
+> Task :testDebugUnitTest
+
+NtripSocketTests > unknownHostIsDns FAILED
+    java.lang.AssertionError at NtripSocketTests.kt:98
+
+239 tests completed, 1 failed
+
+> Task :testDebugUnitTest FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':testDebugUnitTest'.
+> There were failing tests. See the report at: file:///workspace/gcp-app/build/reports/tests/testDebugUnitTest/index.html
+
+* Try:
+> Run with --scan to get full insights.
+
+BUILD FAILED in 2m 5s
+30 actionable tasks: 7 executed, 23 up-to-date
+EXIT 1
