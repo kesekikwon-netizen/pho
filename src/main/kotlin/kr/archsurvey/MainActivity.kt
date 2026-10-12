@@ -48,6 +48,8 @@ class MainActivity : ComponentActivity() {
      */
     private fun exitCompletely() {
         exitRequested = true
+        // 연결 서비스가 혹시 남아 있으면 바로 멈춤(새로 띄우지 않는 stopService — 포그라운드 알림도 같이 사라짐)
+        runCatching { stopService(android.content.Intent(this, kr.archsurvey.engine.SurveyConnectionService::class.java)) }
         runCatching { cleanExit.mark() }
         finishAndRemoveTask()
         runCatching { (getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager).cancel(kr.archsurvey.engine.SurveyConnectionService.NOTI_ID) }
