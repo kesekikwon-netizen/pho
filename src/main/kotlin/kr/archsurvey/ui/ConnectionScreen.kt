@@ -44,6 +44,7 @@ fun ConnectionHost(cc: ConnectionController, quality: kr.archsurvey.core.FixQual
     if (cc.open && cc.mountPickerOpen) MountPicker(cc)
     // 연결 성공 → 설정 자동 저장(한 번)
     LaunchedEffect(link, ntrip, cc.connectRequested) { cc.onStatus(link, ntrip) }
+    cc.pair?.let { if (it.open) PairSheet(it) } // 0.1.40
     if (cc.showProgress && cc.connectRequested) ConnectionProgress(quality, sats, cc, link, ntrip)
 }
 
@@ -337,7 +338,7 @@ private fun DeviceSection(cc: ConnectionController, link: kr.archsurvey.device.L
     }
     Text("등록된 장비 (폰 블루투스)", style = Ty.small.copy(fontSize = 13.sp), color = t.inkSub, modifier = Modifier.padding(top = 4.dp))
     if (cc.bonded.isEmpty()) {
-        Text("등록된 기기가 없어요. 먼저 폰의 블루투스 설정에서 수신기를 등록하세요.", style = Ty.small, color = t.inkSub)
+        Text(if (cc.pair != null) "등록된 기기가 없어요. 아래 「주변 수신기 찾기」를 누르세요." else "등록된 기기가 없어요. 먼저 폰의 블루투스 설정에서 수신기를 등록하세요.", style = Ty.small, color = t.inkSub)
         for ((i, st) in p.pairingSteps.withIndex()) Text("${i + 1}. $st", style = Ty.small, color = t.inkSub)
     }
     for ((name, addr) in cc.bonded) {
@@ -361,15 +362,17 @@ private fun DeviceSection(cc: ConnectionController, link: kr.archsurvey.device.L
             else if (on) GlyphIcon(Glyph.CHECK, t.ink, 22.dp)
         }
     }
+    // 0.1.40 앱 안에서 찾기 → 눌러서 등록(PIN 자동)+연결. 폰 블루투스 설정으로 갈 필요 없음
+    PairFindButton(cc)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         // 목업 04 🔍: 폰에 등록된 장비 목록을 다시 읽고 결과를 알려 줌
-        Btn("🔍 주변 장비 검색", Modifier.weight(1f).testTag("conn_refresh")) {
+        Btn("등록 목록 새로 읽기", Modifier.weight(1f).testTag("conn_refresh")) {
             cc.refresh()
-            if (cc.bonded.isEmpty()) cc.ui.fail("등록된 장비가 없어요 · 「새 장비 등록」에서 먼저 페어링하세요") else cc.ui.ok("등록된 장비 ${cc.bonded.size}개를 찾았어요")
+            if (cc.bonded.isEmpty()) cc.ui.fail("등록된 장비가 없어요 · 위 「주변 수신기 찾기」를 누르세요") else cc.ui.ok("등록된 장비 ${cc.bonded.size}개를 찾았어요")
         }
-        Btn("새 장비 등록", Modifier.weight(1f).testTag("conn_bt_settings_top")) { cc.openBluetoothSettings() }
+        Btn("폰 블루투스 설정", Modifier.weight(1f).testTag("conn_bt_settings_top")) { cc.openBluetoothSettings() }
     }
-    Text("새 수신기는 폰의 블루투스 설정에서 먼저 등록(페어링)해요. 앱은 등록된 장비에만 연결해요(페어링 안 된 기기 직접 검색은 폰 블루투스 설정에서).", style = Ty.small, color = t.inkSub)
+    Text(if (cc.pair != null) "새 수신기는 「주변 수신기 찾기」에서 누르면 등록(PIN 1234 자동)하고 바로 연결해요." else "새 수신기는 폰의 블루투스 설정에서 먼저 등록(페어링)해요.", style = Ty.small, color = t.inkSub)
     FoldRow("처음 연결 도움말", cc.showHelp, "conn_help_toggle") { cc.showHelp = !cc.showHelp }
     if (cc.showHelp) {
         Btn("블루투스 설정 열기", Modifier.fillMaxWidth().testTag("conn_bt_settings")) { cc.openBluetoothSettings() }

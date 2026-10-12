@@ -351,6 +351,8 @@ class ConnectionController(
     val link: StateFlow<LinkStatus> get() = platform.link
     val ntrip: StateFlow<NtripStatus> get() = platform.ntrip
     var connectRequested by mutableStateOf(false); private set
+    /** 0.1.40 앱 안 수신기 찾기·등록(VM 이 넣음). null 이면 예전처럼 폰 블루투스 설정 안내 */
+    var pair: PairController? = null
 
     // ---------------- 0.1.18 연결 상호작용 ----------------
     /** 지금 연결 단계(아래 단추·잠금 판단) */
@@ -875,6 +877,30 @@ class ConnectionController(
     }
 
     private var rtcmWarnedFor: String? = null
+
+    /**
+     * 0.1.40 앱 안 등록 뒤 바로 연결(「주변 수신기 찾기」에서 누른 기기). 이름의 모델 글자로 R10/SP60 을 맞추고,
+     * 사용자가 그 수신기를 직접 고른 것이므로 연결 전 확인은 끝낸 것으로 본다(NMEA 자동 켜기는 연결 뒤 그대로).
+     * [bonded]=false: 등록이 안 돼 「등록 없이 연결」(엔진의 기존 순서 — R10 은 INSECURE SPP 먼저). 연결 순서·NMEA·NTRIP 는 바꾸지 않음.
+     * VRS 입력이 모자라면 이번만 보정 없이 연결(자동 연결과 같은 규칙). 연결되면 기존 흐름이 마지막 수신기로 저장한다.
+     */
+    fun connectPicked(addr: String, name: String?, bonded: Boolean = true) {
+        notice = null
+        if (connectRequested) stopAll()
+        refresh()
+        ReceiverDetect.fromName(name)?.takeIf { it.id != profile.id }?.let { m -> switchProfile(m); onProfileChanged?.invoke(m) }
+        address = addr
+        for (i in checks.indices) checks[i] = true
+        persistSafe()
+        autoRun = false; autoQueue.clear()
+        val vrsOk = connectProblems().isEmpty()
+        startNow(addr, ntripOn = form.enabled && vrsOk)
+        if (form.enabled && !vrsOk) ui.toast(AUTO_NO_VRS + " · " + connectProblems().joinToString(" · "))
+        showProgress = false // 진행은 등록 창이 보여 줌
+    }
+
+    /** 0.1.40 등록 창에서 「등록 없이 연결」이 안 됐을 때 조용히 멈춤(알림 없이) */
+    fun cancelConnectQuiet() { stopAll() }
 
     private fun startNow(addr: String, ntripOn: Boolean = form.enabled) {
         notice = null // 0.1.19: 연결 시작 뒤 사전 점검/경고 카드 지움(남은 notice 가 「다시 시도」로 남는 것 방지)

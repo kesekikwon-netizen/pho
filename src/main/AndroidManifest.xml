@@ -7,6 +7,8 @@
     <!-- 블루투스: API 30 이하는 설치 시 자동 권한, API 31+ 는 런타임(근처 기기) -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <!-- 0.1.2: 안드로이드 11 이하에서 앱 안 수신기 찾기(startDiscovery)에 필요. 12+ 는 BLUETOOTH_SCAN(neverForLocation) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
 
