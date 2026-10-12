@@ -775,7 +775,7 @@ class SurveyController(
         if (saveError == null) {
             saveSerial++
             lastSavedSpeech = "${points.last().name} 저장됨" + if (noSigmaSaved) ", 시그마 없음" else if (worst == SurveyStatus.CAUTION) ", 주의 표시" else ""
-            // 0.1.38: 「P-0004 저장됨 …」 토스트는 지도 아래 결과 카드(같은 내용)와 겹치고 지도 위 단추를 가려서 뺐다
+            ui.toast(savedText(points.last()))
             drive?.notifyPointSaved()
         }
     }
