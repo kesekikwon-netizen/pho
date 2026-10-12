@@ -127,4 +127,5 @@ if __name__ == "__main__":
     draw(512, crop=0.78).save(os.path.join(PREV, "ic_launcher_0138_512.png"))
     draw(512, crop=0.78, round_mask=True).save(os.path.join(PREV, "ic_launcher_0138_round_512.png"))
     draw(1024).save(os.path.join(PREV, "ic_launcher_0138_full_1024.png"))
+    draw(1024, bg=False).save(os.path.join(PREV, "ic_launcher_0138_fg_1024.png"))  # 전경만(시험 기준)
     print("ok")
