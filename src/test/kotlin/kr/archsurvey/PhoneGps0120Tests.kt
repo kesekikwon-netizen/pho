@@ -61,7 +61,7 @@ class PhoneGps0120Tests {
 
     @Test fun versionIs0_1_31Build32() {
         val g = File("build.gradle.kts").readText()
-        assertTrue(g.contains("versionCode = 44"))   // 0.1.43
-        assertTrue(g.contains("versionName = \"0.1.43\""))
+        assertTrue(g.contains("versionCode = 45"))   // 0.1.44
+        assertTrue(g.contains("versionName = \"0.1.44\""))
     }
 }
