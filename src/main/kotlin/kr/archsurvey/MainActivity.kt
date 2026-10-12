@@ -31,6 +31,9 @@ class MainActivity : ComponentActivity() {
 
     private var exitRequested = false
 
+    // 0.1.4: 뒤로 가면 위치를 못 받던 자동 연결은 멈추고, 앞으로 오면 다시(두 앱이 같은 수신기를 번갈아 잡던 문제)
+    override fun onStart() { super.onStart(); runCatching { vm.connection.onAppForeground() } }
+    override fun onStop() { runCatching { vm.connection.onAppBackground() }; super.onStop() }
     override fun onDestroy() {
         super.onDestroy()
         if (exitRequested && isFinishing) {

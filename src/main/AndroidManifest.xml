@@ -5,6 +5,9 @@
     <uses-feature android:name="android.hardware.bluetooth" android:required="true" />
 
     <!-- 블루투스: API 30 이하는 설치 시 자동 권한, API 31+ 는 런타임(근처 기기) -->
+    <!-- 0.1.42/0.1.4: 같은 서명 앱(발굴 측량 · 사진 기준점) 사이 수신기 잠금 방송 -->
+    <permission android:name="kr.archsurvey.permission.RECEIVER_LOCK" android:protectionLevel="signature" />
+    <uses-permission android:name="kr.archsurvey.permission.RECEIVER_LOCK" />
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <!-- 0.1.2: 안드로이드 11 이하에서 앱 안 수신기 찾기(startDiscovery)에 필요. 12+ 는 BLUETOOTH_SCAN(neverForLocation) -->

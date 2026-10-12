@@ -40,7 +40,7 @@ interface PairEvents {
  */
 class PairController(
     private val platform: PairPlatform,
-    private val conn: ConnectionController,
+    val conn: ConnectionController,
     private val scope: CoroutineScope,
     /** 설정의 수신기 PIN(기본 1234, 고급에서만 바꿈) */
     private val pinSetting: () -> String = { PairConst.DEFAULT_PIN },

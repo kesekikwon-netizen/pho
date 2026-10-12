@@ -12,6 +12,8 @@ data class ReconnectPolicy(
     val repairHintAfterFailures: Int,
     /** 최초 연결 전 대기 (SP60: 위성 추적 시작 후 연결하도록 여유) */
     val firstConnectDelayMs: Long = 0,
+    /** 0.1.42: 연속 실패가 이만큼이면 자동 재연결을 멈추고 사용자에게 맡김(7초마다 끝없이 두드리지 않게). 0 = 제한 없음 */
+    val giveUpAfterFailures: Int = 12,
 ) {
     init {
         require(initialDelayMs > 0 && maxDelayMs >= initialDelayMs && settleMs >= 0)
@@ -26,4 +28,5 @@ data class ReconnectPolicy(
     }
 
     fun shouldShowRepairHint(consecutiveFailures: Int) = consecutiveFailures >= repairHintAfterFailures
+    fun shouldGiveUp(consecutiveFailures: Int) = giveUpAfterFailures > 0 && consecutiveFailures >= giveUpAfterFailures
 }

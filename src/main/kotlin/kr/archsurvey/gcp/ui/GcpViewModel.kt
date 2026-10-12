@@ -19,6 +19,7 @@ import kr.archsurvey.ui.TileImages
 class GcpViewModel(app: Application) : AndroidViewModel(app) {
     private val application = app as App
     val platform = AndroidConnectionPlatform(application)
+    private val lockBus = kr.archsurvey.engine.AndroidLockBus(application)
     private val pairPlatform = kr.archsurvey.bt.AndroidPairPlatform(application) { platform.permissionRequester }
     private val safeScope = kotlinx.coroutines.CoroutineScope(viewModelScope.coroutineContext + kotlinx.coroutines.CoroutineExceptionHandler { _, e ->
         kr.archsurvey.diag.CrashLog.record("화면 작업", e)
@@ -38,6 +39,8 @@ class GcpViewModel(app: Application) : AndroidViewModel(app) {
     init {
         connection.ui = controller.ui
         // 0.1.2 앱 안 수신기 찾기·등록(PIN 자동)+연결 — 측량 앱 0.1.40 과 같은 코드
+        // 0.1.4 발굴 측량 앱과 수신기 잠금
+        connection.lock = kr.archsurvey.ui.ReceiverLock(lockBus, application.packageName, "사진 기준점", { android.os.SystemClock.elapsedRealtime() })
         connection.pair = kr.archsurvey.ui.PairController(pairPlatform, connection, safeScope, pinSetting = { application.settings.btPin }, pinSave = { application.settings.btPin = it })
         connection.onFeedback = { application.feedback.play(it) }
         controller.connection = connection
@@ -54,5 +57,5 @@ class GcpViewModel(app: Application) : AndroidViewModel(app) {
         autoConnectTried = true
         runCatching { connection.autoConnectOnLaunch() }.onFailure { kr.archsurvey.diag.CrashLog.record("자동 연결", it) }
     }
-    override fun onCleared() { pairPlatform.release() }
+    override fun onCleared() { connection.lock?.release(); lockBus.release(); pairPlatform.release() }
 }

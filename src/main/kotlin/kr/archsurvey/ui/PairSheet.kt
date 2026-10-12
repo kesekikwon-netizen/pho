@@ -46,6 +46,7 @@ internal fun PairSheet(p: PairController) {
                 Text("수신기를 찾고 등록하려면 폰의 「주변 기기」 권한이 필요해요. 위치를 모으지 않아요.", style = Ty.body, color = t.ink, modifier = Modifier.testTag("pair_perm_text"))
                 MBtn(Modifier.fillMaxWidth().height(56.dp).testTag("pair_perm_allow"), MKind.PRIMARY, 16.dp, onClick = { p.allowPermission() }) { Text("허용하기", style = Ty.label, color = t.onPrimary) }
             }
+            ReceiverLockCard(p.conn) // 0.1.42
             val m = p.machine
             if (m != null && p.step != PairStep.IDLE) {
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(t.raised).padding(14.dp).testTag("pair_progress"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -90,5 +91,18 @@ private fun DeviceRow(p: PairController, d: FoundDevice) {
             }
             Text(if (d.bonded) "연결" else "등록+연결", style = Ty.label, color = t.ink)
         }
+    }
+}
+
+/** 0.1.42 「다른 앱이 수신기를 쓰는 중 · 여기서 쓰기」 */
+@Composable
+internal fun ReceiverLockCard(cc: ConnectionController) {
+    val t = T
+    @Suppress("UNUSED_VARIABLE") val tick = cc.lockTick
+    val h = cc.lockedBy ?: return
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(t.bad.copy(alpha = 0.10f)).padding(14.dp).testTag("lock_card"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(LockText.busy(h.label), style = Ty.label.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.testTag("lock_title"))
+        Text("수신기는 한 번에 한 앱만 연결할 수 있어요.", style = Ty.small, color = t.inkSub)
+        MBtn(Modifier.fillMaxWidth().height(56.dp).testTag("lock_take"), MKind.PRIMARY, 16.dp, onClick = { cc.takeOver() }) { Text(LockText.TAKE, style = Ty.label, color = t.onPrimary) }
     }
 }
