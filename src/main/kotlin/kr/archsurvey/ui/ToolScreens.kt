@@ -478,7 +478,7 @@ fun SettingsScreen(c: SurveyController) {
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(rememberAppVersionLabel(), style = DTy.small, color = D.sub, modifier = Modifier.weight(1f).testTag("app_version"))
             Text("오류 기록 보내기", style = DTy.small.copy(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline), color = D.accent,
-                modifier = Modifier.heightIn(min = 44.dp).hClickable { if (st.showCrash) st.showCrash = false else st.openCrash() }.padding(vertical = 12.dp).testTag("crash_toggle"))
+                modifier = Modifier.heightIn(min = 48.dp).hClickable { if (st.showCrash) st.showCrash = false else st.openCrash() }.padding(vertical = 12.dp).testTag("crash_toggle"))
         }
         if (st.showCrash) Card {
             val txt = st.crashText
@@ -572,7 +572,7 @@ fun JobScreen(c: SurveyController) {
                 Column(Modifier.testTag("job_preview")) {
                     Text("만들 작업", style = DTy.tiny, color = D.sub)
                     Text(jc.effectiveName.ifBlank { "이름을 고르세요" }, style = DTy.serif.copy(fontSize = 26.sp), color = D.ink, modifier = Modifier.testTag("job_built_name"))
-                    Text(jc.newFolderPreview.removePrefix("Documents/").let { "문서/$it" }, style = DTy.monoS, color = D.sub, maxLines = 2, modifier = Modifier.testTag("job_folder_preview"))
+                    Text(jc.newFolderPreview, style = DTy.monoS, color = D.sub, maxLines = 2, modifier = Modifier.testTag("job_folder_preview"))
                     Spacer(Modifier.height(10.dp)); DRule()
                 }
                 DSectionLabel("유적 · 상위 폴더")
@@ -584,10 +584,7 @@ fun JobScreen(c: SurveyController) {
                 if (jc.newGroupTyping) OutlinedTextField(jc.newSite, { jc.newSite = it }, singleLine = true, label = { Text("새 유적 이름 · 예) 강릉 교동") }, modifier = Modifier.fillMaxWidth().testTag("job_group"))
                 DSectionLabel("조사 단계")
                 val stages = kr.archsurvey.job.SurveyStage.entries
-                Box(Modifier.testTag("job_stage")) {
-                    DSeg(stages.map { it.labelKo }, stages.indexOf(jc.newStage), "job_stage_seg") { jc.pickStage(stages[it]) }
-                    Row(Modifier.matchParentSize()) { for (st in stages) Box(Modifier.weight(1f).fillMaxHeight().hClickable { jc.pickStage(st) }.testTag("job_stage_${st.name}")) }
-                }
+                DSeg(stages.map { it.labelKo }, stages.indexOf(jc.newStage), "job_stage", itemTags = stages.map { "job_stage_${it.name}" }) { jc.pickStage(stages[it]) }
                 DSectionLabel("지구 번호 · 날짜 ${jc.mmdd.let { if (it.length == 4) it.take(2) + "-" + it.drop(2) else it }}는 저절로")
                 Row(Modifier.fillMaxWidth().testTag("job_no"), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     DSecondary("−", "job_no_m1", Modifier.width(52.dp), height = 52.dp) { jc.setNo((jc.newNo - 1).coerceAtLeast(1)) }
@@ -599,11 +596,8 @@ fun JobScreen(c: SurveyController) {
                 }
                 DSectionLabel("좌표계 · 원점")
                 val zones = kr.archsurvey.core.KoreanTmZone.entries
-                Box {
-                    DSeg(zones.map { "${it.epsg}" }, zones.indexOf(jc.formZone), "job_zone_seg", height = 58.dp,
-                        subs = zones.map { it.labelKo.substringBefore(" (").substringBefore("원점").trim() + if (jc.recommendedZone == it) "·추천" else "" }) { jc.formZone = zones[it] }
-                    Row(Modifier.matchParentSize()) { for (z in zones) Box(Modifier.weight(1f).fillMaxHeight().hClickable { jc.formZone = z }.testTag("job_zone_${z.epsg}")) }
-                }
+                DSeg(zones.map { "${it.epsg}" }, zones.indexOf(jc.formZone), "job_zone_seg", height = 58.dp, itemTags = zones.map { "job_zone_${it.epsg}" },
+                    subs = zones.map { it.labelKo.substringBefore(" (").substringBefore("원점").trim() + if (jc.recommendedZone == it) "·추천" else "" }) { jc.formZone = zones[it] }
                 Text(if (jc.recommendedZone != null) "지금 위치(경도)로 추천 원점을 표시했어요. 첫 점을 재면 잠깁니다." else "아직 위치가 없어 고른 원점으로 둡니다. 첫 점을 재면 잠깁니다.", style = DTy.small, color = D.sub, modifier = Modifier.testTag("job_zone_note"))
                 DRule(false)
                 Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).hClickable { jc.newDetailsOpen = !jc.newDetailsOpen }.testTag("job_details"), verticalAlignment = Alignment.CenterVertically) {
@@ -633,10 +627,6 @@ fun JobScreen(c: SurveyController) {
                         val last = j.lastAtMs?.let { if (kr.archsurvey.dig.DayKey.of(it) == today) "오늘 " + SimpleDateFormat("HH:mm", Locale.KOREA).format(Date(it)) else SimpleDateFormat("MM-dd", Locale.KOREA).format(Date(it)) } ?: "—"
                         DTableRow(listOf(j.name to 3f, "${j.points}" to 0.8f, last to 1.6f), "job_item_$i", selected = j.name == jc.current, sub = sub,
                             firstStyle = DTy.serif.copy(fontSize = 19.sp), colors = mapOf(2 to D.sub), onLongClick = { jc.askDelete(j) }) { jc.open(j.name) }
-                        // 옛 시험 호환: 열기·삭제 단추(보이지 않게 작은 글자 대신 줄 누르기/길게 누르기로 대신함)
-                        Row(Modifier.height(0.dp)) {
-                            Box(Modifier.size(0.dp).hClickable { jc.open(j.name) }.testTag("job_open_$i")); Box(Modifier.size(0.dp).hClickable { jc.askDelete(j) }.testTag("job_delete_$i"))
-                        }
                     }
                 }
                 val dr = c.drive
@@ -726,7 +716,7 @@ internal fun FormRow(label: String, value: String, tag: String, onClick: () -> U
     val t = T
     Column(Modifier.fillMaxWidth().hClickable(onClick = onClick).testTag(tag), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, style = Ty.small, color = t.inkSub)
-        Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(value, style = Ty.body.copy(fontSize = 17.sp), color = t.ink, modifier = Modifier.weight(1f).testTag(tag + "_value"), maxLines = 2)
             Box(Modifier.size(28.dp).clip(RoundedCornerShape(6.dp)).background(t.chip), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.CHEVRON_RIGHT, t.ink, 16.dp) }
         }

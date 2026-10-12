@@ -117,7 +117,6 @@ open class Screens0135Test {
         rule.onNodeWithTag("set_pole").assertExists()
         rule.onNodeWithTag("zone_toggle").assertExists()
         shot("11_settings")
-        rule.onNodeWithTag("settings_advanced").performScrollTo().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.waitForIdle()
         rule.onNodeWithTag("mapbase_toggle").assertExists()
         shot("12_settings_advanced")
         dig { c.hub.closeAll(); c.ui.hideToast() }

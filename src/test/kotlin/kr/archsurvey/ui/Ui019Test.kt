@@ -94,7 +94,7 @@ class Ui019Test {
 
     @Test fun connectionScreenIsWhiteEvenWhenSystemIsDark() {
         val (_, cc, _) = setup()
-        rule.runOnUiThread { cc.openScreen() }; rule.waitForIdle()
+        rule.runOnUiThread { cc.openVrs() }; rule.waitForIdle()
         rule.onNodeWithTag("conn_service").assertExists()
         rule.onNodeWithTag("conn_mount_pick").assertExists()
         rule.onNodeWithTag("conn_auto_row").assertExists()
@@ -108,7 +108,7 @@ class Ui019Test {
 
     @Test fun mountPickerListsSourcetableWithSearchAndSaves() {
         val (c, cc, p) = setup()
-        rule.runOnUiThread { cc.openScreen() }; rule.waitForIdle()
+        rule.runOnUiThread { cc.openVrs() }; rule.waitForIdle()
         rule.onNodeWithTag("conn_mount_pick").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("mount_picker").assertExists()
         rule.onNodeWithTag("mount_ok").assertTextContains("6개", substring = true)
@@ -128,7 +128,7 @@ class Ui019Test {
 
     @Test fun mountPickerFallsBackToKnownListAndManualInput() {
         val (_, cc, _) = setup(mounts = { throw java.io.IOException("소스테이블 응답이 없어요(시간 초과)") })
-        rule.runOnUiThread { cc.openScreen() }; rule.waitForIdle()
+        rule.runOnUiThread { cc.openVrs() }; rule.waitForIdle()
         rule.onNodeWithTag("conn_mount_pick").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("mount_failed").assertExists()
         rule.onNodeWithTag("mount_known_note").assertTextContains("미확인", substring = true)
@@ -143,7 +143,7 @@ class Ui019Test {
     @Test fun serviceChoiceRecallsLastSuccessfulProfileOfThatServer() {
         val (c, cc, p) = setup()
         p.profiles["rts2.ngii.go.kr"] = NtripForm("RTS2.ngii.go.kr", "2102", "VRS-RTCM32", "id2", "pw2")
-        rule.runOnUiThread { cc.openScreen() }; rule.waitForIdle()
+        rule.runOnUiThread { cc.openVrs() }; rule.waitForIdle()
         rule.onNodeWithTag("conn_service").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("choice_sheet").assertExists()
         rule.onNodeWithTag("service_1").performClick(); rule.waitForIdle()

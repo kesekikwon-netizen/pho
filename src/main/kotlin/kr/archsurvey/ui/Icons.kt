@@ -158,7 +158,7 @@ fun GlyphIcon(g: Glyph, color: Color, size: Dp = 22.dp) {
             Glyph.SECTION -> { drawLine(color, Offset(w * .1f, w * .5f), Offset(w * .9f, w * .5f), sw, cap); drawLine(color, Offset(w * .1f, w * .34f), Offset(w * .1f, w * .66f), sw, cap); drawLine(color, Offset(w * .9f, w * .34f), Offset(w * .9f, w * .66f), sw, cap) }
             Glyph.TRENCH -> drawRect(color, Offset(w * .1f, w * .3f), androidx.compose.ui.geometry.Size(w * .8f, w * .4f), style = Stroke(sw * .8f, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(w * .1f, w * .06f))))
             Glyph.STAKE -> { drawLine(color, Offset(w * .5f, w * .16f), Offset(w * .5f, w * .84f), sw * 1.2f, cap); drawLine(color, Offset(w * .16f, w * .5f), Offset(w * .84f, w * .5f), sw * 1.2f, cap) }
-            Glyph.BM -> { val tri = Path().apply { moveTo(w * .5f, w * .14f); lineTo(w * .9f, w * .84f); lineTo(w * .1f, w * .84f); close() }; drawPath(tri, Color(0xFFC9A227)); drawPath(tri, color, style = Stroke(sw * .8f)) }
+            Glyph.BM -> { val tri = Path().apply { moveTo(w * .5f, w * .14f); lineTo(w * .9f, w * .84f); lineTo(w * .1f, w * .84f); close() }; drawPath(tri, D.bmGold); drawPath(tri, color, style = Stroke(sw * .8f)) }
             Glyph.AREA -> drawRect(color, Offset(w * .1f, w * .28f), androidx.compose.ui.geometry.Size(w * .8f, w * .44f), style = Stroke(sw * .8f, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(w * .16f, w * .06f, w * .03f, w * .06f))))
             Glyph.RULER -> { drawLine(color, Offset(w * .5f, w * .1f), Offset(w * .5f, w * .9f), sw, cap); drawLine(color, Offset(w * .3f, w * .1f), Offset(w * .7f, w * .1f), sw, cap); drawLine(color, Offset(w * .3f, w * .9f), Offset(w * .7f, w * .9f), sw, cap) }
         }

@@ -96,7 +96,7 @@ class NewJob0139Test {
         tap("home_new_job")
         tap("job_stage_TRIAL")
         rule.onNodeWithTag("job_built_name", useUnmergedTree = true).assertTextEquals("강릉 교동 · 시굴 1지구 · 10-12")
-        tap("job_no_p10"); tap("job_no_p1")
+        repeat(11) { tap("job_no_p1") } // 0.1.43 시안: − / + 만
         rule.onNodeWithTag("job_built_name", useUnmergedTree = true).assertTextEquals("강릉 교동 · 시굴 12지구 · 10-12")
         tap("job_no_m1")
         rule.onNodeWithTag("job_folder_preview", useUnmergedTree = true).assertTextContains("Documents/ExcavationSurvey/강릉 교동/", substring = true)

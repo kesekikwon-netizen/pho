@@ -163,13 +163,15 @@ internal fun DigControlArea(c: SurveyController) {
                 val a = tc.angleDeg
                 if (a != null && tc.state != TiltState.OFF && tc.state != TiltState.NO_SENSOR) {
                     val over = tc.state == TiltState.OVER
-                    Box(Modifier.size(9.dp).clip(CircleShape).background(if (over) D.caution else D.fix))
-                    Text(" 기포 ${String.format(Locale.US, "%.1f", a)}°", style = DTy.small, color = if (over) D.caution else D.fix, modifier = Modifier.testTag("bubble_deg"))
+                    Row(Modifier.testTag("tilt_bubble"), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(9.dp).clip(CircleShape).background(if (over) D.caution else D.fix))
+                        Text(" 기포 ${String.format(Locale.US, "%.1f", a)}°", style = DTy.small, color = if (over) D.caution else D.fix, modifier = Modifier.testTag("tilt_angle"))
+                    }
                 }
             }
         }
         DRule()
-        DMetrics(liveCells(c), "live")
+        DMetrics(liveCells(c), "live", clicks = mapOf(2 to ("pole_chip" to { c.antennaSheetOpen = true })), valueTags = mapOf(2 to "antenna_input"))
         Spacer(Modifier.height(10.dp))
         NowRow(c)
         Spacer(Modifier.height(10.dp))
@@ -214,7 +216,7 @@ internal fun DigControlArea(c: SurveyController) {
     DFootLine(listOf(mapHint(c), "${c.epochs}회 평균", c.currentNE()?.let { "X ${String.format(Locale.US, "%,.1f", it.e)} Y ${String.format(Locale.US, "%,.1f", it.n)}" } ?: "X — Y —"), "map_foot")
 }
 
-private val t43Blocked = Color(0xFF5C5B57)
+private val t43Blocked get() = D.blocked
 
 internal fun mapHint(c: SurveyController): String = when {
     c.phase == Phase.ACQUIRING -> "폴을 세운 채 움직이지 마세요"

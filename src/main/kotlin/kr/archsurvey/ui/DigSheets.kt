@@ -76,7 +76,7 @@ internal fun DigPickerSheet(c: SurveyController) {
     val scope = rememberCoroutineScope()
     androidx.activity.compose.BackHandler { close() }
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().background(Color(0x99706F6B)).hClickable { close() }.testTag("dig_picker_scrim"))
+        Box(Modifier.fillMaxSize().background(D.scrim).hClickable { close() }.testTag("dig_picker_scrim"))
         val shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.88f).clip(shape).background(D.bg)
@@ -118,7 +118,7 @@ internal fun DigPickerSheet(c: SurveyController) {
                 list.forEach { n ->
                     val on = d.kind == null && c.typeName == n
                     Text(if (n == "기타") "기타 점" else n, style = DTy.small.copy(fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline), color = D.accent,
-                        modifier = Modifier.heightIn(min = 44.dp).hClickable { d.selectCustomType(n); close() }.padding(horizontal = 4.dp, vertical = 12.dp).testTag("type_custom_$n"))
+                        modifier = Modifier.heightIn(min = 48.dp).hClickable { d.selectCustomType(n); close() }.padding(horizontal = 4.dp, vertical = 12.dp).testTag("type_custom_$n"))
                 }
             }
             val k = d.kind

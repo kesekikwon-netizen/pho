@@ -52,7 +52,7 @@ class FirstScreenTest {
         rule.setContent { SurveyTheme(dark = false) { SurveyMapScreen(c, batteryPct = 82) } }
         rule.waitForIdle()
         // 0.1.35: 상태 알약 + 원인 한 줄(누르면 연결)
-        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("수신기 연결 안 됨")
+        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("연결 안 됨")
         rule.onNodeWithTag("cause_line").assertExists()
         rule.onNodeWithTag("measure_disabled_reason", useUnmergedTree = true).assertExists()
         shot("r1_not_connected")
@@ -73,8 +73,8 @@ class FirstScreenTest {
         }
         rule.waitForIdle()
         rule.onNodeWithTag("cause_line").assertDoesNotExist()
-        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("측량 가능")
-        rule.onNodeWithTag("pill_sigma", useUnmergedTree = true).assertTextEquals("±0.8")
+        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("FIX")
+        rule.onNodeWithTag("pill_sigma", useUnmergedTree = true).assertTextEquals("0.8 cm")
         // 자세한 값(위성·고정)은 알약을 눌러 「지금 상태」에서
         rule.onNodeWithTag("status_pill").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("dig_status").assertExists()

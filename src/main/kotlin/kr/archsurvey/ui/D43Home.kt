@@ -14,6 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,7 +36,7 @@ internal fun d43Pill(c: SurveyController): D43Pill {
     if (g.sigmaMissingOnFix) return if (g.strictMode) D43Pill("FIX · σ 없음", "저장 잠김", D.bad) else D43Pill("FIX", "σ 없음", D.fix)
     return when (g.displayStatus) {
         SurveyStatus.FIXED -> D43Pill("FIX", cm, D.fix)
-        SurveyStatus.CAUTION -> D43Pill(digPill(c).text.let { if (it.startsWith("FLOAT")) "FLOAT" else it }, cm, Color(0xFFD9A400))
+        SurveyStatus.CAUTION -> D43Pill(digPill(c).text.let { if (it.startsWith("FLOAT")) "FLOAT" else it }, cm, D.floatDot)
         SurveyStatus.UNAVAILABLE -> D43Pill("측량 불가", null, D.bad)
     }
 }
@@ -50,7 +52,7 @@ internal fun D43StatusPill(c: SurveyController, modifier: Modifier = Modifier) {
 @Composable
 internal fun D43Logo(size: Int = 36) {
     Box(Modifier.size(size.dp).clip(RoundedCornerShape(8.dp)).background(D.dark).testTag("home_logo"), contentAlignment = Alignment.Center) {
-        GlyphIcon(Glyph.POLE, Color(0xFFF2E6DA), (size * 0.62f).dp)
+        GlyphIcon(Glyph.POLE, D.logoInk, (size * 0.62f).dp)
     }
 }
 
@@ -80,7 +82,13 @@ fun HomeToday(c: SurveyController) {
                 last?.let { Text(timeLabel(it.measuredAtMs, c.nowMs()) + " 저장", style = DTy.monoS, color = D.sub, modifier = Modifier.testTag("home_saved_at")) }
             }
             Spacer(Modifier.height(6.dp))
-            Text(c.projectName, style = DTy.serif, color = D.ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("home_job"))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(c.projectName, style = DTy.serif, color = D.ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("home_job"))
+                // 작업 정보(좌표계 · 높이 · 배경지도)
+                Box(Modifier.size(48.dp).hClickable { c.jobs?.openInfo() ?: c.hub.open(ToolScreen.JOB_INFO) }.semantics { contentDescription = "작업 정보" }.testTag("home_job_btn"), contentAlignment = Alignment.Center) {
+                    GlyphIcon(Glyph.CHEVRON_RIGHT, D.sub, 14.dp)
+                }
+            }
             val site = c.jobs?.currentSite
             Text(listOfNotNull(site, "EPSG:${c.zone.epsg}", "해발 ${c.geoid.shortKo}").joinToString(" · "), style = DTy.small, color = D.sub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp).testTag("home_job_info"))
             c.jobs?.currentFolder?.let { Text("폴더 · $it", style = DTy.tiny, color = D.weak, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp).testTag("home_job_folder")) }
@@ -164,7 +172,7 @@ private fun D43PrepRow(c: SurveyController, i: Int, s: kr.archsurvey.dig.PrepSte
             Text(s.sub, style = DTy.small, color = D.sub, maxLines = 2, modifier = Modifier.testTag("prep_${s.id}_sub"))
         }
         s.action?.let { a ->
-            DSecondary(a, "prep_${s.id}_act", Modifier.padding(top = 2.dp).height(46.dp).widthIn(min = 70.dp)) { prepAction(c, s.id) }
+            DSecondary(a, "prep_${s.id}_act", Modifier.padding(top = 2.dp).height(48.dp).widthIn(min = 70.dp)) { prepAction(c, s.id) }
         }
     }
 }

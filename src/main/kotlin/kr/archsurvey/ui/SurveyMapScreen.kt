@@ -282,7 +282,7 @@ internal fun MapNowBanner(c: SurveyController) {
     val (head, tail) = c.dig.nowLine()
     val hint = c.dig.measureSub().let { m -> if (tail != null && m.startsWith("$tail · ")) m.removePrefix("$tail · ") else m }.let { m -> if (c.dig.kind == kr.archsurvey.dig.DigKind.FEATURE && (c.dig.selectedFeature?.pointRowIds?.size ?: 0) >= 3) "$m · 처음 점을 누르면 닫혀요" else m }
     Row(
-        Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(10.dp)).background(D.card).border(1.dp, D.line, RoundedCornerShape(10.dp))
+        Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(10.dp)).background(D.card).border(1.dp, D.line, RoundedCornerShape(10.dp))
             .hClickable { c.dig.pickerOpen = true }.padding(horizontal = 12.dp, vertical = 8.dp).testTag("map_now_banner"),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -305,7 +305,7 @@ private fun MapSquareBtn(g: Glyph, desc: String, tag: String, dark: Boolean = fa
 @Composable
 private fun MapGroupBtn(desc: String, tag: String, content: @Composable () -> Unit) {
     val c = LocalSurvey.current
-    Box(Modifier.fillMaxWidth().height(46.dp).hClickable {
+    Box(Modifier.fillMaxWidth().height(48.dp).hClickable {
         when (tag) { "tool_zoom_in" -> c?.zoomIn(); "tool_zoom_out" -> c?.zoomOut(); else -> c?.fitAll() }
     }.semantics { contentDescription = desc }.testTag(tag), contentAlignment = Alignment.Center) { content() }
 }

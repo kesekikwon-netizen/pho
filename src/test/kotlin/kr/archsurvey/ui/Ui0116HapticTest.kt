@@ -68,7 +68,7 @@ class Ui0116HapticTest {
 
     @Test fun majorButtonsPulseWhenVibrationOn() {
         setup(true)
-        rule.onNodeWithTag("home_settings2").performScrollTo().performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
+        rule.onNodeWithTag("home_settings2").performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
         assertTrue("탭 카운트", TapHaptics.taps >= 1)
         // Robolectric 에서는 performHapticFeedback 가 보통 false → Vibrator 경로
         assertTrue("직접 진동기 펄스(시스템 터치진동 OFF 대비)", TapHaptics.directPulses >= 1)
@@ -82,7 +82,7 @@ class Ui0116HapticTest {
         rule.runOnUiThread { c.settingsState!!.changeVibration(false) }; rule.waitForIdle()
         TapHaptics.reset()
         // 홈「환경설정」도 hClickable — 진동 OFF 면 탭 카운트 증가 없음
-        rule.onNodeWithTag("home_settings2").performScrollTo().performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
+        rule.onNodeWithTag("home_settings2").performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
         assertEquals(0, TapHaptics.taps)
         assertEquals(0, TapHaptics.directPulses)
     }

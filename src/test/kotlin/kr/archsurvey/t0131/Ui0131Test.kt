@@ -40,19 +40,19 @@ class Ui0131Test {
     @Test fun band_fixNoSigma_normal_readyGreenTitle_withSmallNote() {
         show(strict = false) { s, _ -> s.push(FixQuality.RTK_FIXED, null) }
         // 0.1.35: 상태 띠 → 머리줄 상태 알약(초록 「측량 가능」 + 작은 σ 없음)
-        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("측량 가능")
+        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("FIX")
         rule.onNodeWithTag("pill_sigma", useUnmergedTree = true).assertTextContains("σ 없음", substring = true)
     }
 
     @Test fun band_fixWithSigma_readyTitle_sigmaShown() {
         show(strict = false) { s, _ -> s.push(FixQuality.RTK_FIXED, 0.012) }
-        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("측량 가능")
-        rule.onNodeWithTag("pill_sigma", useUnmergedTree = true).assertTextContains("±1.2", substring = true)
+        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("FIX")
+        rule.onNodeWithTag("pill_sigma", useUnmergedTree = true).assertTextContains("1.2", substring = true)
     }
 
     @Test fun band_fixNoSigma_strict_blockedTitle() {
         show(strict = true) { s, _ -> s.push(FixQuality.RTK_FIXED, null) }
-        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("측점 불가 · σ 없음")
+        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("FIX · σ 없음")
     }
 
     @Test fun pointList_and_detail_showHv() {

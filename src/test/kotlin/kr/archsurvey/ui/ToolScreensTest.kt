@@ -161,7 +161,7 @@ class ToolScreensTest {
         rule.runOnUiThread { c.jobs!!.openList() }; rule.waitForIdle()
         rule.onNodeWithTag("job_item_0").assertExists()
         shot("t7_jobs_list")
-        rule.onNodeWithTag("job_delete_1").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("job_item_1").performScrollTo().performTouchInput { longClick() }; rule.waitForIdle()
         shot("t8_job_delete_confirm")
         rule.onNodeWithTag("confirm_cancel").performClick(); rule.waitForIdle()
         rule.runOnUiThread { c.jobs!!.openNew() }; rule.waitForIdle()
@@ -192,7 +192,7 @@ class ToolScreensTest {
     @Test fun photosAndVoiceInExpandedResult() {
         // 0.1.35: 펼친 결과 패널 대신 잰 직후 장부 카드에 「사진」「음성 · 메모」
         setup()
-        rule.onNodeWithTag("result_strip").assertExists()
+        rule.onNodeWithTag("point_confirm").assertExists()
         rule.onNodeWithTag("result_photo").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("result_photo").performClick(); rule.waitForIdle()
         assertEquals(2, c.photos.size)
@@ -211,7 +211,7 @@ class ToolScreensTest {
         rule.runOnUiThread { c.exporter!!.openScreen() }; rule.waitForIdle()
         rule.onNodeWithTag("export_scale_100").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("export_today_only").performScrollTo().performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("export_evening").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("export_run").performClick(); rule.waitForIdle()
         val b = ex.lastBundle!!
         assertEquals(kr.archsurvey.export.ExportFormat.EVENING, b.first)
         assertEquals(100, b.second)

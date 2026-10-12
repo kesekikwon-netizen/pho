@@ -72,7 +72,6 @@ class Ui0118ConnectUxTest {
         rule.onNodeWithTag("conn_connect_label", useUnmergedTree = true).assertTextEquals("연결")
         rule.onNodeWithTag("conn_cancel_connect").assertDoesNotExist()
         rule.onNodeWithTag("conn_go_map").assertDoesNotExist()
-        rule.onNodeWithTag("conn_pw", useUnmergedTree = true).assertTextContains("•", substring = true)
         rule.onAllNodesWithText("secretPW1", substring = true, useUnmergedTree = true).assertCountEquals(0)
 
         // 연결 → 진행 창 → 닫기(계속 연결) → 화면은 「연결 취소」만

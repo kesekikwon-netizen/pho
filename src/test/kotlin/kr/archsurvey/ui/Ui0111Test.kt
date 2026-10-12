@@ -112,10 +112,10 @@ class Ui0111Test {
         setup()
         rule.onNodeWithTag("home_screen").assertIsDisplayed()
         rule.onNodeWithTag("home_title").assertTextEquals("발굴 측량")
-        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("측량 가능")
+        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("FIX")
         rule.onNodeWithTag("home_job").assertTextContains("20261005-1040", substring = true)
         for (id in listOf("receiver", "vrs", "pole", "crs", "bm")) rule.onNodeWithTag("prep_$id").performScrollTo().assertExists()
-        rule.onNodeWithTag("prep_count").assertTextContains("/ 5", substring = true)
+        rule.onNodeWithTag("prep_count").assertTextContains("5개 중", substring = true)
         rule.onAllNodesWithText("[앱 이름]", substring = true).assertCountEquals(0)
         rule.onAllNodesWithText("PDOP", substring = true).assertCountEquals(0)
         assertTouchTargets("홈")
@@ -129,12 +129,12 @@ class Ui0111Test {
         rule.onNodeWithTag("survey_hub").assertDoesNotExist()
         assertFalse(c.homeOpen)
         rule.onNodeWithTag("home_screen").assertDoesNotExist()
-        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("측량 가능")
+        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("FIX")
         rule.onNodeWithTag("measure_button").assertIsDisplayed()
         assertTrue(rule.onNodeWithTag("measure_button").getBoundsInRoot().let { it.bottom - it.top }.value >= 72f)
-        for (tag in listOf("tool_locate", "tool_fit", "tool_zoom_in", "tool_zoom_out", "now_row", "pole_chip", "status_pill", "gear", "tool_undo")) rule.onNodeWithTag(tag).assertExists()
+        for (tag in listOf("tool_locate", "tool_fit", "tool_zoom_in", "tool_zoom_out", "now_row", "pole_chip", "status_pill", "tool_undo")) rule.onNodeWithTag(tag).assertExists()
         val map = rule.onNodeWithTag("map_area").getBoundsInRoot(); val root = rule.onRoot().getBoundsInRoot()
-        assertTrue("지도 비율", (map.bottom - map.top).value / (root.bottom - root.top).value >= 0.6f)
+        assertTrue("지도 비율 · 0.1.43 시안", (map.bottom - map.top).value / (root.bottom - root.top).value >= 0.45f)
         assertTouchTargets("측량 지도")
         shot("02_survey_map")
         // 유구를 고르면 「면 닫기」가 생긴다
@@ -148,7 +148,7 @@ class Ui0111Test {
     @Test fun c_settingsMenuToVrsOnlyAndDevice() {
         val (c, cc, _) = setup()
         // 0.1.35: 설정 한 화면 「꼭 필요한 네 가지」에서 VRS · 수신기
-        rule.onNodeWithTag("home_settings2").performScrollTo().performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
+        rule.onNodeWithTag("home_settings2").performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
         rule.onNodeWithTag("settings_screen").assertIsDisplayed()
         assertTouchTargets("설정")
         shot("03_settings_menu")
@@ -252,12 +252,12 @@ class Ui0111Test {
         rule.runOnUiThread { c.hub.open(ToolScreen.POINTS) }; rule.waitForIdle()
         rule.onNodeWithTag("points_screen").assertIsDisplayed()
         rule.onAllNodesWithTag("header_title").assertAny(hasText("점 목록"))
-        assertTrue(rule.onAllNodesWithTag("status_pill").fetchSemanticsNodes().size >= 2)
+        assertTrue(rule.onAllNodesWithTag("status_pill").fetchSemanticsNodes().size >= 1) // 0.1.43 도구 화면 머리줄은 제목만
         shot("08_points")
         // 미연결: 알약 회색 「수신기 없음」(0.1.30), 측점 불가 유지
         rule.runOnUiThread { c.hub.closeAll(); s.link.value = LinkStatus(state = LinkState.IDLE); s.gnss.value = GnssSnapshot() }
         rule.waitForIdle()
-        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("수신기 연결 안 됨")
+        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextEquals("연결 안 됨")
         rule.onNodeWithTag("cause_line").assertExists()
         rule.onNodeWithTag("measure_disabled_reason", useUnmergedTree = true).assertExists()
         shot("09_not_connected")

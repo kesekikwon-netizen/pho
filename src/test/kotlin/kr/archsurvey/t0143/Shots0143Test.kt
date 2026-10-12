@@ -18,6 +18,8 @@ import kr.archsurvey.t0139.SiteJobs
 import kr.archsurvey.t0140.FakeConn
 import kr.archsurvey.ui.*
 import org.junit.Rule
+import androidx.compose.ui.test.*
+import kr.archsurvey.ui.Phase
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -94,7 +96,7 @@ class Shots0143Test {
     @Test fun allTen() {
         val (s, c) = setup()
         shot("01_home")
-        rule.runOnIdle { c.homeOpen = false }; rule.waitForIdle(); rule.runOnIdle { c.follow = false; c.fitAll(); val ms = c.mapState(); println("DBG pts=" + c.points.map { c.projection.toLocal(it.lat, it.lon) } + " center=" + ms.center + " dp=" + c.dpPerM + " follow=" + c.follow) }; shot("02_map")
+        rule.runOnIdle { c.homeOpen = false }; rule.waitForIdle(); rule.runOnIdle { c.follow = false; c.fitAll() }; shot("02_map")
         rule.runOnIdle { s.now += 2000; s.push(FixQuality.RTK_FIXED, 0.014, lat = 36.50016, lon = 127.00046); c.onMeasure() }; shot("03_point")
         rule.runOnIdle { c.dismissResult(); c.dig.pickerOpen = true }; shot("04_types")
         rule.runOnIdle { c.dig.pickerOpen = false; c.hub.open(ToolScreen.FEATURES) }; shot("05_points")
@@ -110,5 +112,48 @@ class Shots0143Test {
     @Test fun settingsFull() {
         val (_, c) = setup()
         rule.runOnIdle { c.homeOpen = false; c.hub.open(ToolScreen.SETTINGS) }; shot("10_settings")
+    }
+
+    /** 0.1.43: 측정 직후 점 확인 → 「다음 점 재기」 한 번 = 바로 다음 측정, 글 메모는 고르는 문구(키보드 없음) */
+    @Test fun pointConfirmNextAndMemoChips() {
+        val (s, c) = setup()
+        rule.runOnIdle { c.homeOpen = false }
+        rule.runOnIdle { s.now += 2000; s.push(FixQuality.RTK_FIXED, 0.014, lat = 36.50030, lon = 127.00060); c.onMeasure() }
+        rule.waitForIdle()
+        rule.onNodeWithTag("point_confirm").assertExists()
+        rule.onNodeWithTag("result_memo").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("memo_chips").assertExists()
+        rule.onAllNodes(androidx.compose.ui.test.hasSetTextAction()).assertCountEquals(0)
+        val first = QuickNotes.ITEMS.first()
+        rule.onNodeWithTag("memo_$first").performScrollTo().performClick(); rule.waitForIdle()
+        org.junit.Assert.assertTrue(c.points.last().memo.contains(first))
+        val n = c.points.size
+        rule.onNodeWithTag("next_point").performClick(); rule.waitForIdle()
+        org.junit.Assert.assertTrue("다음 점 재기 = 바로 다음 측정 시작", c.phase == Phase.ACQUIRING || c.points.size == n + 1 || c.dupPrompt != null)
+    }
+
+    /** 0.1.43: 무엇을 잴까요에 AprilTag · 사진 기준점 없음, 기타 점만 */
+    @Test fun pickerHasNoAprilTag() {
+        val (_, c) = setup()
+        rule.runOnIdle { c.homeOpen = false; c.dig.pickerOpen = true }; rule.waitForIdle()
+        rule.onNodeWithTag("dig_picker_close").assertExists()
+        rule.onAllNodes(androidx.compose.ui.test.hasText("AprilTag", substring = true), useUnmergedTree = true).assertCountEquals(0)
+        rule.onAllNodes(androidx.compose.ui.test.hasText("사진 기준점", substring = true), useUnmergedTree = true).assertCountEquals(0)
+        rule.onAllNodes(androidx.compose.ui.test.hasText("기타 점", substring = true), useUnmergedTree = true).assertCountEquals(1)
+    }
+
+    /** 0.1.43: 설정 값은 줄 → 고르기 창, 내보내기는 파일 개수 · iTwin 없음, 진단 기록은 장비 연결 안 */
+    @Test fun settingsChoiceExportAndDiagnostics() {
+        val (_, c) = setup()
+        rule.runOnIdle { c.homeOpen = false; c.hub.open(ToolScreen.SETTINGS) }; rule.waitForIdle()
+        rule.onNodeWithTag("epochs_toggle").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("choice_sheet").assertExists()
+        rule.runOnIdle { c.ui.dismissChoice(); c.hub.closeAll(); c.exporter?.openScreen() }; rule.waitForIdle()
+        rule.onNodeWithTag("export_run").assertTextContains("파일 5개", substring = true)
+        rule.onAllNodes(androidx.compose.ui.test.hasText("iTwin", substring = true), useUnmergedTree = true).assertCountEquals(0)
+        rule.runOnIdle { c.exporter?.close(); c.connection?.openScreen() }; rule.waitForIdle()
+        rule.onNodeWithTag("conn_diag_toggle").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("conn_diag_text").assertExists()
+        rule.onNodeWithTag("pair_find").assertDoesNotExist() // 시험 기기에는 찾기 기능 없음(가짜) — 실제 앱은 PIN 1234 자동
     }
 }

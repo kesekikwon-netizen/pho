@@ -48,6 +48,11 @@ object D {
     val fix = Color(0xFF3F6B31)
     val caution = Color(0xFF7A5A00)
     val cautionBg = Color(0xFFF7EFD6)
+    val floatDot = Color(0xFFD9A400)
+    val logoInk = Color(0xFFF2E6DA)
+    val blocked = Color(0xFF5C5B57)
+    val bmGold = Color(0xFFC9A227)
+    val scrim = Color(0x99706F6B)
     val cautionLine = Color(0xFFE2CF94)
     val bad = Color(0xFFA33B3B)
     val dark = Color(0xFF30302E)
@@ -105,16 +110,17 @@ fun DTopBar(
 
 /** 큰 숫자 칸들(마지막 점 · 오늘 · 폴 / 해발 · 수평·수직 · 폴) */
 @Composable
-fun DMetrics(cells: List<Triple<String, String, String>>, tagPrefix: String, topRule: Boolean = false, big: Boolean = true) {
+fun DMetrics(cells: List<Triple<String, String, String>>, tagPrefix: String, topRule: Boolean = false, big: Boolean = true, clicks: Map<Int, Pair<String, () -> Unit>> = emptyMap(), valueTags: Map<Int, String> = emptyMap()) {
     Column {
         if (topRule) DRule(false)
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 8.dp)) {
             cells.forEachIndexed { i, (k, v, u) ->
                 if (i > 0) Box(Modifier.width(1.dp).fillMaxHeight().background(D.hair))
-                Column(Modifier.weight(1f).padding(start = if (i == 0) 0.dp else 12.dp, end = 6.dp).testTag("${tagPrefix}_$i")) {
+                val ck = clicks[i]
+                Column(Modifier.weight(1f).then(if (ck != null) Modifier.hClickable { ck.second() } else Modifier).padding(start = if (i == 0) 0.dp else 12.dp, end = 6.dp).testTag(ck?.first ?: "${tagPrefix}_$i")) {
                     Text(k, style = DTy.tiny, color = D.sub, maxLines = 1)
                     Row(verticalAlignment = Alignment.Bottom) {
-                        Text(v, style = DTy.monoBig.copy(fontSize = (if (big) 24 else 20).let { f -> if (v.length >= 7) f - 4 else if (v.length >= 6) f - 2 else f }.sp), color = D.ink, maxLines = 1, softWrap = false)
+                        Text(v, style = DTy.monoBig.copy(fontSize = (if (big) 24 else 20).let { f -> if (v.length >= 7) f - 4 else if (v.length >= 6) f - 2 else f }.sp), color = D.ink, maxLines = 1, softWrap = false, modifier = valueTags[i]?.let { Modifier.testTag(it) } ?: Modifier)
                         if (u.isNotEmpty()) Text(" $u", style = DTy.small, color = D.sub, modifier = Modifier.padding(bottom = 3.dp))
                     }
                 }
@@ -148,7 +154,7 @@ fun DSecondary(label: String, tag: String, modifier: Modifier = Modifier, height
 
 /** 나눔 단추(유구별|날짜별|종류별 · 시굴|표본|정밀발굴 · 5185…) */
 @Composable
-fun DSeg(options: List<String>, selected: Int, tag: String, height: Dp = 50.dp, subs: List<String>? = null, onPick: (Int) -> Unit) {
+fun DSeg(options: List<String>, selected: Int, tag: String, height: Dp = 50.dp, subs: List<String>? = null, itemTags: List<String>? = null, onPick: (Int) -> Unit) {
     val shape = RoundedCornerShape(10.dp)
     Row(Modifier.fillMaxWidth().height(height).clip(shape).background(D.card).border(1.dp, D.line, shape).testTag(tag)) {
         options.forEachIndexed { i, o ->
@@ -156,7 +162,7 @@ fun DSeg(options: List<String>, selected: Int, tag: String, height: Dp = 50.dp, 
             val on = i == selected
             Column(
                 Modifier.weight(1f).fillMaxHeight().then(if (on) Modifier.clip(RoundedCornerShape(8.dp)).background(D.sel).border(1.8.dp, D.ink, RoundedCornerShape(8.dp)) else Modifier)
-                    .hClickable { onPick(i) }.testTag("${tag}_$i"),
+                    .hClickable { onPick(i) }.testTag(itemTags?.getOrNull(i) ?: "${tag}_$i"),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
             ) {
                 Text(o, style = DTy.body.copy(fontWeight = if (on) FontWeight.Bold else FontWeight.Normal), color = D.ink, maxLines = 1)
@@ -213,7 +219,7 @@ fun DTableRow(
 ) {
     Column(Modifier.fillMaxWidth()) {
         Row(
-            Modifier.fillMaxWidth().heightIn(min = if (compact) 44.dp else 52.dp).background(if (selected) D.sel else Color.Transparent)
+            Modifier.fillMaxWidth().heightIn(min = if (compact) 48.dp else 52.dp).background(if (selected) D.sel else Color.Transparent)
                 .then(if (onClick != null || onLongClick != null) Modifier.hCombinedClickable(onLongClick = onLongClick) { onClick?.invoke() } else Modifier)
                 .padding(horizontal = 4.dp, vertical = if (compact) 2.dp else 8.dp).testTag(tag),
             verticalAlignment = Alignment.CenterVertically,
@@ -260,7 +266,7 @@ fun DLeaderRow(label: String, value: String?, tag: String, toggle: Boolean? = nu
 @Composable
 fun DStatusChip(text: String, sub: String?, dot: Color?, tag: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Row(
-        modifier.height(44.dp).clip(RoundedCornerShape(10.dp)).background(D.card).border(1.dp, D.line, RoundedCornerShape(10.dp)).hClickable(onClick = onClick)
+        modifier.height(48.dp).clip(RoundedCornerShape(10.dp)).background(D.card).border(1.dp, D.line, RoundedCornerShape(10.dp)).hClickable(onClick = onClick)
             .padding(horizontal = 12.dp).semantics { contentDescription = text + (sub?.let { " $it" } ?: "") }.testTag(tag),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {

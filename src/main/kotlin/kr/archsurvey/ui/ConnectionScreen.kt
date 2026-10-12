@@ -255,8 +255,10 @@ fun ConnectionScreen(cc: ConnectionController) {
                 }
                 ConnPhase.IDLE, ConnPhase.FAILED -> Row(Modifier.weight(1f).height(58.dp).clip(RoundedCornerShape(10.dp)).background(D.primary).hClickable { cc.connect() }.testTag("conn_connect"),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                    GlyphIcon(Glyph.BT, Color.White, 18.dp)
-                    Text("  " + cc.connectLabel(), style = DTy.button, color = Color.White, modifier = Modifier.testTag("conn_connect_label"))
+                    GlyphIcon(Glyph.BT, Color.White, 18.dp); Spacer(Modifier.width(8.dp))
+                    val lbl = cc.connectLabel()
+                    if (lbl == "연결") Text(HeaderModel.shortModel(cc.profile.displayName) + "에 ", style = DTy.button, color = Color.White)
+                    Text(lbl, style = DTy.button, color = Color.White, modifier = Modifier.testTag("conn_connect_label"))
                 }
             }
         }
@@ -349,11 +351,11 @@ private fun DeviceSection(cc: ConnectionController, link: kr.archsurvey.device.L
     // 0.1.40 앱 안에서 찾기 → 눌러서 등록(PIN 자동)+연결. 폰 블루투스 설정으로 갈 필요 없음
     PairFindButton(cc)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("등록 목록 새로 읽기", style = DTy.small, color = D.sub, modifier = Modifier.heightIn(min = 44.dp).hClickable {
+        Text("등록 목록 새로 읽기", style = DTy.small, color = D.sub, modifier = Modifier.heightIn(min = 48.dp).hClickable {
             cc.refresh()
             if (cc.bonded.isEmpty()) cc.ui.fail("등록된 장비가 없어요 · 위 「주변 수신기 찾기」를 누르세요") else cc.ui.ok("등록된 장비 ${cc.bonded.size}개를 찾았어요")
         }.padding(vertical = 12.dp).testTag("conn_refresh"))
-        Text("폰 블루투스 설정", style = DTy.small, color = D.sub, modifier = Modifier.heightIn(min = 44.dp).hClickable { cc.openBluetoothSettings() }.padding(vertical = 12.dp).testTag("conn_bt_settings_top"))
+        Text("폰 블루투스 설정", style = DTy.small, color = D.sub, modifier = Modifier.heightIn(min = 48.dp).hClickable { cc.openBluetoothSettings() }.padding(vertical = 12.dp).testTag("conn_bt_settings_top"))
     }
 }
 
@@ -460,7 +462,10 @@ private fun FormSelect(value: String, tag: String, onClick: () -> Unit) {
 @Composable
 private fun VrsSection(cc: ConnectionController, ntrip: kr.archsurvey.engine.NtripStatus, vrsOnly: Boolean) {
     val t = T
-    if (!vrsOnly) { VrsSummary(cc); return }
+    // 0.1.43: 다 채워진 VRS 는 요약 + 「고치기」. 처음(아이디 등 빠짐)에는 이 화면에서 바로 채우게 펼쳐 둔다(열 때 한 번 정함)
+    val full = remember { cc.form.enabled && cc.form.problems().isNotEmpty() }
+    if (!vrsOnly && !full) { VrsSummary(cc); return }
+    if (!vrsOnly) DSectionLabel("VRS 보정 · NTRIP")
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(t.raised).border(1.dp, t.line.copy(alpha = 0.4f), RoundedCornerShape(18.dp)).padding(horizontal = 16.dp, vertical = 4.dp)) {
         Column {
             Row(
@@ -639,7 +644,7 @@ private fun VrsSummary(cc: ConnectionController) {
             Text("VRS 보정 · NTRIP", style = DTy.small, color = D.sub)
             Box(Modifier.weight(1f).padding(horizontal = 8.dp).height(1.dp).background(D.hair))
             Text("고치기", style = DTy.body.copy(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline), color = D.accent,
-                modifier = Modifier.heightIn(min = 40.dp).hClickable { cc.openVrs() }.padding(vertical = 8.dp).testTag("conn_vrs_edit"))
+                modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 56.dp).hClickable { cc.openVrs() }.padding(vertical = 12.dp, horizontal = 6.dp).testTag("conn_vrs_edit"))
         }
         for ((k, v) in listOf("서버" to (if (f.host.isBlank()) "—" else "${f.host}:${f.port}"), "마운트" to f.mount.ifBlank { "—" }, "아이디" to f.user.ifBlank { "—" },
                 "보내기" to (if (!f.enabled) "VRS 끔" else (if (cc.sendGga) "내 위치(GGA) 켬" else "내 위치(GGA) 끔") + (if (cc.autoRetry) " · 끊기면 다시 접속" else "")))) {

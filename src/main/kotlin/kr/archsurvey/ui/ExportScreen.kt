@@ -63,7 +63,7 @@ fun ExportScreen(ec: ExportController) {
             DSectionLabel("도면 축척 · 글자 크기가 맞춰집니다")
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.width(230.dp)) {
-                    DSeg(kr.archsurvey.dig.DrawingScale.CHOICES.map { "1:$it" }, kr.archsurvey.dig.DrawingScale.CHOICES.indexOf(ec.scale), "export_scale", height = 52.dp) { i ->
+                    DSeg(kr.archsurvey.dig.DrawingScale.CHOICES.map { "1:$it" }, kr.archsurvey.dig.DrawingScale.CHOICES.indexOf(ec.scale), "export_scale", height = 52.dp, itemTags = kr.archsurvey.dig.DrawingScale.CHOICES.map { "export_scale_$it" }) { i ->
                         val k = kr.archsurvey.dig.DrawingScale.CHOICES[i]; ec.scale = k; sc?.dig?.changeScale(k)
                     }
                 }

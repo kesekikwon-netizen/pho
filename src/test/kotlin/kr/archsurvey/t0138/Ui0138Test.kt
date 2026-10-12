@@ -83,7 +83,7 @@ class Ui0138Test {
     }
 
     @Test fun mapHeaderMenu_opensDrawerDirectly_noSecondMenuSheet() {
-        val (c, _) = setup(home = false)
+        val (c, _) = setup(home = true) // 0.1.43 시안: ≡ 는 홈 머리줄에만
         rule.onNodeWithContentDescription("메뉴").performClick(); rule.waitForIdle()
         assertTrue(c.drawerOpen)
         rule.onAllNodesWithTag("dig_menu").assertCountEquals(0)
@@ -125,6 +125,7 @@ class Ui0138Test {
             jobFolder = { JobFolderSnapshot("ExcavationSurvey/광령리 3지구", listOf(MirrorFile("측점.csv", 3, 1) { ByteArray(3) })) })
         val (c, _) = setup(home = false, drive = drive)
         rule.runOnIdle { c.hub.open(ToolScreen.SETTINGS) }; rule.waitForIdle()
+        rule.onNodeWithTag("set_drive").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("drive_sign_in").performScrollTo().assertTextContains("구글 드라이브 연결", substring = true)
         rule.onAllNodesWithTag("drive_upload_now").assertCountEquals(0)
         shot("04_settings_drive_off")

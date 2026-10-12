@@ -69,7 +69,7 @@ class Ui0114UxTest {
 
     @Test fun buttonTapsGiveHapticAndRespectVibrationSetting() {
         setup()
-        rule.onNodeWithTag("home_settings2").performScrollTo().performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
+        rule.onNodeWithTag("home_settings2").performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
         assertTrue("탭 햅틱", TapHaptics.taps >= 1)
         rule.onNodeWithTag("zone_toggle").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("job_exit").performClick(); rule.waitForIdle()

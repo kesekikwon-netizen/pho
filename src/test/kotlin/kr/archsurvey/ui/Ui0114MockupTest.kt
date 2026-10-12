@@ -157,7 +157,6 @@ class Ui0114MockupTest {
         // 0.1.35: 환경설정 목록 → 설정 한 화면(꼭 필요한 네 가지 + 측점 + 발굴 + 고급)
         ui { c.homeOpen = false; c.hub.open(ToolScreen.SETTINGS) }
         for (tag in listOf("set_receiver", "set_vrs", "set_pole", "zone_toggle", "epochs_toggle", "set_strict_quality")) rule.onNodeWithTag(tag).performScrollTo().assertExists()
-        rule.onNodeWithTag("settings_advanced").performScrollTo().assertExists()
         shot("mockup_03_settings")
         // 03→RTK 설정
         reset(); ui { c.hub.open(ToolScreen.RTK) }; rule.onNodeWithTag("rtk_compat").assertExists(); shot("mockup_03b_rtk")
@@ -179,15 +178,17 @@ class Ui0114MockupTest {
         // 11 작업 전송 양식
         reset(); ui { c.exporter!!.openScreen() }
         rule.onNodeWithTag("export_fmt_shp").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("export_more").performScrollTo().performClick(); rule.waitForIdle() // 0.1.43 「다른 형식」 접기
         rule.onNodeWithTag("export_fmt_kml").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("export_screen").performTouchInput { swipeDown() }
         shot("mockup_11_export_format")
         // 12 전송 방식
-        rule.onNodeWithTag("export_run").assertTextContains("적용 (5)", substring = true).performClick(); rule.waitForIdle()
-        assertEquals(setOf(kr.archsurvey.export.ExportFormat.CSV, kr.archsurvey.export.ExportFormat.DXF, kr.archsurvey.export.ExportFormat.GEOJSON, kr.archsurvey.export.ExportFormat.SHP, kr.archsurvey.export.ExportFormat.KML), exp.lastFormats)
-        rule.onNodeWithTag("export_method_share").assertExists(); rule.onNodeWithTag("export_method_save").assertExists()
+        // 0.1.43 시안 ⑨: 기본 = 도면 DXF · Shape · 점 목록 · 야장 (+사진·음성 묶음) → Shape 빼고 KML 넣기 = 파일 5개
+        rule.onNodeWithTag("export_run").assertTextContains("파일 5개", substring = true).performClick(); rule.waitForIdle()
+        assertEquals(setOf(kr.archsurvey.export.ExportFormat.DRAWING_DXF, kr.archsurvey.export.ExportFormat.FIELD_CSV, kr.archsurvey.export.ExportFormat.CSV, kr.archsurvey.export.ExportFormat.KML), exp.lastFormats)
+        rule.onNodeWithTag("export_share").assertExists(); rule.onNodeWithTag("export_save").assertExists()
         shot("mockup_12_export_method")
-        rule.onNodeWithTag("export_send").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("export_share").performClick(); rule.waitForIdle()
         assertEquals(1, exp.shared); assertEquals(ToastKind.OK, c.ui.toastKind)
         // 13 배경맵 설정
         reset(); ui { c.exporter!!.close(); c.bg!!.openManage() }
@@ -209,8 +210,8 @@ class Ui0114MockupTest {
         shot("mockup_17a_result_strip")
         // 0.1.35: 「계속 측량할까요」 패널 없음 — 장부 카드 + 측점 단추가 「다음 점」(X3)
         ui { c.ui.hideToast() }
-        rule.onNodeWithTag("result_strip").assertExists()
-        rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("다음 점")
+        rule.onNodeWithTag("point_confirm").assertExists()
+        rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("측정")
         shot("mockup_17_survey_result")
         // 18 사진 확인(찍은 뒤 확인 화면은 그대로)
         rule.onNodeWithTag("result_photo").performClick(); rule.waitForIdle()

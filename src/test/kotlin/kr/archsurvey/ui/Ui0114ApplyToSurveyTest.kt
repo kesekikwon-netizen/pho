@@ -133,7 +133,7 @@ class Ui0114ApplyToSurveyTest {
     /** 환경설정 › 좌표계·측량 설정 › 지역 줄 › 작업 정보 › 적용 — 겹친 창 두 겹 */
     @Test fun applyFromSettingsScreenNavigatesToSurvey() {
         setup()
-        rule.onNodeWithTag("home_settings2").performScrollTo().performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
+        rule.onNodeWithTag("home_settings2").performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
         rule.onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
         assertEquals("tool:JOB_INFO", c.visibleRoute())
         pickEast()
@@ -158,7 +158,7 @@ class Ui0114ApplyToSurveyTest {
         setup()
         val before = c.jobConfig()
         cfgs.save("te1", before)
-        rule.onNodeWithTag("home_settings2").performScrollTo().performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
+        rule.onNodeWithTag("home_settings2").performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
         rule.onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
         pickEast()
         rule.onNodeWithTag("job_exit").performClick(); rule.waitForIdle()
@@ -202,7 +202,7 @@ class Ui0114ApplyToSurveyTest {
     @Test fun pointsBackToMapFromHomeGoesToSurvey() {
         setup()
         // 0.1.35: 홈 「측량한 것」 → 뒤로 = 측량 지도
-        rule.onNodeWithTag("home_points").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("home_points").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("features_summary").assertExists()
         rule.onNodeWithTag("tool_back").performClick(); rule.waitForIdle()
         assertOnSurvey()
@@ -221,7 +221,7 @@ class Ui0114ApplyToSurveyTest {
     @Test fun systemBackFromJobInfoDoesNotSave() {
         setup()
         val before = c.jobConfig(); cfgs.save("te1", before)
-        rule.onNodeWithTag("home_settings2").performScrollTo().performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
+        rule.onNodeWithTag("home_settings2").performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
         rule.onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
         pickEast()
         rule.runOnUiThread { backTarget(c)!!.invoke() }; rule.waitForIdle()

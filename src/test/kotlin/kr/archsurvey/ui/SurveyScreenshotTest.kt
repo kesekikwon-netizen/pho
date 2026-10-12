@@ -75,7 +75,7 @@ class SurveyScreenshotTest {
         val b = c.mapState().current!!.at
         val moved = Math.hypot(b.x - a.x, b.y - a.y)
         assertTrue("현재 위치가 지도에서 이동 $moved m", moved > 2.5)
-        assertTrue("지도 영역 ≥60% (${mapFraction()})", mapFraction() >= 0.6)
+        assertTrue("지도 영역 ≥45% · 0.1.43 시안 비율 (${mapFraction()})", mapFraction() >= 0.45)
         File(out, "metrics.txt").appendText("idle map_fraction=${"%.3f".format(mapFraction())} marker_moved_m=${"%.2f".format(moved)}\n")
     }
 
@@ -83,11 +83,11 @@ class SurveyScreenshotTest {
         val (f, c) = make(); show(c)
         adv(f, 5)
         // 0.1.35: 상태 띠 → 머리줄 상태 알약(초록 FIX · 노랑 FLOAT · 빨강 불가) + 안 될 때만 원인 한 줄
-        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextContains("측량 가능", substring = true)
+        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextContains("FIX", substring = true)
         rule.onNodeWithTag("cause_line").assertDoesNotExist()
                 shot("03_status_fixed")
         skip(f); adv(f, 2)
-        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextContains("주의", substring = true)
+        rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextContains("FLOAT", substring = true)
                 shot("04_status_caution_float")
         skip(f); adv(f, 2)
         rule.onNodeWithTag("pill_fix", useUnmergedTree = true).assertTextContains("불가", substring = true)
@@ -102,7 +102,7 @@ class SurveyScreenshotTest {
         assertTrue("측점 단추 ≥72dp", bounds("measure_button").height.value >= 72f)
         val idleMap = bounds("map_area")
         val metrics = StringBuilder()
-        fun check(label: String, expectMin: Double = 0.6) {
+        fun check(label: String, expectMin: Double = 0.45) {
             val m = bounds("map_area")
             val ctl = bounds("control_area")
             if (rule.onAllNodesWithTag("info_zone").fetchSemanticsNodes().any { it.size.height > 0 }) {
@@ -123,13 +123,13 @@ class SurveyScreenshotTest {
         adv(f, 5)
         assertEquals(Phase.RESULT, c.phase)
         rule.onNodeWithTag("result_chip", useUnmergedTree = true).assertExists()
-        rule.onNodeWithTag("result_strip").assertIsDisplayed()
+        rule.onNodeWithTag("point_confirm").assertIsDisplayed() // 0.1.43 시안 ③ 점 확인
         rule.onNodeWithTag("measure_button").assertIsDisplayed()
         check("result_strip", 0.4); shot("08_result_strip_min")
-        rule.onNodeWithTag("result_voice").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("result_voice").performScrollTo().performClick(); rule.waitForIdle()
         assertEquals(Phase.RECORDING, c.phase)
         check("recording", 0.4); shot("10_recording_mock")
-        rule.onNodeWithTag("result_voice").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("result_voice").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("measure_button").performClick(); rule.waitForIdle()
         assertEquals("다음 점 한 번 탭 = 바로 취득 시작", Phase.ACQUIRING, c.phase)
         adv(f, 6)
@@ -157,7 +157,7 @@ class SurveyScreenshotTest {
         val (f, c) = make(); show(c); adv(f, 3)
         rule.onNodeWithTag("drawer").assertDoesNotExist()
         // 0.1.38: ≡ = 메뉴 하나(서랍). 예전 「메뉴」 시트 → 「전체 메뉴」 두 단계를 합침
-        rule.onNodeWithTag("gear").performClick(); rule.waitForIdle()
+        rule.runOnIdle { c.drawerOpen = true }; rule.waitForIdle() // 0.1.43 시안: 측량 화면 머리줄에 ≡ 없음 · 홈 ≡ 에서
         rule.onNodeWithTag("dig_menu").assertDoesNotExist()
         rule.onNodeWithTag("drawer").assertIsDisplayed()
         val d = bounds("drawer")

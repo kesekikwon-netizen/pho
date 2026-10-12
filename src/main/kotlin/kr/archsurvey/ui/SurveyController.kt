@@ -587,7 +587,7 @@ class SurveyController(
     // ---------------- 측점 ----------------
 
     /** 결과 띠를 보이는 시간(ms). 띠가 사라져도 측점 버튼은 막히지 않고, 사진·음성·되돌리기는 계속 쓸 수 있다 */
-    var resultStripMs: Long = 4000L
+    var resultStripMs: Long = 8000L
     var resultStripShown by mutableStateOf(false)
         private set
     /** 새 결과마다 올라가는 번호. 화면(LaunchedEffect)이 이 번호로 숨김 시간을 다시 잰다 — 화면과 함께 사라지는 타이머라 따로 도는 스레드가 없다 */

@@ -22,19 +22,19 @@ import java.util.Locale
 
 /** 측정 직후 「점 확인」을 띄울 때(측량 화면 위, 다른 창이 없을 때) */
 internal fun pointConfirmVisible(c: SurveyController): Boolean =
-    !c.homeOpen && c.lastPoint != null && (c.phase == Phase.RESULT || c.phase == Phase.RESULT_EXPANDED || c.phase == Phase.RECORDING) &&
-        c.dupPrompt == null && c.tiltPrompt == null && c.hub.screen == null && c.connection?.open != true && c.exporter?.open != true
+    !c.homeOpen && c.lastPoint != null && ((c.phase == Phase.RESULT && c.resultStripShown) || c.phase == Phase.RESULT_EXPANDED || c.phase == Phase.RECORDING) &&
+        c.dupPrompt == null && c.tiltPrompt == null && c.resurveyTarget == null && c.hub.screen == null && c.connection?.open != true && c.exporter?.open != true
 
 /**
  * 0.1.43 시안 ③ 점 저장 · 확인: 측정 직후 자동. 좌표 · 해발 · 정확도 · 안테나 · 기울기 · 좌표계 · n회 평균 표 ·
- * [사진 n/5][음성 메모][글 메모(고르는 문구)] · 이 점 지우기 · 다음 점 재기(지도로 돌아가 다음 점 위로)
+ * [사진 n/5][음성 메모][글 메모(고르는 문구)] · 이 점 지우기 · 다음 점 재기(한 번 = 바로 다음 측정). 결과 띠처럼 8초 뒤 저절로 지도로
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun PointConfirmScreen(c: SurveyController) {
     val p = c.lastPoint ?: return
     var memoOpen by remember(p.name) { mutableStateOf(false) }
-    androidx.activity.compose.BackHandler { if (memoOpen) memoOpen = false else c.dismissResult() }
+    androidx.activity.compose.BackHandler(enabled = c.ui.confirm == null && c.ui.choice == null) { if (memoOpen) memoOpen = false else c.dismissResult() }
     val idx = c.points.indexOfFirst { it.name == p.name }.let { if (it < 0) c.points.size else it + 1 }
     val st = PointCaution.displayStatus(p)
     Column(Modifier.fillMaxSize().background(D.bg).testTag("point_confirm")) {
@@ -111,7 +111,7 @@ fun PointConfirmScreen(c: SurveyController) {
         DBottomBar {
             Text("이 점 지우기", style = DTy.body.copy(fontWeight = FontWeight.Medium), color = D.bad, textAlign = TextAlign.Center,
                 modifier = Modifier.width(112.dp).heightIn(min = 56.dp).hClickable { c.askUndo() }.wrapContentHeight().testTag("undo_button"))
-            DPrimary("다음 점 재기", "next_point", Modifier.weight(1f)) { c.dismissResult() }
+            DPrimary("다음 점 재기", "next_point", Modifier.weight(1f)) { c.nextPoint() }
         }
     }
 }

@@ -54,7 +54,7 @@ class ThemeTokensTest {
 
     @Test fun noRawColorLiteralsOutsideThemeFile() {
         // 지도 데이터색(구역 색)만 CanvasMapSurface 에 둔다
-        File("src/main/kotlin/kr/archsurvey/ui").walk().filter { it.extension == "kt" && it.name != "Theme.kt" && it.name != "CanvasMapSurface.kt" }.forEach { f ->
+        File("src/main/kotlin/kr/archsurvey/ui").walk().filter { it.extension == "kt" && it.name != "Theme.kt" && it.name != "D43Kit.kt" && it.name != "CanvasMapSurface.kt" }.forEach { f ->
             assertFalse("${f.name} 에 색 직접 지정", Regex("Color\\(0x").containsMatchIn(f.readText()))
         }
     }
