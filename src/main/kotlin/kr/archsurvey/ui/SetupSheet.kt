@@ -50,6 +50,7 @@ fun SetupSheet(c: SurveyController) {
             PickField("코드 / 심볼", c.types.getOrElse(typeIdx) { "없음" }, "setup_code") {
                 c.ui.choose(ChoiceRequest("코드 / 심볼 (위치 종류)", c.types, typeIdx, "setup_type") { typeIdx = it })
             }
+            QuickNoteChips(memo, "setup_note") { if (it.length <= 60) memo = it } // 0.1.39 한 손가락 비고
             FieldRow("비고") {
                 BasicTextField(
                     memo, { if (it.length <= 60) memo = it.replace("\n", " ") }, singleLine = true, textStyle = Ty.body.copy(color = t.ink),

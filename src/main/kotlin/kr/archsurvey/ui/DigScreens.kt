@@ -66,6 +66,10 @@ fun HomeToday(c: SurveyController) {
             HeaderIcon(Glyph.MENU, "메뉴", "home_settings") { c.drawerOpen = true }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // 0.1.39 「새 작업」 한 번에: 홈 맨 위 큰 단추(예전: ≡ → 메뉴 → 새 작업 → … 여러 번)
+            MBtn(Modifier.fillMaxWidth().height(64.dp).testTag("home_new_job"), MKind.PRIMARY, 18.dp, onClick = { c.jobs?.openNew() ?: c.ui.toast("작업 관리를 쓸 수 없어요") }) {
+                Text("+ 새 작업", style = Ty.button.copy(fontSize = 20.sp, fontWeight = FontWeight.Medium), color = t.onPrimary)
+            }
             Box(Modifier.fillMaxWidth().height(1.5.dp).background(t.ink))
             Row {
                 Text("이어서 측량", style = Ty.small, color = t.inkSub, modifier = Modifier.weight(1f))
@@ -85,6 +89,11 @@ fun HomeToday(c: SurveyController) {
                     Text("측량 시작", style = Ty.button.copy(fontSize = 20.sp, fontWeight = FontWeight.Medium), color = t.onPrimary)
                 }
                 MBtn(Modifier.width(110.dp).height(64.dp).testTag("home_job_btn"), MKind.PLAIN, 18.dp, onClick = { c.jobs?.openInfo() ?: c.hub.open(ToolScreen.JOB_INFO) }) { Text("작업", style = Ty.label.copy(fontSize = 16.sp), color = t.ink) }
+            }
+            // 0.1.39 작업 카드에서도 바로: 새 작업 · 다른 작업 열기
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MBtn(Modifier.weight(1f).height(56.dp).testTag("home_card_new"), MKind.PLAIN, 16.dp, onClick = { c.jobs?.openNew() }) { Text("+ 새 작업", style = Ty.label, color = t.ink) }
+                MBtn(Modifier.weight(1f).height(56.dp).testTag("home_card_open"), MKind.PLAIN, 16.dp, onClick = { c.jobs?.openList() }) { Text("다른 작업 열기", style = Ty.label, color = t.ink) }
             }
             Box(Modifier.fillMaxWidth().height(1.5.dp).background(t.ink))
             Row(verticalAlignment = Alignment.CenterVertically) {

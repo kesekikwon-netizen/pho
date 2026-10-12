@@ -142,6 +142,8 @@ fun PointDetailScreen(c: SurveyController) {
                 }
             }
         }
+        // 0.1.39 비고: 자주 쓰는 말은 칩으로(키보드 없이), 그 밖은 아래 칸
+        QuickNoteChips(h.memo(), "edit_note") { h.editMemo = it }
         Field("비고", h.memo(), "edit_memo") { h.editMemo = it }
         ReadRow("안테나 위상중심") {
             Text(f3(p.antenna.apcHeightM), style = Ty.coord.copy(fontSize = 18.sp), color = t.ink)
@@ -451,9 +453,19 @@ fun SettingsScreen(c: SurveyController) {
         }
         var typesText by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(d.featureTypes.joinToString(", ")) }
         Card {
-            Text("유구 종류 (쉼표로 구분)", style = Ty.label, color = t.ink)
-            Field("수혈, 주거지, 주혈 …", typesText, "set_feature_types") { typesText = it }
-            Btn("유구 종류 저장", Modifier.fillMaxWidth().testTag("set_feature_types_save")) { d.setFeatureTypes(typesText.split(',', '\n')); typesText = d.featureTypes.joinToString(", "); c.ui.ok("유구 종류 ${d.featureTypes.size}개") }
+            // 0.1.39 한 손가락: 눌러서 켜고 끄기(바로 저장). 목록에 없는 것만 「직접 입력」
+            Text("유구 종류 · 눌러서 켜기/끄기", style = Ty.label, color = t.ink)
+            ChipFlow {
+                for (ty in OneFingerTypes.catalog(d.featureTypes)) Choice(ty, ty in d.featureTypes, Modifier.testTag("set_ftype_$ty")) {
+                    d.setFeatureTypes(OneFingerTypes.toggle(d.featureTypes, ty)); typesText = d.featureTypes.joinToString(", ")
+                }
+            }
+            var typing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+            TypeFallbackRow(typing, "set_feature_types_manual") { typing = !typing }
+            if (typing) {
+                Field("수혈, 주거지, 주혈 …", typesText, "set_feature_types") { typesText = it }
+                Btn("유구 종류 저장", Modifier.fillMaxWidth().testTag("set_feature_types_save")) { d.setFeatureTypes(typesText.split(',', '\n')); typesText = d.featureTypes.joinToString(", "); c.ui.ok("유구 종류 ${d.featureTypes.size}개") }
+            }
         }
         SelectRow("고급 · 문제 있을 때만", if (advanced) "접기" else "펼치기", advanced, "settings_advanced") { advanced = !advanced }
         if (advanced) {
@@ -548,7 +560,8 @@ fun JobScreen(c: SurveyController) {
     val title = when (h.screen) { ToolScreen.JOB_NEW -> "새 작업"; ToolScreen.JOB_OPEN -> "작업 열기 · 삭제"; else -> "작업 정보 확인" }
     ToolScaffold(title, "job_screen", onBack = { h.back() }, bottom = {
         when (h.screen) {
-            ToolScreen.JOB_NEW -> DualBar("나가기", "job_exit", { h.back() }, if (jc.busy) "만드는 중…" else "만들기", "job_create", !jc.busy) { jc.create() }
+            // 0.1.39: 큰 단추 하나 — 작업+폴더를 만들고 바로 측량 지도로
+            ToolScreen.JOB_NEW -> PrimaryBar(if (jc.busy) "만드는 중…" else "만들고 측량 시작", "job_create", !jc.busy) { jc.create() }
             ToolScreen.JOB_INFO -> DualBar("나가기", "job_exit", { h.back() }, "적용", "job_apply", !jc.busy) { jc.applyInfo() }
             else -> {}
         }
@@ -557,22 +570,40 @@ fun JobScreen(c: SurveyController) {
         jc.error?.let { ErrorCardView(ErrorCard("-", it, "이름이나 값을 바꾸거나 다시 시도하세요.", false), "job_error") }
         when (h.screen) {
             ToolScreen.JOB_NEW -> {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("작업명", style = Ty.small, color = t.inkSub)
-                    OutlinedTextField(jc.newName, { jc.newName = it }, singleLine = true, label = { Text("예) 3지구-A트렌치") }, modifier = Modifier.fillMaxWidth().testTag("job_name"))
+                // 0.1.39 한 화면 · 고르기만: 유적 칩 → 조사 단계 → 지구 번호 → (날짜 자동) → 좌표계 타일. 키보드는 「직접 입력」에서만
+                Card {
+                    Text("만들 작업", style = Ty.small, color = t.inkSub)
+                    Text(jc.effectiveName.ifBlank { "이름을 고르세요" }, style = Ty.title, color = t.ink, modifier = Modifier.testTag("job_built_name"))
+                    Text("폴더 · ${jc.newFolderPreview}", style = Ty.small, color = t.inkSub, maxLines = 2, modifier = Modifier.testTag("job_folder_preview"))
                 }
-                // 0.1.38 새 작업 = 새 폴더. 「새 폴더」(상위 폴더: 유적 이름 등)는 선택
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("상위 폴더 (선택 · 유적 이름 등으로 작업 묶기)", style = Ty.small, color = t.inkSub)
-                    OutlinedTextField(jc.newGroup, { jc.newGroup = it }, singleLine = true, label = { Text("비우면 작업 폴더만 · 예) 광령리 유적") }, modifier = Modifier.fillMaxWidth().testTag("job_group"))
-                    if (jc.groups.isNotEmpty()) androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for (g in jc.groups) Choice(g, jc.newGroup.trim() == g, Modifier.testTag("job_group_pick_$g")) { jc.newGroup = if (jc.newGroup.trim() == g) "" else g }
+                Text("유적 (상위 폴더)", style = Ty.label, color = t.ink)
+                ChipFlow {
+                    for (g in jc.siteChips) Choice(g, !jc.newGroupTyping && jc.newSite == g, Modifier.testTag("job_site_$g")) { jc.pickSite(g) }
+                    Choice("없음", !jc.newGroupTyping && jc.newSite.isBlank(), Modifier.testTag("job_site_none")) { jc.pickSite(null) }
+                    Choice("+ 새 유적", jc.newGroupTyping, Modifier.testTag("job_site_new")) { jc.startNewGroup() }
+                }
+                if (jc.newGroupTyping) OutlinedTextField(jc.newSite, { jc.newSite = it }, singleLine = true, label = { Text("새 유적 이름 · 예) 강릉 교동") }, modifier = Modifier.fillMaxWidth().testTag("job_group"))
+                Text("조사 단계", style = Ty.label, color = t.ink)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (st in kr.archsurvey.job.SurveyStage.entries) Choice(st.labelKo, jc.newStage == st, Modifier.weight(1f).height(56.dp).testTag("job_stage_${st.name}")) { jc.pickStage(st) }
+                }
+                Text("구역 · 지구 번호 (날짜 ${jc.mmdd} 자동)", style = Ty.label, color = t.ink)
+                BigNumberPicker(jc.newNo, 1..kr.archsurvey.job.NewJobName.MAX_NO, "job_no", "지구") { jc.newNo = it }
+                Text("좌표계", style = Ty.label, color = t.ink)
+                val zones = kr.archsurvey.core.KoreanTmZone.entries
+                for (row in zones.chunked(2)) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (z in row) {
+                        val rec = jc.recommendedZone == z
+                        Choice(z.labelKo.substringBefore(" (") + " " + z.epsg + if (rec) " · 추천" else "", jc.formZone == z, Modifier.weight(1f).height(56.dp).testTag("job_zone_${z.epsg}")) { jc.formZone = z }
                     }
-                    Text("폴더 · ${jc.newFolderPreview}", style = Ty.small, color = t.ink, modifier = Modifier.testTag("job_folder_preview"))
-                    Text("이 작업의 측점·내보내기·사진·음성·백업이 모두 이 폴더에 모여요.", style = Ty.small, color = t.inkSub)
                 }
-                JobConfigRows(c, jc, editableZone = true)
-                ToggleRow("지역 자동 설정 (지금 위치로 원점 선택)", jc.autoZoneOn, "job_auto_zone") { jc.changeAutoZone(it) }
+                Text(if (jc.recommendedZone != null) "추천 = 지금 위치(경도)로 고른 원점" else "위치가 아직 없어 지금 작업 좌표계를 골라 두었어요", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("job_zone_note"))
+                FoldRow("자세히 (높이 · 배경지도 · 직접 입력)", jc.newDetailsOpen, "job_details") { jc.newDetailsOpen = !jc.newDetailsOpen }
+                if (jc.newDetailsOpen) {
+                    JobConfigRows(c, jc, editableZone = true)
+                    TypeFallbackRow(jc.nameManual, "job_manual") { jc.nameManual = !jc.nameManual; if (jc.nameManual && jc.newName.isBlank()) jc.newName = jc.builtName }
+                    if (jc.nameManual) OutlinedTextField(jc.newName, { jc.newName = it }, singleLine = true, label = { Text("작업명 직접 입력") }, modifier = Modifier.fillMaxWidth().testTag("job_name"))
+                }
             }
             ToolScreen.JOB_OPEN -> {
                 Text("열려 있는 작업: ${jc.current}", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("job_current"))

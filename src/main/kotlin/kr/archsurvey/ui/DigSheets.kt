@@ -217,7 +217,14 @@ internal fun RenameFeatureSheet(c: SurveyController, id: Long) {
                 type = ty; name = kr.archsurvey.dig.FeatureNaming.newName(d.featureOutlines().filter { it.id != id }.map { it.label }, ty, false)
             }
         }
-        Field("새 이름 (예: 3호 주거지)", name, "rename_name") { name = it; err = null }
+        // 0.1.39 한 손가락: 번호를 큰 숫자 고르기로(이름 = 「N호 종류」). 키보드는 「직접 입력」에서만
+        var typing by remember(id) { mutableStateOf(false) }
+        val no = Regex("^(\\d{1,3})호").find(name)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+        SectionTitle("번호")
+        BigNumberPicker(no, 1..999, "rename_no", "호") { n -> name = kr.archsurvey.dig.FeatureNaming.name(n, type); err = null }
+        Text("새 이름 · $name", style = Ty.label, color = t.ink, modifier = Modifier.testTag("rename_preview"))
+        TypeFallbackRow(typing, "rename_manual") { typing = !typing }
+        if (typing) Field("새 이름 (예: 3호 주거지)", name, "rename_name") { name = it; err = null }
         err?.let { Text(it, style = Ty.label, color = t.bad, modifier = Modifier.testTag("rename_error")) }
         val hist = kr.archsurvey.dig.FeatureNaming.history(o.history)
         if (hist.size > 1) Text("이전 이름: " + hist.dropLast(1).joinToString(" → "), style = Ty.small, color = t.inkSub)

@@ -41,8 +41,15 @@ fun AreasScreen(c: SurveyController) {
                     Btn("지우기", Modifier.width(80.dp).testTag("area_del_${ar.id}")) { confirmDelete = ar }
                 }
             }
-            Field("새 구역 이름 (예: A, 3지구)", newName, "area_name") { newName = it }
-            Btn("구역 만들기", Modifier.fillMaxWidth().testTag("area_add")) { a.addArea(newName) { newName = "" } }
+            // 0.1.39 한 손가락: 안 쓴 이름 칩을 누르면 바로 만들어짐. 그 밖은 「직접 입력」
+            val taken = a.areas.map { it.name }.toSet()
+            ChipChoices(OneFingerNames.areaChoices(taken), null, "area_pick", { it }) { nm -> a.addArea(nm) { newName = "" } }
+            var typing by remember { mutableStateOf(false) }
+            TypeFallbackRow(typing, "area_manual") { typing = !typing }
+            if (typing) {
+                Field("새 구역 이름 (예: A, 3지구)", newName, "area_name") { newName = it }
+                Btn("구역 만들기", Modifier.fillMaxWidth().testTag("area_add")) { a.addArea(newName) { newName = "" } }
+            }
         }
         val ar = a.activeArea
         if (ar != null) Card {
@@ -117,13 +124,20 @@ fun GridWizardScreen(c: SurveyController) {
         if (areaId == null) Text("먼저 발굴 구역을 고르세요.", style = Ty.body, color = t.bad, modifier = Modifier.testTag("grid_need_area"))
         Card {
             Text("그리드는 가로(열) 방향이 원점 → 방향 점이에요. 칸 이름은 A-1, B-1 … 처럼 열 글자 + 줄 번호예요.", style = Ty.small, color = t.inkSub)
-            Field("그리드 이름", name, "grid_name") { name = it }
+            Text("그리드 이름 · $name", style = Ty.label, color = t.ink, modifier = Modifier.testTag("grid_name_label"))
+            ChipChoices(OneFingerNames.gridChoices(a.gridsOf(a.activeAreaId ?: 0).map { it.name }.toSet()), name, "grid_pick", { it }) { name = it }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Choice("점 2개로", byPoints, Modifier.weight(1f).testTag("grid_mode_points")) { byPoints = true }
                 Choice("좌표 + 방위각", !byPoints, Modifier.weight(1f).testTag("grid_mode_az")) { byPoints = false }
             }
-            Field("칸 간격 (m)", spacing, "grid_spacing", KeyboardType.Decimal) { spacing = it }
-            Field("줄 수 (세로 칸)", rows, "grid_rows", KeyboardType.Number) { rows = it }
+            // 0.1.39 간격 = 칩, 줄 수 = 큰 숫자 고르기(키보드 없이)
+            Text("칸 간격", style = Ty.label, color = t.ink)
+            ChipChoices(OneFingerNames.SPACINGS, spacing.toDoubleOrNull(), "grid_sp", { OneFingerNames.m(it) }) { spacing = it.toString() }
+            Text("줄 수 (세로 칸)", style = Ty.label, color = t.ink)
+            BigNumberPicker(rows.toIntOrNull() ?: 10, 1..200, "grid_rows_pick", "줄") { rows = it.toString() }
+            var spTyping by remember { mutableStateOf(false) }
+            TypeFallbackRow(spTyping, "grid_manual") { spTyping = !spTyping }
+            if (spTyping) Field("칸 간격 (m)", spacing, "grid_spacing", KeyboardType.Decimal) { spacing = it }
         }
         if (byPoints) {
             Card {
@@ -133,14 +147,16 @@ fun GridWizardScreen(c: SurveyController) {
             Card {
                 Text("방향 점: ${pD?.name ?: "고르세요"}", style = Ty.label, color = t.ink, modifier = Modifier.testTag("grid_d_label"))
                 PointChooser(c.points.toList().asReversed(), "grid_d") { pD = it }
-                Field("열 수 (비우면 두 점 거리 ÷ 간격)", cols, "grid_cols", KeyboardType.Number) { cols = it }
+                Text("열 수 · " + (cols.ifBlank { "자동(두 점 거리 ÷ 간격)" }), style = Ty.label, color = t.ink)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Choice("자동", cols.isBlank(), Modifier.testTag("grid_cols_auto")) { cols = "" } }
+                BigNumberPicker(cols.toIntOrNull() ?: 10, 1..200, "grid_cols_pick", "열") { cols = it.toString() }
             }
         } else {
             Card {
                 Field("원점 N", n, "grid_n", KeyboardType.Decimal) { n = it }
                 Field("원점 E", e, "grid_e", KeyboardType.Decimal) { e = it }
                 Field("방위각 (° 북 기준, 시계방향)", az, "grid_az", KeyboardType.Decimal) { az = it }
-                Field("열 수", colsAz, "grid_cols_az", KeyboardType.Number) { colsAz = it }
+                BigNumberPicker(colsAz.toIntOrNull() ?: 10, 1..200, "grid_cols_az_pick", "열") { colsAz = it.toString() }
             }
         }
         problem?.let { Text(it, style = Ty.body, color = t.bad, modifier = Modifier.testTag("grid_problem")) }

@@ -158,12 +158,40 @@ class JobController(
     /** 0.1.38 「새 폴더」: 상위 폴더(유적 이름 등). 비우면 ExcavationSurvey 바로 아래 */
     var newGroup by mutableStateOf("")
     var groups by mutableStateOf<List<String>>(emptyList()); private set
+    // ---- 0.1.39 새 작업: 키보드 없이 고르기만(유적 칩 · 단계 타일 · 지구 번호 · 날짜 자동) ----
+    /** 유적(= 상위 폴더). 빈칸 = 없음 */
+    var newSite by mutableStateOf("")
+    var newStage by mutableStateOf(kr.archsurvey.job.SurveyStage.FULL)
+    var newNo by mutableStateOf(1)
+    /** 「직접 입력」(키보드) 으로 이름을 쓰는 중. 기본 false */
+    var nameManual by mutableStateOf(false)
+    /** 「새 유적 · 직접 입력」 칸을 연 상태 */
+    var newGroupTyping by mutableStateOf(false)
+    /** 지금 위치로 고른 추천 좌표계(위치가 없으면 null) */
+    var recommendedZone by mutableStateOf<kr.archsurvey.core.KoreanTmZone?>(null); private set
+    /** 「자세히」(높이·배경지도) 펼침 */
+    var newDetailsOpen by mutableStateOf(false)
+    /** 시험용 날짜 */
+    var today: () -> java.util.Date = { java.util.Date() }
+    val mmdd: String get() = java.text.SimpleDateFormat("MM-dd", java.util.Locale.US).format(today())
+    /** 고른 것으로 만든 이름(겹치면 (2)) */
+    val builtName: String get() = kr.archsurvey.job.NewJobName.unique(
+        kr.archsurvey.job.NewJobName.build(newSite.ifBlank { null }, newStage, newNo, mmdd), (list.map { it.name } + current))
+    /** 실제로 만들 이름 */
+    val effectiveName: String get() = if (nameManual) newName.trim() else builtName
+    /** 유적 칩: 지금 작업의 유적 + 최근 유적(위치→행정동 이름은 이 앱에 주소 API 가 없어 아직 못 함 — 마지막 쓴 것으로 대신) */
+    val siteChips: List<String> get() = (listOfNotNull(currentSite) + groups).distinct().take(6)
+    private val currentSite: String? get() = currentFolder?.removePrefix(kr.archsurvey.job.JobFolders.PUBLIC_PARENT + "/")?.let { kr.archsurvey.job.JobFolders.split(it).first }
+    fun pickSite(sv: String?) { newGroupTyping = false; newSite = sv.orEmpty(); newNo = kr.archsurvey.job.NewJobName.nextNo(newSite, newStage, list.map { it.name }) }
+    fun pickStage(st: kr.archsurvey.job.SurveyStage) { newStage = st; newNo = kr.archsurvey.job.NewJobName.nextNo(newSite, st, list.map { it.name }) }
+    fun stepNo(d: Int) { newNo = (newNo + d).coerceIn(1, kr.archsurvey.job.NewJobName.MAX_NO) }
+    fun startNewGroup() { newGroupTyping = true; newSite = "" }
     /** 지금 작업 폴더(홈 카드·작업 정보) */
     val currentFolder: String? get() = runCatching { platform.folderOf(current) }.getOrNull()
     /** 새 작업 창 미리보기: 만들면 생길 폴더 */
     val newFolderPreview: String get() = kr.archsurvey.job.JobFolders.display(kr.archsurvey.job.JobFolders.relPath(
-        newGroup.trim().takeIf { it.isNotEmpty() }?.let { kr.archsurvey.job.JobFolders.sanitize(it, "폴더") },
-        kr.archsurvey.job.JobFolders.sanitize(newName.ifBlank { "작업명" })))
+        newSite.ifBlank { newGroup }.trim().takeIf { it.isNotEmpty() }?.let { kr.archsurvey.job.JobFolders.sanitize(it, "폴더") },
+        kr.archsurvey.job.JobFolders.sanitize(effectiveName.ifBlank { "작업명" })))
     var busy by mutableStateOf(false); private set
     var error by mutableStateOf<String?>(null); private set
     var notice by mutableStateOf<String?>(null); private set
@@ -187,7 +215,25 @@ class JobController(
         autoZoneOn = on && c.gv.lon != null
         if (on) autoZone()
     }
-    fun openNew() { error = null; notice = null; newName = ""; newGroup = ""; loadForm(); formGeoid = kr.archsurvey.core.GeoidModel.RECEIVER /* 0.1.35: 새 작업 높이 기본 = 수신기 값(지금 작업은 그대로) */; c.hub.open(ToolScreen.JOB_NEW); refresh() }
+    fun openNew() {
+        error = null; notice = null; newName = ""; newGroup = ""; nameManual = false; newGroupTyping = false; newDetailsOpen = false
+        newSite = currentSite.orEmpty()
+        newStage = kr.archsurvey.job.SurveyStage.inName(current) ?: kr.archsurvey.job.SurveyStage.FULL
+        newNo = kr.archsurvey.job.NewJobName.nextNo(newSite, newStage, list.map { it.name } + current)
+        recommendedZone = ZoneAuto.fromLon(c.gv.lon)
+        openNewForm()
+    }
+    private fun openNewForm() {
+        loadForm(); formGeoid = kr.archsurvey.core.GeoidModel.RECEIVER /* 0.1.35: 새 작업 높이 기본 = 수신기 값(지금 작업은 그대로) */
+        recommendedZone?.let { formZone = it } // 0.1.39 추천 좌표계 미리 선택(위치가 없으면 지금 작업 것)
+        c.hub.open(ToolScreen.JOB_NEW)
+        scope.launch {
+            list = runCatching { platform.list() }.getOrDefault(emptyList())
+            groups = runCatching { platform.groups() }.getOrDefault(emptyList())
+            current = platform.current
+            newNo = kr.archsurvey.job.NewJobName.nextNo(newSite, newStage, list.map { it.name })
+        }
+    }
 
     private fun run(label: String, block: suspend () -> Unit) {
         if (busy) return
@@ -204,20 +250,22 @@ class JobController(
     }
 
     fun create() {
-        val prob = JobNames.problem(newName, list.map { it.name })
+        val name = effectiveName
+        val prob = JobNames.problem(name, list.map { it.name })
         if (prob != null) { error = prob; c.ui.fail(prob); return }
-        val n = newName.trim()
+        val n = name.trim()
         val base = c.jobConfig()
         // 0.1.29 UX-0129-1: 새 작업은 사용자가 정한 폴 높이가 아니면 기기 기본값(R10 1.6 · SP60 1.8)으로 시작
         val pole = if (base.poleUserSet) base.poleM else kr.archsurvey.core.DevicePoleDefaults.forModel(base.antennaModelId) ?: base.poleM
         val cfg = base.copy(epsg = formZone.epsg, geoid = formGeoid, mapBase = formMap, poleM = pole)
-        val g = newGroup.trim().takeIf { it.isNotEmpty() }
+        val g = (newSite.ifBlank { newGroup }).trim().takeIf { it.isNotEmpty() } // 0.1.39 유적 = 상위 폴더
         run("새 작업") {
             platform.create(n, g)
             configs.save(n, cfg)
             switched(n)
             notice = "‘$n’ 작업을 만들고 열었어요" + (runCatching { platform.folderOf(n) }.getOrNull()?.let { " · 폴더 $it" } ?: "")
-            c.hub.open(ToolScreen.JOB_INFO)
+            // 0.1.39: 만들면 바로 측량 지도로(예전: 작업 정보 화면 → 「적용」 한 번 더)
+            c.goToSurvey()
         }
     }
 

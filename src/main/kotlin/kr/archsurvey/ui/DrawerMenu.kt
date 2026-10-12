@@ -32,7 +32,7 @@ data class MenuSection(val title: String, val items: List<MenuItem>)
 object DrawerMenu {
     val sections: List<MenuSection> = listOf(
         MenuSection("작업", listOf(
-            MenuItem("job_new", "새 작업 (새 폴더)", MenuAction.OPEN_JOB_NEW),
+            MenuItem("job_new", "+ 새 작업", MenuAction.OPEN_JOB_NEW),
             MenuItem("job_open", "작업 열기 · 삭제", MenuAction.OPEN_JOB_LIST),
             MenuItem("job_export", "내보내기 · 저녁 도면", MenuAction.OPEN_EXPORT),
             MenuItem("job_backup", "백업 · 복구", MenuAction.OPEN_BACKUP),

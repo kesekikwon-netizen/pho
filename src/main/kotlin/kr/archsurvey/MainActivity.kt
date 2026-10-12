@@ -73,6 +73,8 @@ class MainActivity : ComponentActivity() {
             // 0.1.35: 오늘 폴 높이를 아직 확인하지 않았으면 「오늘 준비」(홈)부터, 했으면 마지막 작업 지도로 바로
             vm.controller.homeOpen = !vm.resumeJob || !vm.controller.dig.poleConfirmedToday
             if (vm.resumeJob) vm.controller.ui.toast(vm.resumeNotice())
+            // 0.1.39: 처음 설치(작업이 없음)면 새 작업 화면부터 — 고르기만으로 만들고 바로 측량
+            else vm.controller.jobs?.openNew()
         }
         // 0.1.32: 화면 모델이 새로 만들어질 때마다 한 번(처음 실행 + 시스템이 앱을 정리한 뒤 되살릴 때). 회전은 같은 모델이라 다시 안 함.
         // 예전엔 savedInstanceState == null 일 때만 → 최근 앱에서 되살아난 화면은 자동 연결 없이 폰 위치만 보였음
