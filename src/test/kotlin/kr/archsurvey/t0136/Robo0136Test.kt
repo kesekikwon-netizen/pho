@@ -151,7 +151,7 @@ class GcpFlow0136Test {
         assertEquals(listOf("1", "2", "4"), disk.map { it.digTag }); assertTrue(disk.all { it.featureId == a })
         // 장부 제목 = 표적 번호, 무엇 줄 = AprilTag #n · 유구
         val l = c.dig.ledger(g.last())
-        assertEquals("#4", l.title); assertTrue(l.line, l.line.contains("AprilTag #4") && l.line.contains("1호 수혈"))
+        assertEquals("#4", l.title); assertTrue(l.line, l.line.contains("Target #4") && l.line.contains("1호 수혈"))
         // 다른 유구로 바꾸면 같은 표적 묶음 다시 쓰기 → 1부터
         c.dig.chooseFeature(b)
         assertEquals(1, c.dig.tagId); assertFalse(c.dig.tagAlreadyMeasured)
@@ -170,13 +170,13 @@ class GcpFlow0136Test {
         assertTrue(names.any { it.startsWith("itwin_gcp/1호_주거지_AprilTag_EPSG$epsg") && it.endsWith(".xml") })
         assertTrue("두 유구가 #1 을 같이 써서 전체 파일 없음", names.none { it.startsWith("itwin_gcp/전체_") })
         val txt = ZipFile(r.zip).use { z -> z.getInputStream(z.entries().toList().first { it.name.startsWith("itwin_gcp/1호_수혈") && it.name.endsWith(".txt") }).readBytes().toString(Charsets.UTF_8) }
-        assertEquals(listOf("AprilTag #1", "AprilTag #2", "AprilTag #4"), txt.lines().filter { it.isNotBlank() }.map { it.substringBefore(',') })
+        assertEquals(listOf("Target #1", "Target #2", "Target #4"), txt.lines().filter { it.isNotBlank() }.map { it.substringBefore(',') })
     }
 
     @Test fun noFeatureSelected_isOutsideFeature() {
         c.dig.select(DigKind.GCP, null)
         assertEquals(DigKind.GCP, c.dig.kind)
-        assertEquals("AprilTag #1 · 유구 밖", c.dig.measureSub())
+        assertEquals("Target #1 · 유구 밖", c.dig.measureSub())
         measure()
         assertNull(c.points.single().featureId); assertEquals("1", c.points.single().digTag)
     }

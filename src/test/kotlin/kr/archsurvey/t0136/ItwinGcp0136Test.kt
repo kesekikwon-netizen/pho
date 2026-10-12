@@ -25,8 +25,8 @@ class ItwinGcp0136Test {
 
     // ---------- 이름 규칙 ----------
     @Test fun tagNameIsWhatItwinDetects() {
-        assertEquals("AprilTag #0", AprilTagNaming.name(0))
-        assertEquals("AprilTag #12", AprilTagNaming.name(12))
+        assertEquals("Target #0", AprilTagNaming.name(0))
+        assertEquals("Target #12", AprilTagNaming.name(12))
         assertEquals(12, AprilTagNaming.parse("12")); assertEquals(0, AprilTagNaming.parse("0"))
         assertNull(AprilTagNaming.parse("")); assertNull(AprilTagNaming.parse("A")); assertNull(AprilTagNaming.parse("-1")); assertNull(AprilTagNaming.parse("1000"))
         assertEquals(0, AprilTagNaming.clamp(-3)); assertEquals(999, AprilTagNaming.clamp(5000))
@@ -59,7 +59,7 @@ class ItwinGcp0136Test {
         assertTrue("itwin_gcp/2호_수혈_AprilTag_EPSG5186_MSL-RECEIVER.xml" in paths)
         assertTrue("itwin_gcp/3호_주거지_AprilTag_EPSG5186_MSL-RECEIVER.txt" in paths)
         val t2 = r.files.single { it.path == "itwin_gcp/2호_수혈_AprilTag_EPSG5186_MSL-RECEIVER.txt" }.text
-        assertEquals("AprilTag #1,148096.674,98114.226,57.272\r\nAprilTag #2,148095.811,98115.004,56.987\r\nAprilTag #3,148093.100,98112.500,57.010\r\n", t2)
+        assertEquals("Target #1,148096.674,98114.226,57.272\r\nTarget #2,148095.811,98115.004,56.987\r\nTarget #3,148093.100,98112.500,57.010\r\n", t2)
         assertFalse("BOM 없음", t2.startsWith("\uFEFF"))
         val t3 = r.files.single { it.path.startsWith("itwin_gcp/3호") && it.path.endsWith(".txt") }.text
         assertEquals(3, t3.lines().count { it.isNotBlank() })
@@ -74,11 +74,12 @@ class ItwinGcp0136Test {
     @Test fun xmlIsSurveysDataWithAprilTagNames() {
         val r = ItwinGcpExport.build(sample, labels, "광령리")
         val x = r.files.single { it.path == "itwin_gcp/2호_수혈_AprilTag_EPSG5186_MSL-RECEIVER.xml" }.text
-        assertTrue(x.startsWith("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<SurveysData>\n"))
+        // 0.1.37(의도된 변경): 사용자 실제 iTwin 파일 꼴(CRLF·SRS Id 0·정밀도 0.01)
+        assertTrue(x.startsWith("<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n<SurveysData>\r\n"))
         assertTrue(x.contains("<Definition>EPSG:5186</Definition>"))
-        assertEquals(listOf("AprilTag #1", "AprilTag #2", "AprilTag #3"), Regex("<Name>(AprilTag #\\d+)</Name>").findAll(x).map { it.groupValues[1] }.toList())
+        assertEquals(listOf("Target #1", "Target #2", "Target #3"), Regex("<Name>(Target #\\d+)</Name>").findAll(x).map { it.groupValues[1] }.toList())
         assertTrue(x.contains("<x>148095.811</x>") && x.contains("<y>98115.004</y>") && x.contains("<z>56.987</z>"))
-        assertTrue(x.contains("<HorizontalAccuracy>0.01</HorizontalAccuracy>") && x.contains("<VerticalAccuracy>0.012</VerticalAccuracy>"))
+        assertTrue(x.contains("<HorizontalAccuracy>0.01</HorizontalAccuracy>") && x.contains("<VerticalAccuracy>0.01</VerticalAccuracy>"))
     }
 
     @Test fun writeNamedMatchesUserSampleFormatByteForByte() {
@@ -91,19 +92,19 @@ class ItwinGcp0136Test {
         val r = ItwinGcpExport.build(sample, labels, "광령리")
         assertTrue(r.allWritten)
         val all = r.files.single { it.path == "itwin_gcp/전체_AprilTag_EPSG5186_MSL-RECEIVER.txt" }.text
-        assertEquals(listOf("#1", "#2", "#3", "#11", "#12", "#13"), all.lines().filter { it.isNotBlank() }.map { it.substringBefore(',').removePrefix("AprilTag ") })
+        assertEquals(listOf("#1", "#2", "#3", "#11", "#12", "#13"), all.lines().filter { it.isNotBlank() }.map { it.substringBefore(',').removePrefix("Target ") })
         // 같은 표적 묶음(1·2·3)을 3호 주거지에서도 쓰면 → 전체 파일 없음 + README 에 이유
         val reuse = sample + listOf(pt(20, "P-0060", "1", 8, 148130.0, 98140.0, 57.9))
         val r2 = ItwinGcpExport.build(reuse, labels, "광령리")
         assertFalse(r2.allWritten); assertEquals(listOf(1), r2.allConflicts)
         assertTrue(r2.files.none { it.path.contains("전체_") })
         assertTrue(r2.files.single { it.path.endsWith("README_iTwin_AprilTag.txt") }.text.contains("전체 파일은 만들지 않았어요"))
-        assertTrue("유구별 파일은 그대로", r2.files.any { it.path.startsWith("itwin_gcp/3호_주거지") && it.text.contains("AprilTag #1,") })
+        assertTrue("유구별 파일은 그대로", r2.files.any { it.path.startsWith("itwin_gcp/3호_주거지") && it.text.contains("Target #1,") })
     }
 
     @Test fun readmeDocumentsSrsHeightColumnsAndImportSteps() {
         val rd = ItwinGcpExport.build(sample, labels, "광령리").files.single { it.path.endsWith("README_iTwin_AprilTag.txt") }.text
-        for (s in listOf("EPSG:5186", "해발(수신기 지오이드 값)", "머리줄 없음", "Custom Text Format", "Use targets", "AprilTag #번호")) assertTrue(s, rd.contains(s))
+        for (s in listOf("EPSG:5186", "해발(수신기 지오이드 값)", "머리줄 없음", "Custom Text Format", "Use targets", "Target #번호")) assertTrue(s, rd.contains(s))
     }
 
     @Test fun lessThanThreeTargetsWarnsInReadme_outsideFeatureAndEllipsoidNamed() {
