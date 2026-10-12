@@ -73,6 +73,7 @@ class Shots0143Test {
         c.exporter = ExportController(ShotExp(), scope)
         val fc = FakeConn(); fc.devices = listOf("R10, 5411457757" to "60:21:C0:9F:83:95", "SP60 2210-0417" to "00:80:25:4B:1A:07")
         c.connection = ConnectionController(fc, scope)
+        c.connection!!.updateForm(c.connection!!.form.copy(enabled = true, host = "RTS1.ngii.go.kr", port = "2101", mount = "VRS-RTCM34", user = "example_user", password = "pw"))
         c.ui.toastMs = 1L
         c.arch = kr.archsurvey.arch.ArchController(c, kr.archsurvey.ui.ArchUiTest.MemArch(), scope)
         s.push(FixQuality.RTK_FIXED, 0.014)
