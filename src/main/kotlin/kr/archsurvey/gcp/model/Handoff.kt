@@ -1,0 +1,94 @@
+package kr.archsurvey.gcp.model
+
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+
+/** 유적 하나의 장부 묶음(화면·목록·넘기기 공용) */
+data class SiteBook(val site: Site, val objs: List<Obj>, val sessions: List<Session>, val shots: List<Shot>) {
+    fun sessionsOf(o: Obj) = sessions.filter { it.objId == o.id }.sortedBy { it.no }
+    fun current(o: Obj): Session? = sessionsOf(o).lastOrNull()
+    fun active(s: Session) = Pipeline.activeTags(shots, s.id)
+    fun stage(s: Session, min: Int = Pipeline.MIN_TARGETS) = Pipeline.stage(active(s).size, s, min)
+    fun stageOf(o: Obj, min: Int = Pipeline.MIN_TARGETS): Stage = current(o)?.let { stage(it, min) } ?: Stage.MEASURE
+    fun counts(min: Int = Pipeline.MIN_TARGETS): Map<Stage, Int> = Stage.entries.associateWith { st -> objs.count { stageOf(it, min) == st } }
+    /** 진행 중(끝 아님) 다른 대상의 지금 차수 표적 — 번호 겹침 점검용 */
+    fun othersInProgress(except: Long?, min: Int = Pipeline.MIN_TARGETS): List<Pair<Obj, List<Shot>>> =
+        objs.filter { it.id != except && stageOf(it, min) != Stage.DONE }.mapNotNull { o -> current(o)?.let { o to active(it) } }.filter { it.second.isNotEmpty() }
+    fun lastActivity(): Long? = (sessions.map { maxOf(it.changedAt, it.photoDoneAt ?: 0, it.deliveredAt ?: 0) } + objs.map { it.createdAt }).maxOrNull()
+}
+
+/** 목록.csv — PC 쪽에서 사진 폴더와 맞춰 보는 장부. UTF-8 BOM(엑셀) · CRLF · 차수마다 한 줄 */
+object ListCsv {
+    val HEADER = listOf("ID", "대상", "종류", "차수", "차수 이름", "날짜", "표적 번호", "XML 파일", "사진 폴더", "상태", "작업자", "마지막 저장", "옛 이름")
+
+    fun write(book: SiteBook, zone: ZoneId, min: Int = Pipeline.MIN_TARGETS): String {
+        val day = DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(zone)
+        val stamp = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(zone)
+        val sb = StringBuilder("\uFEFF").append(HEADER.joinToString(",") { q(it) }).append("\r\n")
+        for (o in book.objs.sortedBy { it.code }) for (s in book.sessionsOf(o)) {
+            val tags = book.active(s).map { it.tag }
+            val st = book.stage(s, min)
+            val row = listOf(
+                o.code, o.name, o.kind.ko, "${s.no}차", s.label, day.format(Instant.ofEpochMilli(s.createdAt)),
+                tags.joinToString(" "), if (tags.isEmpty()) "" else "${Names.objFolder(o)}/${Names.xmlName(o, s, book.site.epsg)}",
+                Names.photoFolder(o, s), st.ko, o.operator, s.xmlSavedAt?.let { stamp.format(Instant.ofEpochMilli(it)) } ?: "",
+                o.oldNames.joinToString(" / "),
+            )
+            sb.append(row.joinToString(",") { q(it) }).append("\r\n")
+        }
+        return sb.toString()
+    }
+
+    private fun q(s: String) = if (s.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) "\"" + s.replace("\"", "\"\"") + "\"" else s
+}
+
+enum class HandoffScope(val ko: String, val fileWord: String) { PENDING("전달 필요", "전달"), TODAY("오늘", "오늘"), ALL("전체", "전체") }
+
+/** PC로 넘기기 zip 한 벌의 계획(내용·전달 완료로 바꿀 차수). Android 의존 없음 */
+data class HandoffPlan(
+    val zipName: String,
+    val entries: List<Pair<String, String>>,
+    val sessionIds: List<Long>,
+    /** 보내면 「전달」 로 바꿀 차수(사진까지 끝난 것만) */
+    val markDelivered: List<Long>,
+    /** 사진 아직 — zip 에는 넣지만 ⚠ */
+    val noPhoto: List<String>,
+)
+
+object Handoff {
+    fun select(book: SiteBook, scope: HandoffScope, now: Long, zone: ZoneId, min: Int = Pipeline.MIN_TARGETS): List<Pair<Obj, Session>> {
+        val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+        fun isToday(t: Long?) = t != null && Instant.ofEpochMilli(t).atZone(zone).toLocalDate() == today
+        return book.objs.sortedBy { it.code }.flatMap { o -> book.sessionsOf(o).map { o to it } }.filter { (_, s) ->
+            val has = book.active(s).isNotEmpty()
+            when (scope) {
+                HandoffScope.PENDING -> book.stage(s, min) == Stage.HANDOFF
+                HandoffScope.TODAY -> has && (isToday(s.changedAt) || isToday(s.photoDoneAt) || isToday(s.createdAt))
+                HandoffScope.ALL -> has
+            }
+        }
+    }
+
+    fun count(book: SiteBook, scope: HandoffScope, now: Long, zone: ZoneId, min: Int = Pipeline.MIN_TARGETS) = select(book, scope, now, zone, min).size
+
+    fun zipName(site: Site, scope: HandoffScope, now: Long, zone: ZoneId, operator: String): String {
+        val d = DateTimeFormatter.ofPattern("yyyyMMdd").withZone(zone).format(Instant.ofEpochMilli(now))
+        return "${Names.safe(site.name)}_${scope.fileWord}_$d" + (if (operator.isNotBlank()) "_$operator" else "") + ".zip"
+    }
+
+    fun plan(book: SiteBook, scope: HandoffScope, now: Long, zone: ZoneId, operator: String, min: Int = Pipeline.MIN_TARGETS): HandoffPlan {
+        val sel = select(book, scope, now, zone, min)
+        val entries = ArrayList<Pair<String, String>>()
+        entries += Names.listCsvName(book.site) to ListCsv.write(book, zone, min)
+        val epsg = book.site.epsg
+        for ((o, s) in sel) {
+            val shots = book.active(s)
+            entries += "${Names.objFolder(o)}/${Names.xmlName(o, s, epsg)}" to ItwinXml.write(shots, epsg)
+            entries += "${Names.objFolder(o)}/${Names.txtName(o, s, epsg)}" to ItwinXml.txt(shots)
+        }
+        val mark = sel.filter { (_, s) -> book.stage(s, min).let { it == Stage.HANDOFF || it == Stage.DONE } }.map { it.second.id }
+        val noPhoto = sel.filter { (_, s) -> s.photoDoneAt == null }.map { (o, s) -> Names.photoFolder(o, s) }
+        return HandoffPlan(zipName(book.site, scope, now, zone, operator), entries, sel.map { it.second.id }, mark, noPhoto)
+    }
+}
