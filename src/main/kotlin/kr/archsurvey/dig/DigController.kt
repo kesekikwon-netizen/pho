@@ -30,8 +30,6 @@ data class FeatureCard(
     val id: Long, val name: String, val type: String, val kind: String, val open: Boolean, val closed: Boolean,
     val boundary: Int, val artifacts: List<Int>, val levels: Int, val areaSqm: Double?, val perimeterM: Double?,
     val depthM: Double?, val floorMeanM: Double?, val fixedCount: Int, val total: Int, val history: List<String>,
-    /** 0.1.36 사진 기준점(AprilTag) 번호(마지막 값 기준, 오름차순) */
-    val gcpTags: List<Int> = emptyList(),
 )
 
 /**
@@ -70,14 +68,6 @@ class DigController(private val c: SurveyController) {
     var crsUnlocked by mutableStateOf(false)
     /** 말뚝 찾아가기 목표 */
     var stakeTarget by mutableStateOf<StakeNodes.Node?>(null)
-    /** 0.1.36 사진 기준점: 다음에 잴 AprilTag 번호(장갑 낀 채 −/+ 로 바꿈, 재면 자동으로 다음 번호) */
-    var tagId by mutableStateOf(AprilTagNaming.DEFAULT_FIRST); private set
-    var showGcp by mutableStateOf(true)
-    /**
-     * 0.1.37 지도 「Target 1·2·3·4」 단추로 잰 측점: 지금 재는 종류(유구 경계 등)는 그대로 두고 이번 한 점만 사진 기준점 [quickTag] 번으로 저장.
-     * 저장·취소되면 null
-     */
-    var quickTag by mutableStateOf<Int?>(null)
 
     // ---------------- 설정(앱 전체, 쉽게 바꿀 수 있는 제안값) ----------------
     var artifactMode by mutableStateOf(ArtifactMode.JOB_SERIAL); private set
@@ -101,9 +91,9 @@ class DigController(private val c: SurveyController) {
         provisional = prefs.get("dig_provisional") != "0"
         volumeKey = prefs.get("dig_volume_key") == "1"
         drawScale = prefs.get("dig_scale")?.toIntOrNull()?.takeIf { it in DrawingScale.CHOICES } ?: DrawingScale.DEFAULT
-        prefs.get("dig_layers")?.let { s -> val b = s.map { it == '1' }; if (b.size >= 8) { showArea = b[0]; showGrid = b[1]; showTrench = b[2]; showFeature = b[3]; showArtifactNo = b[4]; showLevelH = b[5]; showSection = b[6]; showBm = b[7] }; if (b.size >= 9) showGcp = b[8] }
+        prefs.get("dig_layers")?.let { s -> val b = s.map { it == '1' }; if (b.size >= 8) { showArea = b[0]; showGrid = b[1]; showTrench = b[2]; showFeature = b[3]; showArtifactNo = b[4]; showLevelH = b[5]; showSection = b[6]; showBm = b[7] } }
     }
-    fun saveLayers() { prefs.put("dig_layers", listOf(showArea, showGrid, showTrench, showFeature, showArtifactNo, showLevelH, showSection, showBm, showGcp).joinToString("") { if (it) "1" else "0" }) }
+    fun saveLayers() { prefs.put("dig_layers", listOf(showArea, showGrid, showTrench, showFeature, showArtifactNo, showLevelH, showSection, showBm).joinToString("") { if (it) "1" else "0" }) }
     fun changeArtifactMode(m: ArtifactMode) { artifactMode = m; prefs.put("dig_artifact_mode", m.id); c.ui.ok("유물 번호: ${m.labelKo}") }
     fun changeBmTol(m: Double) { bmTolM = m.coerceIn(0.005, 0.5); prefs.put("dig_bm_tol", String.format(Locale.US, "%.3f", bmTolM)); c.ui.ok("기준점 확인 허용: ${String.format(Locale.US, "%.0f", bmTolM * 100)} cm") }
     fun changeProvisional(v: Boolean) { provisional = v; prefs.put("dig_provisional", if (v) "1" else "0"); c.ui.ok(if (v) "새 유구는 가번호(가-1)로 시작" else "새 유구는 번호(1호 수혈)로 시작") }
@@ -125,9 +115,8 @@ class DigController(private val c: SurveyController) {
         featureId = f.getOrNull(1)?.toLongOrNull()
         LevelKind.fromId(f.getOrNull(2))?.let { level = it }
         f.getOrNull(3)?.takeIf { it.isNotBlank() }?.let { bmName = it }
-        AprilTagNaming.parse(f.getOrNull(4))?.let { tagId = it }
     }
-    private fun saveSelection() { prefs.put(key("sel"), listOf(kind?.id ?: "", featureId?.toString() ?: "", level.id, bmName, tagId.toString()).joinToString("|")) }
+    private fun saveSelection() { prefs.put(key("sel"), listOf(kind?.id ?: "", featureId?.toString() ?: "", level.id, bmName).joinToString("|")) }
 
     val poleConfirmedToday: Boolean get() = prefs.get(key("pole_day")) == today() + "|" + String.format(Locale.US, "%.1f", c.antenna.inputValueM) + "|" + c.antennaModelId
     fun confirmPole() { prefs.put(key("pole_day"), today() + "|" + String.format(Locale.US, "%.1f", c.antenna.inputValueM) + "|" + c.antennaModelId); c.ui.ok("폴 높이 ${String.format(Locale.US, "%.1f", c.antenna.inputValueM)} m 확인 · 오늘") }
@@ -143,36 +132,16 @@ class DigController(private val c: SurveyController) {
 
     /** 「무엇을 잴까요?」에서 고름. 같은 유구·레벨을 유지하면서 종류만 바꿀 수도 있다 */
     fun select(k: DigKind, feature: Long? = featureId, lv: LevelKind? = null) {
-        val prevKind = kind; val prevFeature = featureId
         applyKind(k)
-        val keepsFeature = k == DigKind.FEATURE || k == DigKind.ARTIFACT || k == DigKind.LEVEL || k == DigKind.GCP
-        if (keepsFeature) featureId = feature?.takeIf { id -> c.arch.outlines.any { it.id == id } }
-        if (k == DigKind.GCP && (prevKind != DigKind.GCP || prevFeature != featureId)) tagId = suggestTag(featureId)
+        if (k == DigKind.FEATURE || k == DigKind.ARTIFACT || k == DigKind.LEVEL) featureId = feature?.takeIf { id -> c.arch.outlines.any { it.id == id } }
         if (lv != null) level = lv
         closeArmed = false
         if (k == DigKind.STAKE) pickStake() else stakeTarget = null
-        val ch = DigChoice(k, if (keepsFeature) featureId else null, if (k == DigKind.LEVEL) level else null)
+        val ch = DigChoice(k, if (k == DigKind.FEATURE || k == DigKind.ARTIFACT || k == DigKind.LEVEL) featureId else null, if (k == DigKind.LEVEL) level else null)
         recent.remove(ch); recent.add(0, ch); while (recent.size > 3) recent.removeAt(recent.lastIndex)
         saveSelection()
     }
-    fun chooseFeature(id: Long?) { featureId = id; closeArmed = false; if (kind == DigKind.GCP) tagId = suggestTag(id); saveSelection() }
-
-    // ---------------- 0.1.36 사진 기준점(AprilTag) ----------------
-    /** 이 유구(null = 유구 밖)에서 이미 잰 표적 번호 */
-    fun tagsIn(fid: Long?): List<Int> = c.points.filter { it.digKind == DigKind.GCP.id && it.featureId == fid }.mapNotNull { AprilTagNaming.parse(it.digTag) }
-    fun suggestTag(fid: Long?): Int = AprilTagNaming.suggest(tagsIn(fid), c.points.filter { it.digKind == DigKind.GCP.id }.mapNotNull { AprilTagNaming.parse(it.digTag) })
-    /** −/+ 단추 */
-    fun stepTag(delta: Int) { tagId = AprilTagNaming.clamp(tagId + delta); saveSelection() }
-    fun setTag(id: Int) { tagId = AprilTagNaming.clamp(id); saveSelection() }
-    /** 0.1.37 지도 단추 번호(1·2·3·4) */
-    val quickTags: List<Int> get() = QUICK_TAGS
-    /** 1–4 단추를 보이는가: 유구를 골랐거나 사진 기준점 모드 */
-    val quickTagsVisible: Boolean get() = kind == DigKind.GCP || selectedFeature != null
-    /** 단추 이름 아래 작은 글자: 이 유구 이름(유구 밖) */
-    fun quickTagFeature(): String = featureName(featureId) ?: "유구 밖"
-
-    /** 고른 번호를 이 유구에서 이미 쟀는가(다시 재면 내보내기는 마지막 값) */
-    val tagAlreadyMeasured: Boolean get() = tagId in tagsIn(featureId)
+    fun chooseFeature(id: Long?) { featureId = id; closeArmed = false; saveSelection() }
     fun chooseLevel(lv: LevelKind) { level = lv; saveSelection() }
     /** 사용자 위치 종류(발굴 8종이 아닌 것) */
     fun selectCustomType(name: String) { val i = c.types.indexOf(name); if (i >= 0) { c.typeIndex = i; stakeTarget = null; saveSelection() } }
@@ -190,9 +159,7 @@ class DigController(private val c: SurveyController) {
     suspend fun newFeature(type: String = featureTypes.firstOrNull() ?: "수혈", prov: Boolean = provisional): Long? {
         val name = nextFeatureName(type, prov)
         val o = c.arch.startFeature(name, "feature", if (prov) "" else type) ?: return null
-        featureId = o.id; closeArmed = false
-        if (kind == DigKind.GCP) tagId = suggestTag(o.id)
-        saveSelection()
+        featureId = o.id; closeArmed = false; saveSelection()
         return o.id
     }
 
@@ -215,11 +182,8 @@ class DigController(private val c: SurveyController) {
 
     /** 측점 결과에 종류·유구·유물 번호·레벨·꼬리표를 붙인다(위치 종류 글자로 종류를 정함) */
     fun decorate(p: SavedPoint): SavedPoint {
-        val ne = NE(p.northing, p.easting)
-        quickTag?.let { q ->
-            return p.copy(type = DigKind.GCP.positionType, digKind = DigKind.GCP.id, featureId = selectedFeature?.id ?: DigGeometry.assign(ne, shapes(), null).featureId, digTag = q.toString())
-        }
         val k = DigKind.fromPositionType(p.type) ?: return p.copy(digKind = "")
+        val ne = NE(p.northing, p.easting)
         return when (k) {
             DigKind.FEATURE -> p.copy(digKind = k.id, featureId = selectedFeature?.takeIf { !it.finished }?.id)
             DigKind.ARTIFACT -> {
@@ -232,8 +196,6 @@ class DigController(private val c: SurveyController) {
             DigKind.BM -> p.copy(digKind = k.id, digTag = bmName)
             DigKind.STAKE -> p.copy(digKind = k.id, digTag = stakeTarget?.name ?: "")
             DigKind.TRENCH, DigKind.AREA -> p.copy(digKind = k.id)
-            // 표적은 유구 둘레(경계 밖)에 놓으므로 고른 유구가 먼저, 없으면 닫힌 유구 안 자동, 그것도 없으면 유구 밖
-            DigKind.GCP -> p.copy(digKind = k.id, featureId = selectedFeature?.id ?: DigGeometry.assign(ne, shapes(), null).featureId, digTag = tagId.toString())
         }
     }
 
@@ -261,12 +223,6 @@ class DigController(private val c: SurveyController) {
             }
             DigKind.BM -> evaluateBm(saved)
             DigKind.STAKE -> pickStake()
-            DigKind.GCP -> {
-                val id = AprilTagNaming.parse(saved.digTag)
-                // 1–4 단추로 잰 점은 −/+ 번호를 건드리지 않음
-                if (id != null && quickTag == null) { tagId = AprilTagNaming.nextAfter(id, tagsIn(saved.featureId)); saveSelection() }
-                quickTag = null
-            }
             else -> {}
         }
         return out
@@ -347,7 +303,6 @@ class DigController(private val c: SurveyController) {
             DigKind.STAKE -> k.labelKo to (stakeTarget?.name ?: "그리드 없음")
             DigKind.TRENCH -> k.labelKo to (outlinesOf("trench").lastOrNull { !it.finished }?.label ?: "Tr.${outlinesOf("trench").size + 1}")
             DigKind.AREA -> k.labelKo to (outlinesOf("area").lastOrNull { !it.finished }?.label ?: "조사구역")
-            DigKind.GCP -> "${k.labelKo} · #$tagId" to (featureName(featureId) ?: "유구 고르기")
         }
     }
     fun nextArtifactNo(): Int = ArtifactNumbering.next(c.points.filter { it.artifactNo != null }.map { ArtifactNo(it.featureId, it.artifactNo!!) }, featureId, artifactMode)
@@ -362,7 +317,6 @@ class DigController(private val c: SurveyController) {
             DigKind.SECTION -> SectionLabels.next(c.points.filter { it.digKind == DigKind.SECTION.id }.map { it.digTag }) + " 끝점"
             DigKind.BM -> "$bmName 확인"
             DigKind.STAKE -> stakeTarget?.let { "${it.name} · ${String.format(Locale.US, "%.0f", StakeGuide.ARRIVE_M * 100)} cm 안이면" } ?: c.nextName
-            DigKind.GCP -> AprilTagNaming.name(tagId) + (featureName(featureId)?.let { " · $it" } ?: " · 유구 밖") + (if (tagAlreadyMeasured) " · 다시 재기" else "")
             else -> c.nextName
         }
     }
@@ -377,7 +331,6 @@ class DigController(private val c: SurveyController) {
             DigKind.SECTION -> parts += "토층 ${p.digTag}"
             DigKind.BM -> parts += "기준점 ${p.digTag}"
             DigKind.STAKE -> parts += "말뚝 ${p.digTag}"
-            DigKind.GCP -> parts += AprilTagNaming.parse(p.digTag)?.let { AprilTagNaming.name(it) } ?: "사진 기준점"
             null -> parts += p.type
             else -> parts += k.labelKo
         }
@@ -404,8 +357,7 @@ class DigController(private val c: SurveyController) {
     fun ledger(p: SavedPoint): SavedLedger {
         val k = DigKind.resolve(p.digKind, p.type)
         val h = p.groundMslM ?: p.groundHeightM
-        val title = if (k == DigKind.ARTIFACT && p.artifactNo != null) "유물 ${p.artifactNo}"
-            else if (k == DigKind.GCP) AprilTagNaming.parse(p.digTag)?.let { "#$it" } ?: p.name else p.name
+        val title = if (k == DigKind.ARTIFACT && p.artifactNo != null) "유물 ${p.artifactNo}" else p.name
         val cells = ArrayList<LedgerCell>()
         cells += LedgerCell("해발", LedgerText.m3(h), "m")
         if (k == DigKind.ARTIFACT || k == DigKind.LEVEL) {
@@ -433,8 +385,7 @@ class DigController(private val c: SurveyController) {
         FeatureCard(o.id, o.label, o.featureType, o.kind, !o.finished, o.closed, o.pointRowIds.size,
             members.mapNotNull { it.artifactNo }.sorted(), members.count { it.digKind == DigKind.LEVEL.id },
             sum?.areaSqm?.takeIf { o.closed }, sum?.perimeterM, DigDepth.depthBelow(ref, floorMean), floorMean,
-            members.count { kr.archsurvey.ui.PointCaution.displayStatus(it) == SurveyStatus.FIXED }, members.size, FeatureNaming.history(o.history),
-            members.filter { it.digKind == DigKind.GCP.id }.mapNotNull { AprilTagNaming.parse(it.digTag) }.distinct().sorted())
+            members.count { kr.archsurvey.ui.PointCaution.displayStatus(it) == SurveyStatus.FIXED }, members.size, FeatureNaming.history(o.history))
     }
 
     /** 오늘 준비 5단계 */
@@ -466,7 +417,6 @@ class DigController(private val c: SurveyController) {
             DigKind.LEVEL -> kr.archsurvey.map.MapMarker(p.name, at(p), flagged, kr.archsurvey.map.MapSym.LEVEL, if (showLevelH) (p.groundMslM ?: p.groundHeightM)?.let { String.format(Locale.US, "%.2f", it) } else null)
             DigKind.BM -> if (!showBm) null else kr.archsurvey.map.MapMarker(p.name, at(p), flagged, kr.archsurvey.map.MapSym.BM, p.digTag.ifBlank { p.name })
             DigKind.STAKE -> if (!showGrid) null else kr.archsurvey.map.MapMarker(p.name, at(p), flagged, kr.archsurvey.map.MapSym.STAKE, p.digTag.substringBefore(' ').ifBlank { null })
-            DigKind.GCP -> if (!showGcp) null else kr.archsurvey.map.MapMarker(p.name, at(p), flagged, kr.archsurvey.map.MapSym.TAG, AprilTagNaming.parse(p.digTag)?.let { "#$it" })
             DigKind.SECTION -> if (!showSection) null else kr.archsurvey.map.MapMarker(p.name, at(p), flagged, kr.archsurvey.map.MapSym.SECTION, p.digTag.ifBlank { null })
             DigKind.FEATURE, DigKind.TRENCH, DigKind.AREA -> if (inOutline) { if (outlineVisible(when (k) { DigKind.TRENCH -> "trench"; DigKind.AREA -> "area"; else -> "feature" })) kr.archsurvey.map.MapMarker(p.name, at(p), flagged, kr.archsurvey.map.MapSym.VERTEX, null) else null }
                 else kr.archsurvey.map.MapMarker(p.name, at(p), flagged)
@@ -502,6 +452,3 @@ class DigController(private val c: SurveyController) {
     /** X11: 점이 있으면 좌표계·지역·지오이드 잠금 */
     val crsLocked: Boolean get() = CrsLock.locked(c.points.size, crsUnlocked)
 }
-
-/** 0.1.37 지도 위 사진 기준점 단추 */
-val QUICK_TAGS = listOf(1, 2, 3, 4)

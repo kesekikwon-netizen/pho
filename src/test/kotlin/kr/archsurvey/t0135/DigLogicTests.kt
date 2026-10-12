@@ -11,8 +11,7 @@ class DigLogicTests {
 
     // ---------- 종류 ----------
     @Test fun kindsAreArchaeologyEight() {
-        // 0.1.36(의도된 변경): 「사진 기준점」(AprilTag) 추가 → 9종
-        assertEquals(listOf("유구 경계", "유물", "레벨", "토층 단면", "트렌치", "그리드 말뚝", "기준점", "조사구역", "사진 기준점"), DigKind.entries.map { it.labelKo })
+        assertEquals(listOf("유구 경계", "유물", "레벨", "토층 단면", "트렌치", "그리드 말뚝", "기준점", "조사구역"), DigKind.entries.map { it.labelKo })
         assertTrue(DigKind.FEATURE.outlineKind && DigKind.TRENCH.outlineKind && DigKind.AREA.outlineKind)
         assertFalse(DigKind.ARTIFACT.outlineKind || DigKind.LEVEL.outlineKind)
     }

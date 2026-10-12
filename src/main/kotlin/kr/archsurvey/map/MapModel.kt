@@ -17,7 +17,7 @@ class LocalProjection(val lat0: Double, val lon0: Double) {
 }
 
 /** 0.1.35 발굴 도면 기호: 점(기본) · 유물 검은 네모+번호 · 레벨 ✕+해발 · 기준점 △ · 말뚝 ✚ · 토층 끝 눈금 · 유구 경계점(윤곽이 그림) */
-enum class MapSym { DOT, ARTIFACT, LEVEL, BM, STAKE, SECTION, VERTEX, TAG }
+enum class MapSym { DOT, ARTIFACT, LEVEL, BM, STAKE, SECTION, VERTEX }
 data class MapMarker(val name: String, val at: LocalXY, val flagged: Boolean = false, val sym: MapSym = MapSym.DOT, val label: String? = null)
 
 data class CurrentMarker(val at: LocalXY, val accuracyM: Double, val status: SurveyStatus, val headingDeg: Double?)

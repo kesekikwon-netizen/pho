@@ -69,11 +69,6 @@ fun ExportScreen(ec: ExportController) {
                     Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.2f)))
                 }
             }
-            if (ExportFormat.ITWIN_XML in ec.formats) {
-                CheckRow("iTwin 점 이름을 현장 번호 그대로 (끄면 1호 → Target #1)", ec.itwinKeepNames, "export_itwin_keep_names") { ec.itwinKeepNames = it }
-                val nh = s?.noHeightPoints ?: 0
-                if (nh > 0) Text("높이 없는 점 ${nh}개는 iTwin XML에서 빠져요 (대조표 CSV에만 적힘)", style = Ty.small, color = t.onCaution, modifier = Modifier.fillMaxWidth().background(t.caution, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp).testTag("export_itwin_no_height"))
-            }
             CheckRow("사진 포함 (photos/)", ec.includePhotos, "export_photos") { ec.includePhotos = it }
             CheckRow("음성 메모 포함 (voices/)", ec.includeVoices, "export_voices") { ec.includeVoices = it }
             Text("공사·지적용 양식(목업의 공공측량·물량산출 등)과 캘리브레이션 파일은 발굴 기록 범위 밖이라 넣지 않았어요.", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("export_scope_note"))
@@ -86,7 +81,6 @@ fun ExportScreen(ec: ExportController) {
                 Text("구글어스 points.kml — 경위도 + 지면 높이", style = Ty.small, color = t.inkSub)
                 Text("Shape points_EPSG.shp/.shx/.dbf/.prj/.cpg — hgis·QGIS용 점 (작업 좌표계 5186/5187 등, 표고 Z, 한글 UTF-8)", style = Ty.small, color = t.inkSub)
                 Text("hgis 기준점 hgis_control_points_EPSG.csv — hgis 「CSV 기준점」 양식", style = Ty.small, color = t.inkSub)
-                Text("iTwin Capture XML itwin_capture_EPSG.xml — 사진 실측 3D 모델 기준점 (1호 → Target #1, 대조표 itwin_capture_names_EPSG.csv)", style = Ty.small, color = t.inkSub)
                 Text("GeoJSON points.geojson — 경위도 + 속성", style = Ty.small, color = t.inkSub)
                 Text("README.txt — 파일 설명", style = Ty.small, color = t.inkSub)
             }
@@ -105,7 +99,6 @@ fun ExportScreen(ec: ExportController) {
                 }
             }
             Text("${ec.formats.size}개 양식 · ${ExportController.sizeText(out.sizeBytes)} · 점 ${out.points}개 · 사진 ${out.photos}장 · 음성 ${out.voices}개", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("export_result_counts"))
-            ExportController.itwinDroppedNotice(ec.formats, out)?.let { Text(it.removePrefix("· "), style = Ty.small, color = t.onCaution, modifier = Modifier.fillMaxWidth().background(t.caution, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp).testTag("export_itwin_dropped")) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.weight(1f)) { Btn("공유하기", Modifier.fillMaxWidth().testTag("export_share")) { ec.share() } }
                 Box(Modifier.weight(1f)) { Btn("파일로 저장", Modifier.fillMaxWidth().testTag("export_save")) { ec.saveAs() } }

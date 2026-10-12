@@ -27,7 +27,7 @@ class AndroidExportPlatform(
         val pts = dao.pointsOf(project())
         var ph = 0; var vo = 0
         for (p in pts) { ph += dao.photoCount(p.rowId); vo += dao.voiceCount(p.rowId) }
-        return ExportSummary(project(), pts.size, ph, vo, pts.count { "가짜" in it.device }, kr.archsurvey.export.ItwinCaptureXml.droppedNoHeight(pts).size)
+        return ExportSummary(project(), pts.size, ph, vo, pts.count { "가짜" in it.device })
     }
 
     override suspend fun export(includePhotos: Boolean, includeVoices: Boolean): ExportOutput = exportFormats(kr.archsurvey.export.ExportFormat.DEFAULT, includePhotos, includeVoices)

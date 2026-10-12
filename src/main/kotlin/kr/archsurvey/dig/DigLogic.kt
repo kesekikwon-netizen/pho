@@ -20,9 +20,7 @@ enum class DigKind(val id: String, val labelKo: String, val positionType: String
     TRENCH("trench", "트렌치", "트렌치", "Tr. 모서리"),
     STAKE("stake", "그리드 말뚝", "그리드 모서리", "찾아가서 박기"),
     BM("bm", "기준점", "기준점", "BM · 확인"),
-    AREA("area", "조사구역", "조사구역 경계", "경계"),
-    /** 0.1.36: iTwin Capture 사진 기준점(AprilTag 표적). 유구마다 따로 저장·내보내기 */
-    GCP("gcp", "사진 기준점", "사진 기준점(AprilTag)", "AprilTag 번호 · 유구별");
+    AREA("area", "조사구역", "조사구역 경계", "경계");
 
     /** 점을 이어 선·면을 만드는 종류(유구·트렌치·조사구역) */
     val outlineKind: Boolean get() = this == FEATURE || this == TRENCH || this == AREA
@@ -32,7 +30,7 @@ enum class DigKind(val id: String, val labelKo: String, val positionType: String
         /** 0.1.34 이전 위치 종류 글자 → 종류. 사용자가 만든 종류·「기타」는 null(이름 그대로 보여 줌) */
         fun fromPositionType(t: String?): DigKind? = when (t?.trim()) {
             null, "" -> null
-            else -> entries.firstOrNull { it.positionType == t.trim() } ?: when (t.trim()) { "레벨", "레벨 점" -> LEVEL; "유구 경계" -> FEATURE; "유물" -> ARTIFACT; "사진 기준점", "AprilTag" -> GCP; else -> null }
+            else -> entries.firstOrNull { it.positionType == t.trim() } ?: when (t.trim()) { "레벨", "레벨 점" -> LEVEL; "유구 경계" -> FEATURE; "유물" -> ARTIFACT; else -> null }
         }
         /** 저장된 id 가 있으면 그것, 없으면 위치 종류 글자로 */
         fun resolve(id: String?, positionType: String?): DigKind? = fromId(id) ?: fromPositionType(positionType)
@@ -245,10 +243,10 @@ object TodayPrep {
 
 /** 도면용 DXF 레이어(종류별) */
 object DigLayers {
-    val ALL = listOf("조사구역", "그리드", "트렌치", "유구", "유물", "레벨", "토층", "기준점", "사진기준점", "기타")
+    val ALL = listOf("조사구역", "그리드", "트렌치", "유구", "유물", "레벨", "토층", "기준점", "기타")
     fun of(kind: DigKind?, level: LevelKind?): String = when (kind) {
         DigKind.FEATURE -> "유구"; DigKind.ARTIFACT -> "유물"; DigKind.LEVEL -> "레벨"; DigKind.SECTION -> "토층"
-        DigKind.TRENCH -> "트렌치"; DigKind.STAKE -> "그리드"; DigKind.BM -> "기준점"; DigKind.AREA -> "조사구역"; DigKind.GCP -> "사진기준점"; null -> "기타"
+        DigKind.TRENCH -> "트렌치"; DigKind.STAKE -> "그리드"; DigKind.BM -> "기준점"; DigKind.AREA -> "조사구역"; null -> "기타"
     }
 }
 
@@ -333,37 +331,4 @@ object LedgerText {
     fun m3(v: Double?) = v?.let { String.format(Locale.US, "%.3f", it) } ?: "—"
     fun cm1(v: Double?) = v?.let { String.format(Locale.US, "%.1f", it * 100.0) } ?: "—"
     fun signed2(v: Double?) = v?.let { (if (it < -0.0005) "−" else "+") + String.format(Locale.US, "%.2f", abs(it)) } ?: "—"
-}
-
-/**
- * 0.1.36 사진 기준점(AprilTag) 번호·이름.
- * 0.1.36 은 Bentley KB0044805 를 따라 「AprilTag #<번호>」 였으나, 0.1.37 부터 사용자가 준 실제 iTwin Capture 파일(강릉 1호)의
- * 이름 「Target #<번호>」 를 기준으로 한다(사진에서 찾은 표적과 같은 이름이어야 저절로 합쳐짐).
- * 앱 안 점 번호(P-0037)는 그대로 두고, 표적 번호는 점의 꼬리표(digTag = "12")에 숫자로만 둔다.
- */
-object AprilTagNaming {
-    const val MIN_ID = 0
-    /** 표적 번호 상한(36h11 = 0–586 이 가장 흔함. 다른 묶음을 위해 넉넉히) */
-    const val MAX_ID = 999
-    const val DEFAULT_FIRST = 1
-    /** 0.1.37: 사용자 실제 iTwin Capture 파일(강릉 1호, build-reports/0.1.37/user-itwin-sample-gangneung-1ho.xml)이 「Target #1」 → 그 이름을 따름 */
-    fun name(id: Int) = "Target #$id"
-    fun clamp(id: Int) = id.coerceIn(MIN_ID, MAX_ID)
-    /** 꼬리표 → 번호. 숫자가 아니면 null */
-    fun parse(tag: String?): Int? = tag?.trim()?.takeIf { it.isNotEmpty() && it.all(Char::isDigit) && it.length <= 4 }?.toInt()?.takeIf { it in MIN_ID..MAX_ID }
-    /** [cur] 다음 번호 중 이 유구에서 아직 안 쓴 첫 번호(없으면 그대로 +1) */
-    fun nextAfter(cur: Int, usedInFeature: Collection<Int>): Int {
-        var n = cur + 1
-        while (n in usedInFeature && n < MAX_ID) n++
-        return clamp(n)
-    }
-    /**
-     * 유구를 고르면 처음 보여 줄 번호: 이 유구에서 쓴 게 있으면 가장 큰 번호 다음,
-     * 없으면 작업 전체에서 가장 작은 번호(같은 표적 묶음을 유구마다 다시 쓰는 경우), 그것도 없으면 1.
-     */
-    fun suggest(usedInFeature: Collection<Int>, usedInJob: Collection<Int>): Int = when {
-        usedInFeature.isNotEmpty() -> nextAfter(usedInFeature.max(), usedInFeature)
-        usedInJob.isNotEmpty() -> usedInJob.min()
-        else -> DEFAULT_FIRST
-    }
 }

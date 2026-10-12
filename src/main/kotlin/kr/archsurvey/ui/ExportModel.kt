@@ -85,7 +85,7 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
                 o.publicFolder?.let { notice = hgisFolderText(it) }
                 onResult?.invoke(true, "내보내기 파일을 만들었어요 · ${o.fileName} (${sizeText(o.sizeBytes)}) · ${fs.size}개 양식 · " +
                     (if (o.publicFolder != null) "PC로 옮길 폴더: 내장 저장공간/${o.publicFolder}" else "전송 방식을 고르세요") +
-                    (itwinDroppedNotice(fs, o)?.let { " $it" } ?: ""))
+                    "")
             }
             catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -105,13 +105,6 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
     fun saveAs() { output?.let { o -> platform.saveAs(o) { ok -> notice = if (ok) "파일로 저장했어요" else "저장을 취소했거나 실패했어요"; onResult?.invoke(ok, notice!!) } } }
 
     companion object {
-        /** UX-0127-1: 「· iTwin XML에서 높이 없는 점 n개 빠짐(4호, 7호, 9호 …)」. iTwin 을 안 골랐거나 빠진 점이 없으면 null */
-        fun itwinDroppedNotice(formats: Set<kr.archsurvey.export.ExportFormat>, o: ExportOutput, show: Int = 3): String? {
-            if (kr.archsurvey.export.ExportFormat.ITWIN_XML !in formats || o.itwinDroppedCount <= 0) return null
-            val names = o.itwinDroppedNames.take(show).joinToString(", ")
-            val more = if (o.itwinDroppedCount > o.itwinDroppedNames.take(show).size) " …" else ""
-            return "· iTwin XML에서 높이 없는 점 ${o.itwinDroppedCount}개 빠짐" + (if (names.isEmpty()) "" else "($names$more)")
-        }
         fun hgisFolderText(folder: String) =
             "폰을 USB로 PC에 연결 → 내장 저장공간/$folder 폴더를 PC에 복사 → 그 안의 points_EPSG.shp 를 hgis 지도에 끌어 놓으세요"
         fun sizeText(bytes: Long): String = when {

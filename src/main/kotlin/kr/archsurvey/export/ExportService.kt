@@ -64,7 +64,7 @@ class ExportService(
     private val arch: kr.archsurvey.data.ArchDao? = null,
 ) {
     suspend fun export(project: String, includePhotos: Boolean, includeVoices: Boolean = false, formats: Set<ExportFormat> = ExportFormat.DEFAULT,
-        /** iTwin XML 에서 「1호」 → 「Target #1」 로 바꾸지 않고 현장 이름 그대로 */
+        /** 0.1.38: 쓰지 않음(사진 실측 iTwin 내보내기는 별도 앱으로 옮김). 시그니처 호환용 */
         itwinKeepNames: Boolean = false,
         /** 0.1.35 도면 축척 분모(20/100/200) — 도면 DXF 글자 크기 */
         drawingScale: Int = kr.archsurvey.dig.DrawingScale.DEFAULT,
@@ -112,16 +112,13 @@ class ExportService(
         if (ExportFormat.GEOJSON in formats) File(dir, "points.geojson").writeText(Formats.pointsGeoJson(pts, byPoint), Charsets.UTF_8)
         // DXF: 지면 표고(표고 우선, 없으면 타원체고). 축 순서 기본 X=동·Y=북, 한글은 CP949
         if (ExportFormat.DXF in formats) File(dir, "points.dxf").writeBytes(DxfWriter.write(pts.map { DxfPoint(it.pointId, it.easting, it.northing, it.groundMsl ?: it.groundEllipsoidalHeight) }))
-        if (ExportFormat.DRAWING_DXF in formats || ExportFormat.FIELD_CSV in formats || ExportFormat.ITWIN_GCP in formats) {
+        if (ExportFormat.DRAWING_DXF in formats || ExportFormat.FIELD_CSV in formats) {
             val a = arch
             val verts = a?.outlineVertices(project).orEmpty().groupBy { it.outlineId }
             val outs = a?.outlines(project).orEmpty().map { o -> DigOutline(o.id, o.label, o.kind, o.featureType, o.closed, verts[o.id].orEmpty().sortedBy { it.orderNo }.map { it.pointRowId }) }
             val grids = a?.grids(project).orEmpty().map { kr.archsurvey.arch.GridDef(it.id, it.areaId, it.name, kr.archsurvey.core.NE(it.originN, it.originE), kr.archsurvey.core.NE(it.dirN, it.dirE), it.spacingM, it.cols, it.rows, it.crsEpsg) }
             if (ExportFormat.DRAWING_DXF in formats) File(dir, "drawing_1-$drawingScale.dxf").writeBytes(DxfWriter.writeDrawing(DigExport.drawing(pts, outs, grids, drawingScale)))
             if (ExportFormat.FIELD_CSV in formats) File(dir, "field_book.csv").writeText(DigExport.fieldCsv(pts, outs, byPoint.mapValues { it.value.size }), Charsets.UTF_8)
-            // 0.1.36 iTwin 사진 기준점: 유구마다 itwin_gcp/<유구>_AprilTag_EPSG<n>_<높이>.txt/.xml + 표 + 읽어보기
-            if (ExportFormat.ITWIN_GCP in formats) for (gf in ItwinGcpExport.build(pts, outs.associate { it.id to it.label }, project).files)
-                File(dir, gf.path).also { it.parentFile?.mkdirs() }.writeText(gf.text, Charsets.UTF_8)
         }
         if (ExportFormat.REPORT in formats) File(dir, "point_report.csv").writeText(MoreFormats.reportCsv(pts, byPoint), Charsets.UTF_8)
         if (ExportFormat.KML in formats) File(dir, "points.kml").writeText(MoreFormats.kml(project, pts), Charsets.UTF_8)
@@ -140,13 +137,6 @@ class ExportService(
             for ((epsg, group) in pts.groupBy { it.crsEpsg })
                 File(dir, "hgis_control_points_$epsg.csv").writeText(MoreFormats.hgisControlCsv(group), Charsets.UTF_8)
         }
-        // iTwin Capture: 좌표계마다 itwin_capture_<EPSG>.xml(표본과 같은 꼴) + 이름 대조표 CSV
-        if (ExportFormat.ITWIN_XML in formats) {
-            for ((epsg, group) in pts.groupBy { it.crsEpsg }) {
-                File(dir, "itwin_capture_$epsg.xml").writeText(ItwinCaptureXml.write(group, epsg, itwinKeepNames), Charsets.UTF_8)
-                File(dir, "itwin_capture_names_$epsg.csv").writeText(ItwinCaptureXml.namesCsv(group, itwinKeepNames), Charsets.UTF_8)
-            }
-        }
         File(dir, "README.txt").writeText(readme(project, pts.size, shpEpsgs), Charsets.UTF_8)
 
         val zip = File(base, "${safe}_$stamp.zip")
@@ -159,8 +149,7 @@ class ExportService(
         }
         // PC 로 옮겨 hgis 에 끌어 놓기 쉽게: 위 파일(사진·음성 폴더 제외)을 공용 문서 폴더에도 한 폴더로 둔다(Android 10 이상)
         val publicFolder = if (ExportFormat.SHP in formats || ExportFormat.HGIS_CSV in formats) publish(dir, "${safe}_$stamp") else null
-        val dropped = if (ExportFormat.ITWIN_XML in formats) ItwinCaptureXml.droppedNoHeight(pts) else emptyList()
-        return ExportResult(dir, zip, pts.size, photoCount, voiceCount, publicFolder, dropped.size, dropped)
+        return ExportResult(dir, zip, pts.size, photoCount, voiceCount, publicFolder)
     }
 
     /**
@@ -183,9 +172,6 @@ class ExportService(
         points.kml      구글어스(경위도+지면 타원체고)
         points_<EPSG>.shp/.shx/.dbf/.prj/.cpg  점 Shapefile(작업 좌표계, X=동 Y=북, Z=지면 표고, 속성 UTF-8)
         hgis_control_points_<EPSG>.csv  hgis 「CSV 기준점」 양식(point_id,x,y,z,datum,ellipsoid,projection,origin,accuracy_m,pdop,fix_type)
-        itwin_capture_<EPSG>.xml  iTwin Capture Modeler 기준점(SurveysData XML, x=동 y=북 z=지면 표고, 이름 「1호」→「Target #1」)
-        itwin_capture_names_<EPSG>.csv  iTwin 이름 ↔ 현장 점 번호 대조표
-        itwin_gcp/      iTwin 사진 기준점(AprilTag) 유구별 TXT·XML(이름 「Target #번호」) · 표 · README_iTwin_AprilTag.txt
         (고른 양식만 들어 있어요)
         photos.csv, photos/  점별 사진(최대 4장)
         voice.csv, voices/   점별 음성 메모(m4a, AAC 16kHz 모노). 내보낼 때 '음성 포함'을 켠 경우만
