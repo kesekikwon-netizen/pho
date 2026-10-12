@@ -76,7 +76,7 @@ object BtCompat {
     }
 }
 
-enum class Strategy { SECURE_SPP, INSECURE_SPP, BASE_SPP, SDP_UUID, REFLECT_CH1 }
+enum class Strategy { SECURE_SPP, INSECURE_SPP, BASE_SPP, SDP_UUID, REFLECT_CH1, INSECURE_BASE, REFLECT_CH1_INSECURE }
 
 data class Attempt(val strategy: Strategy, val uuid: UUID? = null)
 
@@ -91,7 +91,13 @@ internal fun planAttempts(
     advertised: List<UUID>, preferred: Strategy?, exclude: Set<Strategy>, advertisedFirst: Boolean = false,
     /** 0.1.34 R10 프로필만: INSECURE → SECURE → BASE_UUID(secure). false(SP60·기본)면 예전 SECURE → INSECURE, BASE 없음 */
     insecureFirst: Boolean = false,
+    /** 0.1.40: 폰에 등록 안 된 기기 — 보안(secure) 소켓은 시스템 등록 창·실패만 부르므로 insecure 만: SPP → 기본 UUID → 리플렉션 ch1 */
+    unbonded: Boolean = false,
 ): List<Attempt> {
+    if (unbonded) {
+        val plan = listOf(Attempt(Strategy.INSECURE_SPP), Attempt(Strategy.INSECURE_BASE), Attempt(Strategy.REFLECT_CH1_INSECURE))
+        return if (preferred == null || plan.none { it.strategy == preferred }) plan else plan.sortedBy { if (it.strategy == preferred) 0 else 1 }
+    }
     val spp = if (insecureFirst) listOf(Attempt(Strategy.INSECURE_SPP), Attempt(Strategy.SECURE_SPP), Attempt(Strategy.BASE_SPP))
     else listOf(Attempt(Strategy.SECURE_SPP), Attempt(Strategy.INSECURE_SPP))
     val sdp = advertised.distinct().filter { it != BtCompat.SPP_UUID && it != BtCompat.BASE_UUID }
@@ -182,12 +188,17 @@ class BtTransport(
             // 숨은 API: 막혀 있으면 건너뜀. 최근 Android 에서의 동작은 [현장확인]
             dev.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType).invoke(dev, 1) as? BluetoothSocket
         } catch (e: Exception) { null }
+        Strategy.INSECURE_BASE -> dev.createInsecureRfcommSocketToServiceRecord(BtCompat.BASE_UUID)
+        Strategy.REFLECT_CH1_INSECURE -> try {
+            dev.javaClass.getMethod("createInsecureRfcommSocket", Int::class.javaPrimitiveType).invoke(dev, 1) as? BluetoothSocket
+        } catch (e: Exception) { null }
     }
 
     @SuppressLint("MissingPermission")
     private fun buildPlan(dev: BluetoothDevice, preferred: Strategy?): List<Attempt> {
         val advertised = try { dev.uuids?.map { it.uuid }.orEmpty() } catch (_: SecurityException) { emptyList() }
-        return planAttempts(advertised, preferred, exclude, advertisedFirst, insecureFirst)
+        val unbonded = try { dev.bondState != BluetoothDevice.BOND_BONDED } catch (_: SecurityException) { false }
+        return planAttempts(advertised, preferred, exclude, advertisedFirst, insecureFirst, unbonded)
     }
 
     override fun close() {

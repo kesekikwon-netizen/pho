@@ -69,7 +69,14 @@ sealed class PairAction {
  * - 등록 실패(BONDING → NONE): 다음 PIN 으로 한 번 더(1234 → 0000). 다 실패하면 「등록 없이 연결」(insecure SPP) 한 번 → 그래도 안 되면 안내
  * - 사용자가 취소(AUTH_CANCELED) → 재시도 안 함
  */
-class PairMachine(val device: FoundDevice, private val pins: List<String> = PairList.pins(null), private val tryUnbonded: Boolean = true) {
+class PairMachine(
+    val device: FoundDevice, private val pins: List<String> = PairList.pins(null), private val tryUnbonded: Boolean = true,
+    /** 0.1.40 현장(12:29): R10 은 폰 등록이 계속 「등록할 수 없습니다」 → 등록 없이 insecure 연결을 먼저, 안 될 때만 PIN 등록 */
+    private val directFirst: Boolean = device.model?.id == kr.archsurvey.device.DeviceProfiles.R10_ID,
+) {
+    /** 이번 바퀴에서 등록 없이 연결을 해 봤는지 / 등록을 해 봤는지 */
+    var directTried = false; private set
+    var bondTried = false; private set
     var step = PairStep.IDLE; private set
     var fix = PairFix.NONE; private set
     /** 이번 기기에서 실패한 바퀴 수(다시 누르면 안내가 한 단계 깊어짐) */
@@ -81,9 +88,10 @@ class PairMachine(val device: FoundDevice, private val pins: List<String> = Pair
     val log = mutableListOf<String>()
 
     fun start(alreadyBonded: Boolean): PairAction {
-        fix = PairFix.NONE; pinIndex = 0; pinSent = null; lastReason = null
+        fix = PairFix.NONE; pinIndex = 0; pinSent = null; lastReason = null; directTried = false; bondTried = false
         if (alreadyBonded) { step = PairStep.CONNECTING; log += "이미 등록됨 → 바로 연결"; return PairAction.Connect(device.address, true) }
-        step = PairStep.BONDING; log += "등록 시작"
+        if (directFirst) { step = PairStep.CONNECTING_UNBONDED; directTried = true; log += "등록 없이 바로 연결(insecure)"; return PairAction.Connect(device.address, false) }
+        step = PairStep.BONDING; bondTried = true; log += "등록 시작"
         return PairAction.CreateBond(device.address)
     }
 
@@ -114,7 +122,8 @@ class PairMachine(val device: FoundDevice, private val pins: List<String> = Pair
             pinIndex++; pinSent = null; step = PairStep.BONDING; log += "다른 PIN(${currentPin}) 으로 다시"
             return PairAction.CreateBond(device.address)
         }
-        if (tryUnbonded && reason != PairConst.REASON_REMOTE_DEVICE_DOWN) {
+        if (tryUnbonded && !directTried && reason != PairConst.REASON_REMOTE_DEVICE_DOWN) {
+            directTried = true
             step = PairStep.CONNECTING_UNBONDED; log += "등록 없이 연결(insecure SPP) 시도"
             return PairAction.Connect(device.address, false)
         }
@@ -125,7 +134,10 @@ class PairMachine(val device: FoundDevice, private val pins: List<String> = Pair
     fun onConnectResult(ok: Boolean): PairAction {
         if (step != PairStep.CONNECTING && step != PairStep.CONNECTING_UNBONDED) return PairAction.None
         if (ok) { step = PairStep.DONE; fix = PairFix.NONE; log += "연결됨"; return PairAction.None }
-        if (step == PairStep.CONNECTING_UNBONDED) return giveUp(lastReason)
+        if (step == PairStep.CONNECTING_UNBONDED) {
+            if (!bondTried) { bondTried = true; step = PairStep.BONDING; log += "등록 없이 안 됨 → PIN 등록"; return PairAction.CreateBond(device.address) }
+            return giveUp(lastReason)
+        }
         step = PairStep.FAILED; fix = PairFix.RETRY; failedRounds++; return PairAction.None
     }
 
@@ -152,7 +164,7 @@ object PairText {
         PairStep.BONDING -> "① 등록 중 · PIN ${m?.currentPin ?: PairConst.DEFAULT_PIN} 자동 입력"
         PairStep.WAIT_USER -> "① 폰 화면에 뜬 창에서 「등록」(또는 「확인」)을 눌러 주세요"
         PairStep.CONNECTING -> "② 연결 중 · 위치가 오면 끝"
-        PairStep.CONNECTING_UNBONDED -> "② 등록이 안 돼 등록 없이 연결해 보는 중"
+        PairStep.CONNECTING_UNBONDED -> if (m?.bondTried == true) "② 등록이 안 돼 등록 없이 연결해 보는 중" else "① 등록 없이 바로 연결 중(PIN 필요 없음)"
         PairStep.DONE -> "✓ 연결됐어요 · 다음부터 자동 연결"
         PairStep.FAILED -> "등록·연결 실패"
     }
@@ -164,7 +176,7 @@ object PairText {
             PairFix.CANCELLED -> "등록을 취소했어요" to "다시 누르고, 폰 화면에 창이 뜨면 「등록」을 눌러 주세요."
             PairFix.NEAR -> "수신기가 응답하지 않아요" to "수신기가 켜져 있는지, 폰과 2 m 안에 있는지 확인하고 「다시」를 누르세요."
             PairFix.POWER_CYCLE -> (if (r10) "R10 전원을 껐다 켜고 다시 눌러 주세요" else "수신기 전원을 껐다 켜고 다시 눌러 주세요") to
-                "PIN 1234·0000 둘 다 안 됐어요. 수신기가 예전 폰 기록을 들고 있거나, 켠 직후에만 등록을 받는 설정일 수 있어요. 켜고 1분 안에 「다시」."
+                "등록 없이 연결도, PIN 1234·0000 등록도 안 됐어요. 수신기가 예전 폰 기록을 들고 있거나, 켠 직후에만 등록을 받는 설정일 수 있어요. 켜고 1분 안에 「다시」."
             PairFix.CLEAR_RECORD -> (if (r10) "R10 웹 화면에서 블루투스 기록을 확인해 주세요" else "수신기 블루투스 설정을 확인해 주세요") to
                 (if (r10) "폰 Wi-Fi 를 R10 에 연결 → 브라우저 192.168.142.1 › Bluetooth › Remotes 에서 이 폰 연결 끊기, Configuration 에서 PIN·Discoverable 확인 → 고급에서 앱 PIN 을 같은 값으로." else "수신기 PIN 을 확인해 고급 › 수신기 PIN 에 넣고 다시 눌러 주세요.")
             PairFix.PERMISSION -> "주변 기기 권한이 필요해요" to "수신기를 찾고 등록하려면 「주변 기기」 권한을 허용해 주세요."

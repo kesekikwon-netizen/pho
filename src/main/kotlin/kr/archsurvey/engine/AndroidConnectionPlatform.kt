@@ -17,7 +17,16 @@ class AndroidConnectionPlatform(private val app: App) : ConnectionPlatform {
     override val link get() = app.engine.link
     override val ntrip get() = app.engine.ntrip
 
-    override fun bondedDevices() = BtCompat.bonded(app).map { it.name to it.address }
+    override fun bondedDevices(): List<Pair<String, String>> {
+        val b = BtCompat.bonded(app).map { it.name to it.address }
+        // 0.1.40: 등록 없이(insecure) 연결됐던 수신기 — 폰 등록이 안 되는 R10 도 목록·자동 연결에
+        val direct = app.settings.directReceivers.lines().mapNotNull { l -> l.split('\t').takeIf { it.size == 2 && it[0].isNotBlank() }?.let { it[1] to it[0] } }
+        return b + direct.filter { d -> b.none { it.second.equals(d.second, true) } }
+    }
+    override fun rememberDirect(name: String, address: String) {
+        val keep = app.settings.directReceivers.lines().filter { it.isNotBlank() && !it.startsWith(address + "\t", ignoreCase = true) }
+        app.settings.directReceivers = (keep + "$address\t${name.replace('\t', ' ').replace('\n', ' ')}").takeLast(5).joinToString("\n")
+    }
     override fun hasBluetoothPermission() = BtCompat.hasConnectPermission(app) && BtCompat.hasScanPermission(app)
     override fun requestBluetoothPermission(onResult: (Boolean) -> Unit) {
         val perms = (BtCompat.runtimePermissions().toList() + listOfNotNull(BtCompat.notificationPermission())).toTypedArray()
