@@ -22,8 +22,8 @@ android {
         applicationId = "kr.archsurvey.gcp"
         minSdk = 21
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.1"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
@@ -105,3 +105,13 @@ dependencies {
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
+
+// 0.1.1: 0.1.0 릴리스에 V월드 내장 키가 빠져 지도가 안 나왔다 → 릴리스 빌드는 키가 없으면 멈춘다(tools/inject-vworld-key.sh)
+val checkVWorldKey by tasks.registering {
+    doLast {
+        val f = file("src/main/kotlin/kr/archsurvey/map/VWorldDefaults.kt")
+        val ok = f.exists() && Regex("BUILTIN_API_KEY = \"[A-Za-z0-9-]{20,}\"").containsMatchIn(f.readText())
+        if (!ok) throw GradleException("V월드 내장 키가 없어요 — tools/inject-vworld-key.sh 를 먼저 실행하세요")
+    }
+}
+tasks.matching { it.name == "preReleaseBuild" }.configureEach { dependsOn(checkVWorldKey) }
