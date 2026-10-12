@@ -34,7 +34,7 @@ class AndroidGcpFiles(private val ctx: Context, private val zone: ZoneId = ZoneI
         xml.writeText(ItwinXml.write(shots, epsg), Charsets.UTF_8)
         txt.writeText(ItwinXml.txt(shots), Charsets.UTF_8)
         val list = File(localSite(book.site), Names.listCsvName(book.site))
-        list.writeBytes(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()) + ListCsv.write(book, zone).toByteArray(Charsets.UTF_8))
+        list.writeText(ListCsv.write(book, zone), Charsets.UTF_8) // BOM 은 ListCsv 가 붙임
         var where = "앱 폴더"
         var err: String? = null
         if (Build.VERSION.SDK_INT >= 29) {
@@ -89,11 +89,10 @@ class AndroidGcpFiles(private val ctx: Context, private val zone: ZoneId = ZoneI
     }
 
     companion object {
-        /** zip 내용: 목록.csv 는 BOM 붙임(엑셀 한글), XML·TXT 는 그대로 */
+        /** zip 내용 그대로 UTF-8(목록.csv BOM 은 ListCsv 가 붙임). 파일 이름도 UTF-8(zip EFS 표시) */
         fun writeZip(z: ZipOutputStream, plan: HandoffPlan) {
             for ((path, text) in plan.entries) {
                 z.putNextEntry(ZipEntry(path))
-                if (path.endsWith(".csv")) z.write(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()))
                 z.write(text.toByteArray(Charsets.UTF_8)); z.closeEntry()
             }
         }
