@@ -108,6 +108,40 @@ object ItwinCaptureXml {
     }
 
     /**
+     * 0.1.37 사진 기준점(1–4 단추) 용 SurveysData — 사용자 실제 iTwin Capture 파일(강릉 1호)과 같은 꼴:
+     * UTF-8(BOM 없음) · CRLF · 탭 들여쓰기 · SRS Id 0 · SRSId 0 · 이름 「Target #N」 · Category Full · x=동 y=북 z=지면 높이 ·
+     * 정밀도 0.01(표본 값, [useSigma] 면 측정 σ, 최소 0.01) · CheckPoint false · Measurement 없음(사진 찍은 점은 iTwin 안에서 생김).
+     * 순서는 표적 번호 오름차순. 높이 없는 점은 뺀다.
+     */
+    fun writeSurveys(tags: List<Pair<Int, PointEntity>>, epsg: Int, useSigma: Boolean = false): String {
+        val nl = "\r\n"
+        val sb = StringBuilder()
+        sb.append("<?xml version=\"1.0\" encoding=\"utf-8\"?>").append(nl).append("<SurveysData>").append(nl)
+        sb.append("\t<SpatialReferenceSystems>").append(nl).append("\t\t<SRS>").append(nl).append("\t\t\t<Id>0</Id>").append(nl)
+        sb.append("\t\t\t<Name>").append(esc(srsName(epsg))).append("</Name>").append(nl)
+        sb.append("\t\t\t<Definition>EPSG:").append(epsg).append("</Definition>").append(nl)
+        sb.append("\t\t</SRS>").append(nl).append("\t</SpatialReferenceSystems>").append(nl).append("\t<ControlPoints>").append(nl)
+        tags.filter { MoreFormats.groundZ(it.second) != null }.sortedBy { it.first }.forEachIndexed { i, (tag, p) ->
+            sb.append("\t\t<ControlPoint>").append(nl)
+            sb.append("\t\t\t<Id>").append(i).append("</Id>").append(nl)
+            sb.append("\t\t\t<SRSId>0</SRSId>").append(nl)
+            sb.append("\t\t\t<Name>").append(esc(kr.archsurvey.dig.AprilTagNaming.name(tag))).append("</Name>").append(nl)
+            sb.append("\t\t\t<Category>Full</Category>").append(nl)
+            sb.append("\t\t\t<Position>").append(nl)
+            sb.append("\t\t\t\t<x>").append(num(p.easting)).append("</x>").append(nl)
+            sb.append("\t\t\t\t<y>").append(num(p.northing)).append("</y>").append(nl)
+            sb.append("\t\t\t\t<z>").append(num(MoreFormats.groundZ(p)!!)).append("</z>").append(nl)
+            sb.append("\t\t\t</Position>").append(nl)
+            sb.append("\t\t\t<HorizontalAccuracy>").append(if (useSigma) accuracy(p.sigmaH) else num(MIN_ACCURACY_M)).append("</HorizontalAccuracy>").append(nl)
+            sb.append("\t\t\t<VerticalAccuracy>").append(if (useSigma) accuracy(p.sigmaU) else num(MIN_ACCURACY_M)).append("</VerticalAccuracy>").append(nl)
+            sb.append("\t\t\t<CheckPoint>false</CheckPoint>").append(nl)
+            sb.append("\t\t</ControlPoint>").append(nl)
+        }
+        sb.append("\t</ControlPoints>").append(nl).append("</SurveysData>").append(nl)
+        return sb.toString()
+    }
+
+    /**
      * 0.1.36: 이름을 정해서 쓰기(사진 기준점 「AprilTag #12」). 꼴은 [write] 와 바이트 단위로 같고 이름·순서만 넘겨받는다.
      * 높이 없는 점은 뺀다. 검사점은 [isCheckPoint] 규칙 그대로
      */

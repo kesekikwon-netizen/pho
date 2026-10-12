@@ -218,6 +218,11 @@ private fun FeatureCardView(c: SurveyController, fc: kr.archsurvey.dig.FeatureCa
         // 0.1.36 사진 기준점(AprilTag): iTwin Capture 용 표적 번호(내보내기 = 유구마다 따로 파일)
         if (fc.gcpTags.isNotEmpty()) Text("사진 기준점 ${fc.gcpTags.size} · " + fc.gcpTags.joinToString(", ") { "#$it" } + (if (fc.gcpTags.size < 3) " · iTwin은 3개 이상 필요" else ""),
             style = Ty.small.copy(fontSize = 13.sp), color = if (fc.gcpTags.size < 3) t.cautionInk else t.ink, modifier = Modifier.testTag("feature_gcp_${fc.id}"))
+        // 0.1.37: 저장할 때마다 자동으로 쓴 iTwin XML(공용 Documents/ExcavationSurvey/<작업>/itwin_gcp) · 공유
+        if (fc.gcpTags.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(c.gcpSaved[fc.id]?.let { "XML 저장됨 · $it" } ?: "XML 은 다음 저장 때 자동으로 만들어져요", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("feature_xml_${fc.id}"))
+            MBtn(Modifier.height(48.dp).testTag("feature_xml_share_${fc.id}"), MKind.PLAIN, 12.dp, onClick = { c.shareGcp(fc.id) }) { Text("XML 공유", style = Ty.label, color = t.ink) }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             fc.areaSqm?.let { Text("면적 ${f2(it)}㎡", style = Ty.coord.copy(fontSize = 13.sp), color = t.ink) }
             fc.perimeterM?.let { Text("둘레 ${f2(it)} m", style = Ty.coord.copy(fontSize = 13.sp), color = t.ink) }

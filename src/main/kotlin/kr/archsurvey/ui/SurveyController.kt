@@ -618,6 +618,8 @@ class SurveyController(
 
     fun onMeasure() {
         if (phase == Phase.ACQUIRING || phase == Phase.RECORDING) return
+        // 0.1.37: 1–4 단추가 아닌 측점(측량 단추·볼륨 키·음성)이면 남은 표적 번호를 지움(확인 창 뒤 다시 부를 때는 그대로)
+        if (!quickTagCall && !qualityBypass && !tiltBypass) dig.quickTag = null
         // 0.1.35: 「면 닫기」 미리보기 중이면 측점 단추 = 면 닫기 확인
         if (dig.closeArmed) { dig.confirmClose(); return }
         resultStripShown = false
@@ -763,6 +765,8 @@ class SurveyController(
             }
             catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; saveError = "디스크 저장에 실패했어요 — 다시 시도하세요" }
         }
+        dig.quickTag = null
+        if (saveError == null && points.lastOrNull()?.digKind == kr.archsurvey.dig.DigKind.GCP.id) onGcpChanged(points.last().featureId)
         phase = Phase.RESULT; showResultStrip()
         photos.clear(); voices.clear()
         feedback?.invoke(saveError == null)
@@ -798,7 +802,10 @@ class SurveyController(
         val idx = points.indexOfFirst { it.rowId == target.rowId && it.name == target.name }
         if (idx < 0) { phase = Phase.IDLE; message = "재측량할 점을 찾지 못했어요"; return }
         val old = points[idx]
+        val gcp = old.digKind == kr.archsurvey.dig.DigKind.GCP.id
         val upd = fresh.copy(name = old.name, type = old.type, memo = old.memo, rowId = old.rowId)
+            .let { if (gcp) it.copy(digKind = old.digKind, featureId = old.featureId, digTag = old.digTag) else it }   // 0.1.37: 표적 번호·유구 유지
+        dig.quickTag = null
         var err: String? = null
         store?.let { st -> try { st.resurvey(old.rowId, upd) } catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; err = "디스크 저장에 실패했어요 — 다시 시도하세요" } }
         if (err != null) { phase = Phase.IDLE; message = err; feedback?.invoke(false); return }
@@ -806,6 +813,7 @@ class SurveyController(
         arch.bumpRevision(old.rowId)
         resultName = upd.name; resurveyUndo = old
         dupPrompt = null
+        if (gcp) onGcpChanged(old.featureId)
         phase = Phase.RESULT; showResultStrip()
         refreshMedia()
         feedback?.invoke(true)
@@ -868,8 +876,51 @@ class SurveyController(
         when (choice) {
             DupChoice.RESURVEY -> scope.launch { applyResurvey(d.existing, d.fresh, d.worst) }
             DupChoice.NEW_POINT -> scope.launch { commitNew(d.fresh, d.worst) }
-            DupChoice.DISCARD -> { phase = Phase.IDLE; message = "취소했어요 — 방금 측점은 저장하지 않았어요" }
+            DupChoice.DISCARD -> { dig.quickTag = null; phase = Phase.IDLE; message = "취소했어요 — 방금 측점은 저장하지 않았어요" }
         }
+    }
+
+    // ---------------- 0.1.37 사진 기준점 1–4 단추 + iTwin XML 자동 저장 ----------------
+    private var quickTagCall = false
+    /** 지도 「Target n」 단추: 이미 잰 번호면 안내(다시 재기는 길게 누르기), 아니면 바로 측점 */
+    fun tapQuickTag(id: Int) {
+        if (phase == Phase.ACQUIRING) { cancelAcquire(); return }
+        if (id in dig.tagsIn(dig.featureId)) { ui.toast("${dig.quickTagFeature()} Target #$id 은(는) 이미 쟀어요 · 다시 재려면 길게 누르세요"); return }
+        measureQuickTag(id)
+    }
+    /** 길게 누르기: 다시 재기 확인 */
+    fun longPressQuickTag(id: Int) {
+        if (phase == Phase.ACQUIRING) return
+        if (id !in dig.tagsIn(dig.featureId)) { measureQuickTag(id); return }
+        ui.ask(ConfirmRequest("Target #$id 다시 잴까요?", "${dig.quickTagFeature()}의 Target #$id 를 새 값으로 다시 재요. iTwin XML 에는 마지막 값이 들어가요(이전 값은 표적표에 남아요).", "다시 재기") { measureQuickTag(id) })
+    }
+    fun measureQuickTag(id: Int) {
+        if (phase == Phase.ACQUIRING || phase == Phase.RECORDING) return
+        if (phase == Phase.RESULT || phase == Phase.RESULT_EXPANDED) phase = Phase.IDLE
+        dig.quickTag = id
+        quickTagCall = true
+        try { onMeasure() } finally { quickTagCall = false }
+        // 막혔으면(수신기 없음·엄격 등) 번호를 남기지 않음. 확인 창·기울기 확인 중이면 남겨 둠
+        if (phase != Phase.ACQUIRING && ui.confirm == null && tiltPrompt == null && dupPrompt == null) dig.quickTag = null
+    }
+
+    /** Android: 사진 기준점 파일 자동 저장. 시험에서는 가짜 */
+    var gcpFiles: GcpFilePlatform? = null
+    /** 유구별 마지막 자동 저장 XML 이름(유구 카드 「XML 공유」) */
+    val gcpSaved = androidx.compose.runtime.mutableStateMapOf<Long?, String>()
+    /** 사진 기준점이 저장·다시 재기·되돌리기 되면 그 유구 XML 을 다시 쓴다 */
+    fun onGcpChanged(featureId: Long?) {
+        val g = gcpFiles ?: return
+        scope.launch {
+            val r = runCatching { g.save(featureId) }.onFailure { kr.archsurvey.diag.CrashLog.record("iTwin XML 자동 저장", it) }.getOrNull()
+            if (r == null) { if (gcpFiles != null) ui.fail("iTwin XML 자동 저장 실패 · 내보내기에서 다시 만드세요"); return@launch }
+            if (r.xmlName != null) { gcpSaved[featureId] = r.xmlName; ui.ok("${r.featureLabel} XML 저장됨 · Target ${r.count}개" + (r.publicPath?.let { " · $it" } ?: "")) }
+            else { gcpSaved.remove(featureId); ui.toast("${r.featureLabel} 사진 기준점이 없어 XML 을 지웠어요") }
+        }
+    }
+    fun shareGcp(featureId: Long?) {
+        val label = dig.featureName(featureId) ?: kr.archsurvey.export.ItwinGcpExport.OUTSIDE
+        if (gcpFiles?.share(label) != true) ui.toast("공유할 XML 이 없어요 · 사진 기준점을 먼저 재세요")
     }
 
     // ---------------- 0.1.31 T27 앱 종료 ----------------
@@ -898,7 +949,7 @@ class SurveyController(
 
     fun cancelAcquire() {
         if (phase != Phase.ACQUIRING) return
-        acquireJob?.cancel(); phase = Phase.IDLE; progress = 0f; message = "취득을 취소했어요"
+        acquireJob?.cancel(); phase = Phase.IDLE; progress = 0f; message = "취득을 취소했어요"; dig.quickTag = null
     }
 
     fun undo() {
@@ -927,7 +978,8 @@ class SurveyController(
         val gone = points.removeAt(points.lastIndex)
         if (gone.rowId > 0) arch.detachVertex(gone.rowId)
         dig.onPointUndone()
-        store?.let { st -> scope.launch { runCatching { st.hideLast() }.onFailure { message = "디스크 반영에 실패했어요" } } }
+        val gcpGone = gone.digKind == kr.archsurvey.dig.DigKind.GCP.id
+        store?.let { st -> scope.launch { runCatching { st.hideLast() }.onFailure { message = "디스크 반영에 실패했어요" }; if (gcpGone) onGcpChanged(gone.featureId) } }
         phase = Phase.IDLE
         photos.clear(); voices.clear()
         message = "${gone.name} 되돌렸어요"
@@ -1215,3 +1267,10 @@ class SurveyController(
     }
     fun mapNotice(): String? = kr.archsurvey.map.MapLayers.fallbackMessage(mapBase, mapKeyProvider().key)
 }
+
+/** 0.1.37 사진 기준점 파일 자동 저장(Android = MediaStore 공용 Documents + 앱 폴더) */
+interface GcpFilePlatform {
+    suspend fun save(featureId: Long?): GcpSaveResult?
+    fun share(featureLabel: String): Boolean
+}
+data class GcpSaveResult(val featureLabel: String, val xmlName: String?, val publicPath: String?, val count: Int)

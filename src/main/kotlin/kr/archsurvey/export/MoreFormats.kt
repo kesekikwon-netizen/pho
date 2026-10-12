@@ -27,7 +27,7 @@ enum class ExportFormat(val id: String, val labelKo: String, val ext: String) {
     DRAWING_DXF("drawing_dxf", "도면 DXF (레이어별)", ".dxf"),
     /** 0.1.35 야장 CSV: 점번호·종류·유구·유물번호·레벨·칸·해발 */
     FIELD_CSV("field_csv", "야장 CSV", ".csv"),
-    /** 0.1.36 iTwin Capture 사진 기준점(AprilTag): 유구마다 따로 TXT(머리줄 없음 「AprilTag #n,E,N,Z」)+XML, 겹치지 않으면 전체 한 벌 */
+    /** 0.1.36 iTwin Capture 사진 기준점(AprilTag): 유구마다 따로 TXT(머리줄 없음 「Target #n,E,N,Z」)+XML, 겹치지 않으면 전체 한 벌 */
     ITWIN_GCP("itwin_gcp", "iTwin 사진 기준점 (AprilTag · 유구별)", ".txt");
 
     companion object {

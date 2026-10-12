@@ -73,6 +73,11 @@ class DigController(private val c: SurveyController) {
     /** 0.1.36 사진 기준점: 다음에 잴 AprilTag 번호(장갑 낀 채 −/+ 로 바꿈, 재면 자동으로 다음 번호) */
     var tagId by mutableStateOf(AprilTagNaming.DEFAULT_FIRST); private set
     var showGcp by mutableStateOf(true)
+    /**
+     * 0.1.37 지도 「Target 1·2·3·4」 단추로 잰 측점: 지금 재는 종류(유구 경계 등)는 그대로 두고 이번 한 점만 사진 기준점 [quickTag] 번으로 저장.
+     * 저장·취소되면 null
+     */
+    var quickTag by mutableStateOf<Int?>(null)
 
     // ---------------- 설정(앱 전체, 쉽게 바꿀 수 있는 제안값) ----------------
     var artifactMode by mutableStateOf(ArtifactMode.JOB_SERIAL); private set
@@ -159,6 +164,13 @@ class DigController(private val c: SurveyController) {
     /** −/+ 단추 */
     fun stepTag(delta: Int) { tagId = AprilTagNaming.clamp(tagId + delta); saveSelection() }
     fun setTag(id: Int) { tagId = AprilTagNaming.clamp(id); saveSelection() }
+    /** 0.1.37 지도 단추 번호(1·2·3·4) */
+    val quickTags: List<Int> get() = QUICK_TAGS
+    /** 1–4 단추를 보이는가: 유구를 골랐거나 사진 기준점 모드 */
+    val quickTagsVisible: Boolean get() = kind == DigKind.GCP || selectedFeature != null
+    /** 단추 이름 아래 작은 글자: 이 유구 이름(유구 밖) */
+    fun quickTagFeature(): String = featureName(featureId) ?: "유구 밖"
+
     /** 고른 번호를 이 유구에서 이미 쟀는가(다시 재면 내보내기는 마지막 값) */
     val tagAlreadyMeasured: Boolean get() = tagId in tagsIn(featureId)
     fun chooseLevel(lv: LevelKind) { level = lv; saveSelection() }
@@ -203,8 +215,11 @@ class DigController(private val c: SurveyController) {
 
     /** 측점 결과에 종류·유구·유물 번호·레벨·꼬리표를 붙인다(위치 종류 글자로 종류를 정함) */
     fun decorate(p: SavedPoint): SavedPoint {
-        val k = DigKind.fromPositionType(p.type) ?: return p.copy(digKind = "")
         val ne = NE(p.northing, p.easting)
+        quickTag?.let { q ->
+            return p.copy(type = DigKind.GCP.positionType, digKind = DigKind.GCP.id, featureId = selectedFeature?.id ?: DigGeometry.assign(ne, shapes(), null).featureId, digTag = q.toString())
+        }
+        val k = DigKind.fromPositionType(p.type) ?: return p.copy(digKind = "")
         return when (k) {
             DigKind.FEATURE -> p.copy(digKind = k.id, featureId = selectedFeature?.takeIf { !it.finished }?.id)
             DigKind.ARTIFACT -> {
@@ -248,7 +263,9 @@ class DigController(private val c: SurveyController) {
             DigKind.STAKE -> pickStake()
             DigKind.GCP -> {
                 val id = AprilTagNaming.parse(saved.digTag)
-                if (id != null) { tagId = AprilTagNaming.nextAfter(id, tagsIn(saved.featureId)); saveSelection() }
+                // 1–4 단추로 잰 점은 −/+ 번호를 건드리지 않음
+                if (id != null && quickTag == null) { tagId = AprilTagNaming.nextAfter(id, tagsIn(saved.featureId)); saveSelection() }
+                quickTag = null
             }
             else -> {}
         }
@@ -485,3 +502,6 @@ class DigController(private val c: SurveyController) {
     /** X11: 점이 있으면 좌표계·지역·지오이드 잠금 */
     val crsLocked: Boolean get() = CrsLock.locked(c.points.size, crsUnlocked)
 }
+
+/** 0.1.37 지도 위 사진 기준점 단추 */
+val QUICK_TAGS = listOf(1, 2, 3, 4)

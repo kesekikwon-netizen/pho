@@ -161,6 +161,7 @@ internal fun DigControlArea(c: SurveyController) {
     val feature = c.dig.kind == DigKind.FEATURE
     Column(Modifier.fillMaxWidth().background(t.bg).testTag("control_area")) {
         NowRow(c)
+        QuickTagRow(c)   // 0.1.37 사진 기준점 Target 1·2·3·4 (측량 단추와 따로)
         Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             val side: @Composable RowScope.() -> Unit = {
                 SideBtn(Glyph.UNDO, if (c.dig.undoIsReopen) "닫기 취소" else "되돌리기", "tool_undo") { c.askUndo() }
@@ -184,7 +185,7 @@ internal fun DigControlArea(c: SurveyController) {
                 Box(
                     Modifier.weight(1f).height(84.dp).clip(RoundedCornerShape(18.dp))
                         .background(if (!busy && (notConn || dim) && !armed) t.blockedButton else t.primary)
-                        .hCombinedClickable(onLongClick = { if (!busy && !armed) c.setupOpen = true }) { if (busy) c.cancelAcquire() else if (notConn && !armed) { c.connection?.openScreen() ?: c.onMeasure() } else c.onMeasure() }
+                        .hCombinedClickable(onLongClick = { if (!busy && !armed) c.setupOpen = true }) { if (busy) c.cancelAcquire() else if (notConn && !armed) { c.connection?.openScreen() ?: c.onMeasure() } else { c.dig.quickTag = null; c.onMeasure() } }
                         .testTag("measure_button"),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -356,6 +357,46 @@ object HeaderTitle {
             n <= 8 -> Style(19, 1)
             n <= 14 -> Style(17, 2)
             else -> Style(15, 2)
+        }
+    }
+}
+
+/**
+ * 0.1.37 사진 기준점 단추 한 줄(측량 단추 위, 지도 아래): 「Target 1·2·3·4」 각 60dp, 장갑 손가락용.
+ * 누르면 바로 그 번호로 지금 유구의 사진 기준점을 잰다(엄격 FIX·평균 규칙은 측량 단추와 같음). 이미 잰 번호는 ✓ + 진한 테두리,
+ * 다시 재기는 길게 누르기(확인 창). 유구를 골랐거나 사진 기준점 모드일 때만 보인다. 5번 이상은 「사진 기준점」 −/+ 카드.
+ */
+@Composable
+internal fun QuickTagRow(c: SurveyController) {
+    val t = T
+    val d = c.dig
+    if (!d.quickTagsVisible) return
+    val done = d.tagsIn(d.featureId).toSet()
+    val busy = c.phase == Phase.ACQUIRING
+    Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 8.dp).testTag("qtag_row"), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.width(52.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Target", style = Ty.label.copy(fontSize = 12.sp), color = t.ink, maxLines = 1)
+            Text("AprilTag", style = Ty.small.copy(fontSize = 10.sp), color = t.inkSub, maxLines = 1)
+            Text(d.quickTagFeature(), style = Ty.small.copy(fontSize = 10.sp), color = t.accentText, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("qtag_feature"))
+        }
+        for (id in d.quickTags) {
+            val measured = id in done
+            val now = busy && d.quickTag == id
+            Box(
+                Modifier.weight(1f).height(60.dp).clip(RoundedCornerShape(14.dp))
+                    .background(if (now) t.primary else if (measured) t.primaryCont else t.raised)
+                    .border(if (measured || now) 2.dp else 1.dp, if (measured || now) t.primary else t.outline, RoundedCornerShape(14.dp))
+                    .hCombinedClickable(onLongClick = { c.longPressQuickTag(id) }) { c.tapQuickTag(id) }
+                    .semantics { contentDescription = "사진 기준점 Target $id" + if (measured) " · 잰 것, 다시 재려면 길게 누르기" else " · 누르면 바로 측점" }
+                    .testTag("qtag_$id"),
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("$id", style = Ty.ledger.copy(fontSize = 28.sp), color = if (now) t.onPrimary else t.ink, maxLines = 1)
+                    if (measured && !now) Text("✓", style = Ty.label.copy(fontSize = 18.sp), color = t.primary, modifier = Modifier.testTag("qtag_done_$id"))
+                }
+                if (now) Text("재는 중", style = Ty.small.copy(fontSize = 10.sp), color = t.onPrimary, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp))
+            }
         }
     }
 }

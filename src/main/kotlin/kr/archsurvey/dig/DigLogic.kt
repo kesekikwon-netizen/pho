@@ -337,8 +337,8 @@ object LedgerText {
 
 /**
  * 0.1.36 사진 기준점(AprilTag) 번호·이름.
- * iTwin Capture Modeler 는 사진에서 찾은 AprilTag 를 「AprilTag #<번호>」 라는 이름의 점으로 만들고, 같은 이름의 기준점(측량 좌표)과
- * 자동으로 합친다(Bentley KB0044805 「Using April Tags as Control Points」). 그래서 내보낼 이름은 반드시 「AprilTag #12」 꼴.
+ * 0.1.36 은 Bentley KB0044805 를 따라 「AprilTag #<번호>」 였으나, 0.1.37 부터 사용자가 준 실제 iTwin Capture 파일(강릉 1호)의
+ * 이름 「Target #<번호>」 를 기준으로 한다(사진에서 찾은 표적과 같은 이름이어야 저절로 합쳐짐).
  * 앱 안 점 번호(P-0037)는 그대로 두고, 표적 번호는 점의 꼬리표(digTag = "12")에 숫자로만 둔다.
  */
 object AprilTagNaming {
@@ -346,7 +346,8 @@ object AprilTagNaming {
     /** 표적 번호 상한(36h11 = 0–586 이 가장 흔함. 다른 묶음을 위해 넉넉히) */
     const val MAX_ID = 999
     const val DEFAULT_FIRST = 1
-    fun name(id: Int) = "AprilTag #$id"
+    /** 0.1.37: 사용자 실제 iTwin Capture 파일(강릉 1호, build-reports/0.1.37/user-itwin-sample-gangneung-1ho.xml)이 「Target #1」 → 그 이름을 따름 */
+    fun name(id: Int) = "Target #$id"
     fun clamp(id: Int) = id.coerceIn(MIN_ID, MAX_ID)
     /** 꼬리표 → 번호. 숫자가 아니면 null */
     fun parse(tag: String?): Int? = tag?.trim()?.takeIf { it.isNotEmpty() && it.all(Char::isDigit) && it.length <= 4 }?.toInt()?.takeIf { it in MIN_ID..MAX_ID }

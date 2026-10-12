@@ -185,7 +185,7 @@ class ExportService(
         hgis_control_points_<EPSG>.csv  hgis 「CSV 기준점」 양식(point_id,x,y,z,datum,ellipsoid,projection,origin,accuracy_m,pdop,fix_type)
         itwin_capture_<EPSG>.xml  iTwin Capture Modeler 기준점(SurveysData XML, x=동 y=북 z=지면 표고, 이름 「1호」→「Target #1」)
         itwin_capture_names_<EPSG>.csv  iTwin 이름 ↔ 현장 점 번호 대조표
-        itwin_gcp/      iTwin 사진 기준점(AprilTag) 유구별 TXT·XML(이름 「AprilTag #번호」) · 표 · README_iTwin_AprilTag.txt
+        itwin_gcp/      iTwin 사진 기준점(AprilTag) 유구별 TXT·XML(이름 「Target #번호」) · 표 · README_iTwin_AprilTag.txt
         (고른 양식만 들어 있어요)
         photos.csv, photos/  점별 사진(최대 4장)
         voice.csv, voices/   점별 음성 메모(m4a, AAC 16kHz 모노). 내보낼 때 '음성 포함'을 켠 경우만

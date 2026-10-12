@@ -14,7 +14,8 @@ import java.util.Locale
  *    사진에서 찾은 AprilTag 와 같은 이름끼리 저절로 합쳐진다. 머리줄은 마법사에서 지워야 하므로 TXT 에는 머리줄을 넣지 않는다.
  *  - ContextCapture 도움말 「Importing control points」: TXT/CSV 와 ContextCapture Surveys(XML) 를 받는다. 불러올 때 SRS 를 맞게 고를 것.
  *  - 「Positioning/georeferencing」: 기준점으로 맞추려면 3점 이상, 점마다 사진 2장 넘게.
- * XML 은 사용자 표본(SurveysData, build-reports/itwin-capture-xml-samples)과 같은 꼴로 쓴다.
+ * 0.1.37: 이름·XML 은 사용자가 준 실제 iTwin Capture 파일(build-reports/0.1.37/user-itwin-sample-gangneung-1ho.xml)이 기준 —
+ *   이름 「Target #N」, SurveysData(CRLF·SRS Id 0·정밀도 0.01·Measurement 없음). 웹 문서(KB0044805 의 「AprilTag #X」)보다 우선.
  *
  * 묶음: 점의 유구(featureId, 없으면 「유구밖」) × 좌표계(EPSG). 같은 묶음에서 같은 번호를 여러 번 쟀으면 **마지막 값**만 쓰고 표에 「대체됨」.
  * 높이 = 지면 높이(해발 우선, 없으면 지면 타원체고 — 다른 내보내기와 같은 규칙). 높이가 없는 점은 뺀다(표에 적음).
@@ -78,8 +79,8 @@ object ItwinGcpExport {
     /** iTwin 「Custom Text Format」: 머리줄 없음, 쉼표, 「이름,X(동),Y(북),Z」, UTF-8(BOM 없음), CRLF */
     fun txt(rows: List<Row>): String = rows.joinToString("") { r -> "${r.name},${f3(r.point.easting)},${f3(r.point.northing)},${f3(z(r.point)!!)}\r\n" }
 
-    /** 사용자 표본과 같은 SurveysData XML(이름만 「AprilTag #n」) */
-    fun xml(rows: List<Row>, epsg: Int): String = ItwinCaptureXml.writeNamed(rows.map { it.name to it.point }, epsg)
+    /** 0.1.37: 사용자 실제 iTwin 파일(강릉 1호)과 같은 SurveysData(CRLF·SRS Id 0·「Target #n」·정밀도 0.01) */
+    fun xml(rows: List<Row>, epsg: Int, useSigma: Boolean = false): String = ItwinCaptureXml.writeSurveys(rows.map { it.tagId to it.point }, epsg, useSigma)
 
     /** 표(엑셀용, UTF-8 BOM): 어느 유구의 몇 번 표적이 어느 점인지, 쓴 값/대체된 값 */
     fun tableCsv(groups: List<Group>): String {
@@ -141,14 +142,13 @@ object ItwinGcpExport {
         if (allOk) sb.append("  전체_AprilTag_EPSG….txt / .xml: 모든 유구 표적을 한 파일에(번호가 겹치지 않을 때만 만듦)\r\n")
         else sb.append("  전체 파일은 만들지 않았어요: 여러 유구가 같은 번호(${conf.joinToString(", ") { "#$it" }})를 써서 iTwin 에서 서로 섞여요. 유구별 파일을 쓰세요.\r\n")
         sb.append("  표적표_gcp_table.csv: 유구·표적 번호·점 번호(P-…)·좌표·정밀도·다시 잰 값(마지막 값만 내보냄)\r\n\r\n")
-        sb.append("[TXT 열] 머리줄 없음 · 쉼표 · 이름,X,Y,Z = AprilTag #번호, 동(Easting), 북(Northing), 지면 높이(m, 폴 높이 뺌) · UTF-8\r\n")
-        sb.append("[XML] ContextCapture/iTwin SurveysData(사용자 표본과 같은 꼴) · SRS Definition = EPSG:<번호> · 정밀도 = 측정 σ(최소 0.01 m)\r\n\r\n")
+        sb.append("[TXT 열] 머리줄 없음 · 쉼표 · 이름,X,Y,Z = Target #번호, 동(Easting), 북(Northing), 지면 높이(m, 폴 높이 뺌) · UTF-8\r\n")
+        sb.append("[XML] iTwin SurveysData(강릉 1호 실제 파일과 같은 꼴) · SRS Definition = EPSG:<번호> · 정밀도 0.01 m · 표적 번호 순 · 사진 측정(Measurement)은 iTwin 에서 생김\r\n\r\n")
         sb.append("[iTwin Capture Modeler 에서]\r\n")
         sb.append("  1) 그 유구 사진만 넣은 블록을 만든다(유구마다 블록 하나).\r\n")
-        sb.append("  2) Surveys › Import surveys from file › Custom Text Format(Wizard) → 그 유구의 .txt (구분자 쉼표, 열: Name / X(Easting) / Y(Northing) / Z).\r\n")
-        sb.append("     좌표계(SRS)는 파일 이름의 EPSG(예: EPSG:5186 Korea 2000 / Central Belt 2010) 를 고른다. 또는 같은 이름의 .xml 을 Surveys 불러오기로.\r\n")
+        sb.append("  2) Surveys › Import → 그 유구의 .xml (SurveysData, 좌표계 포함). 또는 Custom Text Format(Wizard) → .txt (쉼표, 열: Name / X(Easting) / Y(Northing) / Z, 좌표계는 파일 이름의 EPSG).\r\n")
         sb.append("  3) Aerotriangulation: Positioning = Control points(타깃 포함) 조정, 「Use targets (QR Codes, AprilTags or ChiliTags)」 체크,\r\n")
-        sb.append("     Settings › Targets extraction = AprilTags. 사진에서 찾은 「AprilTag #12」 가 같은 이름 기준점과 저절로 합쳐져요.\r\n")
+        sb.append("     Settings › Targets extraction = AprilTags. 사진에서 찾은 「Target #12」 가 같은 이름 기준점과 저절로 합쳐져요.\r\n")
         sb.append("  4) 사진에 안 잡힌 표적은 사진 연결이 없으니 지워도 돼요.\r\n\r\n")
         sb.append("[주의]\r\n")
         sb.append("  · 표적 번호 = 인쇄한 AprilTag 의 ID 와 같아야 해요. 표적 묶음(family, 예: 36h11)은 iTwin 타깃 추출에서 지원하는지 먼저 확인하세요.\r\n")

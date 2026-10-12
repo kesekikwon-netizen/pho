@@ -38,6 +38,8 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
     val media = AndroidMediaPlatform(application, viewModelScope) { application.settings.project }
     val docs = kr.archsurvey.engine.DocBridge()
     val exportPlatform = kr.archsurvey.engine.AndroidExportPlatform(application, { application.settings.project }, media.photoStore, media.voiceStore, docs)
+    /** 0.1.37 사진 기준점 저장 즉시 iTwin XML 자동 저장 */
+    val gcpFiles = kr.archsurvey.engine.AndroidGcpFiles(application) { application.settings.project }
 
     val backupPlatform = kr.archsurvey.engine.AndroidBackupPlatform(application, docs)
     val driveAuth = kr.archsurvey.engine.DriveAuthBridge()
@@ -98,6 +100,7 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
         controller.tilt = TiltController(kr.archsurvey.engine.AndroidTiltPlatform(app, application.settings))
         controller.media = media
         controller.exporter = ExportController(exportPlatform, viewModelScope)
+        controller.gcpFiles = gcpFiles // 0.1.37
         controller.backup = BackupController(backupPlatform, viewModelScope)
         val drivePlatform = kr.archsurvey.engine.AndroidDrivePlatform(application, driveAuth)
         controller.drive = DriveSyncController(
