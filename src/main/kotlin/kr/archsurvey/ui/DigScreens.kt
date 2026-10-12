@@ -90,11 +90,8 @@ fun HomeToday(c: SurveyController) {
                 }
                 MBtn(Modifier.width(110.dp).height(64.dp).testTag("home_job_btn"), MKind.PLAIN, 18.dp, onClick = { c.jobs?.openInfo() ?: c.hub.open(ToolScreen.JOB_INFO) }) { Text("작업", style = Ty.label.copy(fontSize = 16.sp), color = t.ink) }
             }
-            // 0.1.39 작업 카드에서도 바로: 새 작업 · 다른 작업 열기
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                MBtn(Modifier.weight(1f).height(56.dp).testTag("home_card_new"), MKind.PLAIN, 16.dp, onClick = { c.jobs?.openNew() }) { Text("+ 새 작업", style = Ty.label, color = t.ink) }
-                MBtn(Modifier.weight(1f).height(56.dp).testTag("home_card_open"), MKind.PLAIN, 16.dp, onClick = { c.jobs?.openList() }) { Text("다른 작업 열기", style = Ty.label, color = t.ink) }
-            }
+            // 0.1.39 작업 카드: 다른 작업 열기(새 작업은 바로 위 큰 단추 — 같은 단추를 두 번 두지 않음)
+            MBtn(Modifier.fillMaxWidth().height(56.dp).testTag("home_card_open"), MKind.PLAIN, 16.dp, onClick = { c.jobs?.openList() }) { Text("다른 작업 열기", style = Ty.label, color = t.ink) }
             Box(Modifier.fillMaxWidth().height(1.5.dp).background(t.ink))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("오늘 준비", style = Ty.serifHead, color = t.ink, modifier = Modifier.weight(1f))

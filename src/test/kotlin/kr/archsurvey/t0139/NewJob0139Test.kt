@@ -55,7 +55,7 @@ class NewJob0139Test {
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
     private var taps = 0
-    private fun tap(tag: String) { rule.onNodeWithTag(tag).performScrollTo().performClick(); rule.waitForIdle(); taps++ }
+    private fun tap(tag: String) { val n = rule.onNodeWithTag(tag); runCatching { n.performScrollTo() }; n.performClick(); rule.waitForIdle(); taps++ }
 
     private fun setup(start: String = "강릉 교동 · 정밀발굴 1지구 · 10-01", group: String? = "강릉 교동"): Pair<SurveyController, SiteJobs> {
         kr.archsurvey.ui.TileImages.networkEnabled = false
@@ -135,11 +135,12 @@ class NewJob0139Test {
         assertNull(c.hub.screen)
     }
 
-    @Test fun drawer_firstItem_isNewJob_cardHasNewJob() {
+    @Test fun drawer_firstItem_isNewJob_cardOpensList() {
         val (c, _) = setup()
         assertEquals("job_new", DrawerMenu.sections.first().items.first().id)
         assertEquals("+ 새 작업", DrawerMenu.sections.first().items.first().label)
-        rule.onNodeWithTag("home_card_new").performScrollTo().performClick(); rule.waitForIdle()
-        assertEquals(ToolScreen.JOB_NEW, c.hub.screen)
+        rule.onNodeWithTag("home_card_new").assertDoesNotExist() // 같은 단추 두 번 없음
+        rule.onNodeWithTag("home_card_open").performClick(); rule.waitForIdle()
+        assertEquals(ToolScreen.JOB_OPEN, c.hub.screen)
     }
 }

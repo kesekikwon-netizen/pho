@@ -588,7 +588,7 @@ fun JobScreen(c: SurveyController) {
                     for (st in kr.archsurvey.job.SurveyStage.entries) Choice(st.labelKo, jc.newStage == st, Modifier.weight(1f).height(56.dp).testTag("job_stage_${st.name}")) { jc.pickStage(st) }
                 }
                 Text("구역 · 지구 번호 (날짜 ${jc.mmdd} 자동)", style = Ty.label, color = t.ink)
-                BigNumberPicker(jc.newNo, 1..kr.archsurvey.job.NewJobName.MAX_NO, "job_no", "지구") { jc.newNo = it }
+                BigNumberPicker(jc.newNo, 1..kr.archsurvey.job.NewJobName.MAX_NO, "job_no", "지구") { jc.setNo(it) }
                 Text("좌표계", style = Ty.label, color = t.ink)
                 val zones = kr.archsurvey.core.KoreanTmZone.entries
                 for (row in zones.chunked(2)) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

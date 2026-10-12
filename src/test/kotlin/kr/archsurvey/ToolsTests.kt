@@ -187,7 +187,7 @@ class JobTests {
         jc.openNew(); assertEquals(ToolScreen.JOB_NEW, c.hub.screen)
         jc.newName = "  새작업  "; jc.create()
         assertEquals("새작업", jc.current); assertEquals("새작업", c.projectName); assertEquals("새작업", p.current)
-        assertEquals(ToolScreen.JOB_INFO, c.hub.screen); assertTrue(jc.notice!!.contains("새작업"))
+        assertNull(c.hub.screen); assertTrue(jc.notice!!.contains("새작업")) // 0.1.39: 만들면 바로 측량 지도
     }
 
     @Test fun newJobFormDefaultsGeoidToReceiverWithoutTouchingCurrentJob() {

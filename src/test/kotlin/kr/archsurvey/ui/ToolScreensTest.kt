@@ -165,9 +165,12 @@ class ToolScreensTest {
         shot("t8_job_delete_confirm")
         rule.onNodeWithTag("confirm_cancel").performClick(); rule.waitForIdle()
         rule.runOnUiThread { c.jobs!!.openNew() }; rule.waitForIdle()
-        rule.onNodeWithTag("job_name").performTextInput("4지구"); rule.onNodeWithTag("job_create").performClick(); rule.waitForIdle()
-        assertEquals("4지구", c.projectName)
-        rule.onNodeWithTag("job_info_name").assertExists()
+        // 0.1.39: 키보드 없이 — 단계 「표본」 + 지구 번호 4
+        rule.onNodeWithTag("job_stage_SAMPLE").performScrollTo().performClick(); rule.waitForIdle()
+        repeat(3) { rule.onNodeWithTag("job_no_p1").performScrollTo().performClick(); rule.waitForIdle() }
+        rule.onNodeWithTag("job_create").performClick(); rule.waitForIdle()
+        assertTrue(c.projectName, c.projectName.startsWith("표본 4지구 · "))
+        assertNull(c.hub.screen)
         shot("t9_job_info")
     }
 

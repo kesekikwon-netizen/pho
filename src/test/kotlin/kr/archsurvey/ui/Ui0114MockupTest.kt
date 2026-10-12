@@ -175,7 +175,7 @@ class Ui0114MockupTest {
         // 09 작업관리
         ui { c.hub.open(ToolScreen.JOB_HUB) }; rule.onNodeWithTag("jobhub_new").assertExists(); shot("mockup_09_job_hub")
         // 10 새 작업
-        ui { c.jobs!!.openNew() }; rule.onNodeWithTag("job_auto_zone").performScrollTo().assertExists(); rule.onNodeWithTag("job_codes").assertDoesNotExist() /* 0.1.38: 위치 종류(코드 라이브러리)는 발굴 종류로 대체돼 숨김 */; rule.onNodeWithTag("job_group").assertExists(); shot("mockup_10_new_job")
+        ui { c.jobs!!.openNew(); c.jobs!!.newDetailsOpen = true }; rule.onNodeWithTag("job_zone_note").performScrollTo().assertExists() /* 0.1.39: 자동 토글 → 추천 타일 미리 고름 */; rule.onNodeWithTag("job_codes").assertDoesNotExist() /* 0.1.38: 위치 종류(코드 라이브러리)는 발굴 종류로 대체돼 숨김 */; rule.onNodeWithTag("job_site_new").assertExists(); shot("mockup_10_new_job")
         // 11 작업 전송 양식
         reset(); ui { c.exporter!!.openScreen() }
         rule.onNodeWithTag("export_fmt_shp").performScrollTo().performClick(); rule.waitForIdle()

@@ -154,7 +154,11 @@ class JobController(
     var current by mutableStateOf(platform.current); private set
     var list by mutableStateOf<List<JobInfo>>(emptyList()); private set
     var info by mutableStateOf<JobInfo?>(null); private set
-    var newName by mutableStateOf("")
+    private var newNameState by mutableStateOf("")
+    /** 직접 쓴 작업명. 비어 있지 않게 넣으면(키보드 「직접 입력」 · 코드) 고르기 이름 대신 이것을 씀 */
+    var newName: String
+        get() = newNameState
+        set(v) { newNameState = v; if (v.isNotBlank()) nameManual = true }
     /** 0.1.38 「새 폴더」: 상위 폴더(유적 이름 등). 비우면 ExcavationSurvey 바로 아래 */
     var newGroup by mutableStateOf("")
     var groups by mutableStateOf<List<String>>(emptyList()); private set
@@ -184,7 +188,9 @@ class JobController(
     private val currentSite: String? get() = currentFolder?.removePrefix(kr.archsurvey.job.JobFolders.PUBLIC_PARENT + "/")?.let { kr.archsurvey.job.JobFolders.split(it).first }
     fun pickSite(sv: String?) { newGroupTyping = false; newSite = sv.orEmpty(); newNo = kr.archsurvey.job.NewJobName.nextNo(newSite, newStage, list.map { it.name }) }
     fun pickStage(st: kr.archsurvey.job.SurveyStage) { newStage = st; newNo = kr.archsurvey.job.NewJobName.nextNo(newSite, st, list.map { it.name }) }
-    fun stepNo(d: Int) { newNo = (newNo + d).coerceIn(1, kr.archsurvey.job.NewJobName.MAX_NO) }
+    private var noTouched = false
+    /** 사람이 번호를 고름(목록이 늦게 와도 덮어쓰지 않음) */
+    fun setNo(n: Int) { noTouched = true; newNo = n.coerceIn(1, kr.archsurvey.job.NewJobName.MAX_NO) }
     fun startNewGroup() { newGroupTyping = true; newSite = "" }
     /** 지금 작업 폴더(홈 카드·작업 정보) */
     val currentFolder: String? get() = runCatching { platform.folderOf(current) }.getOrNull()
@@ -216,7 +222,7 @@ class JobController(
         if (on) autoZone()
     }
     fun openNew() {
-        error = null; notice = null; newName = ""; newGroup = ""; nameManual = false; newGroupTyping = false; newDetailsOpen = false
+        error = null; notice = null; newName = ""; newGroup = ""; nameManual = false; noTouched = false; newGroupTyping = false; newDetailsOpen = false
         newSite = currentSite.orEmpty()
         newStage = kr.archsurvey.job.SurveyStage.inName(current) ?: kr.archsurvey.job.SurveyStage.FULL
         newNo = kr.archsurvey.job.NewJobName.nextNo(newSite, newStage, list.map { it.name } + current)
@@ -231,7 +237,7 @@ class JobController(
             list = runCatching { platform.list() }.getOrDefault(emptyList())
             groups = runCatching { platform.groups() }.getOrDefault(emptyList())
             current = platform.current
-            newNo = kr.archsurvey.job.NewJobName.nextNo(newSite, newStage, list.map { it.name })
+            if (!noTouched) newNo = kr.archsurvey.job.NewJobName.nextNo(newSite, newStage, list.map { it.name })
         }
     }
 

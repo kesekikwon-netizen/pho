@@ -53,7 +53,7 @@ class Removal0138Test {
         assertTrue(DrawerMenu.sections.none { it.title == "즐겨찾기" })
         val labels = items.map { it.label }
         for (gone in listOf("점 목록", "계산기", "위치 종류", "안테나 높이", "작업 정보", "측량")) assertFalse(gone, gone in labels)
-        assertTrue(labels.any { "새 폴더" in it })
+        assertTrue(labels.first() == "+ 새 작업") // 0.1.39: 새 작업이 메뉴 첫 칸
         assertTrue(labels.any { "구글 드라이브" in it })
     }
 

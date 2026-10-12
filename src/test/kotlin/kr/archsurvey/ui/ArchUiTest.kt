@@ -85,7 +85,7 @@ class ArchUiTest {
         start()
         ui { c.hub.open(ToolScreen.AREAS) }
         rule.onNodeWithTag("areas_empty").assertExists()
-        rule.onNodeWithTag("area_name").performTextInput("A"); rule.onNodeWithTag("area_add").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("area_pick_A").performClick(); rule.waitForIdle() // 0.1.39: 칩 한 번에 만들기
         assertEquals(listOf("A"), c.arch.areas.map { it.name })
         rule.onNodeWithTag("grids_empty").assertExists()
         shot("a1_areas")
@@ -93,7 +93,7 @@ class ArchUiTest {
         rule.onNodeWithTag("grid_wizard").assertExists()
         rule.onNodeWithTag("grid_mode_az").performClick()
         rule.onNodeWithTag("grid_n").performTextInput("412000"); rule.onNodeWithTag("grid_e").performTextInput("238000")
-        rule.onNodeWithTag("grid_az").performTextInput("90"); rule.onNodeWithTag("grid_spacing").performTextReplacement("2")
+        rule.onNodeWithTag("grid_az").performTextInput("90"); rule.onNodeWithTag("grid_sp_2 m").performScrollTo().performClick()
         rule.onNodeWithTag("grid_save").performClick(); rule.waitForIdle()
         assertEquals(1, c.arch.grids.size)
         assertEquals(2.0, c.arch.grids[0].spacingM, 1e-9)

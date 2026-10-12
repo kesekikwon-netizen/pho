@@ -18,12 +18,13 @@ internal fun BigNumberPicker(value: Int, range: IntRange, tag: String, suffix: S
     val t = T
     Row(Modifier.fillMaxWidth().testTag(tag), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         @Composable fun step(label: String, d: Int, tg: String) =
-            MBtn(Modifier.height(64.dp).widthIn(min = 56.dp).testTag("${tag}_$tg"), MKind.PLAIN, 16.dp, onClick = { onChange((value + d).coerceIn(range.first, range.last)) }) {
-                Text(label, style = Ty.label.copy(fontSize = 18.sp), color = t.ink, modifier = Modifier.padding(horizontal = 6.dp))
+            MBtn(Modifier.height(64.dp).widthIn(min = 52.dp).testTag("${tag}_$tg"), MKind.PLAIN, 16.dp, onClick = { onChange((value + d).coerceIn(range.first, range.last)) }) {
+                Text(label, style = Ty.label.copy(fontSize = 17.sp), color = t.ink, maxLines = 1, softWrap = false, modifier = Modifier.padding(horizontal = 4.dp))
             }
         step("−10", -10, "m10"); step("−", -1, "m1")
-        Box(Modifier.weight(1f).height(64.dp), contentAlignment = Alignment.Center) {
-            Text("$value$suffix", style = Ty.coord.copy(fontSize = 30.sp), color = t.ink, modifier = Modifier.testTag("${tag}_value"))
+        Row(Modifier.weight(1f).height(64.dp).testTag("${tag}_value"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            Text("$value", style = Ty.coord.copy(fontSize = 28.sp), color = t.ink, maxLines = 1, softWrap = false)
+            if (suffix.isNotEmpty()) Text(suffix, style = Ty.small, color = t.inkSub, maxLines = 1, softWrap = false)
         }
         step("+", 1, "p1"); step("+10", 10, "p10")
     }
@@ -78,7 +79,7 @@ object OneFingerNames {
 
 /** 0.1.39 유구 종류 켜기/끄기 목록(자주 쓰는 발굴 유구 + 지금 켠 것) */
 object OneFingerTypes {
-    val COMMON = listOf("주거지", "수혈", "주혈", "구", "토광묘", "석곽묘", "석실묘", "옹관묘", "가마", "건물지", "고상건물지", "우물", "소성유구", "집석", "적석", "경작유구", "도로", "구상유구")
+    val COMMON = listOf("주거지", "수혈", "주혈", "구", "토광묘", "석곽묘", "석실묘", "옹관묘", "가마", "건물지", "고상건물지", "우물", "소성유구", "집석", "적석", "경작유구", "구상유구")
     fun catalog(on: List<String>): List<String> = (on + COMMON).distinct()
     /** 마지막 하나는 끄지 않음(유구 종류가 비면 안 됨) */
     fun toggle(on: List<String>, t: String): List<String> = if (t in on) (if (on.size > 1) on - t else on) else on + t

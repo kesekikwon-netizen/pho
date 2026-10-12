@@ -93,8 +93,10 @@ class Ui0138Test {
     @Test fun newJob_createsFolder_withGroup_preview() {
         val (c, jobs) = setup(home = false)
         rule.runOnIdle { c.jobs!!.openNew() }; rule.waitForIdle()
-        rule.onNodeWithTag("job_name").performTextInput("A트렌치")
+        // 0.1.39: 이름 직접 입력은 「자세히 › 직접 입력」, 새 유적은 「+ 새 유적」
+        rule.onNodeWithTag("job_site_new").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("job_group").performTextInput("광령리 유적")
+        rule.onNodeWithTag("job_details").performScrollTo().performClick(); rule.waitForIdle(); rule.onNodeWithTag("job_manual").performScrollTo().performClick(); rule.waitForIdle(); rule.onNodeWithTag("job_name").performScrollTo().performTextReplacement("A트렌치")
         rule.waitForIdle()
         rule.onNodeWithTag("job_folder_preview", useUnmergedTree = true).assertTextContains("Documents/ExcavationSurvey/광령리 유적/A트렌치", substring = true)
         shot("03_new_job")
@@ -102,13 +104,13 @@ class Ui0138Test {
         assertEquals("광령리 유적", jobs.lastGroup)
         assertEquals("A트렌치", c.projectName)
         assertEquals("Documents/ExcavationSurvey/광령리 유적/A트렌치", jobs.folderOf("A트렌치"))
-        rule.onNodeWithTag("job_info_folder", useUnmergedTree = true).assertTextContains("광령리 유적/A트렌치", substring = true)
+        assertNull(c.hub.screen) // 0.1.39: 바로 측량 지도
     }
 
     @Test fun newJob_duplicateName_refused() {
         val (c, _) = setup(home = false)
         rule.runOnIdle { c.jobs!!.refresh(); c.jobs!!.openNew() }; rule.waitForIdle()
-        rule.onNodeWithTag("job_name").performTextInput("광령리 3지구")
+        rule.onNodeWithTag("job_details").performScrollTo().performClick(); rule.waitForIdle(); rule.onNodeWithTag("job_manual").performScrollTo().performClick(); rule.waitForIdle(); rule.onNodeWithTag("job_name").performScrollTo().performTextReplacement("광령리 3지구")
         rule.onNodeWithTag("job_create").performClick(); rule.waitForIdle()
         assertEquals("같은 이름의 작업이 이미 있어요", c.jobs!!.error)
         rule.runOnIdle { c.jobs!!.newName = "a/b" }

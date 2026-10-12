@@ -142,16 +142,14 @@ class Ui0114ApplyToSurveyTest {
         assertOnSurvey()
     }
 
-    /** 새 작업 › 만들기 → 작업 정보 → 적용 → 측량 */
+    /** 0.1.39: 새 작업 › 「만들고 측량 시작」 → 바로 측량(예전: 작업 정보 → 적용 한 번 더) */
     @Test fun newJobThenApplyNavigatesToSurvey() {
         setup()
         rule.onNodeWithTag("home_job_btn").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("job_to_new").performScrollTo().performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("job_name").performTextInput("동부-1")
+        rule.onNodeWithTag("job_stage_TRIAL").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("job_create").performClick(); rule.waitForIdle()
-        assertEquals("동부-1", c.projectName)
-        assertEquals("tool:JOB_INFO", c.visibleRoute())
-        rule.onNodeWithTag("job_apply").performClick(); rule.waitForIdle()
+        assertTrue(c.projectName, c.projectName.startsWith("시굴 1지구 · "))
         assertOnSurvey()
     }
 
@@ -204,7 +202,7 @@ class Ui0114ApplyToSurveyTest {
     @Test fun pointsBackToMapFromHomeGoesToSurvey() {
         setup()
         // 0.1.35: 홈 「측량한 것」 → 뒤로 = 측량 지도
-        rule.onNodeWithTag("home_points").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("home_points").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("features_summary").assertExists()
         rule.onNodeWithTag("tool_back").performClick(); rule.waitForIdle()
         assertOnSurvey()

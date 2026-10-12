@@ -62,5 +62,5 @@ class OneFinger0139Test {
         }
         assertTrue("키보드 칸 $n 개 — 0.1.39 기준 이하여야 함", n <= KEYBOARD_BUDGET)
     }
-    companion object { const val KEYBOARD_BUDGET = 40 }
+    companion object { const val KEYBOARD_BUDGET = 26 // 0.1.39 기준(보고서의 남은 키보드 목록) }
 }
