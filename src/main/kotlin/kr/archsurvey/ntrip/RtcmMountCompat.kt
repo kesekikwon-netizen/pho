@@ -32,8 +32,41 @@ object RtcmMountCompat {
         return m > maxMinor(profile)
     }
 
+    /**
+     * 0.1.49(SmartTopo 정적 분석 반영, 코드 복사 없음): Trimble 계열은 VRS 보정으로 CMRx/CMR 을 받을 수 있다.
+     * 마운트 이름·format 에서 보정 형식 계열을 추정한다. "CMRX"/"CMR+"/"CMR" · 그 밖은 null.
+     */
+    fun detectCmr(text: String): String? {
+        val t = text.uppercase()
+        return when {
+            Regex("""CMR\s*X""").containsMatchIn(t) -> "CMRX"
+            t.contains("CMR+") || t.contains("CMRPLUS") -> "CMR+"
+            Regex("""(?:^|[^A-Z])CMR(?:[^A-Z]|$)""").containsMatchIn(t) || t.startsWith("CMR") -> "CMR"
+            else -> null
+        }
+    }
+
+    fun detectCmr(mount: String, format: String, formatDetails: String): String? =
+        detectCmr(mount) ?: detectCmr(format) ?: detectCmr(formatDetails)
+
+    /** SP60 은 CMRx 를 받는다고 확인되지 않았다(경고만, 목록에서 빼지 않음) */
+    fun cmrUnconfirmed(profile: DeviceProfile, mount: String, format: String = "", formatDetails: String = ""): Boolean =
+        profile.id == DeviceProfiles.SP60_ID && detectCmr(mount, format, formatDetails) == "CMRX"
+
+    /** R10 목록 행 짧은 표시. R10 은 CMRx·CMR+·CMR 을 직접 받는다 */
+    fun r10CmrNote(profile: DeviceProfile, mount: String, format: String = "", formatDetails: String = ""): String? {
+        if (profile.id != DeviceProfiles.R10_ID) return null
+        return when (detectCmr(mount, format, formatDetails)) {
+            "CMRX" -> "R10 CMRx 사용 가능"
+            "CMR+", "CMR" -> "R10 CMR 사용 가능"
+            else -> null
+        }
+    }
+
     /** 경고 문구. 호환이면 null */
     fun warnIfIncompatible(profile: DeviceProfile, mount: String, format: String = "", formatDetails: String = ""): String? {
+        if (cmrUnconfirmed(profile, mount, format, formatDetails))
+            return "SP60은 CMRx 보정을 받는지 확인되지 않았어요. 이 마운트($mount) 대신 VRS-RTCM32·VRS-RTCM31을 고르세요."
         if (!isTooNew(profile, mount, format, formatDetails)) return null
         val max = maxMinor(profile)
         return when (profile.id) {
