@@ -170,6 +170,7 @@ class ToolScreensTest {
         rule.onNodeWithTag("confirm_cancel").performClick(); rule.waitForIdle()
         rule.runOnUiThread { c.jobs!!.openNew() }; rule.waitForIdle()
         // 0.1.39: 키보드 없이 — 단계 「표본」 + 지구 번호 4
+        rule.onNodeWithTag("job_details").performScrollTo().performClick(); rule.waitForIdle() // 0.1.51
         rule.onNodeWithTag("job_stage_SAMPLE").performScrollTo().performClick(); rule.waitForIdle()
         repeat(3) { rule.onNodeWithTag("job_no_p1").performScrollTo().performClick(); rule.waitForIdle() }
         rule.onNodeWithTag("job_create").performClick(); rule.waitForIdle()

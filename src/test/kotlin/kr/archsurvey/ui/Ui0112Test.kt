@@ -81,9 +81,11 @@ class Ui0112Test {
         setup()
         rule.runOnUiThread { c.jobs!!.openNew() }; rule.waitForIdle()
         // 0.1.39: 좌표계 타일 + 큰 단추가 기본, 높이·배경지도는 「자세히」 안
-        for (tag in listOf("job_zone_5186", "job_create", "job_details")) rule.onNodeWithTag(tag).assertExists()
-        rule.onNodeWithTag("job_geoid").assertDoesNotExist()
+        // 0.1.51: 기본은 자동 이름 + 큰 단추, 좌표계 타일·높이·배경지도는 「바꾸기 ›」 안
+        for (tag in listOf("job_create", "job_details")) rule.onNodeWithTag(tag).assertExists()
+        rule.onNodeWithTag("job_zone_5186").assertDoesNotExist(); rule.onNodeWithTag("job_geoid").assertDoesNotExist()
         rule.onNodeWithTag("job_details").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("job_zone_5186").assertExists()
         for (tag in listOf("job_crs", "job_zone", "job_map", "job_geoid")) rule.onNodeWithTag(tag).assertExists()
         rule.onNodeWithTag("job_crs_value", useUnmergedTree = true).assertTextContains("GRS80 (TM)")
         shot("01_job_new")

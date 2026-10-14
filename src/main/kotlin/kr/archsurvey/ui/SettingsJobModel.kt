@@ -230,7 +230,7 @@ class JobController(
         openNewForm()
     }
     private fun openNewForm() {
-        loadForm(); formGeoid = kr.archsurvey.core.GeoidModel.RECEIVER /* 0.1.35: 새 작업 높이 기본 = 수신기 값(지금 작업은 그대로) */
+        loadForm() /* 0.1.51: 높이(Geoid)·배경지도·좌표계는 지난 작업 값 그대로(예전 0.1.35: 높이만 수신기 값으로 되돌림) */
         recommendedZone?.let { formZone = it } // 0.1.39 추천 좌표계 미리 선택(위치가 없으면 지금 작업 것)
         c.hub.open(ToolScreen.JOB_NEW)
         scope.launch {

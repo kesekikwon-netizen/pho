@@ -120,10 +120,11 @@ fun HomeToday(c: SurveyController) {
                 HomeTileBox(Glyph.LOCATE, "점 찾아가기", "home_goto", Modifier.weight(1f), small = true) { c.hub.open(ToolScreen.GOTO) }
                 HomeTileBox(Glyph.SLIDERS, "설정", "home_settings2", Modifier.weight(1f), small = true) { c.hub.open(ToolScreen.SETTINGS) }
             }
+            // 0.1.51 새 작업 쉽게: 「+ 새 작업」은 오른쪽(엄지 쪽)·테라코타 테두리로 눈에 띄게 → 다음 화면 「만들고 측량 시작」 한 번
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                HomeTileBox(Glyph.PLUS, "새 작업", "home_new_job", Modifier.weight(1f), small = true) { c.jobs?.openNew() ?: c.ui.toast("작업 관리를 쓸 수 없어요") }
                 HomeTileBox(Glyph.FOLDER, "다른 작업", "home_card_open", Modifier.weight(1f), small = true) { c.jobs?.openList() ?: c.hub.open(ToolScreen.JOB_OPEN) }
                 HomeTileBox(Glyph.FACE, "유구별", "home_features", Modifier.weight(1f), small = true) { c.homeOpen = false; c.hub.open(ToolScreen.FEATURES) }
+                HomeTileBox(Glyph.PLUS, "+ 새 작업", "home_new_job", Modifier.weight(1f), small = true, accent = true) { c.jobs?.openNew() ?: c.ui.toast("작업 관리를 쓸 수 없어요") }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 HomeTileBox(Glyph.LIST, "점 목록", "home_points", Modifier.weight(1f)) { c.homeOpen = false; c.hub.open(ToolScreen.POINTS) }
@@ -163,9 +164,9 @@ private fun HomeListRow(g: Glyph, title: String, sub: String, tag: String, plain
 }
 
 @Composable
-private fun HomeTileBox(g: Glyph, label: String, tag: String, modifier: Modifier, small: Boolean = false, onClick: () -> Unit) {
+private fun HomeTileBox(g: Glyph, label: String, tag: String, modifier: Modifier, small: Boolean = false, accent: Boolean = false, onClick: () -> Unit) {
     val sh = RoundedCornerShape(16.dp)
-    Column(modifier.heightIn(min = if (small) FieldIvory.minTouch else 76.dp).clip(sh).background(D.card).border(1.5.dp, D.line, sh).hClickable(onClickLabel = label, onClick = onClick).padding(vertical = 8.dp).testTag(tag),
+    Column(modifier.heightIn(min = if (small) FieldIvory.minTouch else 76.dp).clip(sh).background(if (accent) FieldIvory.primarySoft else D.card).border(if (accent) 2.dp else 1.5.dp, if (accent) FieldIvory.primary else D.line, sh).hClickable(onClickLabel = label, onClick = onClick).padding(vertical = 8.dp).testTag(tag),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         if (!small) { GlyphIcon(g, D.ink, 24.dp); Spacer(Modifier.height(6.dp)) }
         Text(label, style = DTy.small.copy(fontWeight = FontWeight.Bold), color = D.ink, maxLines = 1)

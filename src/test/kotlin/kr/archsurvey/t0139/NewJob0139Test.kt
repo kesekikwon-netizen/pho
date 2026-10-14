@@ -94,6 +94,7 @@ class NewJob0139Test {
     @Test fun pickStageAndNumber_buildsName_folderUnderSite() {
         val (c, jobs) = setup()
         tap("home_new_job")
+        tap("job_details")
         tap("job_stage_TRIAL")
         rule.onNodeWithTag("job_built_name", useUnmergedTree = true).assertTextEquals("강릉 교동 · 시굴 1지구 · 10-12")
         repeat(11) { tap("job_no_p1") } // 0.1.43 시안: − / + 만
@@ -112,11 +113,12 @@ class NewJob0139Test {
     @Test fun zoneTiles_recommendedPreselected_detailsHidden() {
         val (c, _) = setup()
         tap("home_new_job")
+        rule.onNodeWithTag("job_zone_5186").assertDoesNotExist() // 0.1.51: 고르기는 「바꾸기 ›」 안
+        tap("job_details")
         val rec = c.jobs!!.recommendedZone
         if (rec != null) rule.onNodeWithTag("job_zone_${rec.epsg}").assertExists()
         rule.onNodeWithTag("job_zone_5186").assertExists(); rule.onNodeWithTag("job_zone_5187").assertExists()
         rule.onNodeWithTag("job_manual").assertDoesNotExist()
-        tap("job_details")
         // 0.1.46: 새 작업은 선택만 — 작업명 직접 입력창 없음
         rule.onNodeWithTag("job_manual").assertDoesNotExist()
         rule.onNodeWithTag("job_name").assertDoesNotExist()
@@ -126,6 +128,7 @@ class NewJob0139Test {
     @Test fun newSite_isOptionalKeyboard_fallback() {
         val (c, jobs) = setup()
         tap("home_new_job")
+        tap("job_details")
         tap("job_site_new")
         rule.onNodeWithTag("job_group").performScrollTo().performTextInput("광령리")
         rule.onNodeWithTag("job_built_name", useUnmergedTree = true).assertTextEquals("광령리 · 정밀발굴 2지구 · 10-12")

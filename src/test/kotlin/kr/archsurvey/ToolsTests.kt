@@ -190,11 +190,11 @@ class JobTests {
         assertNull(c.hub.screen); assertTrue(jc.notice!!.contains("새작업")) // 0.1.39: 만들면 바로 측량 지도
     }
 
-    @Test fun newJobFormDefaultsGeoidToReceiverWithoutTouchingCurrentJob() {
+    @Test fun newJobFormReusesLastJobGeoidWithoutTouchingCurrentJob() {
         val (c, jc, _) = setup()
         c.geoid = kr.archsurvey.core.GeoidModel.EGM96
         jc.openNew()
-        assertEquals(kr.archsurvey.core.GeoidModel.RECEIVER, jc.formGeoid)   // 0.1.35: 새 작업 = 수신기 값
+        assertEquals(kr.archsurvey.core.GeoidModel.EGM96, jc.formGeoid)   // 0.1.51: 새 작업 = 지난 작업 값 그대로
         assertEquals(kr.archsurvey.core.GeoidModel.EGM96, c.geoid)          // 지금 작업은 그대로
     }
 

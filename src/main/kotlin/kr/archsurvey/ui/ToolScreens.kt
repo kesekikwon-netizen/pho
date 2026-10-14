@@ -601,39 +601,40 @@ fun JobScreen(c: SurveyController) {
                 WhiteCard(tag = "job_preview") {
                     Column(Modifier.padding(16.dp)) {
                         Text(jc.effectiveName.ifBlank { "이름을 고르세요" }, style = DTy.h1.copy(fontSize = 20.sp), color = D.ink, modifier = Modifier.testTag("job_built_name"))
-                        Text("유적 + 지구 + 날짜로 자동 생성", style = DTy.small, color = D.sub)
+                        Text("유적 + 지구 + 날짜로 자동 · 지난 작업 설정 그대로", style = DTy.small, color = D.sub)
                         Text(jc.newFolderPreview, style = DTy.small, color = D.weak, maxLines = 2, modifier = Modifier.testTag("job_folder_preview"))
                     }
                 }
-                SectionHead("유적")
-                ChoiceGrid(jc.siteChips.map { g -> GridItem(g, "job_site_$g", !jc.newGroupTyping && jc.newSite == g) { jc.pickSite(g) } } +
-                    GridItem("없음", "job_site_none", !jc.newGroupTyping && jc.newSite.isBlank()) { jc.pickSite(null) } +
-                    GridItem("새 유적…", "job_site_new", jc.newGroupTyping) { jc.startNewGroup() })
-                // 새 유적 이름만은 글자가 필요해 키보드 대체 경로로 남김(시안 「새 유적…」)
-                if (jc.newGroupTyping) OutlinedTextField(jc.newSite, { jc.newSite = it }, singleLine = true, label = { Text("새 유적 이름 · 예) 강릉 교동") }, modifier = Modifier.fillMaxWidth().testTag("job_group"))
-                SectionHead("조사 단계")
-                val stages = kr.archsurvey.job.SurveyStage.entries
-                ChoiceGrid(stages.map { st -> GridItem(st.labelKo, "job_stage_${st.name}", jc.newStage == st) { jc.pickStage(st) } }, modifier = Modifier.testTag("job_stage"))
-                SectionHead("지구 · 날짜 ${jc.mmdd.let { if (it.length == 4) it.take(2) + "-" + it.drop(2) else it }}는 저절로")
-                val maxNo = kr.archsurvey.job.NewJobName.MAX_NO
-                val nos = (1..5).toMutableList().apply { if (jc.newNo > 5) add(jc.newNo) }
-                ChoiceGrid(nos.map { n -> GridItem("${n}지구", "job_no_$n", jc.newNo == n) { jc.setNo(n) } } +
-                    GridItem("−", "job_no_m1") { jc.setNo((jc.newNo - 1).coerceAtLeast(1)) } +
-                    GridItem("+", "job_no_p1") { jc.setNo((jc.newNo + 1).coerceAtMost(maxNo)) }, modifier = Modifier.testTag("job_no"))
-                SectionHead("좌표계 원점")
-                val zones = kr.archsurvey.core.KoreanTmZone.entries
-                ChoiceGrid(zones.mapIndexed { i, z -> GridItem(z.shortKo + " " + z.epsg + if (jc.recommendedZone == z) " · 추천" else "", "job_zone_${z.epsg}", jc.formZone == z, span = if (i == zones.lastIndex) 3 else 1) { jc.formZone = z } }, modifier = Modifier.testTag("job_zone_seg"))
-                Text(if (jc.recommendedZone != null) "지금 위치(경도)로 추천 원점을 표시했어요. 첫 점을 재면 잠깁니다." else "아직 위치가 없어 고른 원점으로 둡니다. 첫 점을 재면 잠깁니다.", style = DTy.small, color = D.sub, modifier = Modifier.testTag("job_zone_note"))
-                SectionHead("배경 지도")
-                val maps = listOf(kr.archsurvey.map.MapBase.SATELLITE_CADASTRAL to "위성 + 지적", kr.archsurvey.map.MapBase.SATELLITE to "위성만", kr.archsurvey.map.MapBase.CADASTRAL to "일반 + 지적")
-                ChoiceGrid(maps.map { (m, l) -> GridItem(l, "job_newmap_${m.id}", jc.formMap == m) { jc.formMap = m } })
+                // 0.1.51 새 작업 쉽게: 기본값(자동 이름·지난 작업 설정)이 이미 골라져 있어 「만들고 측량 시작」 한 번. 바꾸기는 아래 「바꾸기 ›」 안에
                 DRule(false)
                 Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).hClickable { jc.newDetailsOpen = !jc.newDetailsOpen }.testTag("job_details"), verticalAlignment = Alignment.CenterVertically) {
-                    Text("높이 ${jc.formGeoid.shortKo} · 배경지도 ${jc.formMap.labelKo}", style = DTy.body, color = D.ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    Text(if (jc.newDetailsOpen) "접기 ⌃" else "자세히 ›", style = DTy.small, color = D.accent)
+                    Text("${jc.formZone.shortKo} ${jc.formZone.epsg} · 높이 ${jc.formGeoid.shortKo} · ${jc.formMap.labelKo}", style = DTy.body, color = D.ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text(if (jc.newDetailsOpen) "접기 ⌃" else "바꾸기 ›", style = DTy.small, color = D.accent)
                 }
                 DRule(false)
                 if (jc.newDetailsOpen) {
+                    SectionHead("유적")
+                    ChoiceGrid(jc.siteChips.map { g -> GridItem(g, "job_site_$g", !jc.newGroupTyping && jc.newSite == g) { jc.pickSite(g) } } +
+                        GridItem("없음", "job_site_none", !jc.newGroupTyping && jc.newSite.isBlank()) { jc.pickSite(null) } +
+                        GridItem("새 유적…", "job_site_new", jc.newGroupTyping) { jc.startNewGroup() })
+                    // 새 유적 이름만은 글자가 필요해 키보드 대체 경로로 남김(시안 「새 유적…」)
+                    if (jc.newGroupTyping) OutlinedTextField(jc.newSite, { jc.newSite = it }, singleLine = true, label = { Text("새 유적 이름 · 예) 강릉 교동") }, modifier = Modifier.fillMaxWidth().testTag("job_group"))
+                    SectionHead("조사 단계")
+                    val stages = kr.archsurvey.job.SurveyStage.entries
+                    ChoiceGrid(stages.map { st -> GridItem(st.labelKo, "job_stage_${st.name}", jc.newStage == st) { jc.pickStage(st) } }, modifier = Modifier.testTag("job_stage"))
+                    SectionHead("지구 · 날짜 ${jc.mmdd.let { if (it.length == 4) it.take(2) + "-" + it.drop(2) else it }}는 저절로")
+                    val maxNo = kr.archsurvey.job.NewJobName.MAX_NO
+                    val nos = (1..5).toMutableList().apply { if (jc.newNo > 5) add(jc.newNo) }
+                    ChoiceGrid(nos.map { n -> GridItem("${n}지구", "job_no_$n", jc.newNo == n) { jc.setNo(n) } } +
+                        GridItem("−", "job_no_m1") { jc.setNo((jc.newNo - 1).coerceAtLeast(1)) } +
+                        GridItem("+", "job_no_p1") { jc.setNo((jc.newNo + 1).coerceAtMost(maxNo)) }, modifier = Modifier.testTag("job_no"))
+                    SectionHead("좌표계 원점")
+                    val zones = kr.archsurvey.core.KoreanTmZone.entries
+                    ChoiceGrid(zones.mapIndexed { i, z -> GridItem(z.shortKo + " " + z.epsg + if (jc.recommendedZone == z) " · 추천" else "", "job_zone_${z.epsg}", jc.formZone == z, span = if (i == zones.lastIndex) 3 else 1) { jc.formZone = z } }, modifier = Modifier.testTag("job_zone_seg"))
+                    Text(if (jc.recommendedZone != null) "지금 위치(경도)로 추천 원점을 표시했어요. 첫 점을 재면 잠깁니다." else "아직 위치가 없어 고른 원점으로 둡니다. 첫 점을 재면 잠깁니다.", style = DTy.small, color = D.sub, modifier = Modifier.testTag("job_zone_note"))
+                    SectionHead("배경 지도")
+                    val maps = listOf(kr.archsurvey.map.MapBase.SATELLITE_CADASTRAL to "위성 + 지적", kr.archsurvey.map.MapBase.SATELLITE to "위성만", kr.archsurvey.map.MapBase.CADASTRAL to "일반 + 지적")
+                    ChoiceGrid(maps.map { (m, l) -> GridItem(l, "job_newmap_${m.id}", jc.formMap == m) { jc.formMap = m } })
                     JobConfigRows(c, jc, editableZone = true)
                     // 0.1.46: 새 작업은 선택만 — 작업명 직접 입력 제거(이름은 유적·지구·날짜 선택으로 자동)
                 }
