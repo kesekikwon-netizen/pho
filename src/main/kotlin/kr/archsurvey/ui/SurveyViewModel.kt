@@ -76,7 +76,7 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
         controller.connection = cc
         // 0.1.40 앱 안 수신기 찾기·등록(PIN 자동)+연결
         // 0.1.42 사진 기준점 앱과 수신기 잠금(같은 R10 을 서로 빼앗지 않게)
-        cc.lock = ReceiverLock(lockBus, application.packageName, "발굴 측량", { android.os.SystemClock.elapsedRealtime() })
+        cc.lock = ReceiverLock(lockBus, application.packageName, "발굴 측량", { android.os.SystemClock.elapsedRealtime() }, settleMs = 1_500L)
         cc.pair = PairController(pairPlatform, cc, safeScope, pinSetting = { application.settings.btPin }, pinSave = { application.settings.btPin = it })
         // 시작 시 이미 고른 프로필이 있으면 안테나도 맞춤
         kr.archsurvey.data.AntennaDb.antennaIdForProfile(cc.profile.id)?.let { controller.setAntennaModel(it) }
