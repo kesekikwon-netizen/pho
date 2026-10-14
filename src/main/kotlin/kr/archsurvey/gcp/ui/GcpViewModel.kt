@@ -40,7 +40,7 @@ class GcpViewModel(app: Application) : AndroidViewModel(app) {
         connection.ui = controller.ui
         // 0.1.2 앱 안 수신기 찾기·등록(PIN 자동)+연결 — 측량 앱 0.1.40 과 같은 코드
         // 0.1.4 발굴 측량 앱과 수신기 잠금
-        connection.lock = kr.archsurvey.ui.ReceiverLock(lockBus, application.packageName, "사진 기준점", { android.os.SystemClock.elapsedRealtime() })
+        connection.lock = kr.archsurvey.ui.ReceiverLock(lockBus, application.packageName, "사진 기준점", { android.os.SystemClock.elapsedRealtime() }, settleMs = 1_500L)
         connection.pair = kr.archsurvey.ui.PairController(pairPlatform, connection, safeScope, pinSetting = { application.settings.btPin }, pinSave = { application.settings.btPin = it })
         connection.onFeedback = { application.feedback.play(it) }
         controller.connection = connection

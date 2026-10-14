@@ -749,6 +749,7 @@ class ConnectionController(
      * - VRS 입력이 모자라도 수신기는 연결한다(이번 연결만 보정 끔, 저장값은 그대로) — 예전에는 아무 말 없이 연결 자체를 건너뜀.
      * - 막히면(권한·블루투스 꺼짐) 이유를 알린다.
      */
+    private var autoWaitScheduled = false
     fun autoConnectOnLaunch(): Boolean {
         if (connectRequested) return false
         if (platform.link.value.state != LinkState.IDLE) { // 서비스가 살아 있음 → 이어받기(소켓을 끊었다 다시 맺지 않음)
@@ -756,6 +757,11 @@ class ConnectionController(
             return false
         }
         if (!autoConnect) return false
+        // 0.1.47/0.1.9: 다른 앱 잠금 답(방송)이 오기 전에 바로 연결하면 그 앱의 소켓을 빼앗는다 → 답을 기다린 뒤 다시 판단
+        lock?.settleRemainingMs()?.takeIf { it > 0 }?.let { w ->
+            if (!autoWaitScheduled) { autoWaitScheduled = true; sc().launch { kotlinx.coroutines.delay(w); autoConnectOnLaunch() } }
+            return false
+        }
         val hasSaved = address != null
         if (!platform.hasBluetoothPermission()) { if (hasSaved) ui.toast(AUTO_NO_PERMISSION); return false }
         if (!platform.bluetoothEnabled()) { if (hasSaved) ui.toast(AUTO_BT_OFF); return false }
@@ -929,7 +935,9 @@ class ConnectionController(
         set(v) {
             field = v
             v?.onReleaseRequested = { label -> stopAll(); ui.toast(LockText.handedOver(label)) }
-            v?.onConflict = { _ -> if (!appForeground && link.value.state != kr.archsurvey.device.LinkState.STREAMING) stopAll() } // 뒤에 있고 위치도 없으면 양보
+            // 0.1.47/0.1.9: 뒤에 있는 앱은 (위치를 받던 중이라도) 항상 양보 — 앞의 앱이 수신기를 쓴다.
+            // 현장 logcat 10-14 10:37~10:42: 뒤의 발굴 측량(STREAMING)·앞의 사진 기준점 둘 다 양보 안 해 R10 SPP 를 몇 초마다 서로 빼앗음.
+            v?.onConflict = { h -> if (!appForeground) { stopAll(); bgStopped = true; ui.toast(LockText.handedOver(h.label)) } }
             v?.onChanged = { lockTick++; if (waitingTake && pendingStart != null && v.otherHolder(pendingStart!!.first) == null) resumePending() }
         }
     var lockedBy by mutableStateOf<ReceiverLock.Holder?>(null); private set

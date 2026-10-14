@@ -22,7 +22,12 @@ class ReceiverLock(
     val selfLabel: String,
     private val clock: () -> Long,
     val staleMs: Long = 60_000L,
+    /** 0.1.47/0.1.9: 시작 QUERY 의 답(다른 앱 HOLD)은 방송이라 늦게 온다. 이 시간 동안은 「아직 모름」 — 자동 연결은 기다린다 */
+    val settleMs: Long = 0L,
 ) {
+    private val createdAt = clock()
+    /** 시작 QUERY 답을 기다릴 남은 시간(0 이면 판단 가능) */
+    fun settleRemainingMs(): Long = (createdAt + settleMs - clock()).coerceAtLeast(0L)
     data class Holder(val pkg: String, val label: String, val mac: String, val seenAt: Long)
     private val holders = LinkedHashMap<String, Holder>()
     var holding: String? = null; private set
