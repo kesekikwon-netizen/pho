@@ -207,6 +207,7 @@ class Ui019Test {
         shot("06_saved_toast")
         rule.runOnUiThread { c.ui.hideToast(); c.hub.open(ToolScreen.POINTS) }; rule.waitForIdle()
         rule.onNodeWithTag("point_row_${p.name}").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("pm_edit").performScrollTo().performClick(); rule.waitForIdle()
         for (i in 0 until 3) rule.onNodeWithTag("sample_$i").performScrollTo().assertExists()
         rule.onNodeWithTag("samples_spread").performScrollTo().assertTextContains("mm", substring = true)
         shot("07_point_samples")

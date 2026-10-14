@@ -664,63 +664,61 @@ private fun FavCard(c: SurveyController, item: MenuItem, modifier: Modifier) {
 
 // ---------------- 안테나 높이 시트 (s4 최소판) ----------------
 
+/** 0.1.46 시안 s06 폴 높이 시트: 큰 숫자 · ±0.10 · 자주 쓰는 높이 4칸 · 적용. 수신기 모델·기준점은 「자세히」 */
 @Composable
 fun AntennaSheet(c: SurveyController) {
     val t = T
+    var more by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().background(t.scrim.copy(alpha = 0.25f)).hClickable { c.antennaSheetOpen = false })
+        Box(Modifier.fillMaxSize().background(t.scrim.copy(alpha = 0.18f)).hClickable { c.antennaSheetOpen = false })
+        val sh = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
         Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = maxHeight * 0.55f)
-                .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)).background(t.bg).verticalScroll(rememberScrollState())
-                .padding(16.dp).testTag("antenna_sheet"),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = maxHeight * 0.75f)
+                .clip(sh).background(D.bg).verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 10.dp).testTag("antenna_sheet"),
+            verticalArrangement = Arrangement.spacedBy(FieldIvory.gap),
         ) {
-            Text("안테나 높이", style = Ty.title, color = t.ink)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for ((id, label) in listOf("TRIMBLE_R10" to "Trimble R10", "SPECTRA_SP60" to "Spectra SP60")) {
-                    val sel = c.antennaModelId == id
-                    Box(
-                        Modifier.weight(1f).height(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp))
-                            .background(if (sel) t.primary.copy(alpha = 0.2f) else t.card).hClickable { c.setAntennaModel(id) }.testTag("model_$id"),
-                        contentAlignment = Alignment.Center,
-                    ) { Text(label, style = Ty.label, color = t.ink) }
+            Box(Modifier.align(Alignment.CenterHorizontally).size(width = 44.dp, height = 5.dp).clip(RoundedCornerShape(3.dp)).background(D.line))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("폴 높이", style = DTy.h2.copy(fontSize = 20.sp), color = D.ink, modifier = Modifier.weight(1f))
+                Box(Modifier.size(FieldIvory.minTouch).clip(CircleShape).hClickable { c.antennaSheetOpen = false }.semantics { contentDescription = "닫기" }.testTag("sheet_x"), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.CLOSE, D.ink, 22.dp) }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.Bottom) {
+                Text(String.format(java.util.Locale.US, "%.2f", c.antenna.inputValueM), style = DTy.h1.copy(fontSize = FieldIvory.display, lineHeight = 70.sp), color = D.ink, modifier = Modifier.testTag("sheet_input"))
+                Text(" m", style = DTy.h2.copy(fontSize = 22.sp), color = D.ink, modifier = Modifier.padding(bottom = 10.dp))
+            }
+            Text("수신기 위상중심까지 · 바뀐 기록이 점마다 남아요", style = DTy.small, color = D.sub, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            ChoiceGrid(listOf(
+                GridItem("− 0.10", "step_minus") { c.stepAntennaCm(-AntennaMath.POLE_STEP_CM) },
+                GridItem("+ 0.10", "step_plus") { c.stepAntennaCm(AntennaMath.POLE_STEP_CM) },
+            ), columns = 2)
+            ChoiceGrid(AntennaMath.CHIPS_M.map { m ->
+                GridItem(String.format(java.util.Locale.US, "%.2f", m), "pole_chip_" + String.format(java.util.Locale.US, "%.1f", m), kotlin.math.abs(c.antenna.inputValueM - m) < 1e-6) { c.setPoleHeight(m) }
+            }, columns = 4)
+            Row(Modifier.fillMaxWidth().heightIn(min = FieldIvory.minTouch).hClickable { more = !more }.testTag("sheet_more"), verticalAlignment = Alignment.CenterVertically) {
+                Text("수신기 ${if (c.antennaModelId == "TRIMBLE_R10") "Trimble R10" else "Spectra SP60"} · ${c.antennaModel.visibleRefs.firstOrNull { it.id == c.antenna.refPointId }?.labelKo ?: ""}", style = DTy.small, color = D.sub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(if (more) "접기 ⌃" else "자세히 ›", style = DTy.small, color = D.accent)
+            }
+            if (more) {
+                ChoiceGrid(listOf("TRIMBLE_R10" to "Trimble R10", "SPECTRA_SP60" to "Spectra SP60").map { (id, label) -> GridItem(label, "model_$id", c.antennaModelId == id) { c.setAntennaModel(id) } }, columns = 2)
+                Text("어디부터 쟀나요", style = DTy.small, color = D.sub)
+                for (r in c.antennaModel.visibleRefs) {
+                    val sel = c.antenna.refPointId == r.id
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = FieldIvory.minTouch).clip(RoundedCornerShape(14.dp)).background(if (sel) FieldIvory.primarySoft else D.card)
+                            .border(if (sel) 2.dp else 1.dp, if (sel) FieldIvory.primary else D.line, RoundedCornerShape(14.dp)).hClickable { c.setRefPoint(r.id) }.padding(horizontal = 12.dp).testTag("ref_${r.id}"),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(r.labelKo, style = DTy.body, color = D.ink, modifier = Modifier.weight(1f))
+                        Text("+${f3(r.pcoV)} m", style = DTy.mono, color = D.sub)
+                    }
                 }
+                Text(if (c.antennaModelId == "TRIMBLE_R10") (if (c.antenna.refPointId == "bottom_of_antenna_mount") AntennaMath.ADAPTER_NOTE_R10_MOUNT else AntennaMath.ADAPTER_NOTE_R10) else AntennaMath.ADAPTER_NOTE_SP60, style = DTy.small, color = D.sub)
             }
-            Text("어디부터 쟀나요", style = Ty.small, color = t.accentText)
-            for (r in c.antennaModel.visibleRefs) {
-                val sel = c.antenna.refPointId == r.id
-                Row(
-                    Modifier.fillMaxWidth().height(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp))
-                        .background(if (sel) t.primary.copy(alpha = 0.2f) else t.card).hClickable { c.setRefPoint(r.id) }.padding(horizontal = 12.dp).testTag("ref_${r.id}"),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(r.labelKo, style = Ty.body, color = t.ink, modifier = Modifier.weight(1f))
-                    Text("+${f3(r.pcoV)} m", style = Ty.coord, color = t.inkSub)
-                }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StepBtn("−10 cm", "step_minus") { c.stepAntennaCm(-AntennaMath.POLE_STEP_CM) }
-                Text(String.format(java.util.Locale.US, "%.1f", c.antenna.inputValueM) + " m", style = Ty.title, color = t.ink, textAlign = TextAlign.Center, modifier = Modifier.weight(1f).testTag("sheet_input"))
-                StepBtn("+10 cm", "step_plus") { c.stepAntennaCm(AntennaMath.POLE_STEP_CM) }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (m in AntennaMath.CHIPS_M) Box(
-                    Modifier.weight(1f).height(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp))
-                        .background(if (kotlin.math.abs(c.antenna.inputValueM - m) < 1e-6) t.primary.copy(alpha = 0.2f) else t.card)
-                        .hClickable { c.setPoleHeight(m) }.testTag("pole_chip_" + String.format(java.util.Locale.US, "%.1f", m)),
-                    contentAlignment = Alignment.Center,
-                ) { Text(String.format(java.util.Locale.US, "%.1f m", m), style = Ty.label, color = t.ink) }
-            }
-            Text("폴 높이는 10 cm 단위로만 바꿔요 · 작업마다 저장", style = Ty.small, color = t.inkSub)
             val r = c.antennaResult
-            Text(r?.let { AntennaMath.summary(it) } ?: "계산할 수 없어요", style = Ty.body, color = t.ink, modifier = Modifier.testTag("sheet_summary"))
-            Text(if (c.antennaModelId == "TRIMBLE_R10") (if (c.antenna.refPointId == "bottom_of_antenna_mount") AntennaMath.ADAPTER_NOTE_R10_MOUNT else AntennaMath.ADAPTER_NOTE_R10) else AntennaMath.ADAPTER_NOTE_SP60, style = Ty.small, color = t.inkSub)
-            AntennaMath.mismatchWarning(c.antenna, c.antennaModel)?.let { Text(it, style = Ty.small, color = t.bad) }
-            Text("실기기 실측 전 값 — 현장에서 확인하세요", style = Ty.small, color = t.inkSub)
-            Box(
-                Modifier.fillMaxWidth().height(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp)).glossy(t.primary).hClickable { c.antennaSheetOpen = false }.testTag("sheet_close"),
-                contentAlignment = Alignment.Center,
-            ) { Text("닫기", style = Ty.label, color = t.onPrimary) }
+            Text(r?.let { AntennaMath.summary(it) } ?: "계산할 수 없어요", style = DTy.small, color = D.ink, modifier = Modifier.testTag("sheet_summary"))
+            AntennaMath.mismatchWarning(c.antenna, c.antennaModel)?.let { Text(it, style = DTy.small, color = FieldIvory.error) }
+            DPrimary("적용", "sheet_close", Modifier.fillMaxWidth(), height = FieldIvory.minTouch + 8.dp, color = FieldIvory.primary) { c.antennaSheetOpen = false }
         }
     }
 }

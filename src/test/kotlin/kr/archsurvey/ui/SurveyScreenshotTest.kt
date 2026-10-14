@@ -182,28 +182,29 @@ class SurveyScreenshotTest {
         rule.onNodeWithTag("antenna_input", useUnmergedTree = true).assertTextContains("2.0", substring = true)
         rule.onNodeWithTag("pole_chip").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("antenna_sheet").assertIsDisplayed()
-        rule.onNodeWithTag("sheet_summary").assertTextContains("안테나 위상중심 2.199 m", substring = true)
+        rule.onNodeWithTag("sheet_summary").performScrollTo().assertTextContains("안테나 위상중심 2.199 m", substring = true)
         shot("13_antenna_sheet_r10_quick_release_2_1991")
-        rule.onNodeWithTag("ref_bottom_of_antenna_mount").performClick()
-        repeat(5) { rule.onNodeWithTag("step_plus").performClick() }
+        rule.onNodeWithTag("sheet_more").performScrollTo().performClick(); rule.waitForIdle() // 0.1.46: 모델·기준점은 「자세히」
+        rule.onNodeWithTag("ref_bottom_of_antenna_mount").performScrollTo().performClick()
+        repeat(5) { rule.onNodeWithTag("step_plus").performScrollTo().performClick() }
         rule.waitForIdle()
         // 0.1.12: + 한 번 = 10 cm → 5번 = 2.5 m
         assertEquals(2.5, c.antenna.inputValueM, 1e-9)
         assertEquals(2.6491, c.antennaResult!!.totalToApcM, 1e-9)
-        rule.onNodeWithTag("sheet_summary").assertTextContains("2.649 m", substring = true)
+        rule.onNodeWithTag("sheet_summary").performScrollTo().assertTextContains("2.649 m", substring = true)
         shot("14_antenna_sheet_r10_mount_2050_2_1991")
-        rule.onNodeWithTag("model_SPECTRA_SP60").performClick(); rule.waitForIdle()
-        repeat(5) { rule.onNodeWithTag("step_minus").performClick() }
+        rule.onNodeWithTag("model_SPECTRA_SP60").performScrollTo().performClick(); rule.waitForIdle()
+        repeat(5) { rule.onNodeWithTag("step_minus").performScrollTo().performClick() }
         rule.waitForIdle()
         assertEquals(2.000, c.antenna.inputValueM, 1e-9)
         assertEquals(2.0687, c.antennaResult!!.totalToApcM, 1e-9)
-        rule.onNodeWithTag("sheet_summary").assertTextContains("2.069 m", substring = true)
+        rule.onNodeWithTag("sheet_summary").performScrollTo().assertTextContains("2.069 m", substring = true)
         shot("15_antenna_sheet_sp60_2_0687")
     }
 
     @Test fun g_pole_left() {
         val (f, c) = make(poleRight = false); show(c); adv(f, 3)
-        assertTrue("측점 버튼이 왼쪽(0.1.14: 위치 종류 칩은 지도로 옮겨 툴바 첫 버튼과 비교)", bounds("measure_button").left.value < bounds("tool_undo").left.value)
+        assertTrue("측점 버튼이 왼쪽(0.1.14: 위치 종류 칩은 지도로 옮겨 툴바 첫 버튼과 비교)", bounds("measure_button").left.value < bounds("tool_points").left.value)
         shot("16_pole_left")
     }
 

@@ -111,7 +111,7 @@ class PointHv0131Tests {
         val tools = File("src/main/kotlin/kr/archsurvey/ui/ToolScreens.kt").readText()
         assertTrue(tools.substringAfter("private fun PointRow(").substringBefore("\n}\n").contains("PointCaution.hv(p)"))
         assertTrue(tools.substringAfter("fun PointDetailScreen(").substringBefore("\n}\n").contains("PointCaution.hvLine(p)"))
-        assertTrue(File("src/main/kotlin/kr/archsurvey/ui/MockupScreens.kt").readText().substringAfter("fun PointMenuSheet(").substringBefore("\n}\n").contains("PointCaution.hvLine(p)"))
+        assertTrue(File("src/main/kotlin/kr/archsurvey/ui/MockupScreens.kt").readText().substringAfter("fun PointMenuSheet(").substringBefore("\n}\n").contains("PointCaution.hvLine(cur)"))
         assertTrue(File("src/main/kotlin/kr/archsurvey/ui/SurveyMapScreen.kt").readText().substringAfter("private fun ResultStrip(").substringBefore("\n}\n").contains("PointCaution.hv(p)"))
     }
 }

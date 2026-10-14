@@ -7,6 +7,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -326,25 +329,47 @@ internal fun Seg(options: List<String>, selected: Int, tag: String, onPick: (Int
 
 // ---------------- 20 점 길게 누르기 메뉴 ----------------
 
+/** 0.1.46 시안 s04 아래 점 시트: 종류 바꾸기 칸 · 다시 측량 · 지도에서 보기 · 찾아가기 · 자세히 · 삭제(길게 누름, 마지막 점만) · 닫기 */
 @Composable
 fun PointMenuSheet(c: SurveyController, p: SavedPoint) {
-    val t = T
     val close = { c.pointMenuFor = null }
     val isLast = c.points.lastOrNull()?.name == p.name
+    val cur = c.points.firstOrNull { it.name == p.name } ?: p
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().background(t.scrim).hClickable { close() }.testTag("point_menu_scrim"))
-        val shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        Box(Modifier.fillMaxSize().background(T.scrim.copy(alpha = 0.18f)).hClickable { close() }.testTag("point_menu_scrim"))
+        val shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
         Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().clip(shape).background(t.raised).hClickable(enabled = false) {}.padding(20.dp).testTag("point_menu"),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = 640.dp).clip(shape).background(D.bg).hClickable(enabled = false) {}
+                .verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 10.dp).testTag("point_menu"),
+            verticalArrangement = Arrangement.spacedBy(FieldIvory.gap),
         ) {
-            Box(Modifier.align(Alignment.CenterHorizontally).width(40.dp).height(4.dp).clip(CircleShape).background(t.line))
-            Text(p.name, style = Ty.title, color = t.ink, modifier = Modifier.testTag("point_menu_title"))
-            Text(PointCaution.label(p) + " · " + PointCaution.hvLine(p), style = Ty.small, color = t.inkSub, maxLines = 1, modifier = Modifier.testTag("point_menu_hv")) // 0.1.31
-            MenuRow(Glyph.RULER, "안테나 높이 다시 재기 (재측량)", "높이를 잘못 넣었다면 그 자리에서 다시 측량 · 이전 값은 이력에 보관", "pm_resurvey") { close(); c.startResurvey(p) }
-            MenuRow(Glyph.INFO, "편집 (위치 종류 · 비고)", "점 상세에서 고쳐 저장", "pm_edit") { close(); c.hub.openDetail(p) }
-            MenuRow(Glyph.PIN, "여기로 찾아가기", null, "pm_goto") { close(); c.hub.startGoto(p) }
-            MenuRow(Glyph.CLOSE, if (isLast) "삭제 (마지막 점 되돌리기)" else "삭제는 마지막 점만", if (isLast) "번호는 다시 쓰지 않아요" else "기록 보존을 위해 중간 점은 지우지 않아요 · 여러 개 삭제도 없어요", "pm_delete", enabled = isLast) { close(); c.askUndo() }
+            Box(Modifier.align(Alignment.CenterHorizontally).width(44.dp).height(5.dp).clip(CircleShape).background(D.line))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(cur.name, style = DTy.h1, color = D.ink, modifier = Modifier.testTag("point_menu_title"))
+                    Text(java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.KOREA).format(java.util.Date(cur.measuredAtMs)) + " · " + PointCaution.hvLine(cur), style = DTy.small, color = D.sub, maxLines = 2, modifier = Modifier.testTag("point_menu_hv"))
+                }
+                val okSt = PointCaution.displayStatus(cur) == kr.archsurvey.core.SurveyStatus.FIXED
+                if (!okSt) Text(PointCaution.label(cur), style = DTy.small.copy(fontWeight = FontWeight.Bold), color = FieldIvory.float, modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(FieldIvory.float.copy(alpha = 0.14f)).padding(horizontal = 10.dp, vertical = 4.dp))
+            }
+            Text("종류 바꾸기", style = DTy.small, color = D.sub)
+            val opts = (listOf(cur.type) + c.types).filter { it.isNotBlank() }.distinct().take(6)
+            ChoiceGrid(opts.mapIndexed { i, ty -> GridItem(ty, "pm_type_$i", cur.type == ty) { c.updatePointMeta(cur.name, ty, cur.memo) } })
+            ChoiceGrid(listOf(
+                GridItem("다시 측량", "pm_resurvey") { close(); c.startResurvey(cur) },
+                GridItem("지도에서 보기", "pm_map") { close(); c.hub.closeAll(); c.goToSurvey(); c.focusOn(cur) },
+                GridItem("찾아가기", "pm_goto") { close(); c.hub.startGoto(cur) },
+                GridItem("자세히 · 메모", "pm_edit") { close(); c.hub.openDetail(cur) },
+            ), columns = 2)
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                val sh = RoundedCornerShape(14.dp)
+                Box(Modifier.weight(1f).heightIn(min = FieldIvory.minTouch).clip(sh).border(1.5.dp, if (isLast) FieldIvory.error.copy(alpha = 0.5f) else D.line, sh)
+                    .hCombinedClickable(onLongClick = { if (isLast) { close(); c.askUndo() } }) { c.ui.toast(if (isLast) "삭제는 길게 누르세요" else "기록 보존을 위해 마지막 점만 지울 수 있어요") }
+                    .semantics { contentDescription = if (isLast) "삭제, 길게 누르기" else "삭제는 마지막 점만" }.testTag("pm_delete"), contentAlignment = Alignment.Center) {
+                    Text(if (isLast) "삭제 (길게 누름)" else "삭제는 마지막 점만", style = DTy.bodyB, color = if (isLast) FieldIvory.error else D.weak)
+                }
+                DPrimary("닫기", "pm_close", Modifier.weight(1f), height = FieldIvory.minTouch, color = FieldIvory.primary) { close() }
+            }
         }
     }
 }

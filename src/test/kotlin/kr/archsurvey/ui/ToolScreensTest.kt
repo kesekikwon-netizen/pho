@@ -114,9 +114,11 @@ class ToolScreensTest {
         rule.onNodeWithTag("points_count").assertExists()
         shot("t1_points")
         rule.onNodeWithTag("point_row_P-0002").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("pm_edit").performScrollTo().performClick(); rule.waitForIdle() // 0.1.46: 행 → s04 시트 → 자세히
         rule.onNodeWithTag("point_detail").assertExists()
         rule.onNodeWithTag("edit_type_toggle").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("edit_type_기준점").performClick()
+        rule.onNodeWithTag("edit_memo_manual").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("edit_memo").performTextInput("북동 모서리")
         shot("t2_point_detail")
         rule.onNodeWithTag("point_save").performClick(); rule.waitForIdle()

@@ -209,14 +209,45 @@ fun ConnectionScreen(cc: ConnectionController) {
     Column(Modifier.fillMaxSize().background(t.bg).testTag("connection_screen")) {
         DTopBar(if (vrsOnly) "VRS 설정" else "장비 연결", { cc.leaveScreen() }, backTag = "conn_back")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            // 0.1.43 시안 ⑥: 큰 상태 글자 + 작은 보정·시도 줄, 그 아래 가로 5단계
+            // 0.1.46 시안 s05: 수신기 카드(상태 · 위성 · PDOP · 수평 · 수직) → 보정(VRS) 카드 → 진행 상태(세로 체크)
             val live = link.state == LinkState.STREAMING
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(linkText(link.state), style = DTy.h1, color = if (live) D.fix else if (link.state == LinkState.NEEDS_USER) D.bad else D.ink, modifier = Modifier.testTag("conn_link_state"))
-                Text("  " + (if (cc.form.enabled) "보정 " + ntripText(ntrip.state) else "VRS 끔") + " · 시도 ${link.attempt}회", style = DTy.small, color = D.sub, modifier = Modifier.padding(bottom = 3.dp).testTag("conn_ntrip_state"))
+            val g = LocalSurvey.current?.gv
+            if (!vrsOnly) WhiteCard(tag = "conn_device_card") {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)).background((if (live) D.fix else D.sub).copy(alpha = 0.12f)), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.BT, if (live) D.fix else D.sub, 26.dp) }
+                        Column(Modifier.weight(1f).padding(start = 14.dp)) {
+                            Text(p.displayName, style = DTy.h2.copy(fontSize = 20.sp), color = D.ink, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                            Text(listOfNotNull(cc.address, "시도 ${link.attempt}회").joinToString(" · "), style = DTy.small, color = D.sub, maxLines = 1)
+                        }
+                        Text(linkText(link.state), style = DTy.small.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), color = if (live) D.fix else if (link.state == LinkState.NEEDS_USER) D.bad else D.ink,
+                            modifier = Modifier.clip(RoundedCornerShape(12.dp)).background((if (live) D.fix else D.sub).copy(alpha = 0.12f)).padding(horizontal = 10.dp, vertical = 4.dp).testTag("conn_link_state"))
+                    }
+                    fun cm(v: Double?) = v?.let { String.format(java.util.Locale.US, "%.1f", it * 100) } ?: "—"
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for ((k, v, u) in listOf(Triple("위성", if (g == null || g.noReceiver) "—" else "${g.satellites}", ""), Triple("PDOP", g?.pdop?.let { String.format(java.util.Locale.US, "%.1f", it) } ?: "—", ""),
+                                Triple("수평", cm(g?.status?.sigmaHM), "cm"), Triple("수직", cm(g?.sigmaVM), "cm"))) {
+                            Column(Modifier.weight(1f).heightIn(min = 72.dp).clip(RoundedCornerShape(12.dp)).border(1.dp, D.line, RoundedCornerShape(12.dp)).padding(10.dp)) {
+                                Text(k, style = DTy.small, color = D.sub, maxLines = 1)
+                                Text(v + if (u.isNotEmpty() && v != "—") " $u" else "", style = DTy.bodyB.copy(fontSize = 18.sp), color = D.ink, maxLines = 2)
+                            }
+                        }
+                    }
+                }
             }
             if (link.message.isNotBlank()) Text(link.message, style = DTy.small, color = D.sub)
-            if (!vrsOnly) ConnStepsInline(cc, link, ntrip)
+            SectionHead("보정 (VRS)")
+            WhiteCard(tag = "conn_vrs_card") {
+                Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(if (cc.form.enabled) cc.form.mount.ifBlank { "마운트 없음" } else "VRS 끔", style = DTy.bodyB, color = D.ink)
+                        Text(if (cc.form.enabled) cc.form.host.ifBlank { "서버 없음" } else "보정 없이 단독 측위", style = DTy.small, color = D.sub, maxLines = 1)
+                    }
+                    Text((if (cc.form.enabled) "보정 " + ntripText(ntrip.state) else "VRS 끔"), style = DTy.small.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), color = D.ink,
+                        modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(D.chip).padding(horizontal = 10.dp, vertical = 4.dp).testTag("conn_ntrip_state"))
+                }
+            }
+            if (!vrsOnly) { SectionHead("진행 상태"); ConnStepsInline(cc, link, ntrip) }
             // 0.1.18 HTML 실패 카드: 원인과 해결 방법(블루투스 단계 실패일 때). BT-130(위치 없음)은 아래 기존 카드
             ConnectFailCopy.headline(p, link)?.takeIf { cc.connectRequested }?.let { ErrorCardView(it, "conn_fail_card") }
             cc.notice?.let { ErrorCardView(it, "conn_notice") }
@@ -247,10 +278,10 @@ fun ConnectionScreen(cc: ConnectionController) {
                 }
                 ConnPhase.CONNECTED -> {
                     MBtn(Modifier.weight(0.39f).height(56.dp).testTag("conn_disconnect"), MKind.PLAIN, 28.dp, onClick = { cc.disconnect() }) {
-                        Text("연결 해제", style = Ty.label.copy(fontSize = 16.sp), color = t.bad)
+                        Text("다른 수신기", style = Ty.label.copy(fontSize = 16.sp), color = t.ink) // 0.1.46 시안 s05: 연결을 끊고 다른 수신기 고르기
                     }
                     MBtn(Modifier.weight(0.61f).height(56.dp).testTag("conn_go_map"), MKind.PRIMARY, 28.dp, onClick = { cc.close() }) {
-                        Text("지도로 가기", style = Ty.label.copy(fontSize = 16.sp), color = t.onPrimary)
+                        Text("측량으로", style = Ty.label.copy(fontSize = 16.sp), color = t.onPrimary)
                     }
                 }
                 ConnPhase.IDLE, ConnPhase.FAILED -> Row(Modifier.weight(1f).height(58.dp).clip(RoundedCornerShape(10.dp)).background(D.primary).hClickable { cc.connect() }.testTag("conn_connect"),
@@ -271,30 +302,26 @@ private fun ConnStepsInline(cc: ConnectionController, link: kr.archsurvey.device
     val t = T
     val q = LocalSurvey.current?.gv?.quality?.code ?: 0
     val states = ConnectSteps.compute(link, ntrip, cc.form.enabled, q)
-    Column(Modifier.fillMaxWidth().testTag("conn_steps")) {
-        Box(Modifier.fillMaxWidth().height(64.dp)) {
-            Box(Modifier.fillMaxWidth().padding(horizontal = 36.dp).padding(top = 13.dp).height(1.dp).background(D.line))
-            Row(Modifier.fillMaxWidth()) {
-                for ((i, _) in ConnectSteps.labels.withIndex()) {
-                    val label = listOf("블루투스", "위치 수신", "VRS 접속", "보정 수신", "FIX").getOrElse(i) { "" }
-                    val st = states[i]
-                    val ring = when (st) { StepState.FAIL -> D.bad; StepState.DONE -> D.fix; StepState.ACTIVE -> D.accentLight; else -> D.line }
-                    Column(Modifier.weight(1f).testTag("conn_step_$i"), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(Modifier.size(26.dp).clip(androidx.compose.foundation.shape.CircleShape).background(if (st == StepState.DONE) D.fix else D.card).border(1.5.dp, ring, androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
-                            when (st) {
-                                StepState.DONE -> Text("✓", style = DTy.tiny, color = Color.White)
-                                StepState.ACTIVE -> Box(Modifier.size(9.dp).clip(androidx.compose.foundation.shape.CircleShape).background(D.accentLight))
-                                StepState.FAIL -> Text("!", style = DTy.tiny, color = D.bad)
-                                else -> Text("${i + 1}", style = DTy.tiny, color = D.sub)
-                            }
+    WhiteCard(tag = "conn_steps") {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            for ((i, _) in ConnectSteps.labels.withIndex()) {
+                val label = listOf("Bluetooth 연결", "NMEA 수신 (GGA·GST 1 Hz)", "VRS 접속", "VRS 보정 수신", "FIX 고정").getOrElse(i) { "" }
+                val st = states[i]
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("conn_step_$i"), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(28.dp).clip(androidx.compose.foundation.shape.CircleShape).background(when (st) { StepState.DONE -> D.fix; StepState.FAIL -> D.bad; else -> D.card })
+                        .border(1.5.dp, when (st) { StepState.DONE -> D.fix; StepState.FAIL -> D.bad; StepState.ACTIVE -> FieldIvory.primary; else -> D.line }, androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
+                        when (st) {
+                            StepState.DONE -> GlyphIcon(Glyph.CHECK, Color.White, 16.dp)
+                            StepState.ACTIVE -> Box(Modifier.size(10.dp).clip(androidx.compose.foundation.shape.CircleShape).background(FieldIvory.primary))
+                            StepState.FAIL -> Text("!", style = DTy.small, color = Color.White)
+                            else -> Text("${i + 1}", style = DTy.small, color = D.sub)
                         }
-                        Text(label, style = DTy.tiny, color = if (st == StepState.ACTIVE) D.ink else D.sub, maxLines = 1, modifier = Modifier.padding(top = 6.dp))
-                        Text(ConnPhases.stateKo(st), style = DTy.tiny.copy(fontSize = 1.sp), color = Color.Transparent, modifier = Modifier.testTag("conn_step_state_$i"))
                     }
+                    Text(label, style = DTy.body, color = if (st != StepState.DONE && st != StepState.ACTIVE && st != StepState.FAIL) D.sub else D.ink, maxLines = 1, modifier = Modifier.weight(1f).padding(start = 14.dp))
+                    Text(ConnPhases.stateKo(st), style = DTy.small, color = D.sub, maxLines = 1, modifier = Modifier.testTag("conn_step_state_$i"))
                 }
             }
         }
-        DRule()
     }
 }
 

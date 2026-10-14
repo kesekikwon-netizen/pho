@@ -65,6 +65,7 @@ class Ui0131Test {
         rule.onNodeWithTag("point_hv_P-1", useUnmergedTree = true).assertTextEquals("H 0.012 · V 0.020 m")
         rule.onNodeWithTag("point_hv_P-2", useUnmergedTree = true).assertTextEquals("H — · V —")
         rule.onNodeWithTag("point_row_P-1").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("pm_edit").performScrollTo().performClick(); rule.waitForIdle() // 0.1.46: 행 → s04 시트 → 자세히
         rule.onNodeWithTag("detail_hv", useUnmergedTree = true).assertTextEquals("오차 H 0.012 · V 0.020 m")
     }
 

@@ -115,6 +115,7 @@ class ArchUiTest {
         start()
         ui { c.hub.open(ToolScreen.TYPES) }
         val n0 = c.types.size
+        rule.onNodeWithTag("type_manual").performScrollTo().performClick(); rule.waitForIdle() // 0.1.46: 직접 입력은 대체 경로
         rule.onNodeWithTag("type_new_field").performScrollTo().performTextInput("토층점"); rule.onNodeWithTag("type_add").performScrollTo().performClick(); rule.waitForIdle()
         assertEquals(n0 + 1, c.types.size); assertEquals("토층점", c.types.last())
         rule.onNodeWithTag("type_new_field").performScrollTo().performTextInput("아주아주긴이름이다아"); rule.onNodeWithTag("type_add").performScrollTo().performClick(); rule.waitForIdle()
@@ -173,8 +174,9 @@ class ArchUiTest {
         rule.onNodeWithTag("measure_button").performTouchInput { longClick() }; rule.waitForIdle()
         rule.onNodeWithTag("setup_sheet").assertExists()
         rule.onNodeWithTag("setup_name", useUnmergedTree = true).assertTextEquals(c.nextName)
+        rule.onNodeWithTag("setup_memo_manual").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("setup_memo").performTextInput("북동 모서리")
-        rule.onNodeWithTag("setup_link_area").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("setup_link_area").performScrollTo().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.waitForIdle()
         shot("a8_setup_sheet")
         rule.onNodeWithTag("setup_apply").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("setup_sheet").assertDoesNotExist()

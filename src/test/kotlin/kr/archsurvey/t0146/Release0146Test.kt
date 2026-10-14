@@ -126,12 +126,33 @@ class Release0146Test {
         rule.onNodeWithTag("saved_toast").assertDoesNotExist()
     }
 
+    @Test fun header_epsg_notTruncated_412dp_fs130() {
+        setup()
+        val res = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        rule.onNodeWithTag("header_job", useUnmergedTree = true).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(res) }
+        assertFalse("머리줄 EPSG 잘림", res.first().hasVisualOverflow)
+    }
+
+    @Test fun measureRow_pointsButton_and_compactSecondary() {
+        val (_, c) = setup()
+        rule.onNodeWithTag("tool_points").assertIsDisplayed()
+        rule.onNodeWithTag("tool_photo").assertIsDisplayed(); rule.onNodeWithTag("tool_memo").assertIsDisplayed()
+        rule.onNodeWithTag("tool_points").performClick(); rule.waitForIdle()
+        assertEquals(ToolScreen.POINTS, c.hub.screen)
+    }
+
     @Test fun screens_folded_fontScale130() {
-        val (_, c) = setup(home = true)
+        val (s, c) = setup(home = true)
+        rule.runOnIdle { c.homeOpen = false }
+        measureOnce(s, c, 36.5001, 127.0001); rule.runOnIdle { c.dismissResult() }
+        measureOnce(s, c, 36.5003, 127.0004); rule.runOnIdle { c.dismissResult(); c.homeOpen = true }
         shot("s01_home-folded-fs130")
         rule.runOnIdle { c.homeOpen = false; c.jobs?.openNew() ?: Unit }; shot("s02_new_job-folded-fs130")
-        rule.runOnIdle { c.hub.closeAll(); c.hub.open(ToolScreen.FEATURES) }; shot("s04_point_list-folded-fs130")
+        rule.runOnIdle { c.hub.closeAll(); c.hub.open(ToolScreen.POINTS) }; shot("s04_point_list-folded-fs130")
+        rule.runOnIdle { c.pointMenuFor = c.points.first() }; shot("s04b_point_sheet-folded-fs130")
+        rule.onNodeWithTag("pm_type_0").assertExists(); rule.runOnIdle { c.pointMenuFor = null }
         rule.runOnIdle { c.hub.closeAll(); c.antennaSheetOpen = true }; shot("s06_pole_sheet-folded-fs130")
+        rule.onNodeWithTag("step_plus").assertIsDisplayed(); rule.onNodeWithTag("sheet_close").assertExists()
         rule.runOnIdle { c.antennaSheetOpen = false; c.hub.open(ToolScreen.SETTINGS) }; shot("s07_settings-folded-fs130")
         rule.onNodeWithTag("settings_tab_1").performClick(); rule.waitForIdle(); rule.onNodeWithTag("set_receiver").assertExists()
         rule.onNodeWithTag("settings_tab_2").performClick(); rule.waitForIdle(); rule.onNodeWithTag("mapbase_toggle").assertExists()

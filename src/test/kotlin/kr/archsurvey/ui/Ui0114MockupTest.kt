@@ -200,10 +200,11 @@ class Ui0114MockupTest {
         // 14 백업/복구 창
         reset(); ui { c.bg!!.close(); c.backupQuickOpen = true }; rule.onNodeWithTag("backup_quick").assertExists(); shot("mockup_14_backup_restore")
         // 15 측량 지도
-        reset(); for (tag in listOf("tool_undo", "now_row", "pole_chip", "status_pill", "measure_button")) rule.onNodeWithTag(tag).assertExists()
+        reset(); for (tag in listOf("tool_points", "now_row", "pole_chip", "status_pill", "measure_button")) rule.onNodeWithTag(tag).assertExists()
         shot("mockup_15_survey_map")
         // 16 측량 설정
         ui { c.setupOpen = true }
+        rule.onNodeWithTag("setup_memo_manual").performScrollTo().performClick(); rule.waitForIdle()
         for (tag in listOf("setup_code", "setup_memo", "setup_antenna", "setup_ref", "setup_autolink", "setup_link_line", "setup_link_area", "setup_link_point", "setup_new_link", "setup_tilt", "setup_apply", "setup_cancel")) rule.onNodeWithTag(tag).assertExists()
         shot("mockup_16_survey_settings")
         ui { c.setupOpen = false }
@@ -214,7 +215,7 @@ class Ui0114MockupTest {
         // 0.1.35: 「계속 측량할까요」 패널 없음 — 장부 카드 + 측점 단추가 「다음 점」(X3)
         ui { c.ui.hideToast(); c.openPointDetail() }
         rule.onNodeWithTag("point_confirm").assertExists()
-        rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("측정")
+        rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("측량")
         shot("mockup_17_survey_result")
         // 18 사진 확인(찍은 뒤 확인 화면은 그대로)
         rule.onNodeWithTag("result_photo").performClick(); rule.waitForIdle()
@@ -224,7 +225,7 @@ class Ui0114MockupTest {
         rule.onNodeWithTag("photo_review").assertDoesNotExist()
         // 19 점 목록
         reset(); ui { c.hub.open(ToolScreen.POINTS) }
-        rule.onNodeWithTag("points_sort_0").assertExists(); shot("mockup_19_point_manager")
+        rule.onNodeWithTag("points_tab_0").assertExists(); shot("mockup_19_point_manager")
         // 20 길게 누름 메뉴
         val p0 = c.points.first()
         rule.onNodeWithTag("point_row_${p0.name}").performTouchInput { longClick() }; rule.waitForIdle()

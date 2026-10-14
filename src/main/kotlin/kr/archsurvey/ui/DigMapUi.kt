@@ -85,7 +85,7 @@ internal fun DigHeader(c: SurveyController) {
             val ts = HeaderTitle.style(c.projectName)
             Column(Modifier.weight(1f).heightIn(min = 48.dp).padding(start = 2.dp).hClickable { c.ui.toast(c.projectName) }.semantics { contentDescription = "작업 ${c.projectName}" }, verticalArrangement = Arrangement.Center) {
                 Text(c.projectName, style = DTy.h1.copy(fontSize = (ts.sizeSp + 1).sp, lineHeight = (ts.sizeSp + 5).sp), color = D.ink, maxLines = ts.maxLines, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("header_title"))
-                Text("오늘 ${c.dig.todayCount()}점 · ${c.zone.displayKo}", style = DTy.monoS, color = D.sub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("header_job"))
+                Text("오늘 ${c.dig.todayCount()}점 · ${c.zone.displayKo}", style = DTy.small, color = D.sub, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("header_job"))
             }
             D43StatusPill(c, Modifier.padding(start = 6.dp))
         }
@@ -196,12 +196,21 @@ internal fun DigControlArea(c: SurveyController) {
                 Text("$pole m", style = DTy.mono.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold), color = D.ink, maxLines = 1, modifier = Modifier.testTag("antenna_input"))
             }
         }
+        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (feature) MiniAction(Glyph.FACE, if (c.dig.closeArmed) "닫기 취소" else "면 닫기", "tool_close_area", Modifier.weight(1f), on = c.dig.closeArmed) { c.dig.armClose() }
+            MiniAction(Glyph.MIC, if (c.voiceSeconds > 0) "녹음 끝" else "메모", "tool_memo", Modifier.weight(1f), on = c.voiceSeconds > 0) { c.toggleVoice() }
+            MiniAction(Glyph.CAMERA, "사진", "tool_photo", Modifier.weight(1f)) { if (c.lastPoint != null) c.addPhotoCamera() else c.ui.toast("점을 잰 뒤 사진을 붙일 수 있어요") }
+            if (c.dig.undoIsReopen) MiniAction(Glyph.UNDO, "면 닫기 되돌리기", "tool_undo", Modifier.weight(1f)) { c.askUndo() }
+        }
         Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            // 0.1.46 시안 s03: [점 목록] + 큰 「측량」. 면 닫기·사진·메모는 위 작은 줄(한 번 탭), 되돌리기는 저장 알림 안
             val side: @Composable RowScope.() -> Unit = {
-                DIconTile(Glyph.UNDO, if (c.dig.undoIsReopen) "닫기 취소" else "되돌리기", "tool_undo", Modifier.width(64.dp)) { c.askUndo() }
-                if (feature) DIconTile(Glyph.FACE, if (c.dig.closeArmed) "취소" else "면 닫기", "tool_close_area", Modifier.width(64.dp), on = c.dig.closeArmed) { c.dig.armClose() }
-                else DIconTile(Glyph.MIC, if (c.voiceSeconds > 0) "녹음 끝" else "메모", "tool_memo", Modifier.width(64.dp)) { c.toggleVoice() }
-                DIconTile(Glyph.CAMERA, "사진", "tool_photo", Modifier.width(64.dp)) { if (c.lastPoint != null) c.addPhotoCamera() else c.ui.toast("점을 잰 뒤 사진을 붙일 수 있어요") }
+                val sh = RoundedCornerShape(16.dp)
+                Column(Modifier.width(96.dp).height(FieldIvory.measureButton).clip(sh).background(D.card).border(1.5.dp, D.line, sh)
+                    .hClickable { c.hub.open(ToolScreen.POINTS) }.semantics { contentDescription = "점 목록" }.testTag("tool_points"),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    GlyphIcon(Glyph.LIST, D.ink, 26.dp); Spacer(Modifier.height(6.dp)); Text("점 목록", style = DTy.small.copy(fontWeight = FontWeight.Bold), color = D.ink, maxLines = 1)
+                }
             }
             val measure: @Composable RowScope.() -> Unit = {
                 val dim = blocked || strictBlock
@@ -214,7 +223,7 @@ internal fun DigControlArea(c: SurveyController) {
                     strictBlock -> { label = "FIX 기다리는 중"; sub = "FLOAT 저장 잠김" }
                     blocked -> { label = "측점 불가"; sub = c.gv.status.reason.textKo }
                     caution -> { label = "주의 측정"; sub = c.dig.measureSub() }
-                    else -> { label = "측정"; sub = "" }
+                    else -> { label = "측량"; sub = c.gv.status.sigmaHM?.let { "±" + String.format(Locale.US, "%.1f", it * 100) + " cm · 길게 눌러 설정" } ?: "" }
                 }
                 Box(
                     Modifier.weight(1f).height(FieldIvory.measureButton).clip(RoundedCornerShape(16.dp))
@@ -240,6 +249,16 @@ internal fun DigControlArea(c: SurveyController) {
 }
 
 private val t43Blocked get() = D.blocked
+
+/** 0.1.46 작은 보조 동작(한 번 탭, 56dp 높이) */
+@Composable
+private fun MiniAction(g: Glyph, label: String, tag: String, modifier: Modifier, on: Boolean = false, onClick: () -> Unit) {
+    val sh = RoundedCornerShape(14.dp)
+    Row(modifier.heightIn(min = FieldIvory.minTouch).clip(sh).background(if (on) FieldIvory.primarySoft else D.card).border(if (on) 2.dp else 1.dp, if (on) FieldIvory.primary else D.line, sh)
+        .hClickable(onClickLabel = label, onClick = onClick).padding(horizontal = 6.dp).testTag(tag), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+        GlyphIcon(g, D.ink, 20.dp); Spacer(Modifier.width(6.dp)); Text(label, style = DTy.small.copy(fontWeight = FontWeight.Medium), color = D.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
 
 internal fun mapHint(c: SurveyController): String = when {
     c.phase == Phase.ACQUIRING -> "폴을 세운 채 움직이지 마세요"

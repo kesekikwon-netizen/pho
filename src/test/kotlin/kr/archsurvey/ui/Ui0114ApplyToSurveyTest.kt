@@ -205,7 +205,7 @@ class Ui0114ApplyToSurveyTest {
         setup()
         // 0.1.35: 홈 「측량한 것」 → 뒤로 = 측량 지도
         rule.onNodeWithTag("home_points").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("features_summary").assertExists()
+        rule.onNodeWithTag("points_screen").assertExists() // 0.1.46: home_points → 점 목록(s04)
         rule.onNodeWithTag("tool_back").performClick(); rule.waitForIdle()
         assertOnSurvey()
     }

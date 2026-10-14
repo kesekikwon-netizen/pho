@@ -73,7 +73,7 @@ class ConsecutivePointsTest {
         rule.onNodeWithTag("measure_button").performClick(); adv(f, 5)
         // 0.1.35 X3: 장부 카드를 닫지 않아도 측점 단추(「다음 점」) 한 번 = 바로 다음 측정
         rule.onNodeWithTag("point_confirm").assertDoesNotExist(); rule.onNodeWithTag("saved_toast").assertExists()
-        rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("측정") // 0.1.43 시안: 늘 「측정」
+        rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("측량") // 0.1.46 s03: 「측량」
         rule.onNodeWithTag("measure_button").performClick(); rule.waitForIdle()
         assertEquals(Phase.ACQUIRING, c.phase)
         adv(f, 5)

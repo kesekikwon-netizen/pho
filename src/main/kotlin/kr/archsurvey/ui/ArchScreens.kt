@@ -199,8 +199,16 @@ fun TypesScreen(c: SurveyController) {
             }
         }
         Card {
-            Field("새 종류 이름", newName, "type_new_field") { newName = it }
-            Btn("종류 추가", Modifier.fillMaxWidth().testTag("type_add")) { msg = c.addType(newName); if (msg == null) newName = "" }
+            // 0.1.46: 자주 쓰는 발굴 위치 종류를 눌러 추가, 그 밖은 「직접 입력」
+            Text("눌러서 추가", style = Ty.small, color = t.inkSub)
+            ChoiceGrid(ArchTypes.seed.plus(listOf("토층", "기타", "시료 채취", "사진 기준")).filter { it !in c.types }.distinct().take(9).mapIndexed { i, nm ->
+                GridItem(nm, "type_pick_$i") { msg = c.addType(nm) } })
+            var typing by remember { mutableStateOf(false) }
+            TypeFallbackRow(typing, "type_manual") { typing = !typing }
+            if (typing) {
+                Field("새 종류 이름", newName, "type_new_field") { newName = it }
+                Btn("종류 추가", Modifier.fillMaxWidth().testTag("type_add")) { msg = c.addType(newName); if (msg == null) newName = "" }
+            }
         }
     }
 }

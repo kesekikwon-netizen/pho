@@ -51,7 +51,10 @@ fun SetupSheet(c: SurveyController) {
                 c.ui.choose(ChoiceRequest("코드 / 심볼 (위치 종류)", c.types, typeIdx, "setup_type") { typeIdx = it })
             }
             QuickNoteChips(memo, "setup_note") { if (it.length <= 60) memo = it } // 0.1.39 한 손가락 비고
-            FieldRow("비고") {
+            // 0.1.46: 비고는 칩으로, 키보드는 「직접 입력」에서만
+            var memoTyping by remember { mutableStateOf(false) }
+            TypeFallbackRow(memoTyping, "setup_memo_manual") { memoTyping = !memoTyping }
+            if (memoTyping) FieldRow("비고") {
                 BasicTextField(
                     memo, { if (it.length <= 60) memo = it.replace("\n", " ") }, singleLine = true, textStyle = Ty.body.copy(color = t.ink),
                     cursorBrush = SolidColor(t.accent), modifier = Modifier.fillMaxWidth().testTag("setup_memo"),

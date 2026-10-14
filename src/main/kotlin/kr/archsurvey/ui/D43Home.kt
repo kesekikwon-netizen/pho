@@ -126,9 +126,12 @@ fun HomeToday(c: SurveyController) {
                 HomeListRow(Glyph.PLUS, "새 작업", "선택만으로 만들기", "home_new_job", plain = true) { c.jobs?.openNew() ?: c.ui.toast("작업 관리를 쓸 수 없어요") }
             }
             Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                HomeTileBox(Glyph.LIST, "점 목록", "home_points", Modifier.weight(1f)) { c.homeOpen = false; c.hub.open(ToolScreen.FEATURES) }
+                HomeTileBox(Glyph.LIST, "점 목록", "home_points", Modifier.weight(1f)) { c.homeOpen = false; c.hub.open(ToolScreen.POINTS) }
                 HomeTileBox(Glyph.EXPORT, "내보내기", "home_export", Modifier.weight(1f)) { c.exporter?.openScreen() }
                 HomeTileBox(Glyph.BT, "수신기", "home_receiver", Modifier.weight(1f)) { c.connection?.openScreen() ?: c.ui.toast("연결 화면을 열 수 없어요") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HomeTileBox(Glyph.FACE, "유구별 보기", "home_features", Modifier.weight(1f)) { c.homeOpen = false; c.hub.open(ToolScreen.FEATURES) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 HomeTileBox(Glyph.GRID, "구역·그리드", "home_areas", Modifier.weight(1f)) { c.homeOpen = false; c.hub.open(ToolScreen.AREAS) }

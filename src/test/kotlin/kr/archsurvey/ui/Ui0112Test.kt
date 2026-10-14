@@ -136,7 +136,7 @@ class Ui0112Test {
     @Test fun antennaSheetSteps10cmAndChips() {
         setup()
         rule.runOnUiThread { c.homeOpen = false; c.antennaSheetOpen = true }; rule.waitForIdle()
-        rule.onNodeWithTag("step_plus").assertTextContains("+10 cm", substring = true)
+        rule.onNodeWithTag("step_plus").assertTextContains("+ 0.10", substring = true) // 0.1.46 s06: m 단위 표기
         rule.onNodeWithTag("step_plus").performClick(); rule.waitForIdle()
         assertEquals(2.1, c.antenna.inputValueM, 1e-9)
         rule.onNodeWithTag("pole_chip_1.8").performScrollTo().performClick(); rule.waitForIdle()

@@ -96,6 +96,9 @@ class NtripSocketTests {
     }
 
     @Test fun unknownHostIsDns() = runBlocking {
+        // 0.1.46: 일부 망(박스 포함)은 .invalid 도 가짜 주소로 풀어 준다(싱크홀) — 그런 환경에선 DNS 실패를 시험할 수 없어 건너뜀(사진 기준점과 같음)
+        val sinkhole = runCatching { java.net.InetAddress.getAllByName("no-such-host.invalid") }.getOrNull()
+        org.junit.Assume.assumeTrue("resolver returns sinkhole ${sinkhole?.joinToString { it.hostAddress ?: "" }} for .invalid", sinkhole == null)
         val e = runOnce(cfg = NtripConfig(host = "no-such-host.invalid", port = 2101, mountPoint = "V", username = "u"), timeoutMs = 15000)
         assertTrue(e.toString(), e is NtripNetworkException)
         assertEquals(NtripFailureKind.DNS, NtripFailureKind.classify(e!!))
