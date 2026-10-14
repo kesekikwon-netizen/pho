@@ -57,7 +57,8 @@ fun SurveyMapScreen(
 ) {
     val t = T
     androidx.compose.runtime.CompositionLocalProvider(LocalSurvey provides c, LocalTapHaptic provides (c.settingsState?.vibration ?: true)) {
-    Box(Modifier.fillMaxSize().background(t.bg).windowInsetsPadding(WindowInsets.systemBars).testTag("screen")) {
+    // 0.1.52 #3: 바탕은 시스템 막대 뒤까지, 내용(측량 단추·아래 줄 포함)은 safeDrawing(상태줄·내비 막대·컷아웃·키보드) 안쪽
+    Box(Modifier.fillMaxSize().background(D.bg).windowInsetsPadding(WindowInsets.safeDrawing).testTag("screen")) {
         // 0.1.35: 위 한 줄(작업명·상태 알약·메뉴) · 원인 한 줄 · 넓은 지도 · 잰 직후 장부 · 지금 재는 것 + 조작부.
         // 폴드 안쪽 화면(가로 600dp 이상)은 왼쪽 지도 · 오른쪽 결과 + 오늘 점 + 조작부 2단
         if (c.homeOpen) HomeToday(c) else androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {

@@ -11,6 +11,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -229,14 +230,16 @@ internal fun DigControlArea(c: SurveyController) {
                     else -> { label = "측량"; sub = c.gv.status.sigmaHM?.let { "±" + String.format(Locale.US, "%.1f", it * 100) + " cm" } ?: "" }
                 }
                 Box(
-                    Modifier.weight(1f).height(MEASURE_RH).clip(RoundedCornerShape(16.dp))
+                    // 0.1.52 #6: 누르는 동안 모서리·크기 스프링(측량 단추에만). 자리·크기·탭 규칙은 0.1.50 그대로
+                    Modifier.weight(1f).height(MEASURE_RH).pressSpring()
                         .background(if (!busy && (notConn || dim) && !armed) t43Blocked else D.primary)
                         // 0.1.50 오른손 #9: 손을 뗄 때 실행 · 8dp 넘게 밀리면 취소 · 연타 0.8초 막기(길게 = 설정은 그대로)
                         .releaseTap(label, onLongClick = { if (!busy && !armed) c.setupOpen = true }) { if (busy) c.cancelAcquire() else if (notConn && !armed) { c.connection?.openScreen() ?: c.onMeasure() } else c.onMeasure() }
                         .testTag("measure_button"),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (busy) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(c.progress.coerceIn(0f, 1f)).height(6.dp).background(Color.White.copy(alpha = 0.85f)).testTag("measure_progress"))
+                    // 0.1.52 #4: 진행 막대는 그리기 단계에서만 c.progress 를 읽는다(측정 중 매 epoch 재구성 없음)
+                    if (busy) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(6.dp).drawBehind { drawRect(Color.White.copy(alpha = 0.85f), size = size.copy(width = size.width * c.progress.coerceIn(0f, 1f))) }.testTag("measure_progress"))
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(label, style = DTy.button.copy(fontSize = if (label.length <= 3) 24.sp else 19.sp, lineHeight = 26.sp), color = Color.White, maxLines = 1, textAlign = TextAlign.Center,
                             modifier = Modifier.testTag(if (notConn || dim) "measure_disabled_reason" else "measure_label"))

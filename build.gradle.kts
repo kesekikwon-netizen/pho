@@ -21,8 +21,8 @@ android {
         applicationId = "kr.archsurvey.field"
         minSdk = 21
         targetSdk = 35
-        versionCode = 52
-        versionName = "0.1.51"
+        versionCode = 53
+        versionName = "0.1.52"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         buildConfigField("boolean", "USE_MAPLIBRE", project.hasProperty("withMapLibre").toString()) // 옵트인 MapLibre 지도(기본 false)
     }
@@ -42,7 +42,9 @@ android {
     buildTypes {
         debug { applicationIdSuffix = ".debug"; versionNameSuffix = "-debug" }
         release {
-            isMinifyEnabled = false // 현장시험 빌드: minify 끔
+            isMinifyEnabled = true // 0.1.52 R8 full mode (AGP 8 기본) + 리소스 축소
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // keystore.properties 가 있으면 release 키로 서명.
             // 없으면 debug 키로 서명(설치/시험용, 현장 배포·업데이트용 아님) — 빌드 로그에 경고.
             val rel = signingConfigs.findByName("release")
@@ -77,7 +79,7 @@ android {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
-    val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
+    val composeBom = platform("androidx.compose:compose-bom:2025.07.00")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
@@ -85,6 +87,8 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.core:core-ktx:1.13.1")
+    // 0.1.52 #2: adb 설치에서도 Baseline Profile 을 설치(첫 실행/백그라운드)
+    implementation("androidx.profileinstaller:profileinstaller:1.3.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.exifinterface:exifinterface:1.3.7")

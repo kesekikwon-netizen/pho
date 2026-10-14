@@ -9,6 +9,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,7 +30,7 @@ import java.util.Date
 import java.util.Locale
 
 /** 0.1.43 머리줄 상태 알약 글자(시안: 「○ 연결 안 됨」 / 「● FIX 1.4 cm」 / 「● FLOAT 5.2 cm」) */
-data class D43Pill(val text: String, val sub: String?, val dot: Color?)
+data class D43Pill(val text: String, val sub: String?, val dot: Color?, val mark: StatusMark = if (dot == null) StatusMark.NONE else StatusMark.FIX)
 
 internal fun d43Pill(c: SurveyController): D43Pill {
     val g = c.gv
@@ -36,16 +39,16 @@ internal fun d43Pill(c: SurveyController): D43Pill {
     if (g.sigmaMissingOnFix) return if (g.strictMode) D43Pill("FIX · 정밀도 정보 없음", "저장 잠김", D.bad) else D43Pill("FIX", "정밀도 정보 없음", D.fix)
     return when (g.displayStatus) {
         SurveyStatus.FIXED -> D43Pill("FIX", cm, D.fix)
-        SurveyStatus.CAUTION -> D43Pill(digPill(c).text.let { if (it.startsWith("FLOAT")) "FLOAT" else it }, cm, D.floatDot)
-        SurveyStatus.UNAVAILABLE -> D43Pill("측량 불가", null, D.bad)
+        SurveyStatus.CAUTION -> D43Pill(digPill(c).text.let { if (it.startsWith("FLOAT")) "FLOAT" else it }, cm, D.floatDot, StatusMark.FLOAT)
+        SurveyStatus.UNAVAILABLE -> D43Pill("측량 불가", null, D.bad, StatusMark.NONE)
     }
 }
 
 @Composable
 internal fun D43StatusPill(c: SurveyController, modifier: Modifier = Modifier) {
-    rememberTick()
-    val p = d43Pill(c)
-    DStatusChip(p.text, p.sub, p.dot, "status_pill", modifier) { if (c.gv.noReceiver) c.connection?.openScreen() ?: run { c.dig.statusOpen = true } else c.dig.statusOpen = true }
+    // 0.1.52 #4: 위치가 바뀔 때마다가 아니라 알약 글자·색이 바뀔 때만 다시 그림
+    val p by remember(c) { derivedStateOf { d43Pill(c) } }
+    DStatusChip(p.text, p.sub, p.dot, "status_pill", modifier, p.mark) { if (c.gv.noReceiver) c.connection?.openScreen() ?: run { c.dig.statusOpen = true } else c.dig.statusOpen = true }
 }
 
 /** 앱 표시(어두운 네모 + 폴) — 아이콘과 같은 어둡고 굵은 모양 */
@@ -71,6 +74,7 @@ fun HomeToday(c: SurveyController) {
                 Text("발굴 측량", style = DTy.h1, color = D.ink, maxLines = 1, modifier = Modifier.testTag("home_title"))
                 Text(site ?: "현장 GNSS", style = DTy.small, color = D.sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            SunToggle()
             D43StatusPill(c)
             HeaderIcon(Glyph.MENU, "메뉴", "home_settings") { c.drawerOpen = true }
         }
@@ -132,7 +136,7 @@ fun HomeToday(c: SurveyController) {
                 HomeTileBox(Glyph.BT, "수신기", "home_receiver", Modifier.weight(1f)) { c.connection?.openScreen() ?: c.ui.toast("연결 화면을 열 수 없어요") }
             }
             Box(
-                Modifier.fillMaxWidth().height(MEASURE_RH).clip(RoundedCornerShape(18.dp)).background(FieldIvory.primary)
+                Modifier.fillMaxWidth().height(MEASURE_RH).clip(RoundedCornerShape(18.dp)).background(D.primary)
                     .hClickable { c.goToSurvey() }.semantics { contentDescription = "측량 계속하기" }.testTag("home_survey"),
                 contentAlignment = Alignment.Center,
             ) {
@@ -219,5 +223,17 @@ private fun D43PrepRow(c: SurveyController, i: Int, s: kr.archsurvey.dig.PrepSte
         s.action?.let { a ->
             DSecondary(a, "prep_${s.id}_act", Modifier.padding(top = 2.dp).height(48.dp).widthIn(min = 70.dp)) { prepAction(c, s.id) }
         }
+    }
+}
+
+/** 0.1.52 #9 햇빛 고대비: 홈 머리줄에서 한 번 눌러 켬/끔(선택만, 저장됨) */
+@Composable
+internal fun SunToggle() {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val on = Sunlight.on
+    Box(Modifier.padding(end = 6.dp).heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp)).background(if (on) D.ink else D.card).border(1.5.dp, D.line, RoundedCornerShape(24.dp))
+        .hClickable(onClickLabel = "햇빛 고대비") { Sunlight.set(ctx, !on) }.padding(horizontal = 10.dp)
+        .semantics { contentDescription = "햇빛 고대비 " + if (on) "켬" else "끔" }.testTag("home_sun"), contentAlignment = Alignment.Center) {
+        Text(if (on) "☀ 고대비" else "☀ 햇빛", style = DTy.small.copy(fontWeight = FontWeight.Bold), color = if (on) D.bg else D.ink, maxLines = 1)
     }
 }

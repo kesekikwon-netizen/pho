@@ -6,6 +6,7 @@ import android.os.BatteryManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -45,6 +46,12 @@ class MainActivity : ComponentActivity() {
         freshAfterExit = cleanExit.consumeOnLaunch()
         val savedInstanceState = if (freshAfterExit) null else savedInstanceStateRaw
         super.onCreate(savedInstanceState)
+        // 0.1.52 #3: Android 15(targetSdk 35)은 edge-to-edge 강제 — 모든 버전에서 같게 켜고, 밝은 바탕이라 어두운 시스템 아이콘
+        enableEdgeToEdge(
+            statusBarStyle = androidx.activity.SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = androidx.activity.SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+        )
+        kr.archsurvey.ui.Sunlight.load(this) // 0.1.52 #9
         vm.platform.permissionRequester = { perms, cb ->
             if (perms.isEmpty()) cb(true) else { permCallback = cb; permLauncher.launch(perms) }
         }

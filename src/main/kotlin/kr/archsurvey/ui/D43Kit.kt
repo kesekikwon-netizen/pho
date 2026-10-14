@@ -31,30 +31,31 @@ import androidx.compose.ui.unit.sp
  * 0.1.43 사용자 디자인 시안(10-12) 부품. 크림 바탕·흰 카드·검은 굵은 선(표)·테라코타 주 단추·모노 숫자.
  * 색 값은 시안 design.html 에서 뽑은 것(plan.md 「디자인 토큰」).
  */
+/** 0.1.52: 햇빛 고대비(Sunlight.on)면 진한 값으로 — 읽는 화면은 자동으로 다시 그림 */
 object D {
-    val bg = Color(0xFFFAF9F5)
-    val card = Color(0xFFFFFFFF)
-    val card2 = Color(0xFFF5F4EF)
-    val chip = Color(0xFFF0EEE6)
-    val hair = FieldIvory.line
-    val line = Color(0xFFC2C0B6)
-    val ink = Color(0xFF141413)
-    val sub = Color(0xFF5E5D59)
-    val weak = Color(0xFF73726C)
-    val primary = FieldIvory.primary
-    val accent = Color(0xFF9C4A2F)
+    val bg: Color get() = if (Sunlight.on) Sunlight.bg else Color(0xFFFAF9F5)
+    val card: Color get() = if (Sunlight.on) Sunlight.bg else Color(0xFFFFFFFF)
+    val card2: Color get() = if (Sunlight.on) Sunlight.chip else Color(0xFFF5F4EF)
+    val chip: Color get() = if (Sunlight.on) Sunlight.chip else Color(0xFFF0EEE6)
+    val hair: Color get() = if (Sunlight.on) Sunlight.hair else FieldIvory.line
+    val line: Color get() = if (Sunlight.on) Sunlight.line else Color(0xFFC2C0B6)
+    val ink: Color get() = if (Sunlight.on) Sunlight.ink else Color(0xFF141413)
+    val sub: Color get() = if (Sunlight.on) Sunlight.sub else Color(0xFF5E5D59)
+    val weak: Color get() = if (Sunlight.on) Sunlight.sub else Color(0xFF73726C)
+    val primary: Color get() = if (Sunlight.on) Sunlight.primary else FieldIvory.primary
+    val accent: Color get() = if (Sunlight.on) Sunlight.primary else Color(0xFF9C4A2F)
     val accentLight = FieldIvory.decor
-    val sel = Color(0xFFE3DACC)
-    val fix = FieldIvory.fix
-    val caution = FieldIvory.float
+    val sel: Color get() = if (Sunlight.on) Sunlight.sel else Color(0xFFE3DACC)
+    val fix: Color get() = if (Sunlight.on) Sunlight.fix else FieldIvory.fix
+    val caution: Color get() = if (Sunlight.on) Sunlight.float else FieldIvory.float
     val cautionBg = Color(0xFFF7EFD6)
-    val floatDot = FieldIvory.float
+    val floatDot: Color get() = if (Sunlight.on) Sunlight.float else FieldIvory.float
     val logoInk = Color(0xFFF2E6DA)
     val blocked = Color(0xFF5C5B57)
     val bmGold = Color(0xFFC9A227)
     val scrim = Color(0x99706F6B)
-    val cautionLine = Color(0xFFE2CF94)
-    val bad = FieldIvory.error
+    val cautionLine: Color get() = if (Sunlight.on) Sunlight.float else Color(0xFFE2CF94)
+    val bad: Color get() = if (Sunlight.on) Sunlight.error else FieldIvory.error
     val dark = Color(0xFF30302E)
 }
 
@@ -264,17 +265,17 @@ fun DLeaderRow(label: String, value: String?, tag: String, toggle: Boolean? = nu
 
 /** 상태 알약(시안 머리줄 오른쪽): ● FIX 1.4 cm / ○ 연결 안 됨 */
 @Composable
-fun DStatusChip(text: String, sub: String?, dot: Color?, tag: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun DStatusChip(text: String, sub: String?, dot: Color?, tag: String, modifier: Modifier = Modifier, mark: StatusMark = if (dot == null) StatusMark.NONE else StatusMark.FIX, onClick: () -> Unit) {
     // 0.1.46: 상태색 채움 + 흰 글자(「● FIX 1.4 cm」). 연결 안 됨은 흰 바탕 외곽선
     val fill = dot ?: D.card
     val on = if (dot != null) FieldIvory.onPrimary else D.ink
     Row(
         modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp)).background(fill).border(if (dot == null) 1.5.dp else 0.dp, if (dot == null) D.line else fill, RoundedCornerShape(24.dp)).hClickable(onClick = onClick)
-            .padding(horizontal = 12.dp).semantics { contentDescription = text + (sub?.let { " $it" } ?: "") }.testTag(tag),
+            .padding(horizontal = 12.dp).semantics { contentDescription = mark.glyph + " " + text + (sub?.let { " $it" } ?: "") }.testTag(tag),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        if (dot != null) Box(Modifier.size(10.dp).clip(CircleShape).background(on))
-        else Box(Modifier.size(10.dp).clip(CircleShape).border(1.5.dp, D.ink, CircleShape))
+        // 0.1.52 #5: 색 + 모양 ● FIX / ◐ FLOAT / ○ 없음
+        StatusDot(mark, on, 12.dp, Modifier.testTag("pill_mark_" + mark.name.lowercase()))
         Text(text, style = DTy.small.copy(fontWeight = FontWeight.Bold), color = on, maxLines = 1, modifier = Modifier.testTag("pill_fix"))
         if (sub != null) Text(sub, style = DTy.small.copy(fontWeight = FontWeight.Medium), color = on, maxLines = 1, modifier = Modifier.testTag("pill_sigma"))
     }
