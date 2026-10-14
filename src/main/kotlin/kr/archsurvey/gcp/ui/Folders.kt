@@ -180,7 +180,9 @@ fun ObjScreen(c: GcpController) {
     val doneCount = done.count { it }
     Column(Modifier.fillMaxSize().background(G.bg).testTag("obj_screen")) {
         GTopBar(o.name, { c.back() }, c, sub = "${s.no}차 · ${s.label}" + if (locked) " · 앞 차수 보기만" else "", titleTag = "obj_title", onMenu = { c.menuOpen = true }, onTitle = { c.sessionSheetOpen = true }, titleClickTag = "tool_session")
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // 0.1.12 오른손 #8: 단계 카드는 화면 아래쪽에 붙인다(지금 단계·4단계까지 엄지 범위)
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.Bottom)) {
             Row(Modifier.padding(top = 14.dp, start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("4단계 중 ${doneCount}단계 완료", style = Ty.small, color = G.sub, modifier = Modifier.weight(1f).testTag("obj_progress"))
                 Box(Modifier.width(140.dp).height(8.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFFEFEBE3))) {
@@ -197,15 +199,28 @@ fun ObjScreen(c: GcpController) {
             Text("XML: ${Names.objFolder(o)}/${Names.xmlName(o, s, b.site.epsg)}", style = Ty.coord.copy(fontSize = 16.sp), color = G.sub, modifier = Modifier.padding(start = 4.dp).testTag("obj_xml"))
             Spacer(Modifier.height(4.dp))
         }
+        }
         Column(Modifier.fillMaxWidth().background(G.bg)) {
             Box(Modifier.fillMaxWidth().height(1.dp).background(G.line))
-            Box(Modifier.padding(16.dp)) {
+            // 0.1.12 오른손 #8: 위 ‹ 와 같은 뒤로를 아래 「지도」로도(76dp, 다음 단추 왼쪽). 이전 화면이 지도가 아니면 「목록」
+            val backToMap = c.stack.getOrNull(c.stack.size - 2) == Screen.MAP
+            val backLabel = if (backToMap) "지도" else "목록"
+            Row(Modifier.padding(16.dp).height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.width(76.dp).fillMaxHeight().heightIn(min = 80.dp).clip(RoundedCornerShape(20.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(20.dp))
+                    .hClickable(onClickLabel = backLabel) { c.back() }.testTag("obj_to_map"),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    GlyphIcon(if (backToMap) Glyph.PIN else Glyph.LIST, G.ink, 24.dp)
+                    Spacer(Modifier.height(4.dp))
+                    Text(backLabel, style = Ty.small.copy(fontWeight = FontWeight.Medium), color = G.ink, maxLines = 1)
+                }
+                Box(Modifier.weight(1f)) {
                 when {
                     locked -> BigPrimary("차수 고르기", "앞 차수는 보기만 해요", "obj_session") { c.sessionSheetOpen = true }
                     st == Stage.MEASURE -> BigPrimary("다음: 표적 재기", "1 / 4 단계 · ${n}/${s.slots.size} · FIX 때만 저장", "obj_measure") { c.openTargets() }
                     st == Stage.PHOTO -> BigPrimary("다음: ID 카드 띄우기", "2 / 4 단계 · 그다음 사진 찍기", "obj_idcard") { c.openIdCard() }
                     st == Stage.HANDOFF -> BigPrimary("다음: PC로 보내기", "4 / 4 단계", "obj_send") { c.handoffOpen = true }
                     else -> BigPrimary("다음 차수 만들기", "4단계 모두 끝 · 앞 차수 파일은 그대로", "obj_newsession") { c.openNewSession() }
+                }
                 }
             }
         }
@@ -287,6 +302,14 @@ private fun TargetsPanel(c: GcpController, o: kr.archsurvey.gcp.model.Obj, s: kr
                 Text("표적 ${shots.size}/${s.slots.size}" + (if (shots.size < Pipeline.MIN_TARGETS) " · ${Pipeline.MIN_TARGETS}개부터 사진" else " · 사진 가능") + (if (locked) " · 앞 차수 보기만" else ""),
                     style = Ty.small, color = if (locked) G.warn else G.sub, maxLines = 2, modifier = Modifier.testTag("targets_note"))
             }
+            // 0.1.12 오른손 #1: 평균 횟수는 측량 단추 아래가 아니라 폴 옆(위 줄)
+            Column(Modifier.widthIn(min = 72.dp).heightIn(min = FieldIvory.minTouch).clip(RoundedCornerShape(16.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(16.dp))
+                .hClickable(onClickLabel = "평균 횟수") { val l = GcpController.EPOCH_CHOICES; c.setEpochs(l[(l.indexOf(c.prefs.epochs) + 1).mod(l.size)]) }
+                .padding(horizontal = 10.dp, vertical = 6.dp).testTag("epochs_chip"),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Text("평균", style = Ty.small, color = G.sub)
+                Text("${c.prefs.epochs}회", style = Ty.coord.copy(fontSize = 20.sp, fontWeight = FontWeight.Medium), color = G.ink, maxLines = 1, modifier = Modifier.testTag("epochs_value"))
+            }
             Column(Modifier.widthIn(min = 96.dp).heightIn(min = FieldIvory.minTouch).clip(RoundedCornerShape(16.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(16.dp))
                 .hClickable(onClickLabel = "폴 높이") { c.poleOpen = true }.padding(horizontal = 12.dp, vertical = 6.dp).testTag("pole_chip"),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -296,7 +319,8 @@ private fun TargetsPanel(c: GcpController, o: kr.archsurvey.gcp.model.Obj, s: kr
         }
         // 표적 칸(세 상태): 완료 = 연테라코타 + 「완료」, 지금/다음 = 테라코타 채움, 대기 = 흰색
         val cells: @Composable (Modifier) -> Unit = { m ->
-            Row(m.testTag("qtag_row"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // 0.1.12 오른손 #5: 칩 줄을 오른쪽으로 40dp(1번도 엄지 범위) · 다음 표적은 자동이라 칩은 다시 잴 때만
+            Row(m.padding(start = 40.dp).testTag("qtag_row"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val scroll = s.slots.size > 4
                 s.slots.forEachIndexed { i, tag ->
                     val shot = c.shotOf(tag)
@@ -304,7 +328,7 @@ private fun TargetsPanel(c: GcpController, o: kr.archsurvey.gcp.model.Obj, s: kr
                     val isNext = tag == next && shot == null
                     val hot = now || isNext
                     val cellMod = if (scroll) Modifier.width(72.dp) else Modifier.weight(1f)
-                    Column(cellMod.heightIn(min = 72.dp).clip(RoundedCornerShape(16.dp))
+                    Column(cellMod.heightIn(min = 60.dp).clip(RoundedCornerShape(16.dp))
                         .background(when { hot -> G.dark; shot != null -> G.sel; else -> G.white })
                         .border(if (hot) 0.dp else 1.dp, if (shot != null) G.dark.copy(alpha = 0.35f) else G.line, RoundedCornerShape(16.dp))
                         .hCombinedClickable(onLongClick = { c.onTargetLong(i) }) { c.onTargetTap(tag) }
@@ -319,14 +343,16 @@ private fun TargetsPanel(c: GcpController, o: kr.archsurvey.gcp.model.Obj, s: kr
                         }
                     }
                 }
-                if (!locked) Box(Modifier.width(FieldIvory.minTouch).heightIn(min = 72.dp).clip(RoundedCornerShape(16.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(16.dp))
-                    .hClickable(onClickLabel = "표적 더하기") { c.openAddSlot() }.testTag("add_slot"), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.PLUS, G.ink, 24.dp) }
+                // 0.1.12 오른손 #5: 「+」(표적 더하기)는 길게 눌러야(오터치 방지). 짧게 누르면 안내만
+                if (!locked) Box(Modifier.width(FieldIvory.minTouch).heightIn(min = 60.dp).clip(RoundedCornerShape(16.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(16.dp))
+                    .hCombinedClickable(onLongClick = { c.openAddSlot() }) { c.ui.toast(ADD_SLOT_HINT) }.semantics { contentDescription = "표적 더하기 · 길게 누르기" }.testTag("add_slot"), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.PLUS, G.ink, 24.dp) }
             }
         }
         if (s.slots.size > 4) cells(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) else cells(Modifier.fillMaxWidth())
-        // 평균 횟수(선택만) · 대상 · 96dp 측량
+        // 0.1.12 오른손 #1: 측량 단추 위 16dp 는 누를 것 없음 · 대상 + 104dp 측량(오른쪽)
+        Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.width(88.dp).height(FieldIvory.measureButton).clip(RoundedCornerShape(18.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(18.dp))
+            Column(Modifier.width(88.dp).height(MEASURE_RH).clip(RoundedCornerShape(18.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(18.dp))
                 .hClickable(onClickLabel = "대상") { c.back() }.testTag("targets_obj"),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 GlyphIcon(Glyph.FOLDER, G.ink, 26.dp)
@@ -335,15 +361,12 @@ private fun TargetsPanel(c: GcpController, o: kr.archsurvey.gcp.model.Obj, s: kr
             }
             Box(Modifier.weight(1f)) { MeasureBig(c) }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("평균", style = Ty.small, color = G.sub, modifier = Modifier.weight(1f))
-            Text("FIX ${c.prefs.epochs}회", style = Ty.coord, color = G.ink,
-                modifier = Modifier.heightIn(min = FieldIvory.minTouch).clip(RoundedCornerShape(12.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(12.dp))
-                    .hClickable(onClickLabel = "평균 횟수") { val l = GcpController.EPOCH_CHOICES; c.setEpochs(l[(l.indexOf(c.prefs.epochs) + 1).mod(l.size)]) }
-                    .wrapContentHeight(Alignment.CenterVertically).padding(horizontal = 14.dp).testTag("epochs_chip"))
-        }
     }
 }
+
+/** 0.1.12 오른손 #1: 측량 단추 104dp */
+internal val MEASURE_RH = 104.dp
+const val ADD_SLOT_HINT = "표적을 더하려면 「+」를 길게 누르세요"
 
 /** g04 지도 위 작은 진행 띠(화면을 가리지 않음): 표적 N · 7/10 · 막대 */
 @Composable
@@ -380,8 +403,9 @@ fun MeasureBig(c: GcpController) {
         else -> { label = "표적 #$next 측량"; sub = "FIX ${c.prefs.epochs}회 평균" + if (c.session?.slots?.contains(next) == false) " · 새 칸" else "" }
     }
     val dim = !busy && (locked || (blocked && !notConn))
-    Box(Modifier.fillMaxWidth().height(FieldIvory.measureButton).clip(RoundedCornerShape(20.dp)).background(if (dim) FieldIvory.disabled else G.dark)
-        .hClickable(onClickLabel = label) { if (!locked || busy) c.onMeasureButton() }.testTag("measure_button"), contentAlignment = Alignment.Center) {
+    // 0.1.12 오른손 #9: 손을 뗄 때 실행 · 8dp 넘게 밀리면 취소 · 연타 0.8초 막기
+    Box(Modifier.fillMaxWidth().height(MEASURE_RH).clip(RoundedCornerShape(20.dp)).background(if (dim) FieldIvory.disabled else G.dark)
+        .releaseTap(label) { if (!locked || busy) c.onMeasureButton() }.testTag("measure_button"), contentAlignment = Alignment.Center) {
         if (busy) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(c.progress.coerceIn(0f, 1f)).height(6.dp).background(G.white.copy(alpha = 0.85f)).testTag("measure_progress"))
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(label, style = Ty.label.copy(fontSize = if (busy) 30.sp else 24.sp, fontWeight = FontWeight.Bold), color = if (dim) FieldIvory.onDisabled else G.onDark, maxLines = 1, modifier = Modifier.testTag("measure_label"))

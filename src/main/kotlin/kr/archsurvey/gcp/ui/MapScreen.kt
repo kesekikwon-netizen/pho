@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -93,21 +94,23 @@ fun MapArea(c: GcpController, env: GcpEnv, modifier: Modifier) {
     val surface = remember { CanvasMapSurface() }
     val ms = c.mapState(access)
     DisposableEffect(Unit) { onDispose { ToastAnchor.mapBounds = null } }
+    val density = androidx.compose.ui.platform.LocalDensity.current.density
+    var mapSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     Box(
-        modifier.fillMaxWidth().onGloballyPositioned { ToastAnchor.mapBounds = it.boundsInRoot() }.testTag("map_area").pointerInput(Unit) {
-            // 측량 앱과 같음: 한 손가락 이동 + 두 손가락 확대(손가락 아래 고정)
-            detectTransformGestures { centroid, pan, zoom, _ ->
-                val ppm = (c.dpPerM * density).toFloat()
-                if (pan.x != 0f || pan.y != 0f) c.panBy((-pan.x / ppm).toDouble(), (pan.y / ppm).toDouble())
-                if (zoom != 1f) c.scaleBy(zoom.toDouble(), ((centroid.x - size.width / 2f) / ppm).toDouble(), (-(centroid.y - size.height / 2f) / ppm).toDouble())
-            }
-        },
+        modifier.fillMaxWidth().onGloballyPositioned { ToastAnchor.mapBounds = it.boundsInRoot() }.onSizeChanged { mapSize = it }.testTag("map_area").oneThumbMap(
+            // 0.1.12 오른손 #6: 한 엄지 끌기 = 이동 · 두 번 탭 후 위아래 끌기 = 확대 · 두 손가락은 예전처럼 · 왼쪽 끝 24dp 는 시스템 뒤로
+            onPan = { pan -> val ppm = (c.dpPerM * density).toFloat(); c.panBy((-pan.x / ppm).toDouble(), (pan.y / ppm).toDouble()) },
+            onZoom = { zoom, at -> val ppm = (c.dpPerM * density).toFloat(); c.scaleBy(zoom.toDouble(), ((at.x - mapSize.width / 2f) / ppm).toDouble(), (-(at.y - mapSize.height / 2f) / ppm).toDouble()) },
+        ),
     ) {
         surface.Draw(ms, Modifier.fillMaxSize())
-        Column(Modifier.align(Alignment.TopStart).padding(start = 10.dp, top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            MapBtn(Glyph.LOCATE, "내 위치", "tool_locate", c.follow) { if (c.follow) c.follow = false else c.recenter() }
-            MapBtn(Glyph.PLUS, "확대", "tool_zoom_in") { c.zoomIn() }
-            MapBtn(Glyph.MINUS, "축소", "tool_zoom_out") { c.zoomOut() }
+        // 0.1.12 오른손 #3: 내 위치 · 확대 · 축소는 지도 오른쪽 아래(엄지 영역). 드물게 쓰는 전체 보기는 위
+        Row(Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 34.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MapBtn(Glyph.LOCATE, if (c.follow) "따라가기 끄기" else "내 위치 따라가기", "tool_locate", c.follow) { if (c.follow) c.follow = false else c.recenter() }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                MapBtn(Glyph.PLUS, "확대", "tool_zoom_in") { c.zoomIn() }
+                MapBtn(Glyph.MINUS, "축소", "tool_zoom_out") { c.zoomOut() }
+            }
         }
         Column(Modifier.align(Alignment.TopEnd).padding(end = 10.dp, top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             MapBtn(Glyph.EXTENT, "유적 전체 보기", "tool_fit") { c.fitAll() }
@@ -127,7 +130,8 @@ fun MapArea(c: GcpController, env: GcpEnv, modifier: Modifier) {
         }
         // 0.1.8 g08: 예외 원문(SocketTimeoutException 등)은 화면에 내지 않는다 → 한 문장 무엇 + 한 문장 영향 + [다시]
         MapErrorChip.of(MapLayers.fallbackMessage(MapBase.SATELLITE_CADASTRAL, access.key) != null, TileImages.lastError)?.let { e ->
-            ErrorChip(e, Modifier.align(Alignment.BottomCenter).padding(start = 10.dp, end = 10.dp, bottom = 34.dp)) { TileImages.clear() }
+            // 0.1.12 오른손 #4: 오류 칩은 지도 맨 위 한 줄(엄지 영역·지도 끌기를 가리지 않음)
+            ErrorChip(e, Modifier.align(Alignment.TopStart).padding(start = 10.dp, end = 76.dp, top = 10.dp), compact = true) { TileImages.clear() }
         }
         Text(scaleText(c.dpPerM), style = Ty.coord.copy(fontSize = 16.sp), color = t.ink,
             modifier = Modifier.align(Alignment.BottomStart).padding(8.dp).background(t.bg.copy(alpha = 0.85f), RoundedCornerShape(8.dp)).padding(horizontal = 6.dp, vertical = 1.dp).testTag("scale_label"))
@@ -307,16 +311,18 @@ data class MapErrorChip(val what: String, val effect: String, val retry: Boolean
 }
 
 @Composable
-fun ErrorChip(e: MapErrorChip, modifier: Modifier = Modifier, onRetry: () -> Unit) {
+fun ErrorChip(e: MapErrorChip, modifier: Modifier = Modifier, compact: Boolean = false, onRetry: () -> Unit) {
+    var open by remember(e) { mutableStateOf(!compact) }
     Row(
         modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(16.dp))
-            .padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp).testTag("map_notice"),
+            .then(if (compact) Modifier.hClickable(onClickLabel = if (open) "접기" else "펼치기") { open = !open } else Modifier)
+            .heightIn(min = 48.dp).padding(start = 12.dp, end = 8.dp, top = 4.dp, bottom = 4.dp).testTag("map_notice"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         GlyphIcon(Glyph.LAYERS, FieldIvory.float, 24.dp)
         Column(Modifier.weight(1f)) {
-            Text(e.what, style = Ty.label.copy(fontWeight = FontWeight.Bold), color = G.ink, maxLines = 2, modifier = Modifier.testTag("map_notice_what"))
-            Text(e.effect, style = Ty.small, color = G.sub, maxLines = 2)
+            Text(e.what, style = Ty.label.copy(fontWeight = FontWeight.Bold), color = G.ink, maxLines = if (open) 2 else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("map_notice_what"))
+            if (open) Text(e.effect, style = Ty.small, color = G.sub, maxLines = 2)
         }
         if (e.retry) Box(
             Modifier.heightIn(min = FieldIvory.minTouch).widthIn(min = FieldIvory.minTouch).clip(RoundedCornerShape(12.dp)).background(G.sel)

@@ -62,8 +62,8 @@ private fun ToastView(ui: FeedbackHub) {
             Box(with(dens) {
                 Modifier.offset((map.left - origin.x).toDp(), (map.top - origin.y).toDp())
                     .size(map.width.toDp(), (map.height.toDp() - ToastAnchor.bottomGap).coerceAtLeast(0.dp))
-                    .padding(horizontal = 12.dp).testTag("toast_area_map")
-            }, contentAlignment = Alignment.BottomCenter) { ToastBody(ui, msg, kind, bgc, fg) }
+                    .padding(start = 12.dp, end = ToastAnchor.rightGap).testTag("toast_area_map")
+            }, contentAlignment = Alignment.BottomStart) { ToastBody(ui, msg, kind, bgc, fg) }
         }
         return
     }
@@ -194,8 +194,9 @@ fun ProgressWindow(
 /** 0.1.8 알림 자리: 지도 화면이 자기 경계(뿌리 좌표)를 알려 준다. 지도가 없으면 null */
 object ToastAnchor {
     var mapBounds by mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
-    /** 지도 맨 아래에서 띄울 거리(오류 칩·축척 줄 위) */
-    val bottomGap = 124.dp
+    /** 0.1.12 오른손 #4: 알림은 지도 아래 왼쪽(축척 줄 위). 오른쪽 아래 내 위치·확대 단추와 측량 단추를 가리지 않게 오른쪽을 비운다 */
+    val bottomGap = 40.dp
+    val rightGap = 140.dp
 }
 
 private fun Modifier.onGloballyPositionedOrigin(f: (androidx.compose.ui.geometry.Offset) -> Unit): Modifier =
