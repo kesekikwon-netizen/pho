@@ -11,6 +11,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -112,42 +113,68 @@ object QrMatrix {
     }
 }
 
-// =============================== 설정(최소) ===============================
+// =============================== g07 설정: 일반 · 수신기 · 고급 ===============================
 @Composable
 fun SettingsScreen(c: GcpController, env: GcpEnv) {
     val t = T
     c.poleTick
     var keyEdit by remember { mutableStateOf<String?>(null) }
     var diag by remember { mutableStateOf<String?>(null) }
+    var tab by rememberSaveable { mutableStateOf(0) }
     val link by c.source.link.collectAsState()
     Column(Modifier.fillMaxSize().background(t.bg).testTag("settings")) {
-        GcpHeader("설정", null, c.source, onBack = { c.back() }, onPill = { c.openReceiver() }, tag = "settings_header")
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        GTopBar("설정", { c.back() }, c, sub = "일반 · 수신기 · 고급", tag = "settings_header", onMenu = { c.menuOpen = true })
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
+            Spacer(Modifier.height(14.dp))
+            Segmented(listOf("일반" to "set_tab_general", "수신기" to "set_tab_receiver", "고급" to "set_tab_advanced"), tab) { tab = it }
             val cc = c.connection
-            val vrs = cc?.form?.let { if (!it.enabled) "VRS 끔" else "VRS " + it.mount.ifBlank { "마운트 없음" } } ?: ""
-            Tile("수신기 · VRS", false, "set_receiver", Modifier.fillMaxWidth(), height = 72.dp,
-                sub = (cc?.profile?.displayName ?: "R10") + " · " + when (link.state) { LinkState.STREAMING -> "연결됨"; LinkState.IDLE -> "연결 안 됨"; LinkState.NEEDS_USER -> "확인 필요"; else -> "연결 중" } + " · " + vrs) { c.openReceiver() }
-            Text("폴 높이", style = Ty.label.copy(fontSize = 16.sp), color = t.ink)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Tile("− 0.1", false, "pole_minus", Modifier.weight(1f), big = true) { c.stepPole(-10) }
-                Text(String.format(java.util.Locale.US, "%.1f m", c.poleM()), style = Ty.ledger.copy(fontSize = 26.sp), color = t.ink, modifier = Modifier.weight(1f).testTag("pole_value"), textAlign = TextAlign.Center)
-                Tile("+ 0.1", false, "pole_plus", Modifier.weight(1f), big = true) { c.stepPole(10) }
-            }
-            Text("평균 횟수 (FIX 때만)", style = Ty.label.copy(fontSize = 16.sp), color = t.ink)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { for (n in GcpController.EPOCH_CHOICES) Tile("${n}회", c.prefs.epochs == n, "epochs_$n", Modifier.weight(1f)) { c.setEpochs(n) } }
-            Tile(if (c.advancedOpen) "고급 접기 ▴" else "고급 ▾", false, "advanced_toggle", Modifier.fillMaxWidth(), height = 56.dp) { c.advancedOpen = !c.advancedOpen }
-            if (c.advancedOpen) {
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(t.raised).border(1.dp, t.outline, RoundedCornerShape(14.dp)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) { Text("볼륨 아래 키 = 측량하기", style = Ty.label.copy(fontSize = 16.sp), color = t.ink); Caption("장갑 낀 채로 안 잰 첫 표적을 재요") }
-                    Switch(c.prefs.volumeKey, { c.setVolumeKey(it) }, modifier = Modifier.testTag("volume_switch"), colors = SwitchDefaults.colors(checkedTrackColor = t.primary))
+            val vrs = cc?.form?.let { if (!it.enabled) "VRS 끔" else it.mount.ifBlank { "마운트 없음" } } ?: "VRS"
+            val linkWord = when (link.state) { LinkState.STREAMING -> "연결됨"; LinkState.IDLE -> "연결 안 됨"; LinkState.NEEDS_USER -> "확인 필요"; else -> "연결 중" }
+            when (tab) {
+                0 -> {
+                    GroupLabel("측량")
+                    CardGroup {
+                        CardRow(Glyph.POLE, "폴 높이", "누르면 ±0.10 · 프리셋", "set_pole", onClick = { c.poleOpen = true }) {
+                            Text(String.format(java.util.Locale.US, "%.2f m", c.poleM()), style = Ty.coord.copy(fontSize = 20.sp, fontWeight = FontWeight.Bold), color = G.ink, modifier = Modifier.testTag("pole_value"))
+                        }
+                        CardDivider()
+                        Column(Modifier.padding(16.dp)) {
+                            Text("평균 횟수 (FIX 때만)", style = Ty.label.copy(fontWeight = FontWeight.Bold), color = G.ink)
+                            Spacer(Modifier.height(10.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { for (n in GcpController.EPOCH_CHOICES) Tile("${n}회", c.prefs.epochs == n, "epochs_$n", Modifier.weight(1f), height = 56.dp) { c.setEpochs(n) } }
+                        }
+                    }
+                    GroupLabel("장갑 낀 손")
+                    CardGroup {
+                        CardRow(Glyph.CHECK, "볼륨 아래 키 = 측량", "안 잰 첫 표적을 재요", "set_volume") {
+                            Switch(c.prefs.volumeKey, { c.setVolumeKey(it) }, modifier = Modifier.testTag("volume_switch"), colors = SwitchDefaults.colors(checkedTrackColor = t.primary))
+                        }
+                    }
                 }
-                val acc = env.mapAccess()
-                Tile("V월드 지도 키", false, "set_vworld", Modifier.fillMaxWidth(), sub = if (acc.key.isBlank()) "없음" else "••••" + acc.key.takeLast(4) + " · 바꿀 때만 직접 입력") { keyEdit = "" }
-                Tile("진단 기록", false, "set_diag", Modifier.fillMaxWidth(), sub = "연결 방식 · 오류 기록") { diag = c.connection?.diagnostics().orEmpty().ifBlank { "기록 없음" } }
-                Caption("점검 기준(고정): 표적 ${Pipeline.MIN_TARGETS}개부터 사진 · 다시 잰 값 ${(TargetChecks.MOVED_M * 100).toInt()} cm 넘게 다르면 묻기 · 근처 ${TargetChecks.CLASH_RADIUS_M.toInt()} m 같은 번호 경고 · XML 정밀도 0.01")
-                Caption("사진 기준점 ${env.version} · 수신기·지도 코드 = 발굴 측량 0.1.37")
+                1 -> {
+                    GroupLabel("수신기")
+                    CardGroup {
+                        CardRow(Glyph.BT, "기본 수신기", (cc?.profile?.displayName ?: "R10") + " · " + linkWord + " · " + vrs + " · 평균 ${c.prefs.epochs}회", "set_receiver", onClick = { c.openReceiver() }) {
+                            GlyphIcon(Glyph.CHEVRON_RIGHT, G.sub, 22.dp)
+                        }
+                    }
+                    Text("연결·VRS·마운트는 수신기 화면에서 고르기만 해요. 다른 앱(발굴 측량)이 쓰는 중이면 넘겨받기를 물어요.", style = Ty.small, color = G.sub, modifier = Modifier.padding(start = 4.dp, top = 8.dp))
+                }
+                else -> {
+                    GroupLabel("고급 (현장에서는 바꾸지 마세요)")
+                    CardGroup {
+                        val acc = env.mapAccess()
+                        CardRow(Glyph.LAYERS, "V월드 지도 키", if (acc.key.isBlank()) "없음" else "••••" + acc.key.takeLast(4) + " · 바꿀 때만 직접 입력", "set_vworld", onClick = { keyEdit = "" }, iconTint = FieldIvory.error, iconBg = Color(0xFFFBE4E1)) { GlyphIcon(Glyph.CHEVRON_RIGHT, G.sub, 22.dp) }
+                        CardDivider()
+                        CardRow(Glyph.INFO, "진단 기록", "연결 방식 · 오류 기록", "set_diag", onClick = { diag = c.connection?.diagnostics().orEmpty().ifBlank { "기록 없음" } }, iconTint = FieldIvory.error, iconBg = Color(0xFFFBE4E1)) { GlyphIcon(Glyph.CHEVRON_RIGHT, G.sub, 22.dp) }
+                    }
+                    Text("점검 기준(고정): 표적 ${Pipeline.MIN_TARGETS}개부터 사진 · 다시 잰 값 ${(TargetChecks.MOVED_M * 100).toInt()} cm 넘게 다르면 묻기 · 근처 ${TargetChecks.CLASH_RADIUS_M.toInt()} m 같은 번호 경고 · XML 정밀도 0.01",
+                        style = Ty.small, color = G.sub, modifier = Modifier.padding(start = 4.dp, top = 8.dp))
+                }
             }
+            Spacer(Modifier.height(16.dp))
             Btn("앱 종료", "exit", Modifier.fillMaxWidth(), primary = false) { c.requestExit() }
+            Text("사진 기준점 ${env.version}", style = Ty.small, color = G.sub, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp).testTag("set_version"))
         }
     }
     keyEdit?.let { k ->

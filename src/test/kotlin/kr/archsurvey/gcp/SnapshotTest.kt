@@ -202,7 +202,7 @@ class SnapshotTest {
         rule.onNodeWithTag("menu").performClick(); shot("m12-menu")
         rule.runOnIdle { c.menuOpen = false; c.poleOpen = true }; shot("m13-pole")
         rule.runOnIdle { c.poleOpen = false; c.go(Screen.SETTINGS) }
-        rule.onNodeWithTag("pole_value").assertTextEquals("1.6 m"); shot("m14-settings")
+        rule.onNodeWithTag("pole_value", useUnmergedTree = true).assertTextEquals("1.60 m"); shot("m14-settings")
         rule.onNodeWithTag("exit").performScrollTo().performClick(); shot("m15-exit-confirm")
     }
 }

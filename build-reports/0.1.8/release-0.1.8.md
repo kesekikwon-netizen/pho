@@ -25,3 +25,28 @@ VWorld 키·위성·지적, iTwin XML/TXT 형식, R10 잠금·넘김, 측정 판
 - 펼침에서 저장 알림(toast)이 화면 가운데라 오른쪽 판 위에 겹침.
 - FieldIvory.kt 는 발굴 측량에 아직 복사 안 됨(그쪽 팀이 같은 파일을 넣어야 함).
 - 실기기(Fold7) 확인 안 함. 설치·실행 안 함.
+
+---
+## 2차 (CEO 검토 반영, 같은 vc9 · 배포 전)
+- g01 홈(폴더 목록): 세그먼트 전체/측량 필요/사진 필요/보내기, 차수·면 묶음 카드, 배지(시작 전·측량 N점 남음·사진 필요·보내기 준비·끝), 아래 PC로 보내기 + 새 대상.
+- g02 새 대상: 종류 3열, 번호 − / 큰 값(누르면 번호판) / + 와 빠른 번호, 차수·면, 맨 아래 「N호 ○○ 만들기 / 1차 · 면」.
+- g05 폴더 안: 「4단계 중 N단계 완료」 막대 + 단계 카드 4장(완료 초록 ✓ · 지금 테라코타 테두리+배지 · 대기 회색) + 「다음: ○○」.
+- g06 PC로 보내기: 무엇을(안 보낸 것·오늘·유적 전체) · 받는 곳(공유하기 / USB·PC 케이블 안내) · 들어가는 파일 카드. zip 내용·형식 그대로.
+- g07 설정: 일반/수신기/고급 탭. g09 폴 시트: 큰 1.60 m · ±0.10 · 프리셋 4 · 적용.
+- 공용: 상태 알약 채움색, 머리줄(제목+보조줄), 선택 타일 = 연테라코타+테라코타 테두리, 시트 손잡이.
+- 좌표·숫자: Pretendard + fontFeatureSettings "tnum" (Ty.coord / Ty.ledger).
+- 펼침: 저장 알림은 지도 경계 안 아래쪽(ToastAnchor) — 오른쪽 판과 겹치지 않음(시험 GScreensUnfoldedTest).
+- FieldIvory.kt 단일 원본: /workspace/design-program/shared/FieldIvory.kt (sha256 76a7afa6…bc80c, 앱 안 사본과 같음).
+- NtripSocketTests.unknownHostIsDns: 리졸버가 .invalid 를 싱크홀 주소로 풀면 Assume 으로 건너뜀(이 상자: 198.18.0.1).
+- lint NewApi(Engine.kt ConcurrentHashMap.KeySetView.clear, API 24) → Collections.newSetFromMap 로 교체(안드로이드 5–6 안전).
+- 비교 PNG: build-reports/0.1.8/compare/g*.png (목업 | Robolectric 렌더), 렌더 원본 build-reports/0.1.8/render/, 스크립트 tools/compare.py.
+
+### 목업과 다른 점(의도)
+- g07: 목업의 진동·저장 소리 스위치, 글자 크기(보통/크게/아주 크게), 배경 지도 선택은 앱에 없는 기능이라 넣지 않음(새 기능 금지). 대신 있는 설정(폴 높이·평균 횟수·볼륨 키·수신기·V월드 키·진단)을 탭에 나눔.
+- g06: 목업의 「이 대상/이 차수」 범위와 사진·ID 카드 파일 포함은 기존 zip 형식에 없어 기존 범위(안 보낸 것/오늘/전체)와 실제 내용(목록 CSV·XML·TXT)으로 표시. Google Drive 따로 단추 없음(공유 창에서 고름).
+- g02: 2차/3차 타일 없음(새 대상은 항상 1차 — 기존 흐름).
+- g05: 사진 장수(「지금 0장」)는 앱이 세지 않아 표시 안 함.
+- 렌더는 V월드 타일 끔(네트워크 없음) → 지도는 회색 격자.
+
+### 시험
+testDebugUnitTest 290개: 통과 289 · 건너뜀 1(DNS 싱크홀) · 실패 0. lintRelease 통과. 서명 인증서 = 0.1.7 과 같음(2f210fd4…acdf3).

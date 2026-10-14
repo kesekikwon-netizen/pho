@@ -92,23 +92,101 @@ fun rememberPill(src: GnssSource): PillText {
 
 @Composable
 fun GcpPill(src: GnssSource, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val t = T
     val p = rememberPill(src)
-    val (dot, border) = when (p.tone) {
-        PTone.FIXED -> G.ok to G.ink
-        PTone.CAUTION -> G.dot to G.ink
-        PTone.BAD -> G.bad to G.bad
-        else -> G.faint to G.lineStrong
+    // 0.1.8 Field Ivory: 상태색 채움 + 흰 글자(FIX 초록 · FLOAT/대기 황토 · 불가 빨강), 연결 없음 = 흰 바탕 테두리
+    val (bg, fg) = when (p.tone) {
+        PTone.FIXED -> FieldIvory.fix to G.white
+        PTone.CAUTION -> FieldIvory.float to G.white
+        PTone.BAD -> FieldIvory.error to G.white
+        else -> G.white to G.ink
     }
     Row(
-        modifier.height(48.dp).clip(RoundedCornerShape(22.dp)).background(G.white)
-            .border(1.5.dp, border, RoundedCornerShape(24.dp)).hClickable(onClickLabel = "수신기") { onClick() }
-            .padding(horizontal = 12.dp).semantics { contentDescription = p.text + (p.sub?.let { " $it" } ?: "") }.testTag("status_pill"),
+        modifier.height(48.dp).clip(RoundedCornerShape(24.dp)).background(bg)
+            .then(if (p.tone == PTone.NO_RECEIVER) Modifier.border(1.dp, G.line, RoundedCornerShape(24.dp)) else Modifier)
+            .hClickable(onClickLabel = "수신기") { onClick() }
+            .padding(horizontal = 14.dp).semantics { contentDescription = p.text + (p.sub?.let { " $it" } ?: "") }.testTag("status_pill"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Box(Modifier.size(12.dp).clip(CircleShape).background(dot))
-        Text(p.short, style = Ty.label.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold), color = G.ink, maxLines = 1, modifier = Modifier.testTag("pill_fix"))
-        p.sub?.takeIf { p.tone == PTone.FIXED }?.let { Text(it.removePrefix("±") + " cm", style = Ty.coord.copy(fontSize = 16.sp), color = G.sub, maxLines = 1) }
+        Box(Modifier.size(9.dp).clip(CircleShape).background(if (p.tone == PTone.NO_RECEIVER) G.faint else G.white))
+        Text(p.short, style = Ty.label.copy(fontWeight = FontWeight.Bold), color = fg, maxLines = 1, modifier = Modifier.testTag("pill_fix"))
+        p.sub?.takeIf { p.tone == PTone.FIXED }?.let { Text(it.removePrefix("±") + " cm", style = Ty.coord.copy(fontSize = 16.sp), color = fg, maxLines = 1) }
+    }
+}
+
+// ---------------- 0.1.8 Field Ivory 공용 조각(g01–g09) ----------------
+/** 둥근 회색 판 위 흰 알약 세그먼트(g01 거르기 · g07 설정 나누기) */
+@Composable
+fun Segmented(items: List<Pair<String, String>>, selected: Int, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
+    Row(modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color(0xFFEFEBE3)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        items.forEachIndexed { i, (label, tag) ->
+            val on = i == selected
+            Box(Modifier.weight(1f).heightIn(min = FieldIvory.minTouch).clip(RoundedCornerShape(14.dp)).background(if (on) G.white else Color.Transparent)
+                .hClickable(onClickLabel = label) { onSelect(i) }.testTag(tag), contentAlignment = Alignment.Center) {
+                Text(label, style = Ty.label.copy(fontWeight = if (on) FontWeight.Bold else FontWeight.Medium), color = if (on) G.ink else G.sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+/** 작은 회색 굵은 소제목(목업 「1차 · 검출면」, 「종류」) */
+@Composable
+fun GroupLabel(text: String, tag: String = "") {
+    Text(text, style = Ty.small.copy(fontWeight = FontWeight.Bold), color = G.sub, modifier = Modifier.padding(start = 4.dp, top = 14.dp, bottom = 8.dp).then(if (tag.isEmpty()) Modifier else Modifier.testTag(tag)))
+}
+
+/** 흰 카드 묶음(줄 사이 구분선) */
+@Composable
+fun CardGroup(modifier: Modifier = Modifier, tag: String = "", content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(20.dp)).then(if (tag.isEmpty()) Modifier else Modifier.testTag(tag)), content = content)
+}
+
+@Composable
+fun CardDivider() { Box(Modifier.fillMaxWidth().height(1.dp).background(G.line)) }
+
+/** 연테라코타 네모 안 아이콘 */
+@Composable
+fun IconTile(g: Glyph, tint: Color = G.dot, bg: Color = G.sel, size: Dp = 48.dp) {
+    Box(Modifier.size(size).clip(RoundedCornerShape(14.dp)).background(bg), contentAlignment = Alignment.Center) { GlyphIcon(g, tint, 24.dp) }
+}
+
+/** 카드 한 줄: 아이콘 · 제목/보조 · 오른쪽(배지·꺾쇠·스위치) */
+@Composable
+fun CardRow(icon: Glyph?, title: String, sub: String?, tag: String, onClick: (() -> Unit)? = null, iconTint: Color = G.dot, iconBg: Color = G.sel, trailing: (@Composable () -> Unit)? = null) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).then(if (onClick != null) Modifier.hClickable(onClickLabel = title) { onClick() } else Modifier)
+        .padding(horizontal = 16.dp, vertical = 10.dp).testTag(tag), verticalAlignment = Alignment.CenterVertically) {
+        if (icon != null) { IconTile(icon, iconTint, iconBg); Spacer(Modifier.width(14.dp)) }
+        Column(Modifier.weight(1f)) {
+            Text(title, style = Ty.label.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold), color = G.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (sub != null) Text(sub, style = Ty.small, color = G.sub, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        if (trailing != null) { Spacer(Modifier.width(8.dp)); trailing() }
+    }
+}
+
+enum class BadgeTone { DONE, WARN, BAD, NEUTRAL, NOW }
+
+/** 둥근 상태 배지(목업: 사진 필요 · 측량 2점 남음 · 보내기 준비 · 시작 전 · 완료 · 지금) */
+@Composable
+fun Badge(text: String, tone: BadgeTone, tag: String = "") {
+    val (bg, fg) = when (tone) {
+        BadgeTone.DONE -> Color(0xFFE3F0E6) to FieldIvory.fix
+        BadgeTone.WARN -> Color(0xFFFBEFD6) to Color(0xFF7A4A00)
+        BadgeTone.BAD -> Color(0xFFFBE4E1) to FieldIvory.error
+        BadgeTone.NOW -> G.sel to G.dot
+        BadgeTone.NEUTRAL -> Color(0xFFF1ECE6) to G.ink
+    }
+    Text(text, style = Ty.small.copy(fontWeight = FontWeight.Bold), color = fg, maxLines = 1,
+        modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(bg).padding(horizontal = 12.dp, vertical = 5.dp).then(if (tag.isEmpty()) Modifier else Modifier.testTag(tag)))
+}
+
+/** 화면 맨 아래 큰 주 단추(96dp 아님 · 80dp, 둘째 줄) — g02/g05/g06/g09 */
+@Composable
+fun BigPrimary(label: String, sub: String?, tag: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+    Column(modifier.fillMaxWidth().heightIn(min = 80.dp).clip(RoundedCornerShape(20.dp)).background(if (enabled) G.dark else FieldIvory.disabled)
+        .hClickable(enabled = enabled, onClickLabel = label) { onClick() }.padding(horizontal = 12.dp, vertical = 10.dp).testTag(tag),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Text(label, style = Ty.label.copy(fontSize = 24.sp, fontWeight = FontWeight.Bold), color = if (enabled) G.onDark else FieldIvory.onDisabled, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.testTag("${tag}_label"))
+        if (sub != null) Text(sub, style = Ty.small, color = if (enabled) G.onDark else FieldIvory.onDisabled, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -145,14 +223,14 @@ fun Tile(label: String, selected: Boolean, tag: String, modifier: Modifier = Mod
     val shape = RoundedCornerShape(14.dp)
     Column(
         modifier.heightIn(min = maxOf(height, FieldIvory.minTouch)).clip(shape)
-            .background(when { !enabled -> G.chip; selected -> G.dark; else -> G.white })
+            .background(when { !enabled -> G.chip; selected -> G.sel; else -> G.white })
             .border(if (selected) 2.dp else 1.dp, if (selected) G.dark else if (enabled) G.line else G.line.copy(alpha = 0.5f), shape)
             .hClickable(enabled = enabled, onClickLabel = label) { onClick() }.padding(horizontal = 8.dp, vertical = 6.dp).testTag(tag),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
     ) {
-        Text(label, style = (if (big) Ty.ledger.copy(fontSize = 24.sp) else Ty.label.copy(fontSize = 17.sp, fontWeight = FontWeight.Medium)), color = when { !enabled -> G.faint; selected -> G.onDark; else -> G.ink },
+        Text(label, style = (if (big) Ty.ledger.copy(fontSize = 24.sp) else Ty.label.copy(fontSize = 17.sp, fontWeight = FontWeight.Medium)), color = when { !enabled -> G.faint; selected -> G.dot; else -> G.ink },
             maxLines = 2, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
-        if (sub != null) Text(sub, style = Ty.small.copy(fontSize = 16.sp), color = if (selected) G.onDark else G.sub, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+        if (sub != null) Text(sub, style = Ty.small.copy(fontSize = 16.sp), color = if (selected) G.dot else G.sub, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
     }
 }
 
@@ -184,8 +262,9 @@ fun BottomSheet(title: String, tag: String, onClose: () -> Unit, maxHeightFrac: 
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = maxHeight * maxHeightFrac)
                 .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)).background(G.bg).hClickable {}.windowInsetsPadding(WindowInsets.navigationBars).testTag(tag),
         ) {
-            Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 6.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(title, style = Ty.label.copy(fontSize = 19.sp, fontWeight = FontWeight.Bold), color = G.ink, modifier = Modifier.weight(1f), maxLines = 2)
+            Box(Modifier.fillMaxWidth().padding(top = 10.dp), contentAlignment = Alignment.Center) { Box(Modifier.width(44.dp).height(5.dp).clip(RoundedCornerShape(3.dp)).background(G.line)) }
+            Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 6.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = Ty.label.copy(fontSize = 20.sp, fontWeight = FontWeight.Bold), color = G.ink, modifier = Modifier.weight(1f), maxLines = 2)
                 IconBtn(Glyph.CLOSE, "닫기", "${tag}_close", onClose)
             }
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)

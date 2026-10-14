@@ -12,6 +12,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kr.archsurvey.gcp.model.*
@@ -224,16 +225,22 @@ fun HandoffSheet(c: GcpController) {
     }
 }
 
+/** g09 폴 높이 시트: 큰 1.60 m · ±0.10 · 프리셋 4개 · 적용(값은 누를 때마다 바로 저장 — 적용 = 닫기) */
 @Composable
 fun PoleSheet(c: GcpController) {
     c.poleTick
-    BottomSheet("폴 높이", "pole_sheet", onClose = { c.poleOpen = false }) {
-        Text(String.format(Locale.US, "%.1f m", c.poleM()), style = Ty.ledger.copy(fontSize = 44.sp), color = T.ink, modifier = Modifier.testTag("pole_value"))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Tile("− 0.1", false, "pole_minus", Modifier.weight(1f), height = 72.dp, big = true) { c.stepPole(-10) }
-            Tile("+ 0.1", false, "pole_plus", Modifier.weight(1f), height = 72.dp, big = true) { c.stepPole(10) }
+    BottomSheet("폴 높이", "pole_sheet", onClose = { c.poleOpen = false }, bottom = {
+        BigPrimary("적용", null, "pole_apply", Modifier.weight(1f)) { c.poleOpen = false }
+    }) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.Bottom) {
+            Text(String.format(Locale.US, "%.2f", c.poleM()), style = Ty.ledger.copy(fontSize = 64.sp, fontWeight = FontWeight.Bold), color = G.ink, modifier = Modifier.testTag("pole_value"))
+            Text(" m", style = Ty.label.copy(fontSize = 24.sp, fontWeight = FontWeight.Bold), color = G.sub, modifier = Modifier.padding(bottom = 12.dp))
         }
-        TileGrid(listOf(1.5, 1.6, 1.8, 2.0), 4) { v -> Tile(String.format(Locale.US, "%.1f", v), Math.abs(c.poleM() - v) < 1e-6, "pole_$v", Modifier.weight(1f), height = 56.dp, big = true) { c.setPole(v) } }
-        Caption("기본 R10 1.6 m · SP60 1.8 m. 높이 = 수신기 해발 − (폴 + 안테나 보정)")
+        Text("수신기 위상중심까지 · 바꾼 기록이 점마다 남아요", style = Ty.small, color = G.sub, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Tile("− 0.10", false, "pole_minus", Modifier.weight(1f), height = 76.dp, big = true) { c.stepPole(-10) }
+            Tile("+ 0.10", false, "pole_plus", Modifier.weight(1f), height = 76.dp, big = true) { c.stepPole(10) }
+        }
+        TileGrid(listOf(1.5, 1.6, 1.8, 2.0), 4, 10.dp) { v -> Tile(String.format(Locale.US, "%.2f", v), Math.abs(c.poleM() - v) < 1e-6, "pole_$v", Modifier.weight(1f), height = 64.dp, big = true) { c.setPole(v) } }
     }
 }

@@ -128,15 +128,15 @@ object Ty {
     /** 0.1.35 명조 제목 */
     val serifTitle = TextStyle(fontSize = 26.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.serif)
     val serifHead = TextStyle(fontSize = 19.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.serif)
-    /** 장부 숫자 */
-    val ledger = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.mono)
+    /** 장부 숫자 · 좌표: 0.1.8 Pretendard 고정폭 숫자(tnum) */
+    val ledger = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Medium, fontFamily = Fonts.sans, fontFeatureSettings = "tnum")
     val label = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
     val body = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.sans)
     val small = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.sans)
     val title = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
     val bandMain = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
     val button = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
-    val coord = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.mono)
+    val coord = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.Medium, fontFamily = Fonts.sans, fontFeatureSettings = "tnum")
 }
 
 private fun bundledTypography(): androidx.compose.material3.Typography {

@@ -22,6 +22,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 
 /** 저장 알림(터치를 가로채지 않음)·확인 대화상자·선택 창. 화면 맨 위(모든 화면 위)에 그린다 */
 @Composable
@@ -50,7 +52,27 @@ private fun ToastView(ui: FeedbackHub) {
     }
     val bgc = if (kind == ToastKind.ERROR) t.bad else t.ink
     val fg = if (kind == ToastKind.ERROR) t.onBad else t.bg
-    Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 88.dp), contentAlignment = Alignment.TopCenter) {
+    // 0.1.8: 지도가 화면에 있으면 알림은 지도 아래쪽 안에만(펼침에서 오른쪽 판을 가리지 않음). 없으면 예전 자리(위)
+    val map = ToastAnchor.mapBounds
+    var origin by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    val dens = androidx.compose.ui.platform.LocalDensity.current
+    if (map != null) {
+        // 바깥 = 화면 전체(뿌리 기준 원점 재기) · 안 = 지도 경계 안 아래쪽
+        Box(Modifier.fillMaxSize().onGloballyPositionedOrigin { origin = it }) {
+            Box(with(dens) {
+                Modifier.offset((map.left - origin.x).toDp(), (map.top - origin.y).toDp())
+                    .size(map.width.toDp(), (map.height.toDp() - ToastAnchor.bottomGap).coerceAtLeast(0.dp))
+                    .padding(horizontal = 12.dp).testTag("toast_area_map")
+            }, contentAlignment = Alignment.BottomCenter) { ToastBody(ui, msg, kind, bgc, fg) }
+        }
+        return
+    }
+    Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 88.dp), contentAlignment = Alignment.TopCenter) { ToastBody(ui, msg, kind, bgc, fg) }
+}
+
+@Composable
+private fun ToastBody(ui: FeedbackHub, msg: String, kind: ToastKind, bgc: androidx.compose.ui.graphics.Color, fg: androidx.compose.ui.graphics.Color) {
+    run {
         Row(
             Modifier.clip(RoundedCornerShape(16.dp)).background(bgc).padding(horizontal = 16.dp, vertical = 12.dp).testTag("toast")
                 .semantics { contentDescription = when (kind) { ToastKind.OK -> "완료"; ToastKind.ERROR -> "오류"; else -> "알림" } },
@@ -168,3 +190,13 @@ fun ProgressWindow(
         }
     }
 }
+
+/** 0.1.8 알림 자리: 지도 화면이 자기 경계(뿌리 좌표)를 알려 준다. 지도가 없으면 null */
+object ToastAnchor {
+    var mapBounds by mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
+    /** 지도 맨 아래에서 띄울 거리(오류 칩·축척 줄 위) */
+    val bottomGap = 124.dp
+}
+
+private fun Modifier.onGloballyPositionedOrigin(f: (androidx.compose.ui.geometry.Offset) -> Unit): Modifier =
+    this.then(Modifier.onGloballyPositioned { f(it.positionInRoot()) })

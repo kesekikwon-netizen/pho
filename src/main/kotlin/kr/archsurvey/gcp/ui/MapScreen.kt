@@ -15,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -90,8 +92,9 @@ fun MapArea(c: GcpController, env: GcpEnv, modifier: Modifier) {
     val access = remember { env.mapAccess() }
     val surface = remember { CanvasMapSurface() }
     val ms = c.mapState(access)
+    DisposableEffect(Unit) { onDispose { ToastAnchor.mapBounds = null } }
     Box(
-        modifier.fillMaxWidth().testTag("map_area").pointerInput(Unit) {
+        modifier.fillMaxWidth().onGloballyPositioned { ToastAnchor.mapBounds = it.boundsInRoot() }.testTag("map_area").pointerInput(Unit) {
             // 측량 앱과 같음: 한 손가락 이동 + 두 손가락 확대(손가락 아래 고정)
             detectTransformGestures { centroid, pan, zoom, _ ->
                 val ppm = (c.dpPerM * density).toFloat()

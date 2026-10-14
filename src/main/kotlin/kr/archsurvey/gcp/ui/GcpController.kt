@@ -529,6 +529,7 @@ class GcpController(
     }
 
     // ================= PC로 넘기기 =================
+    fun whereLabel(): String = book?.let { files.whereLabel(it.site) } ?: ""
     fun handoffCount(scope: HandoffScope): Int = book?.let { Handoff.count(it, scope, clock(), zone) } ?: 0
     fun handoffPlan(): HandoffPlan? = book?.let { Handoff.plan(it, handoffScope, clock(), zone) }
 
