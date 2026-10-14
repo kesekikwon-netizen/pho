@@ -254,7 +254,7 @@ object ConnectSteps {
         }
         1 -> when (states[1]) {
             StepState.FAIL -> (link.error?.let { "${it.code} · ${it.action}" } ?: link.message).ifBlank { null }
-            StepState.ACTIVE -> link.message.ifBlank { "위치(GGA) 기다리는 중" }
+            StepState.ACTIVE -> link.message.ifBlank { "수신기 위치 기다리는 중" }
             StepState.DONE -> "GGA 수신 중"
             else -> null
         }

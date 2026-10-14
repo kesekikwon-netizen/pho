@@ -36,14 +36,14 @@ internal fun digPill(c: SurveyController): DigPill {
     val g = c.gv
     if (g.noReceiver) return DigPill("수신기 연결 안 됨", null, Tone.NO_RECEIVER)
     // 0.1.31: FIX인데 수신기가 정밀도(σ)를 안 보냄 — 엄격 모드면 저장 잠김을 알약에 그대로
-    if (g.sigmaMissingOnFix) return if (g.strictMode) DigPill("측점 불가 · σ 없음", "엄격", Tone.BAD) else DigPill("FIX", "σ 없음", Tone.FIXED)
+    if (g.sigmaMissingOnFix) return if (g.strictMode) DigPill("측량 불가 · 정밀도 정보 없음", "엄격", Tone.BAD) else DigPill("FIX", "σ 없음", Tone.FIXED)
     // 0.1.46 디자인 시스템: 「FIX 1.4 cm」 코드형 + 상태색 채움(색만으로 구분하지 않게 항상 글자 동반)
     val hv = g.status.sigmaHM?.let { hm -> sigmaCm(hm) }
     val isFloat = g.quality.labelKo.contains("Float", true) || g.quality.labelKo.contains("플로트") || g.quality.labelKo.contains("유동")
     return when (g.displayStatus) {
         SurveyStatus.FIXED -> DigPill("FIX", hv, Tone.FIXED)
         SurveyStatus.CAUTION -> DigPill(
-            if (isFloat) "FLOAT" else if (g.strictMode) "FIX 기다리는 중" else "주의 · " + g.status.reason.textKo.take(8), hv, Tone.CAUTION)
+            if (isFloat) "FLOAT" else if (g.strictMode) "FIX 기다리는 중" else "주의", hv, Tone.CAUTION)
         SurveyStatus.UNAVAILABLE -> DigPill("측량 불가", null, Tone.BAD)
     }
 }
@@ -220,10 +220,10 @@ internal fun DigControlArea(c: SurveyController) {
                     armed -> { label = "면 닫기 확인"; sub = c.dig.closePreview() ?: "" }
                     busy -> { label = "재는 중 ${c.measureCount.coerceAtMost(c.epochs)}/${c.epochs}"; sub = "누르면 중지" }
                     notConn -> { label = MEASURE_NO_RECEIVER; sub = "눌러서 연결" }
-                    strictBlock -> { label = "FIX 기다리는 중"; sub = "FLOAT 저장 잠김" }
+                    strictBlock -> { label = "FIX 기다리는 중"; sub = "정밀도가 아직 부족해요 · 잠시 기다려요" }
                     blocked -> { label = "측점 불가"; sub = c.gv.status.reason.textKo }
                     caution -> { label = "주의 측정"; sub = c.dig.measureSub() }
-                    else -> { label = "측량"; sub = c.gv.status.sigmaHM?.let { "±" + String.format(Locale.US, "%.1f", it * 100) + " cm · 길게 눌러 설정" } ?: "" }
+                    else -> { label = "측량"; sub = c.gv.status.sigmaHM?.let { "±" + String.format(Locale.US, "%.1f", it * 100) + " cm" } ?: "" }
                 }
                 Box(
                     Modifier.weight(1f).height(FieldIvory.measureButton).clip(RoundedCornerShape(16.dp))

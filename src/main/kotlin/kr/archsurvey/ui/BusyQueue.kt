@@ -33,7 +33,7 @@ object BusyOps {
             when (link?.state) {
                 LinkState.CONNECTING -> out += BusyOp("bt", "수신기 블루투스 연결 중" + (link.attempt.takeIf { it > 1 }?.let { " · ${it}번째" } ?: ""), 15)
                 LinkState.RECONNECTING -> out += BusyOp("bt", "수신기 다시 연결 중 (치유·재시도)" + (link.attempt.takeIf { it > 0 }?.let { " · ${it}번째" } ?: ""), 20)
-                LinkState.CONNECTED_NO_DATA -> out += BusyOp("gga", "위치(GGA) 기다리는 중 · NMEA 켜기", 20)
+                LinkState.CONNECTED_NO_DATA -> out += BusyOp("gga", "수신기 위치 기다리는 중", 20)
                 else -> {}
             }
             if (cc.form.enabled) when (ntrip?.state) {
