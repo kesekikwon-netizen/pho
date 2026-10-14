@@ -58,7 +58,7 @@ abstract class GBase {
 
 @Config(sdk = [34], qualifiers = "w360dp-h800dp-notnight-xxhdpi")
 class GScreensFoldedTest : GBase() {
-    @Test fun g01_home_sites() { val r = site(); rule.runOnIdle { r.c.back() }; show(r.c); rule.onNodeWithTag("objects").assertIsDisplayed(); rule.onNodeWithTag("stage_row").assertIsDisplayed(); shot("g01_home_sites") }
+    @Test fun g01_home_sites() { val r = site(); rule.runOnIdle { while (r.c.screen != Screen.OBJECTS) r.c.back() }; show(r.c); rule.onNodeWithTag("objects").assertIsDisplayed(); rule.onNodeWithTag("stage_row").assertIsDisplayed(); shot("g01_home_sites") }
     @Test fun g02_new_target() { val r = site(); rule.runOnIdle { r.c.back(); r.c.openNewObj(); r.c.pickKind(ObjKind.PIT) }; show(r.c); rule.onNodeWithTag("newobj_name", useUnmergedTree = true).assertTextEquals("2호 수혈"); shot("g02_new_target") }
     @Test fun g03_measure_map() { val r = site(); val c = r.c; rule.runOnIdle { c.openObj(c.book!!.objs.first { it.kind == ObjKind.DWELLING && it.no == 1 }.id); c.openTargets() }; show(c); shot("g03_measure_map") }
     @Test fun g04_measuring_avg() {

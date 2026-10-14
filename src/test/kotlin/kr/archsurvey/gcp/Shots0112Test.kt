@@ -50,7 +50,7 @@ class Shots0112Test {
         shot("gcp_targets")
     }
     @Test fun g_obj() {
-        val r = rigTargets()
+        val r = rigTargets(); while (r.c.screen != Screen.OBJ) r.c.back()
         rule.setContent { SurveyTheme { GcpRoot(r.c, GcpEnv()) } }
         shot("gcp_obj")
     }
@@ -77,7 +77,7 @@ class Shots0112Test {
     }
 
     @Test fun rightHand_obj_mapButton_cardsLow() {
-        val r = rigTargets()
+        val r = rigTargets(); while (r.c.screen != Screen.OBJ) r.c.back()
         rule.setContent { SurveyTheme { GcpRoot(r.c, GcpEnv()) } }; rule.waitForIdle()
         val root = rule.onRoot().fetchSemanticsNode().boundsInRoot
         val back = b("obj_to_map"); val step4 = b("step_send")

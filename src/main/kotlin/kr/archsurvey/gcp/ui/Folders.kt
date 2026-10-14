@@ -463,11 +463,11 @@ fun NewObjScreen(c: GcpController, f: NewObjForm) {
             Box(Modifier.fillMaxWidth().height(1.dp).background(G.line))
             Box(Modifier.padding(16.dp)) {
                 Column(Modifier.fillMaxWidth().heightIn(min = 80.dp).clip(RoundedCornerShape(20.dp)).background(if (!taken) G.dark else FieldIvory.disabled)
-                    .hClickable(enabled = !taken, onClickLabel = "$name 만들기") { c.submitNewObj() }.padding(10.dp).testTag("newobj_ok"),
+                    .hClickable(enabled = !taken, onClickLabel = "$name 만들고 표적 재기") { c.submitNewObj() }.padding(10.dp).testTag("newobj_ok"),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(name, style = Ty.label.copy(fontSize = 24.sp, fontWeight = FontWeight.Bold), color = if (!taken) G.onDark else FieldIvory.onDisabled, maxLines = 1, modifier = Modifier.testTag("newobj_name"))
-                        Text(" 만들기", style = Ty.label.copy(fontSize = 24.sp, fontWeight = FontWeight.Bold), color = if (!taken) G.onDark else FieldIvory.onDisabled, maxLines = 1)
+                        Text(" 만들고 시작", style = Ty.label.copy(fontSize = 24.sp, fontWeight = FontWeight.Bold), color = if (!taken) G.onDark else FieldIvory.onDisabled, maxLines = 1)
                     }
                     Text("1차 · ${f.label}", style = Ty.small, color = if (!taken) G.onDark else FieldIvory.onDisabled)
                 }

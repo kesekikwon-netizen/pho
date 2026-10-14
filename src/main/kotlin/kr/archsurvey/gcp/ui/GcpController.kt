@@ -299,7 +299,9 @@ class GcpController(
     fun openNewObj() {
         val (slots, note) = suggestFor(null)
         objListOpen = false
-        newObj = NewObjForm(slots = slots, nearNote = note)
+        // 0.1.13: 차수 면은 지난 대상 것 그대로(없으면 첫 값)
+        val lastLabel = book?.let { b -> b.objs.maxByOrNull { it.createdAt }?.let { o -> b.sessionsOf(o).firstOrNull()?.label } } ?: SessionLabels.ALL.first()
+        newObj = NewObjForm(slots = slots, nearNote = note, label = lastLabel)
         pickKind(lastKind())   // 0.1.5: 한 화면 — 종류·번호가 처음부터 골라져 있음
     }
     /** 마지막에 만든 대상 종류(없으면 주거지) */
@@ -323,6 +325,8 @@ class GcpController(
             reloadBook()
             ui.ok("${o.name} · 1차 ${f.label} 만들었어요")
             openObj(o.id)
+            openTargets() // 0.1.13 새 대상 쉽게: 만들면 바로 표적 재기(예전: 대상 화면 → 「다음: 표적 재기」 한 번 더). 뒤로 = 대상 화면
+
         }
     }
 

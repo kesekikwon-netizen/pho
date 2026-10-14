@@ -52,7 +52,8 @@ class ControllerTest {
     @Test fun createSite_byPickingOnly_andObjects_kindTileNextNumber_uniquePerKind() {
         val r = rig().siteWithObj()
         val c = r.c
-        assertEquals(Screen.OBJ, c.screen)   // 0.1.5: 만들면 폴더 안
+        assertEquals(Screen.TARGETS, c.screen)   // 0.1.13: 만들면 바로 표적 재기(뒤로 = 폴더 안)
+        assertEquals(Screen.OBJ, c.stack[c.stack.size - 2])
         assertEquals("1호 수혈", c.obj!!.name); assertEquals("001호_수혈", c.obj!!.code)
         assertEquals(listOf(1, 2, 3, 4), c.session!!.slots); assertEquals("검출면", c.session!!.label)
         // 같은 종류는 다음 번호, 다른 종류는 1호부터
@@ -65,7 +66,7 @@ class ControllerTest {
         c.openNewObj(); c.pickKind(ObjKind.DWELLING); assertEquals(13, c.newObj!!.no); c.pickObjNo(12); c.submitNewObj()
         assertTrue(c.ui.toast!!.contains("이미 있어요")); assertNotNull(c.newObj); c.newObj = null
         c.openNewObj(); c.pickKind(ObjKind.SECTION); assertEquals(1, c.newObj!!.no); c.submitNewObj(); assertEquals("A—A′ 토층", c.obj!!.name); assertEquals("A_토층", c.obj!!.code)
-        c.back(); assertEquals(Screen.OBJECTS, c.screen); c.back(); assertEquals(Screen.SITES, c.screen)
+        c.back(); assertEquals(Screen.OBJ, c.screen); c.back(); assertEquals(Screen.OBJECTS, c.screen); c.back(); assertEquals(Screen.SITES, c.screen)
         assertEquals(1, c.sites.size); assertEquals(4, c.sites[0].objCount)
         // 같은 이름 유적은 (2)
         c.openNewSite(); c.newSite = c.newSite!!.copy(base = "강릉 유적"); c.submitNewSite()
@@ -114,7 +115,7 @@ class ControllerTest {
         assertEquals(4, c.nextTag())
         c.openIdCard(); assertEquals(Screen.ID_CARD, c.screen)
         assertEquals("001호_수혈|1차|EPSG5187|T1-4", c.qr())
-        c.markPhotoDone(); assertEquals(Screen.OBJ, c.screen)
+        c.markPhotoDone(); assertEquals(Screen.TARGETS, c.screen) // 0.1.13: 사진 끝 = ID 카드를 연 화면으로
         assertEquals(Stage.HANDOFF, c.stageNow())
         assertEquals(mapOf(Stage.MEASURE to 0, Stage.PHOTO to 0, Stage.HANDOFF to 1, Stage.DONE to 0), c.counts())
         c.sendHandoff(HandoffScope.PENDING)
@@ -229,7 +230,7 @@ class ControllerTest {
     /** 0.1.5 시안 흐름: 폴더 목록 → 폴더 안 → 표적 재기 · 지도는 따로 · 다시 켜면 마지막 유적 폴더 목록 */
     @Test fun folderFlow_0105_navigation_and_resume() {
         val r = rig().siteWithObj(); val c = r.c
-        assertEquals(listOf(Screen.SITES, Screen.OBJECTS, Screen.OBJ), c.stack)
+        assertEquals(listOf(Screen.SITES, Screen.OBJECTS, Screen.OBJ, Screen.TARGETS), c.stack) // 0.1.13 만들면 바로 표적 재기
         c.openTargets(); assertEquals(Screen.TARGETS, c.screen)
         c.go(Screen.MAP); assertEquals(Screen.MAP, c.screen); c.back(); assertEquals(Screen.TARGETS, c.screen)
         c.back(); c.back(); assertEquals(Screen.OBJECTS, c.screen)
