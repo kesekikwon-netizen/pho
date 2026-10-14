@@ -255,7 +255,7 @@ object ConnectSteps {
         1 -> when (states[1]) {
             StepState.FAIL -> (link.error?.let { "${it.code} · ${it.action}" } ?: link.message).ifBlank { null }
             StepState.ACTIVE -> link.message.ifBlank { "수신기 위치 기다리는 중" }
-            StepState.DONE -> "GGA 수신 중"
+            StepState.DONE -> "수신기 위치 받는 중"
             else -> null
         }
         2 -> hostMount
@@ -558,7 +558,7 @@ class ConnectionController(
         } else form.copy(host = sv.host, port = sv.port.toString(), mount = sv.mount, password = basePw)
         val ggaOn = ensureGgaForGvrs()
         persistSafe()
-        ui.toast("보정 서비스: ${sv.label} · 마운트 ${form.mount}" + (if (prof != null) " · 이 서버의 마지막 성공 설정을 불러왔어요" else "") + (if (toGvrs) " · ${Gvrs.NOTICE}" else "") + if (ggaOn) " · GGA 전송 켬" else "")
+        ui.toast("보정 서비스: ${sv.label} · 마운트 ${form.mount}" + (if (prof != null) " · 이 서버의 마지막 성공 설정을 불러왔어요" else "") + (if (toGvrs) " · ${Gvrs.NOTICE}" else "") + if (ggaOn) " · 내 위치 보내기 켬" else "")
     }
 
     /** 서버 주소를 직접 바꾼 뒤(입력 끝) 그 서버의 마지막 성공 설정을 채운다 */
@@ -689,7 +689,7 @@ class ConnectionController(
         // 0.1.29 T17: GVRS 마운트는 GGA 가 없으면 보정이 오지 않는다 — 끄지 못하게 경고하고 켠 채로 둔다
         if (!v && Gvrs.requiresGga(form)) { if (!sendGga) { sendGga = true; platform.applyNtripOptions(sendGga, autoRetry) }; ui.fail(Gvrs.GGA_REQUIRED); return }
         sendGga = v; platform.applyNtripOptions(sendGga, autoRetry)
-        ui.toast(if (v) "GGA 전송: 켬" else "GGA 전송: 끔 — VRS 마운트는 내 위치가 없으면 보정이 오지 않을 수 있어요")
+        ui.toast(if (v) "내 위치 보내기: 켬" else "내 위치 보내기: 끔 — VRS는 내 위치가 없으면 보정이 오지 않을 수 있어요")
     }
     fun changeAutoRetry(v: Boolean) {
         autoRetry = v; platform.applyNtripOptions(sendGga, autoRetry)
@@ -750,18 +750,51 @@ class ConnectionController(
      * - 막히면(권한·블루투스 꺼짐) 이유를 알린다.
      */
     private var autoWaitScheduled = false
+    /** 0.1.48: 다른 앱 「닫았다」 답을 기다리는 최대 시간 */
+    var closeWaitMs = 2_000L
+    private var closeWaiting = false
+    var closeDone = false; private set
+    private var closedOtherLabel: String? = null
+    /** 0.1.48: 다른 앱 때문에 닫을 때 앱을 완전히 끝내는 동작(Activity 가 넣음: 서비스 멈춤·finishAndRemoveTask·프로세스 종료) */
+    var onExitForOtherApp: (() -> Unit)? = null
+    /** 시험용: 다른 앱 요청으로 닫혔는지 */
+    var closedForOther = false; private set
+
+    private fun finishCloseWait() {
+        if (closeDone || !closeWaiting) return
+        closeDone = true
+        val label = closedOtherLabel
+        val started = autoConnectOnLaunch()
+        if (label != null && started) { ui.toast(LockText.closedOther(label)); closedOtherLabel = null }
+    }
+
+    /** 0.1.48: 다른 앱이 켜짐 → 이 앱은 완전히 닫힌다(측점은 저장 때 이미 디스크에, 연결 설정은 여기서 한 번 더 저장) */
+    fun closeForOtherApp(fromPkg: String) {
+        if (closedForOther) return
+        closedForOther = true
+        runCatching { persistSafe() }
+        runCatching { stopAll() }
+        lock?.ackClosed(fromPkg)
+        onExitForOtherApp?.invoke()
+    }
     fun autoConnectOnLaunch(): Boolean {
         if (connectRequested) return false
         if (platform.link.value.state != LinkState.IDLE) { // 서비스가 살아 있음 → 이어받기(소켓을 끊었다 다시 맺지 않음)
             connectRequested = true; savedThisRun = true
             return false
         }
-        if (!autoConnect) return false
-        // 0.1.47/0.1.9: 다른 앱 잠금 답(방송)이 오기 전에 바로 연결하면 그 앱의 소켓을 빼앗는다 → 답을 기다린 뒤 다시 판단
-        lock?.settleRemainingMs()?.takeIf { it > 0 }?.let { w ->
-            if (!autoWaitScheduled) { autoWaitScheduled = true; sc().launch { kotlinx.coroutines.delay(w); autoConnectOnLaunch() } }
+        // 0.1.48/0.1.10: 켜질 때 다른 앱을 완전히 닫게 하고, 「닫았다」 답(또는 [closeWaitMs])을 기다린 뒤 연결
+        if (lock != null && !closeDone) {
+            if (!closeWaiting) {
+                closeWaiting = true
+                lock?.requestCloseOthers()
+                sc().launch { kotlinx.coroutines.delay(closeWaitMs); finishCloseWait() }
+            }
             return false
         }
+        if (!autoConnect) { closedOtherLabel?.let { ui.toast(LockText.closedOtherNoConnect(it)); closedOtherLabel = null }; return false }
+        // 0.1.47/0.1.9: 다른 앱 잠금 답(방송)이 오기 전에 바로 연결하면 그 앱의 소켓을 빼앗는다 → 답을 기다린 뒤 다시 판단
+        // (0.1.48: 위 「닫기 → 닫았다 답 또는 2초」 대기가 이 기다림을 대신한다 — settleMs 는 잠금 객체에만 남김)
         val hasSaved = address != null
         if (!platform.hasBluetoothPermission()) { if (hasSaved) ui.toast(AUTO_NO_PERMISSION); return false }
         if (!platform.bluetoothEnabled()) { if (hasSaved) ui.toast(AUTO_BT_OFF); return false }
@@ -938,6 +971,9 @@ class ConnectionController(
             // 0.1.47/0.1.9: 뒤에 있는 앱은 (위치를 받던 중이라도) 항상 양보 — 앞의 앱이 수신기를 쓴다.
             // 현장 logcat 10-14 10:37~10:42: 뒤의 발굴 측량(STREAMING)·앞의 사진 기준점 둘 다 양보 안 해 R10 SPP 를 몇 초마다 서로 빼앗음.
             v?.onConflict = { h -> if (!appForeground) { stopAll(); bgStopped = true; ui.toast(LockText.handedOver(h.label)) } }
+            // 0.1.48/0.1.10: 다른 앱이 켜짐 → 설정 저장 → 보정·블루투스 끊기·서비스 멈춤 → 「닫았다」 답 → 앱 완전 종료
+            v?.onCloseRequested = { from -> closeForOtherApp(from) }
+            v?.onClosed = { label -> closedOtherLabel = label; finishCloseWait() }
             v?.onChanged = { lockTick++; if (waitingTake && pendingStart != null && v.otherHolder(pendingStart!!.first) == null) resumePending() }
         }
     var lockedBy by mutableStateOf<ReceiverLock.Holder?>(null); private set

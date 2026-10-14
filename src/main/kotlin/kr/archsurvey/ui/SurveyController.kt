@@ -50,7 +50,7 @@ data class GnssView(
     val sats: List<kr.archsurvey.core.SatInfo> = emptyList(),
     /** 0.1.30 T24: 수신기 링크 상태(머리글 「수신기 없음」·「수신기 끊김」·「연결 중」 구분용) */
     val link: kr.archsurvey.device.LinkState = kr.archsurvey.device.LinkState.IDLE,
-    /** 0.1.30 T23-c: 엄격 모드(표시만 — 엄격 + σ 없음은 막힘이라 고정 색으로 보이지 않게) */
+    /** 0.1.30 T23-c: 엄격 모드(표시만 — 엄격 + 정밀도 정보 없음은 막힘이라 고정 색으로 보이지 않게) */
     val strictMode: Boolean = false,
 ) {
     /** 0.1.30 T24: 수신기 없음(미연결) 또는 끊김 — 측점 불가, 좌표·정밀도 「—」 */
@@ -60,7 +60,7 @@ data class GnssView(
      * 저장 판정은 계속 [status](NO_SIGMA = 주의)로 한다 — 엄격 모드는 막고, 기본 모드는 주의 표시로 저장(규칙 그대로).
      */
     val displayStatus: SurveyStatus get() = if (sigmaMissingOnFix && !strictMode) SurveyStatus.FIXED else status.status
-    /** 고정·보정 양호인데 GST(σ)만 없음 → H/V 옆 「σ 없음」 */
+    /** 고정·보정 양호인데 GST(σ)만 없음 → H/V 옆 「정밀도 정보 없음」 */
     val sigmaMissingOnFix: Boolean get() = status.status == SurveyStatus.CAUTION && status.reason == StatusReason.NO_SIGMA
     /** 타원체고(m) = 정표고(MSL) + 지오이드 분리. 둘 중 하나라도 없으면 null */
     val ellipsoidalM: Double? get() = if (altM != null && geoidSepM != null) altM + geoidSepM else null

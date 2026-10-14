@@ -16,8 +16,13 @@ import kr.archsurvey.ui.LockOp
 class AndroidLockBus(private val ctx: Context) : LockBus {
     companion object {
         const val ACTION = "kr.archsurvey.action.RECEIVER_LOCK"
+        /** 0.1.48: 닫기 요청 전용(매니페스트 수신기 — 다른 방송으로는 꺼진 앱을 깨우지 않게) */
+        const val ACTION_CLOSE = "kr.archsurvey.action.CLOSE_APP"
         const val PERMISSION = "kr.archsurvey.permission.RECEIVER_LOCK"
         /** 같은 서명 앱(서로에게 직접 보냄 — 암시적 방송 제한을 피하려고 패키지 지정) */
+        /** 0.1.48: 이 프로세스에 화면(ViewModel)의 잠금 통로가 살아 있음 — 매니페스트 수신기는 비켜섬 */
+        @Volatile var vmAlive = false
+        fun labelFor(pkg: String) = if (pkg.startsWith("kr.archsurvey.gcp")) "사진 기준점" else "발굴 측량"
         val PACKAGES = listOf("kr.archsurvey.field", "kr.archsurvey.gcp", "kr.archsurvey.field.debug", "kr.archsurvey.gcp.debug")
     }
     override var onMessage: ((LockMsg) -> Unit)? = null
@@ -29,6 +34,7 @@ class AndroidLockBus(private val ctx: Context) : LockBus {
         }
     }
     init {
+        vmAlive = true
         ContextCompat.registerReceiver(ctx, rx, IntentFilter(ACTION), PERMISSION, null, ContextCompat.RECEIVER_EXPORTED)
     }
     override fun send(m: LockMsg) {
@@ -38,7 +44,8 @@ class AndroidLockBus(private val ctx: Context) : LockBus {
                 .putExtra("op", m.op.name).putExtra("from", m.from).putExtra("label", m.label)
                 .putExtra("mac", m.mac).putExtra("to", m.to)
             runCatching { ctx.sendBroadcast(i, PERMISSION) }
+            if (m.op == LockOp.CLOSE_APP) runCatching { ctx.sendBroadcast(Intent(i).setAction(ACTION_CLOSE), PERMISSION) }
         }
     }
-    fun release() { runCatching { ctx.unregisterReceiver(rx) } }
+    fun release() { vmAlive = false; runCatching { ctx.unregisterReceiver(rx) } }
 }

@@ -6,7 +6,8 @@ package kr.archsurvey.ui
  * 방송(같은 서명만 받는 권한 kr.archsurvey.permission.RECEIVER_LOCK)으로 「잡음/놓음/놓아 주세요/누가 잡았나」를 주고받는다.
  * 잡은 쪽은 20초마다 다시 알림 — 60초 넘게 소식이 없으면(앱이 죽음) 잠금은 없는 것으로 본다.
  */
-enum class LockOp { HOLD, RELEASE, ASK_RELEASE, QUERY }
+/** 0.1.48/0.1.10: CLOSE_APP = 「내가 켜졌으니 너는 완전히 닫아라」(켜지는 앱 → 다른 앱) · CLOSED = 「닫았다·수신기 놓았다」(답) */
+enum class LockOp { HOLD, RELEASE, ASK_RELEASE, QUERY, CLOSE_APP, CLOSED }
 
 data class LockMsg(val op: LockOp, val from: String, val label: String, val mac: String? = null, val to: String? = null)
 
@@ -37,6 +38,14 @@ class ReceiverLock(
     var onConflict: ((Holder) -> Unit)? = null
     /** 잠금 상태가 바뀜(화면 새로 그리기·기다리던 연결 이어 가기) */
     var onChanged: (() -> Unit)? = null
+    /** 0.1.48: 다른 앱이 켜지며 「완전히 닫아 주세요」 */
+    var onCloseRequested: ((String) -> Unit)? = null
+    /** 0.1.48: 다른 앱이 닫았다고 답함(label) */
+    var onClosed: ((String) -> Unit)? = null
+    /** 켜질 때 한 번: 다른 같은 서명 앱 모두에게 닫기 요청 */
+    fun requestCloseOthers() = send(LockMsg(LockOp.CLOSE_APP, self, selfLabel))
+    /** 닫기 직전 답(잠금도 함께 놓음) */
+    fun ackClosed(to: String?) { holding = null; send(LockMsg(LockOp.CLOSED, self, selfLabel, to = to)) }
 
     init { bus.onMessage = { handle(it) }; runCatching { bus.send(LockMsg(LockOp.QUERY, self, selfLabel)) } }
 
@@ -69,6 +78,8 @@ class ReceiverLock(
             LockOp.RELEASE -> holders.remove(m.from)
             LockOp.ASK_RELEASE -> if (m.to == self && holding != null) onReleaseRequested?.invoke(m.label)
             LockOp.QUERY -> heartbeat()
+            LockOp.CLOSE_APP -> onCloseRequested?.invoke(m.from)
+            LockOp.CLOSED -> { holders.remove(m.from); if (m.to == null || m.to == self) onClosed?.invoke(m.label) }
         }
         onChanged?.invoke()
     }
@@ -79,5 +90,7 @@ object LockText {
     fun busy(label: String) = "다른 앱($label)이 수신기를 쓰는 중"
     const val TAKE = "여기서 쓰기"
     fun handedOver(label: String) = "수신기를 $label 에 넘겼어요 · 연결을 끊었어요"
+    fun closedOther(label: String) = "${label}을 닫고 연결했어요"
+    fun closedOtherNoConnect(label: String) = "${label}을 닫았어요"
     const val BG_STOP = "앱이 뒤로 가 있어 자동 연결을 멈췄어요 · 앱을 열면 다시 연결해요"
 }

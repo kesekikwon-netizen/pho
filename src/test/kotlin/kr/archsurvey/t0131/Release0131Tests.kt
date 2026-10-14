@@ -38,7 +38,7 @@ internal fun pt(sigmaH: Double?, sigmaU: Double?, q: Int = 4, caution: Boolean =
     antenna = AntennaRecord("X", "ARP", "ARP", 1.8, "VERTICAL", 0.0, 0.0, 1.8), fixQuality = q, satellites = 30, measuredAtMs = 0L,
     correctionAgeSec = 1.0, sigmaU = sigmaU)
 
-/** 0.1.31 #1 측량 가능 = 초록(σ 없음 고정 포함), 엄격 규칙은 0.1.30 그대로 */
+/** 0.1.31 #1 측량 가능 = 초록(정밀도 정보 없음 고정 포함), 엄격 규칙은 0.1.30 그대로 */
 class Green0131Tests {
     private fun isGreen(c: androidx.compose.ui.graphics.Color) = c.green > c.red + 0.1f && c.green > c.blue + 0.1f
 
@@ -54,7 +54,7 @@ class Green0131Tests {
         s.now += 1000; s.push(FixQuality.RTK_FIXED, null)
         assertEquals(SurveyStatus.FIXED, c.gv.displayStatus); assertTrue(c.gv.sigmaMissingOnFix)
         assertEquals(Tone.FIXED, HeaderModel.pill(c.gv, null, false, 10_000).fixTone)
-        assertTrue("σ 없음 작은 표시는 남음", HeaderModel.metrics(c.gv).endsWith("· σ 없음"))
+        assertTrue("정밀도 정보 없음 작은 표시는 남음", HeaderModel.metrics(c.gv).endsWith("· 정밀도 정보 없음"))
         val (s2, c2) = rig(strict = true); s2.push(FixQuality.RTK_FIXED, null)
         assertEquals(SurveyStatus.CAUTION, c2.gv.displayStatus)
     }
@@ -74,7 +74,7 @@ class Green0131Tests {
         c.onMeasure(); c.ui.answer(true)
         s.now += 1000; s.push(FixQuality.RTK_FIXED, null)
         val p = store.saved.single()
-        assertEquals("σ 없음(고정)", PointCaution.reason(p))
+        assertEquals("정밀도 정보 없음(고정)", PointCaution.reason(p))
         assertEquals(SurveyStatus.FIXED, PointCaution.displayStatus(p))
         assertTrue(isGreen(statusColors(LightTokens, PointCaution.displayStatus(p)).first))
     }
@@ -83,7 +83,7 @@ class Green0131Tests {
         assertEquals("측량 가능 · 양호", SigmaText.READY_MAIN)
         val band = File("src/main/kotlin/kr/archsurvey/ui/AppHeader.kt").readText().substringAfter("internal fun StatusBand(").substringBefore("\n}\n")
         assertTrue(band.contains("SurveyStatus.FIXED -> SigmaText.READY_MAIN"))
-        assertFalse("비엄격 σ 없음도 같은 제목(따로 「고정 · σ 없음」 제목 없음)", band.contains("else SigmaText.FIX_NO_SIGMA"))
+        assertFalse("비엄격 정밀도 정보 없음도 같은 제목(따로 「고정 · 정밀도 정보 없음」 제목 없음)", band.contains("else SigmaText.FIX_NO_SIGMA"))
         val drawer = File("src/main/kotlin/kr/archsurvey/ui/SurveyMapScreen.kt").readText().substringAfter("fun DrawerOverlay(").substringBefore("\n}\n")
         assertTrue(drawer.contains("statusColors(t, shownSt)")); assertFalse(drawer.contains("statusColors(t, st.status)"))
     }

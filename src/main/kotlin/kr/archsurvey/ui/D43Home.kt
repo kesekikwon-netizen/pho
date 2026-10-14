@@ -33,7 +33,7 @@ internal fun d43Pill(c: SurveyController): D43Pill {
     val g = c.gv
     if (g.noReceiver) return D43Pill("연결 안 됨", null, null)
     val cm = g.status.sigmaHM?.let { String.format(Locale.US, "%.1f cm", it * 100) }
-    if (g.sigmaMissingOnFix) return if (g.strictMode) D43Pill("FIX · σ 없음", "저장 잠김", D.bad) else D43Pill("FIX", "σ 없음", D.fix)
+    if (g.sigmaMissingOnFix) return if (g.strictMode) D43Pill("FIX · 정밀도 정보 없음", "저장 잠김", D.bad) else D43Pill("FIX", "정밀도 정보 없음", D.fix)
     return when (g.displayStatus) {
         SurveyStatus.FIXED -> D43Pill("FIX", cm, D.fix)
         SurveyStatus.CAUTION -> D43Pill(digPill(c).text.let { if (it.startsWith("FLOAT")) "FLOAT" else it }, cm, D.floatDot)
@@ -143,6 +143,7 @@ fun HomeToday(c: SurveyController) {
                 Text("  ${steps.size}개 중 ${done}개 끝남", style = DTy.small, color = D.sub, modifier = Modifier.testTag("prep_count"))
             }
             steps.forEachIndexed { i, s -> D43PrepRow(c, i, s, i == steps.lastIndex) }
+            BatteryGuideCard(Modifier.padding(top = 8.dp)) // 0.1.48
             Spacer(Modifier.height(8.dp))
         }
         DFootLine(listOf(homeHint(c, steps), backupLabel(c)), "home_foot")

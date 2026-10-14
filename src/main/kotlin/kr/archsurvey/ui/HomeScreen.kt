@@ -159,8 +159,8 @@ fun SettingsMenuScreen(c: SurveyController) {
             // 0.1.14 목업 03 순서: 장비 연결 · RTK 설정 · VRS 설정 · 좌표계 설정 · 현재위치 모양 · 알림 소리·진동 · 앱 정보
             val rows: List<Triple<Pair<Glyph?, String>, String, Pair<String, () -> Unit>>> = listOf(
                 Triple(Glyph.BT to "장비 연결", "GNSS 수신기 블루투스 연결 (R10 · SP60)", "set_row_device" to { c.connection?.openScreen() ?: run { c.message = "연결 화면은 이 빌드에 없어요" } }),
-                Triple(Glyph.SAT to "RTK 설정", "보정 형식(RTCM) · 마운트 호환 · GGA · 재접속", "set_row_rtk" to { c.hub.open(ToolScreen.RTK) }),
-                Triple(Glyph.WIFI to "VRS 설정", "NTRIP 서버 · 마운트포인트 · 계정", "set_row_vrs" to { c.connection?.openVrs() ?: run { c.message = "VRS 설정은 이 빌드에 없어요" } }),
+                Triple(Glyph.SAT to "RTK 설정", "보정 형식 · 접속 지점 맞춤 · 내 위치 보내기 · 다시 접속", "set_row_rtk" to { c.hub.open(ToolScreen.RTK) }),
+                Triple(Glyph.WIFI to "VRS 설정", "보정 서버 · 접속 지점 · 계정", "set_row_vrs" to { c.connection?.openVrs() ?: run { c.message = "VRS 설정은 이 빌드에 없어요" } }),
                 Triple(Glyph.GLOBE to "좌표계 설정", "작업명 · 좌표계(EPSG) · 지역 · 배경맵 · Geoid → 적용하면 측량", "set_row_job" to { c.jobs?.openInfo() ?: run { c.message = "작업 관리는 이 빌드에 없어요" } }),
                 Triple(Glyph.PIN to "현재위치 모양", "현재 위치 · 점 · 목표 표시 모양과 크기", "set_row_marker" to { c.markerStyleOpen = true }),
                 Triple(Glyph.MIC to "알림 소리 · 진동", "측량 완료음 · 버튼 탭 진동 · 화면 켜두기", "set_row_alert" to { c.hub.open(ToolScreen.SETTINGS) }),

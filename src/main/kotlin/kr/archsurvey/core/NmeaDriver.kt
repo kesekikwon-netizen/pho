@@ -22,7 +22,7 @@ data class GnssSnapshot(
 ) {
     /**
      * 0.1.33: [maxAgeMs] 안에 받은 GST 만. GGA 는 계속 오는데 GST 출력이 멈추면 옛 σ 를 보여 주거나
-     * 그 σ 로 「고정·측량 가능」을 판정하지 않는다(그때는 σ 없음).
+     * 그 σ 로 「고정·측량 가능」을 판정하지 않는다(그때는 정밀도 정보 없음).
      */
     fun freshGst(nowMs: Long, maxAgeMs: Long = PRECISION_MAX_AGE_MS): GstMessage? {
         val at = lastGstAtMs ?: return gst

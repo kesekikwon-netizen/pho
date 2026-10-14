@@ -555,7 +555,7 @@ fun DrawerOverlay(c: SurveyController) {
                     .verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 10.dp, top = 8.dp, bottom = 16.dp).testTag("drawer"),
             ) {
                 val st = c.gv.status
-                val shownSt = c.gv.displayStatus // 0.1.31: 띠·알약과 같은 표시 상태(σ 없음 고정 = 초록)
+                val shownSt = c.gv.displayStatus // 0.1.31: 띠·알약과 같은 표시 상태(정밀도 정보 없음 고정 = 초록)
                 val (bg, fg) = statusColors(t, shownSt)
                 Row(Modifier.height(34.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     androidx.compose.foundation.Image(

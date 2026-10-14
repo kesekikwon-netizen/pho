@@ -157,7 +157,7 @@ fun RtkScreen(c: SurveyController) {
             val warn = RtcmMountCompat.warnIfIncompatible(prof, cc.form.mount)
             Text(warn ?: "이 수신기와 맞는 형식이에요 (최대 RTCM 3.$max)", style = Ty.small, color = if (warn != null) t.bad else t.inkSub, modifier = Modifier.testTag("rtk_compat"))
             cc.recommendedMount()?.let { rec -> Btn("권장 마운트로 바꾸기 · $rec", Modifier.fillMaxWidth().testTag("rtk_use_recommended")) { cc.applyRecommendedMount() } }
-            KV("GGA 전송", if (cc.sendGga) "켬 (VRS 필요)" else "끔", "rtk_gga")
+            KV("내 위치 보내기", if (cc.sendGga) "켬 (VRS 필요)" else "끔", "rtk_gga")
             KV("자동 재접속", if (cc.autoRetry) "켬" else "끔", "rtk_retry")
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

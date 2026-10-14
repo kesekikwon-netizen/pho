@@ -305,7 +305,7 @@ private fun ConnStepsInline(cc: ConnectionController, link: kr.archsurvey.device
     WhiteCard(tag = "conn_steps") {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             for ((i, _) in ConnectSteps.labels.withIndex()) {
-                val label = listOf("Bluetooth 연결", "NMEA 수신 (GGA·GST 1 Hz)", "VRS 접속", "VRS 보정 수신", "FIX 고정").getOrElse(i) { "" }
+                val label = listOf("Bluetooth 연결", "수신기 위치 받기 (1초마다)", "VRS 접속", "VRS 보정 수신", "FIX 고정").getOrElse(i) { "" }
                 val st = states[i]
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("conn_step_$i"), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(28.dp).clip(androidx.compose.foundation.shape.CircleShape).background(when (st) { StepState.DONE -> D.fix; StepState.FAIL -> D.bad; else -> D.card })
@@ -492,7 +492,7 @@ private fun VrsSection(cc: ConnectionController, ntrip: kr.archsurvey.engine.Ntr
     // 0.1.43: 다 채워진 VRS 는 요약 + 「고치기」. 처음(아이디 등 빠짐)에는 이 화면에서 바로 채우게 펼쳐 둔다(열 때 한 번 정함)
     val full = remember { cc.form.enabled && cc.form.problems().isNotEmpty() }
     if (!vrsOnly && !full) { VrsSummary(cc); return }
-    if (!vrsOnly) DSectionLabel("VRS 보정 · NTRIP")
+    if (!vrsOnly) DSectionLabel("VRS 보정")
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(t.raised).border(1.dp, t.line.copy(alpha = 0.4f), RoundedCornerShape(18.dp)).padding(horizontal = 16.dp, vertical = 4.dp)) {
         Column {
             Row(
@@ -512,7 +512,7 @@ private fun VrsSection(cc: ConnectionController, ntrip: kr.archsurvey.engine.Ntr
             FormRow("마운트포인트") { FormSelect(cc.form.mount.ifBlank { "눌러서 목록 받기" }, "conn_mount_pick") { cc.openMountPicker() } }
             FormRow("아이디") { FormInput(cc.form.user, "conn_user", placeholder = "통합회원 ID") { cc.updateForm(cc.form.copy(user = it)) } }
             FormRow("비밀번호") { FormInput(cc.form.password, "conn_pw", kb = KeyboardType.Password, hide = true) { cc.updateForm(cc.form.copy(password = it)) } }
-            ToggleLine("GGA 전송", if (cc.sendGga) "내 위치(GGA)를 서버에 보내요 · VRS에 필요" else "꺼짐 — VRS 마운트는 보정이 오지 않을 수 있어요", cc.sendGga, "conn_gga", warn = !cc.sendGga) { cc.changeSendGga(it) }
+            ToggleLine("내 위치 보내기", if (cc.sendGga) "내 위치를 서버에 보내요 · VRS에 필요" else "꺼짐 — VRS 마운트는 보정이 오지 않을 수 있어요", cc.sendGga, "conn_gga", warn = !cc.sendGga) { cc.changeSendGga(it) }
             Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.25f)))
             ToggleLine("자동 재접속", if (cc.autoRetry) "끊기면 알아서 다시 접속해요(인증 오류 제외)" else "꺼짐 — 끊기면 ‘다시 시도’를 눌러요", cc.autoRetry, "conn_autoretry") { cc.changeAutoRetry(it) }
         }
@@ -668,13 +668,13 @@ private fun VrsSummary(cc: ConnectionController) {
     val f = cc.form
     Column(Modifier.testTag("conn_vrs_summary")) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("VRS 보정 · NTRIP", style = DTy.small, color = D.sub)
+            Text("VRS 보정", style = DTy.small, color = D.sub)
             Box(Modifier.weight(1f).padding(horizontal = 8.dp).height(1.dp).background(D.hair))
             Text("고치기", style = DTy.body.copy(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline), color = D.accent,
                 modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 56.dp).hClickable { cc.openVrs() }.padding(vertical = 12.dp, horizontal = 6.dp).testTag("conn_vrs_edit"))
         }
         for ((k, v) in listOf("서버" to (if (f.host.isBlank()) "—" else "${f.host}:${f.port}"), "마운트" to f.mount.ifBlank { "—" }, "아이디" to f.user.ifBlank { "—" },
-                "보내기" to (if (!f.enabled) "VRS 끔" else (if (cc.sendGga) "내 위치(GGA) 켬" else "내 위치(GGA) 끔") + (if (cc.autoRetry) " · 끊기면 다시 접속" else "")))) {
+                "보내기" to (if (!f.enabled) "VRS 끔" else (if (cc.sendGga) "내 위치 보내기 켬" else "내 위치 보내기 끔") + (if (cc.autoRetry) " · 끊기면 다시 접속" else "")))) {
             Row(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                 Text(k, style = DTy.small, color = D.sub, modifier = Modifier.width(80.dp))
                 Text(v, style = if (k == "보내기") DTy.bodyB.copy(fontSize = 16.sp) else DTy.mono, color = D.ink, modifier = Modifier.testTag("conn_vrs_$k"))

@@ -126,9 +126,9 @@ class SigmaDisplay0130Tests {
         assertEquals(SurveyStatus.FIXED, g.displayStatus)
         assertEquals(SurveyStatus.FIXED, c.mapState().current!!.status)
         assertEquals(Tone.FIXED, HeaderModel.pill(g, null, false, 10_000).fixTone)
-        assertEquals("고정 · σ 없음", SigmaText.FIX_NO_SIGMA)
+        assertEquals("고정 · 정밀도 정보 없음", SigmaText.FIX_NO_SIGMA)
         assertEquals(SigmaText.BAND_SUB_NORMAL, statusBandSub(g.status.status, g.status.reason, false, false, null))
-        assertEquals("HDOP 0.7 / H — / V — · σ 없음", HeaderModel.metrics(g))
+        assertEquals("HDOP 0.7 / H — / V — · 정밀도 정보 없음", HeaderModel.metrics(g))
         assertNull(g.status.sigmaHM); assertNull(g.sigmaVM)
         assertFalse(SigmaText.BAND_SUB_NORMAL.contains("주의"))
     }
@@ -167,10 +167,10 @@ class SigmaDisplay0130Tests {
         assertTrue("주의 표시는 그대로 기록", p.cautionFlag); assertEquals(SurveyStatus.CAUTION, p.status)
         assertNull(p.sigmaHM)
         assertEquals(PointCaution.NO_SIGMA_FIXED, PointCaution.reason(p))
-        assertEquals("σ 없음(고정)", PointCaution.reason(p))
-        assertEquals("고정 · σ 없음", PointCaution.label(p)); assertEquals("고정 · σ 없음", PointCaution.chip(p))
+        assertEquals("정밀도 정보 없음(고정)", PointCaution.reason(p))
+        assertEquals("고정 · 정밀도 정보 없음", PointCaution.label(p)); assertEquals("고정 · 정밀도 정보 없음", PointCaution.chip(p))
         assertEquals(SurveyStatus.FIXED, PointCaution.displayStatus(p))
-        assertTrue(c.ui.toast!!, c.ui.toast!!.endsWith(" · 고정 · σ 없음"))
+        assertTrue(c.ui.toast!!, c.ui.toast!!.endsWith(" · 고정 · 정밀도 정보 없음"))
         assertEquals(SigmaText.SAVED_MESSAGE, c.message)
         assertFalse(c.mapState().points.single().flagged)
     }
@@ -225,7 +225,7 @@ class Trail0130Tests {
     }
 }
 
-/** 0.1.30 UX-0130-1: 점 목록 행 상태 = 결과 칩 = 지도 점 (σ 없음(고정)이 목록에서만 주의로 보이던 문제) */
+/** 0.1.30 UX-0130-1: 점 목록 행 상태 = 결과 칩 = 지도 점 (정밀도 정보 없음(고정)이 목록에서만 주의로 보이던 문제) */
 class PointRowConsistency0130Tests {
     private fun pt(q: Int, sigma: Double?, floatEpochs: Int = 0, age: Double? = 1.0, caution: Boolean = true) = SavedPoint(
         name = "P-$q-$sigma-$floatEpochs-$age", type = "t", lat = 37.0, lon = 127.0, northing = 0.0, easting = 0.0, crsEpsg = 5186,
@@ -246,7 +246,7 @@ class PointRowConsistency0130Tests {
             assertEquals(p.name, row != SurveyStatus.FIXED, markers.getValue(p.name).flagged)
         }
         assertEquals(SurveyStatus.FIXED, PointCaution.displayStatus(noSigma))
-        assertEquals("고정 · σ 없음", PointCaution.rowReason(noSigma))
+        assertEquals("고정 · 정밀도 정보 없음", PointCaution.rowReason(noSigma))
         assertEquals(PointCaution.FLOAT, PointCaution.rowReason(float))
         assertEquals(PointCaution.AGE_OVER, PointCaution.rowReason(old))
         assertNull(PointCaution.rowReason(fixed))

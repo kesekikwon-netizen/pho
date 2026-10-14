@@ -141,6 +141,73 @@ class Release0146Test {
         assertEquals(ToolScreen.POINTS, c.hub.screen)
     }
 
+    // ---------- 0.1.48 ----------
+    private fun clickablesAtLeast(minDp: Float) {
+        val nodes = rule.onAllNodes(hasClickAction()).fetchSemanticsNodes()
+        assertTrue(nodes.isNotEmpty())
+        val small = nodes.filter { n -> with(rule.density) { n.boundsInRoot.height.toDp().value } in 1f..(minDp - 0.5f) }
+        assertTrue("작은 누름 칸: " + small.map { it.config.toString().take(80) }, small.isEmpty())
+    }
+
+    private class Jobs0148 : JobPlatform {
+        override var current = "작업1"; val m = linkedMapOf("작업1" to 3)
+        override suspend fun list() = m.map { JobInfo(it.key, it.value, 2, 1, 1_791_000_000_000L, 1_791_090_000_000L, 0) }
+        override suspend fun info(name: String) = list().first { it.name == name }
+        override suspend fun create(name: String) { m[name] = 0; current = name }
+        override suspend fun open(name: String) { current = name }
+        override suspend fun delete(name: String): String { m.remove(name); return "x.zip" }
+    }
+    private fun render130(content: @androidx.compose.runtime.Composable () -> Unit) {
+        rule.setContent {
+            val d = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(d.density, 1.3f)) { SurveyTheme(dark = false) { content() } }
+        }
+        rule.waitForIdle()
+    }
+
+    /** 0.1.48: s02 새 작업 화면을 직접 그림(이전 시험은 rig 에 작업 관리자가 없어 지도만 찍혔음) */
+    @Test fun s02_newJob_fontScale130_bigTargets() {
+        TileImages.networkEnabled = false
+        val (_, c) = rig(false, DeviceProfiles.R10_ID, Mem())
+        c.jobs = JobController(c, Jobs0148(), kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined))
+        c.jobs?.openNew()
+        render130 { JobScreen(c) }
+        clickablesAtLeast(48f)
+        rule.onAllNodes(hasClickAction()).fetchSemanticsNodes().let { assertTrue("고르기 칸이 보여야 함", it.size >= 3) }
+        shot("0148_s02_new_job-fs130")
+    }
+
+    /** 0.1.48: s05 수신기 화면 직접 그림 — 기술 용어(GGA·NTRIP·RTCM)가 첫 화면에 없어야 */
+    @Test fun s05_receiver_fontScale130_bigTargets_noJargon() {
+        TileImages.networkEnabled = false
+        val cc = ConnectionController(kr.archsurvey.t0140.FakeConn(), kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined))
+        render130 { ConnectionScreen(cc) }
+        clickablesAtLeast(48f)
+        for (w in listOf("GGA", "NTRIP", "NMEA")) rule.onAllNodes(hasText(w, substring = true), useUnmergedTree = true).fetchSemanticsNodes().filter { n ->
+            n.boundsInRoot.height > 0f }.let { assertTrue("첫 화면에 「$w」: " + it.size, it.isEmpty()) }
+        shot("0148_s05_receiver-fs130")
+    }
+
+    @Test fun memoPhotoCloseRow_atLeast56dp_fontScale130() {
+        setup()
+        for (tag in listOf("tool_memo", "tool_photo")) {
+            val h = with(rule.density) { rule.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot.height.toDp() }
+            assertTrue("$tag $h", h >= 56.dp)
+        }
+        rule.onAllNodesWithTag("tool_close_area").fetchSemanticsNodes().forEach { n ->
+            assertTrue(with(rule.density) { n.boundsInRoot.height.toDp() } >= 56.dp)
+        }
+        shot("0148_s03_measure_map-fs130")
+    }
+
+    @Test fun home_batteryCard_oneTap() {
+        setup(home = true)
+        rule.onNodeWithTag("battery_card", useUnmergedTree = true).assertExists()
+        val h = rule.onNodeWithTag("battery_fix").getUnclippedBoundsInRoot().let { it.bottom - it.top }
+        assertTrue(h >= 56.dp)
+        shot("0148_s01_home_battery-fs130")
+    }
+
     @Test fun screens_folded_fontScale130() {
         val (s, c) = setup(home = true)
         rule.runOnIdle { c.homeOpen = false }

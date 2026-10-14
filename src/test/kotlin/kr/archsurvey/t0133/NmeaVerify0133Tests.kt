@@ -91,7 +91,7 @@ class NmeaVerify0133Tests {
         // 소문자 16진 체크섬도 받음
         val body = "GNGST,021530.00,0.012,0.007,0.004,12.3,0.006,0.005,0.018"
         assertTrue(p.parseLine("$" + body + "*" + "%02x".format(NmeaParser.checksum(body))) is GstMessage)
-        // 해 없을 때 빈 GST → σ 없음(0 으로 바꾸지 않음)
+        // 해 없을 때 빈 GST → 정밀도 정보 없음(0 으로 바꾸지 않음)
         val e = p.parseLine(nmea("GNGST,021531.00,,,,,,,").trim()) as GstMessage
         assertNull(e.sigmaHoriz); assertNull(e.sigmaAlt)
         // 빈 GSA → PDOP 없음
@@ -184,12 +184,12 @@ class NmeaVerify0133Tests {
             src.gnss.value = d.snapshot
         }
         val gv = c.gv
-        // 10초 묵은 σ 로 「측량 가능(고정)」 판정하지 않음 → σ 없음(고정·주의)
+        // 10초 묵은 σ 로 「측량 가능(고정)」 판정하지 않음 → 정밀도 정보 없음(고정·주의)
         assertNull("10초 묵은 수평 σ", gv.status.sigmaHM)
         assertNull("10초 묵은 수직 σ", gv.sigmaVM)
         assertNull("10초 묵은 PDOP", gv.pdop)
         assertEquals(StatusReason.NO_SIGMA, gv.status.reason)
-        assertEquals("HDOP 0.8 / H — / V — · σ 없음", HeaderModel.metrics(gv))
+        assertEquals("HDOP 0.8 / H — / V — · 정밀도 정보 없음", HeaderModel.metrics(gv))
         // 다시 GST·GSA 가 오면 곧바로 회복
         src.now += 1_000
         feed(d, src.now, gga, gst, gsaGps)

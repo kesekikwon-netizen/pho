@@ -29,7 +29,7 @@ object HeaderModel {
 
     /** 0.1.30 T24 머리글·상태 띠 공통 문구(UX리뷰) */
     /** 0.1.30 T23-c: 고정인데 GST 없음 — H/V 옆 작은 표시 */
-    const val SIGMA_MISSING = "σ 없음"
+    const val SIGMA_MISSING = "정밀도 정보 없음"
     const val NO_RECEIVER = "수신기 없음"
     const val RECEIVER_LOST = "수신기 끊김"
     const val CONNECTING = "연결 중"

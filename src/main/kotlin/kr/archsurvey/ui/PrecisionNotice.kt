@@ -24,7 +24,7 @@ object PrecisionGuide {
     const val RETRY_OK = "정밀도(GST) 받는 중 — 다시 측점하세요"
     /** 막힘 창 본문: 원인 + 기기별 해결 경로 + 모드는 사용자가 바꾼다 */
     fun strictBlockedNote(deviceId: String?): String =
-        "고정(FIX)이지만 수신기가 정밀도(σ, GST)를 보내지 않아 엄격 모드(FIX만 저장)에서 측점할 수 없어요.\n" +
+        "고정(FIX)이지만 수신기가 정밀도(정밀도 정보)를 보내지 않아 엄격 모드(FIX만 저장)에서 측점할 수 없어요.\n" +
             when (deviceId) {
                 DeviceProfiles.SP60_ID -> "SP60: [자동 켜기 다시] · 안 되면 터미널/SPace에서 GST·GSA 켜기"
                 DeviceProfiles.R10_ID -> "R10: 앱 자동 켜기가 안 되면 웹UI I/O 설정 → BT 포트 → NMEA에서 GST·GSA 켜기"

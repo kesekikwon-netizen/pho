@@ -118,10 +118,10 @@ class NoPhoneGps0130Tests {
             groundHeightM = 0.0, sigmaHM = null, status = SurveyStatus.CAUTION, cautionFlag = true, epochs = 5,
             antenna = AntennaRecord("X", "ARP", "ARP", 1.8, "VERTICAL", 0.0, 0.0, 1.8), fixQuality = 4, satellites = 20, measuredAtMs = 0L,
             correctionAgeSec = 1.0)
-        assertEquals("σ 없음(고정)", PointCaution.reason(base))
+        assertEquals("정밀도 정보 없음(고정)", PointCaution.reason(base))
         assertEquals(PointCaution.FLOAT, PointCaution.reason(base.copy(fixQuality = 5)))
         assertEquals(PointCaution.AGE_OVER, PointCaution.reason(base.copy(correctionAgeSec = 99.0)))
-        assertEquals("고정 · σ 없음", PointCaution.label(base)) // 0.1.30 T23-c 게이트: 같은 문구
+        assertEquals("고정 · 정밀도 정보 없음", PointCaution.label(base)) // 0.1.30 T23-c 게이트: 같은 문구
     }
 
     @Test fun hdopShownAsHdop_whenPdopMissing_neverAsSigma() {

@@ -76,5 +76,9 @@
             android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
+        <!-- 0.1.48/0.1.10: 다른 앱이 켜지면 화면 없이 남은 연결 서비스도 완전히 닫음(같은 서명만) -->
+        <receiver android:name="kr.archsurvey.engine.CloseOtherReceiver" android:exported="true" android:permission="kr.archsurvey.permission.RECEIVER_LOCK">
+            <intent-filter><action android:name="kr.archsurvey.action.CLOSE_APP" /></intent-filter>
+        </receiver>
     </application>
 </manifest>

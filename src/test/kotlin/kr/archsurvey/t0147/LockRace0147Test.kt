@@ -35,7 +35,7 @@ class LockRace0147Test {
         b.selectAddress(mac); b.changeAutoConnect(true)
         assertFalse("답 오기 전엔 연결 안 함", b.autoConnectOnLaunch()); assertNull(fb.started)
         w.deliver() // QUERY → a 가 HOLD 로 답
-        now += 1_500; advanceTimeBy(1_600); runCurrent()
+        now += 1_500; advanceTimeBy(2_100); runCurrent()
         assertNull("다른 앱이 쓰는 중이면 자동 연결로 빼앗지 않음", fb.started)
         assertEquals("발굴 측량", b.lockedBy?.label)
     }
@@ -47,7 +47,7 @@ class LockRace0147Test {
         b.lock = ReceiverLock(w.Bus(), "kr.archsurvey.gcp", "사진 기준점", { now }, settleMs = 1_500L)
         b.selectAddress(mac); b.changeAutoConnect(true)
         b.autoConnectOnLaunch(); w.deliver()
-        now += 1_500; advanceTimeBy(1_600); runCurrent()
+        now += 1_500; advanceTimeBy(2_100); runCurrent()
         assertEquals(mac, fb.started?.second)
     }
 

@@ -36,7 +36,7 @@ internal fun digPill(c: SurveyController): DigPill {
     val g = c.gv
     if (g.noReceiver) return DigPill("수신기 연결 안 됨", null, Tone.NO_RECEIVER)
     // 0.1.31: FIX인데 수신기가 정밀도(σ)를 안 보냄 — 엄격 모드면 저장 잠김을 알약에 그대로
-    if (g.sigmaMissingOnFix) return if (g.strictMode) DigPill("측량 불가 · 정밀도 정보 없음", "엄격", Tone.BAD) else DigPill("FIX", "σ 없음", Tone.FIXED)
+    if (g.sigmaMissingOnFix) return if (g.strictMode) DigPill("측량 불가 · 정밀도 정보 없음", "엄격", Tone.BAD) else DigPill("FIX", "정밀도 정보 없음", Tone.FIXED)
     // 0.1.46 디자인 시스템: 「FIX 1.4 cm」 코드형 + 상태색 채움(색만으로 구분하지 않게 항상 글자 동반)
     val hv = g.status.sigmaHM?.let { hm -> sigmaCm(hm) }
     val isFloat = g.quality.labelKo.contains("Float", true) || g.quality.labelKo.contains("플로트") || g.quality.labelKo.contains("유동")
@@ -92,7 +92,7 @@ internal fun DigHeader(c: SurveyController) {
     }
 }
 
-/** X12 원인 한 줄(고정이 아닐 때만). 엄격 모드·σ 없음 안내는 기존 문구를 이어 쓴다 */
+/** X12 원인 한 줄(고정이 아닐 때만). 엄격 모드·정밀도 정보 없음 안내는 기존 문구를 이어 쓴다 */
 @Composable
 internal fun DigCauseLine(c: SurveyController) {
     val t = T
@@ -100,7 +100,7 @@ internal fun DigCauseLine(c: SurveyController) {
     val strict = c.settingsState?.requireFixed == true
     val line = c.dig.causeLine(ntripNow())?.let { base ->
         if (strict && c.gv.displayStatus == SurveyStatus.CAUTION) "$base · 엄격 모드: FIX 때만 저장" else base
-    } ?: (if (c.gv.sigmaMissingOnFix) "고정이지만 정밀도(σ)가 오지 않아요 · " + (if (strict) "엄격 모드는 저장 잠김" else "저장하면 「주의」 표시") else null)
+    } ?: (if (c.gv.sigmaMissingOnFix) "고정이지만 정밀도 정보가 오지 않아요 · " + (if (strict) "엄격 모드는 저장 잠김" else "저장하면 「주의」 표시") else null)
     if (line == null) return
     val noRx = c.gv.noReceiver
     Row(

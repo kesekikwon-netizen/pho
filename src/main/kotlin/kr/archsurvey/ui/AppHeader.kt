@@ -129,7 +129,7 @@ internal fun statusBandSub(status: SurveyStatus, reason: StatusReason, notConnec
     // 0.1.30 T23-c: 고정·보정 양호·σ만 없음 → 띠는 ‘측량 가능’(표시). 저장 결과는 그대로 알려 준다
     if (status == SurveyStatus.CAUTION && reason == StatusReason.NO_SIGMA)
         return if (requireFixed) "엄격 모드 · " + (noSigmaHint ?: "수신기에서 GST·GSA 출력을 켜 주세요") else SigmaText.BAND_SUB_NORMAL
-    // 0.1.30 T23: σ 없음(NO_SIGMA)에는 기기별 안내를 붙인다
+    // 0.1.30 T23: 정밀도 정보 없음(NO_SIGMA)에는 기기별 안내를 붙인다
     val why = reason.textKo + if (reason == StatusReason.NO_SIGMA && noSigmaHint != null) " · $noSigmaHint" else ""
     return when (status) {
         SurveyStatus.CAUTION -> if (requireFixed) "엄격 모드 · FIX만 측점 · $why"
@@ -149,7 +149,7 @@ internal fun StatusBand(c: SurveyController, compact: Boolean = false, modifier:
     val notConnected = st.reason == StatusReason.NOT_CONNECTED
     val shown = c.gv.displayStatus // 0.1.30 T23-c: 색·제목은 표시 상태, 부제는 저장 판정(st)
     val main = if (notConnected) "불가 · ${HeaderModel.NO_RECEIVER}"
-    // 0.1.31: 고정·보정 양호면 σ 가 없어도 「측량 가능 · 양호」(초록). σ 없음은 오른쪽 작은 표시로만. 엄격+σ 없음은 막힘 그대로
+    // 0.1.31: 고정·보정 양호면 σ 가 없어도 「측량 가능 · 양호」(초록). 정밀도 정보 없음은 오른쪽 작은 표시로만. 엄격+정밀도 정보 없음은 막힘 그대로
     else if (c.gv.sigmaMissingOnFix && c.gv.strictMode) SigmaText.STRICT_BAND_MAIN
     else when (shown) {
         SurveyStatus.FIXED -> SigmaText.READY_MAIN

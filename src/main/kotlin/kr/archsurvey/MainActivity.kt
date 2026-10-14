@@ -67,6 +67,8 @@ class MainActivity : ComponentActivity() {
         vm.onKeepScreen = { applyKeepScreen(it) }
         // 0.1.31 T27: 종료 확인 창 「예」 → 연결은 컨트롤러가 끊고, 여기서 앱 작업을 완전히 닫는다(최근 앱 목록에서도 빠짐)
         vm.controller.onExitApp = { exitCompletely() }
+        // 0.1.48: 다른 앱이 켜지면 이 앱은 완전히 닫힘
+        vm.controller.connection?.onExitForOtherApp = { exitCompletely() }
         val firstLaunch = savedInstanceState == null
         setContent {
             SurveyTheme {

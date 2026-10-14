@@ -100,7 +100,7 @@ class FakeGnssSourceTest {
         assertEquals(1, f.epochIndex)
     }
     @Test fun gstMissingScenarioGivesNoSigma() {
-        val sc = FakeScenario("no-gst", listOf(FakeSegment("고정 σ 없음", 3, sigmaHM = null)))
+        val sc = FakeScenario("no-gst", listOf(FakeSegment("고정 정밀도 정보 없음", 3, sigmaHM = null)))
         val f = FakeGnssSource(sc); f.runAll()
         assertNull(f.gnss.value.gst)
         assertEquals(StatusReason.NO_SIGMA, StatusJudge.judge(f.gnss.value, f.link.value.state, f.clockMs()).reason)
