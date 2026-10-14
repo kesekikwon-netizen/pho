@@ -35,6 +35,8 @@ class MainActivity : ComponentActivity() {
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         // 종료 두 단계(측량 앱과 같음): 연결은 컨트롤러가 끊고, 여기서 앱 작업을 완전히 닫는다
         vm.controller.onExitApp = { exitCompletely() }
+        // 0.1.10: 다른 앱이 켜지면 이 앱은 완전히 닫힘
+        vm.connection.onExitForOtherApp = { exitCompletely() }
         setContent { SurveyTheme { GcpRoot(vm.controller, vm.env) } }
         vm.autoConnectOnLaunch()
     }

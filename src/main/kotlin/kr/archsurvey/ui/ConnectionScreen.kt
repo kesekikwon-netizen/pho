@@ -487,7 +487,7 @@ private fun VrsSection(cc: ConnectionController, ntrip: kr.archsurvey.engine.Ntr
             FormRow("마운트포인트") { FormSelect(cc.form.mount.ifBlank { "눌러서 목록 받기" }, "conn_mount_pick") { cc.openMountPicker() } }
             FormRow("아이디") { FormInput(cc.form.user, "conn_user", placeholder = "통합회원 ID") { cc.updateForm(cc.form.copy(user = it)) } }
             FormRow("비밀번호") { FormInput(cc.form.password, "conn_pw", kb = KeyboardType.Password, hide = true) { cc.updateForm(cc.form.copy(password = it)) } }
-            ToggleLine("GGA 전송", if (cc.sendGga) "내 위치(GGA)를 서버에 보내요 · VRS에 필요" else "꺼짐 — VRS 마운트는 보정이 오지 않을 수 있어요", cc.sendGga, "conn_gga", warn = !cc.sendGga) { cc.changeSendGga(it) }
+            ToggleLine("내 위치 보내기", if (cc.sendGga) "내 위치를 서버에 보내요 · VRS에 필요" else "꺼짐 — VRS 마운트는 보정이 오지 않을 수 있어요", cc.sendGga, "conn_gga", warn = !cc.sendGga) { cc.changeSendGga(it) }
             Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.25f)))
             ToggleLine("자동 재접속", if (cc.autoRetry) "끊기면 알아서 다시 접속해요(인증 오류 제외)" else "꺼짐 — 끊기면 ‘다시 시도’를 눌러요", cc.autoRetry, "conn_autoretry") { cc.changeAutoRetry(it) }
         }

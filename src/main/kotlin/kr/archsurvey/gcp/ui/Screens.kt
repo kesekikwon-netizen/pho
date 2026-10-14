@@ -41,6 +41,7 @@ fun SitesScreen(c: GcpController) {
         }
         Box(Modifier.padding(horizontal = 18.dp).padding(top = 8.dp).fillMaxWidth().height(2.dp).background(G.ink))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            kr.archsurvey.ui.BatteryGuideCard(Modifier.padding(horizontal = 18.dp).padding(top = 10.dp)) // 0.1.10
             if (c.sites.isEmpty()) Text("유적이 없어요. 아래 「+ 새 유적」을 누르면 지금 위치의 동 이름으로 이름을 골라 드려요.", style = Ty.label.copy(fontSize = 16.sp), color = G.sub, modifier = Modifier.padding(20.dp).testTag("sites_empty"))
             for (sc in c.sites.sortedByDescending { it.lastAt ?: it.site.createdAt }) {
                 val pend = (sc.counts[Stage.MEASURE] ?: 0) + (sc.counts[Stage.PHOTO] ?: 0) + (sc.counts[Stage.HANDOFF] ?: 0)

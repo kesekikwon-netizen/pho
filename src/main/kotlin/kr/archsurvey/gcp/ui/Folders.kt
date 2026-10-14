@@ -187,7 +187,7 @@ fun ObjScreen(c: GcpController) {
                     Box(Modifier.fillMaxWidth(doneCount / 4f).fillMaxHeight().background(G.dark))
                 }
             }
-            val sigMax = shots.mapNotNull { it.sigmaH }.maxOrNull()?.let { String.format(Locale.US, " · σ 최대 %.1f cm", it * 100) } ?: ""
+            val sigMax = shots.mapNotNull { it.sigmaH }.maxOrNull()?.let { String.format(Locale.US, " · 정밀도 최대 %.1f cm", it * 100) } ?: ""
             StepCard(1, "표적 좌표", if (n > 0) "#${QrPayload.ranges(shots.map { it.tag }.sorted())} ${n}개 측량$sigMax" else "${Pipeline.MIN_TARGETS}개부터 사진",
                 done[0], nowStep == 0, "step_targets") { c.openTargets() }
             StepCard(2, "ID 카드", "QR · 대상 이름 · 날짜", done[1], nowStep == 1, "step_idcard") { c.openIdCard() }

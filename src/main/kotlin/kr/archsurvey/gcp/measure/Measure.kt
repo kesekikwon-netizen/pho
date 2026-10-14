@@ -15,7 +15,7 @@ import kr.archsurvey.device.GnssSource
 
 /**
  * 엄격 FIX 만: RTK 고정 + 보정 연령 정상 + σ ≤ 2 cm(측량 앱 StatusJudge 그대로).
- * 수신기가 σ(GST)를 아예 안 보내는 「고정 · σ 없음」만 한 번 묻고 잰다(R10 기본 설정). 플로트·단독·끊김·보정 오래됨·연령 모름은 막는다.
+ * 수신기가 σ(GST)를 아예 안 보내는 「고정 · 정밀도 정보 없음」만 한 번 묻고 잰다(R10 기본 설정). 플로트·단독·끊김·보정 오래됨·연령 모름은 막는다.
  */
 sealed interface Gate {
     data object Ok : Gate
@@ -42,7 +42,7 @@ object MeasureGate {
     /** 상태 알약 짧은 글: FIX ±0.8 cm / FLOAT / 연결 안 됨 */
     fun pill(r: StatusResult, q: FixQuality): String = when {
         r.reason == StatusReason.NOT_CONNECTED -> "연결 안 됨"
-        q == FixQuality.RTK_FIXED -> "FIX " + (r.sigmaHM?.let { String.format(java.util.Locale.US, "±%.1f cm", it * 100) } ?: "σ 없음")
+        q == FixQuality.RTK_FIXED -> "FIX " + (r.sigmaHM?.let { String.format(java.util.Locale.US, "±%.1f cm", it * 100) } ?: "정밀도 정보 없음")
         q == FixQuality.RTK_FLOAT -> "FLOAT"
         r.status == SurveyStatus.UNAVAILABLE -> when (r.reason) { StatusReason.STALE, StatusReason.LINK_DOWN, StatusReason.NO_DATA -> "수신 끊김"; else -> "단독" }
         else -> r.reason.textKo

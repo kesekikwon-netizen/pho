@@ -439,7 +439,7 @@ class GcpController(
         val r = StatusJudge.judge(source.gnss.value, source.link.value.state, source.clockMs())
         when (val g = MeasureGate.check(r)) {
             Gate.Ok -> go(false)
-            Gate.AskNoSigma -> ui.ask(ConfirmRequest("정밀도(σ)를 받지 못해요", "FIX 는 맞지만 수신기가 GST(정밀도)를 보내지 않아요. 그래도 잴까요?\nR10 은 웹 설정에서 GST 출력을 켜면 이 창이 안 떠요.", "그래도 재기") { go(true) })
+            Gate.AskNoSigma -> ui.ask(ConfirmRequest("정밀도 정보를 받지 못해요", "FIX 는 맞지만 수신기가 GST(정밀도)를 보내지 않아요. 그래도 잴까요?\nR10 은 웹 설정에서 GST 출력을 켜면 이 창이 안 떠요.", "그래도 재기") { go(true) })
             is Gate.Blocked -> { ui.fail("못 재요 — ${g.reasonKo}"); onFeedback?.invoke(FeedbackEvent.SURVEY_FAIL) }
         }
     }

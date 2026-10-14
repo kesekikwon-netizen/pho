@@ -77,7 +77,7 @@ data class PillText(val text: String, val sub: String?, val tone: PTone) {
 
 fun pillFor(r: kr.archsurvey.core.StatusResult, link: LinkState, q: FixQuality): PillText = when {
     link == LinkState.IDLE || r.reason == kr.archsurvey.core.StatusReason.NOT_CONNECTED -> PillText("수신기 연결 안 됨", null, PTone.NO_RECEIVER)
-    r.status == SurveyStatus.FIXED && q == FixQuality.RTK_FIXED -> PillText("측량 가능", r.sigmaHM?.let { String.format(Locale.US, "±%.1f", it * 100) } ?: "σ 없음", PTone.FIXED)
+    r.status == SurveyStatus.FIXED && q == FixQuality.RTK_FIXED -> PillText("측량 가능", r.sigmaHM?.let { String.format(Locale.US, "±%.1f", it * 100) } ?: "정밀도 정보 없음", PTone.FIXED)
     r.status == SurveyStatus.UNAVAILABLE -> PillText("측량 불가", null, PTone.BAD)
     else -> PillText("FIX 기다리는 중", if (q == FixQuality.RTK_FLOAT) "FLOAT" else null, PTone.CAUTION)
 }
