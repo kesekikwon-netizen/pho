@@ -99,19 +99,20 @@ fun SurveyTheme(dark: Boolean = false, content: @Composable () -> Unit) {
 }
 
 /** 번들 글꼴(OFL): Noto Sans KR 300/400, JetBrains Mono 300/400. 한글은 KS X 1001 2,350자 + 기호만 담았다(그 밖의 글자는 기기 글꼴로 대체). */
+/** 0.1.52: 글꼴 2굵기 — Pretendard Regular(400)·Bold(700). Medium→Regular, SemiBold→Bold 로 합침. 숫자는 IBM Plex Mono 400/500 */
 object Fonts {
     /** 0.1.8 Field Ivory: Pretendard(OFL 1.1, assets/licenses/OFL-Pretendard.txt). Light 요청도 Regular 로(햇빛 아래 가는 글씨 금지) */
     val sans = FontFamily(
         Font(kr.archsurvey.R.font.pretendard_regular, FontWeight.Light),
         Font(kr.archsurvey.R.font.pretendard_regular, FontWeight.Normal),
-        Font(kr.archsurvey.R.font.pretendard_semibold, FontWeight.Medium),
-        Font(kr.archsurvey.R.font.pretendard_semibold, FontWeight.SemiBold),
+        Font(kr.archsurvey.R.font.pretendard_regular, FontWeight.Medium),
+        Font(kr.archsurvey.R.font.pretendard_bold, FontWeight.SemiBold),
         Font(kr.archsurvey.R.font.pretendard_bold, FontWeight.Bold),
         Font(kr.archsurvey.R.font.pretendard_bold, FontWeight.ExtraBold),
     )
     /** 0.1.35 숫자: IBM Plex Mono 400/500 (가는 글씨는 JetBrains Mono Light 유지) */
     val mono = FontFamily(
-        Font(kr.archsurvey.R.font.jetbrains_mono_light, FontWeight.Light),
+        Font(kr.archsurvey.R.font.ibm_plex_mono_regular, FontWeight.Light),
         Font(kr.archsurvey.R.font.ibm_plex_mono_regular, FontWeight.Normal),
         Font(kr.archsurvey.R.font.ibm_plex_mono_medium, FontWeight.Medium),
     )

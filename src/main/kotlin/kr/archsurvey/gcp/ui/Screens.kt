@@ -37,6 +37,7 @@ fun SitesScreen(c: GcpController) {
         GTopBar("사진 기준점", null, c, onMenu = { c.go(Screen.SETTINGS) }, brand = true)
         Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp).padding(top = 6.dp), verticalAlignment = Alignment.Bottom) {
             Text("유적", style = Ty.label.copy(fontSize = 26.sp, fontWeight = FontWeight.Black), color = G.ink, modifier = Modifier.weight(1f))
+            SunToggle(Modifier.padding(end = 10.dp))
             Text("최근 순", style = Ty.small.copy(fontSize = 16.sp), color = G.sub, modifier = Modifier.padding(bottom = 4.dp))
         }
         Box(Modifier.padding(horizontal = 18.dp).padding(top = 8.dp).fillMaxWidth().height(2.dp).background(G.ink))
@@ -196,7 +197,8 @@ fun GcpRoot(c: GcpController, env: GcpEnv) {
     androidx.activity.compose.BackHandler { c.back() }
     val g by c.source.gnss.collectAsState()
     CompositionLocalProvider(LocalFixCode provides g.quality.code) {
-        Box(Modifier.fillMaxSize().background(T.bg).windowInsetsPadding(WindowInsets.systemBars)) {
+        // 0.1.52 #3: 바탕은 시스템 막대 뒤까지, 내용(측량 단추·아래 줄)은 safeDrawing 안쪽
+        Box(Modifier.fillMaxSize().background(G.bg).windowInsetsPadding(WindowInsets.safeDrawing)) {
             when (c.screen) {
                 Screen.SITES -> SitesScreen(c)
                 Screen.OBJECTS -> ObjectsScreen(c)

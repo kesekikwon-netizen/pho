@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -404,9 +405,9 @@ fun MeasureBig(c: GcpController) {
     }
     val dim = !busy && (locked || (blocked && !notConn))
     // 0.1.12 오른손 #9: 손을 뗄 때 실행 · 8dp 넘게 밀리면 취소 · 연타 0.8초 막기
-    Box(Modifier.fillMaxWidth().height(MEASURE_RH).clip(RoundedCornerShape(20.dp)).background(if (dim) FieldIvory.disabled else G.dark)
+    /* 0.1.52 #6 눌림 스프링 */ Box(Modifier.fillMaxWidth().height(MEASURE_RH).pressSpring(20.dp, 34.dp).background(if (dim) FieldIvory.disabled else G.dark)
         .releaseTap(label) { if (!locked || busy) c.onMeasureButton() }.testTag("measure_button"), contentAlignment = Alignment.Center) {
-        if (busy) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(c.progress.coerceIn(0f, 1f)).height(6.dp).background(G.white.copy(alpha = 0.85f)).testTag("measure_progress"))
+        if (busy) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(6.dp).drawBehind { drawRect(G.white.copy(alpha = 0.85f), size = size.copy(width = size.width * c.progress.coerceIn(0f, 1f))) }.testTag("measure_progress")) // 0.1.52 #4 그리기 단계에서만 읽음
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(label, style = Ty.label.copy(fontSize = if (busy) 30.sp else 24.sp, fontWeight = FontWeight.Bold), color = if (dim) FieldIvory.onDisabled else G.onDark, maxLines = 1, modifier = Modifier.testTag("measure_label"))
             Text(sub, style = Ty.small, color = if (dim) G.sub else G.onDark, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 8.dp).testTag("measure_sub"))

@@ -42,12 +42,24 @@ import java.util.Locale
  * 0.1.5 사용자 시안(10-12) 색: 크림 바탕 · 먹색 주 단추 · 굵은 고딕 제목 · 테라코타 점(할 일) · 초록(끝·FIX).
  * 공용 Theme(측량 앱과 같은 파일)는 건드리지 않고 이 앱 화면만 이 값을 쓴다.
  */
+/** 0.1.52 #9: 햇빛 고대비(Sunlight.on)면 진한 값 */
 object G {
     // 0.1.8 Field Ivory(FieldIvory.kt, 발굴 측량과 같은 값): 주 단추 검정 → 테라코타
-    val bg = FieldIvory.bg; val ink = FieldIvory.ink; val sub = FieldIvory.inkSub; val faint = FieldIvory.onDisabled
-    val dark = FieldIvory.primary; val onDark = FieldIvory.onPrimary
-    val soft = Color(0xFFFFFFFF); val chip = FieldIvory.disabled; val line = Color(0xFFD6D1C4); val lineStrong = Color(0xFF8C8B86)
-    val sel = FieldIvory.primarySoft; val dot = FieldIvory.pressed; val ok = FieldIvory.fix; val bad = FieldIvory.error; val warn = FieldIvory.float
+    val bg: Color get() = if (Sunlight.on) Sunlight.bg else FieldIvory.bg
+    val ink: Color get() = if (Sunlight.on) Sunlight.ink else FieldIvory.ink
+    val sub: Color get() = if (Sunlight.on) Sunlight.sub else FieldIvory.inkSub
+    val faint = FieldIvory.onDisabled
+    val dark: Color get() = if (Sunlight.on) Sunlight.primary else FieldIvory.primary
+    val onDark = FieldIvory.onPrimary
+    val soft: Color get() = if (Sunlight.on) Sunlight.bg else Color(0xFFFFFFFF)
+    val chip: Color get() = if (Sunlight.on) Sunlight.chip else FieldIvory.disabled
+    val line: Color get() = if (Sunlight.on) Sunlight.hair else Color(0xFFD6D1C4)
+    val lineStrong: Color get() = if (Sunlight.on) Sunlight.sub else Color(0xFF8C8B86)
+    val sel: Color get() = if (Sunlight.on) Sunlight.sel else FieldIvory.primarySoft
+    val dot: Color get() = if (Sunlight.on) Sunlight.primary else FieldIvory.pressed
+    val ok: Color get() = if (Sunlight.on) Sunlight.fix else FieldIvory.fix
+    val bad: Color get() = if (Sunlight.on) Sunlight.error else FieldIvory.error
+    val warn: Color get() = if (Sunlight.on) Sunlight.float else FieldIvory.float
     val white = Color(0xFFFFFFFF)
 }
 
@@ -95,19 +107,21 @@ fun GcpPill(src: GnssSource, modifier: Modifier = Modifier, onClick: () -> Unit)
     val p = rememberPill(src)
     // 0.1.8 Field Ivory: 상태색 채움 + 흰 글자(FIX 초록 · FLOAT/대기 황토 · 불가 빨강), 연결 없음 = 흰 바탕 테두리
     val (bg, fg) = when (p.tone) {
-        PTone.FIXED -> FieldIvory.fix to G.white
-        PTone.CAUTION -> FieldIvory.float to G.white
-        PTone.BAD -> FieldIvory.error to G.white
+        PTone.FIXED -> G.ok to G.white
+        PTone.CAUTION -> G.warn to G.white
+        PTone.BAD -> G.bad to G.white
         else -> G.white to G.ink
     }
+    // 0.1.52 #5: 색 + 모양 ● FIX / ◐ FLOAT·대기 / ○ 없음·불가
+    val mark = when (p.tone) { PTone.FIXED -> StatusMark.FIX; PTone.CAUTION -> StatusMark.FLOAT; else -> StatusMark.NONE }
     Row(
         modifier.height(48.dp).clip(RoundedCornerShape(24.dp)).background(bg)
             .then(if (p.tone == PTone.NO_RECEIVER) Modifier.border(1.dp, G.line, RoundedCornerShape(24.dp)) else Modifier)
             .hClickable(onClickLabel = "수신기") { onClick() }
-            .padding(horizontal = 14.dp).semantics { contentDescription = p.text + (p.sub?.let { " $it" } ?: "") }.testTag("status_pill"),
+            .padding(horizontal = 14.dp).semantics { contentDescription = mark.glyph + " " + p.text + (p.sub?.let { " $it" } ?: "") }.testTag("status_pill"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Box(Modifier.size(9.dp).clip(CircleShape).background(if (p.tone == PTone.NO_RECEIVER) G.faint else G.white))
+        StatusDot(mark, if (p.tone == PTone.NO_RECEIVER) G.ink else G.white, 12.dp, Modifier.testTag("pill_mark_" + mark.name.lowercase()))
         Text(p.short, style = Ty.label.copy(fontWeight = FontWeight.Bold), color = fg, maxLines = 1, modifier = Modifier.testTag("pill_fix"))
         p.sub?.takeIf { p.tone == PTone.FIXED }?.let { Text(it.removePrefix("±") + " cm", style = Ty.coord.copy(fontSize = 16.sp), color = fg, maxLines = 1) }
     }
@@ -290,3 +304,15 @@ fun <T> TileGrid(items: List<T>, cols: Int, gap: Dp = 8.dp, cell: @Composable Ro
 }
 
 fun f3(v: Double) = String.format(Locale.US, "%.3f", v)
+
+/** 0.1.52 #9 햇빛 고대비: 첫 화면에서 한 번 눌러 켬/끔(선택만, 저장됨) */
+@Composable
+fun SunToggle(modifier: Modifier = Modifier) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val on = Sunlight.on
+    Box(modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp)).background(if (on) G.ink else G.white).border(1.5.dp, G.lineStrong, RoundedCornerShape(24.dp))
+        .hClickable(onClickLabel = "햇빛 고대비") { Sunlight.set(ctx, !on) }.padding(horizontal = 12.dp)
+        .semantics { contentDescription = "햇빛 고대비 " + if (on) "켬" else "끔" }.testTag("home_sun"), contentAlignment = Alignment.Center) {
+        Text(if (on) "☀ 고대비" else "☀ 햇빛", style = Ty.label.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold), color = if (on) G.bg else G.ink, maxLines = 1)
+    }
+}

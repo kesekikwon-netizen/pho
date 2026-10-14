@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -286,11 +287,11 @@ private fun MeasureButton(c: GcpController, modifier: Modifier) {
     }
     val dim = !busy && !noObj && (locked || (blocked && !notConn))
     Box(
-        modifier.height(FieldIvory.measureButton).clip(RoundedCornerShape(20.dp)).background(if (dim || (notConn && !noObj && !busy)) G.lineStrong else G.dark)
+        /* 0.1.52 #6 눌림 스프링 */ modifier.height(FieldIvory.measureButton).pressSpring(20.dp, 34.dp).background(if (dim || (notConn && !noObj && !busy)) G.lineStrong else G.dark)
             .hClickable(onClickLabel = label) { if (!locked || busy) c.onMeasureButton() }.testTag("measure_button"),
         contentAlignment = Alignment.Center,
     ) {
-        if (busy) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(c.progress.coerceIn(0f, 1f)).height(6.dp).background(Color.White.copy(alpha = 0.85f)).testTag("measure_progress"))
+        if (busy) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(6.dp).drawBehind { drawRect(Color.White.copy(alpha = 0.85f), size = size.copy(width = size.width * c.progress.coerceIn(0f, 1f))) }.testTag("measure_progress")) // 0.1.52 #4 그리기 단계에서만 읽음
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(label, style = Ty.button.copy(fontSize = 22.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium), color = G.onDark, maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.testTag("measure_label"))
             Text(sub, style = Ty.small.copy(fontSize = 16.sp, lineHeight = 21.sp), color = G.onDark, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 8.dp).testTag("measure_sub"))

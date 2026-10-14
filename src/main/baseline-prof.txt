@@ -1,0 +1,16 @@
+# 0.1.52 #2 Baseline Profile (손으로 작성 — 상자에 KVM 이 없어 에뮬레이터 매크로벤치마크로 생성 못 함)
+# 경로: 시작 → 유적 → 대상 → 표적 재기. Compose/AndroidX 라이브러리 프로파일은 자동으로 합쳐진다.
+HSPLkr/archsurvey/App;->**(**)**
+HSPLkr/archsurvey/MainActivity;->**(**)**
+HSPLkr/archsurvey/MainActivity$**;->**(**)**
+HSPLkr/archsurvey/gcp/ui/**;->**(**)**
+HSPLkr/archsurvey/gcp/model/**;->**(**)**
+HSPLkr/archsurvey/gcp/data/**;->**(**)**
+HSPLkr/archsurvey/ui/ThumbGesturesKt**;->**(**)**
+HSPLkr/archsurvey/ui/SunlightKt**;->**(**)**
+HSPLkr/archsurvey/ui/Sunlight;->**(**)**
+HSPLkr/archsurvey/ui/ThemeKt**;->**(**)**
+HSPLkr/archsurvey/ui/Fonts;->**(**)**
+HSPLkr/archsurvey/core/**;->**(**)**
+HSPLkr/archsurvey/map/**;->**(**)**
+HSPLkr/archsurvey/data/**;->**(**)**
