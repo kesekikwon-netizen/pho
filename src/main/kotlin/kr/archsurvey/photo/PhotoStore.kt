@@ -98,7 +98,7 @@ class PhotoStore(private val ctx: Context, private val dao: SurveyDao) {
             if (rot != 0) m.postRotate(rot.toFloat())
             bmp = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
         }
-        FileOutputStream(dst).use { bmp.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+        kr.archsurvey.io.AtomicFiles.write(dst) { bmp.compress(Bitmap.CompressFormat.JPEG, 90, it) }
         return true
     }
 
@@ -119,7 +119,7 @@ class PhotoStore(private val ctx: Context, private val dao: SurveyDao) {
         if (b != null) {
             val rot = try { f.inputStream().use { rotationOf(it) } } catch (_: Exception) { 0 }
             if (rot != 0) b = Bitmap.createBitmap(b, 0, 0, b.width, b.height, Matrix().apply { postRotate(rot.toFloat()) }, true)
-            FileOutputStream(thumbFile(rel)).use { b!!.compress(Bitmap.CompressFormat.JPEG, 80, it) }
+            kr.archsurvey.io.AtomicFiles.write(thumbFile(rel)) { b!!.compress(Bitmap.CompressFormat.JPEG, 80, it) }
             rel
         } else null
     } catch (_: Exception) { null }

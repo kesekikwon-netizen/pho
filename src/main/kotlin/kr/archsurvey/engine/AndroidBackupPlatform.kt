@@ -37,7 +37,7 @@ class AndroidBackupPlatform(private val ctx: Context, private val docs: DocBridg
         return withContext(Dispatchers.IO) {
             val dst = File(svc.dir, "imported_" + System.currentTimeMillis() + ".zip")
             try {
-                ctx.contentResolver.openInputStream(uri)?.use { i -> dst.outputStream().use { o -> i.copyTo(o) } } ?: throw BackupException("파일을 열 수 없어요")
+                ctx.contentResolver.openInputStream(uri)?.use { i -> kr.archsurvey.io.AtomicFiles.copy(i, dst) } ?: throw BackupException("파일을 열 수 없어요")
                 svc.validate(dst)
                 svc.list().firstOrNull { it.file.path == dst.path }?.toItem() ?: throw BackupException("백업 파일을 확인하지 못했어요")
             } catch (e: Exception) { dst.delete(); throw e }

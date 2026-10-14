@@ -1,5 +1,7 @@
 package kr.archsurvey.ui
 
+import kr.archsurvey.settingsTab
+
 import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
@@ -152,7 +154,7 @@ class Ui0111Test {
         rule.onNodeWithTag("settings_screen").assertIsDisplayed()
         assertTouchTargets("설정")
         shot("03_settings_menu")
-        rule.onNodeWithTag("set_vrs").performClick(); rule.waitForIdle()
+        rule.settingsTab(1).onNodeWithTag("set_vrs").performClick(); rule.waitForIdle()
         assertTrue(cc.open); assertEquals(ConnSection.VRS, cc.section)
         rule.onAllNodesWithTag("header_title").assertAny(hasText("VRS 설정"))
         rule.onNodeWithTag("conn_host").assertExists()
@@ -172,7 +174,7 @@ class Ui0111Test {
         rule.onNodeWithTag("conn_autoretry_note", useUnmergedTree = true).assertTextContains("다시 시도", substring = true)
         rule.onNodeWithTag("conn_back").performClick(); rule.waitForIdle()
         assertFalse(cc.open)
-        rule.onNodeWithTag("set_receiver").performClick(); rule.waitForIdle()
+        rule.settingsTab(1).onNodeWithTag("set_receiver").performClick(); rule.waitForIdle()
         assertEquals(ConnSection.ALL, cc.section)
         rule.onAllNodesWithTag("header_title").assertAny(hasText("장비 연결"))
         rule.onNodeWithTag("conn_model_trimble_r10").assertIsDisplayed()

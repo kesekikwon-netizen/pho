@@ -161,8 +161,8 @@ private fun LayerSliderRow(bg: BackgroundController, r: LayerRow) {
     Column(Modifier.fillMaxWidth().testTag("row_${r.id}")) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.heightIn(min = SurveyDims.MIN_TOUCH_DP.dp)) {
             Column(Modifier.weight(1f)) {
-                Text(r.name, style = Ty.label.copy(fontSize = 15.sp), color = t.ink)
-                r.badge?.let { Text(it, style = Ty.small.copy(fontSize = 11.sp), color = t.inkSub, modifier = Modifier.testTag("badge_${r.id}")) }
+                Text(r.name, style = Ty.label.copy(fontSize = 16.sp), color = t.ink)
+                r.badge?.let { Text(it, style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, modifier = Modifier.testTag("badge_${r.id}")) }
             }
             Text("${Math.round(r.opacity * 100).toInt()}%", style = Ty.coord, color = t.ink, textAlign = TextAlign.End, modifier = Modifier.width(48.dp).testTag("pct_${r.id}"))
             Spacer(Modifier.width(8.dp))
@@ -211,8 +211,8 @@ private fun ManageSheet(bg: BackgroundController) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
-                    Text(r.name, style = Ty.label.copy(fontSize = 15.sp), color = t.ink)
-                    r.badge?.let { Text(it, style = Ty.small.copy(fontSize = 11.sp), color = t.inkSub, modifier = Modifier.testTag("manage_badge_${r.id}")) }
+                    Text(r.name, style = Ty.label.copy(fontSize = 16.sp), color = t.ink)
+                    r.badge?.let { Text(it, style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, modifier = Modifier.testTag("manage_badge_${r.id}")) }
                 }
                 run {
                     val armed = bg.deleteArmedId == r.id
@@ -298,7 +298,7 @@ private fun InfoLine(k: String, v: String, tag: String) {
     val t = T
     Row(Modifier.fillMaxWidth()) {
         Text(k, style = Ty.small, color = t.inkSub, modifier = Modifier.width(56.dp))
-        Text(v, style = Ty.coord.copy(fontSize = 12.sp), color = t.ink, modifier = Modifier.weight(1f).testTag(tag))
+        Text(v, style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.weight(1f).testTag(tag))
     }
 }
 
@@ -321,7 +321,7 @@ private fun WarningSheet(bg: BackgroundController) {
         HeaderRow("좌표 확인", "warning") {}
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(t.caution.copy(alpha = 0.18f)).border(1.dp, t.caution, RoundedCornerShape(14.dp)).padding(10.dp)) {
             FileChip(p)
-            Text("⚠ $head", style = Ty.label.copy(fontSize = 15.sp), color = t.ink, modifier = Modifier.testTag("warning_head"))
+            Text("⚠ $head", style = Ty.label.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.testTag("warning_head"))
             for (m in o.messages.filterNot { it.contains("수동") || it.contains("직접 맞춰") }.take(3)) Text(m, style = Ty.small, color = t.inkSub)
             if (o.status == AlignStatus.NEEDS_MANUAL && o.fileToCrs == null) Text("위치와 크기를 알 수 없어 지도에 맞출 수 없어요.", style = Ty.small, color = t.inkSub)
         }

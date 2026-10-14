@@ -48,7 +48,7 @@ class BackupController(private val platform: BackupPlatform, private val scope: 
             try { ok(block()); notice?.let { onResult?.invoke(true, it) } }
             catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                error = (e as? kr.archsurvey.data.BackupException)?.message ?: "$label 중 문제가 생겼어요 (${e.javaClass.simpleName}). 저장 공간을 확인하세요."
+                error = (e as? kr.archsurvey.data.BackupException)?.message ?: UserError.of("backup:$label", e, "$label 중 문제가 생겼어요", "저장 공간을 확인하세요")
                 onResult?.invoke(false, error!!)
             } finally { running = false }
         }

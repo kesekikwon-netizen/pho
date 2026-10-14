@@ -468,6 +468,8 @@ class SurveyController(
     var drawerOpen by mutableStateOf(false)
     /** 0.1.11 홈(메인 메뉴). 앱 시작 때 MainActivity 가 켠다. 기본 false(시험·기존 화면은 바로 지도) */
     var homeOpen by mutableStateOf(false)
+    /** 0.1.46 설정 칸(0 일반 · 1 수신기 · 2 고급) — 다시 열면 마지막 칸 */
+    var settingsTab by mutableStateOf(0)
     /** 0.1.11 환경설정 목록 화면(목업 03) */
     var settingsMenuOpen by mutableStateOf(false)
     /** 0.1.14 목업 22 위치 모양 설정 창 */
@@ -587,7 +589,7 @@ class SurveyController(
     // ---------------- 측점 ----------------
 
     /** 결과 띠를 보이는 시간(ms). 띠가 사라져도 측점 버튼은 막히지 않고, 사진·음성·되돌리기는 계속 쓸 수 있다 */
-    var resultStripMs: Long = 2000L // 0.1.45: 지도 위 작은 알림 ~2초
+    var resultStripMs: Long = SurveyDesign.SAVED_NOTICE_MS // 0.1.46: 지도 위 작은 알림 3초 + 되돌리기
     /** 0.1.45: 점 자세히(점 저장·확인)는 사용자가 알림·점을 눌렀을 때만 연다 — 측정 뒤 자동으로 열지 않음 */
     var pointDetailOpen by mutableStateOf(false)
         private set

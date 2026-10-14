@@ -1,5 +1,7 @@
 package kr.archsurvey.ui
 
+import kr.archsurvey.settingsTab
+
 import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.*
@@ -156,7 +158,8 @@ class Ui0114MockupTest {
         // 03 환경설정 (목업 순서)
         // 0.1.35: 환경설정 목록 → 설정 한 화면(꼭 필요한 네 가지 + 측점 + 발굴 + 고급)
         ui { c.homeOpen = false; c.hub.open(ToolScreen.SETTINGS) }
-        for (tag in listOf("set_receiver", "set_vrs", "set_pole", "zone_toggle", "epochs_toggle", "set_strict_quality")) rule.onNodeWithTag(tag).performScrollTo().assertExists()
+        for (tag in listOf("set_receiver", "set_vrs", "set_pole", "zone_toggle")) rule.settingsTab(1).onNodeWithTag(tag).performScrollTo().assertExists()
+        for (tag in listOf("epochs_toggle", "set_strict_quality")) rule.settingsTab(0).onNodeWithTag(tag).performScrollTo().assertExists()
         shot("mockup_03_settings")
         // 03→RTK 설정
         reset(); ui { c.hub.open(ToolScreen.RTK) }; rule.onNodeWithTag("rtk_compat").assertExists(); shot("mockup_03b_rtk")

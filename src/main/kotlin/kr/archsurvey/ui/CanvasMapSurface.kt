@@ -70,8 +70,8 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
                 drawPath(path, areaCol.copy(alpha = 0.16f)); drawPath(path, areaCol, style = Stroke(2.2f * density))
             }
             for (lb in state.gridLabels) {
-                val r = tm.measure(lb.text, TextStyle(fontSize = 12.sp, color = areaCol, fontWeight = FontWeight.Normal))
-                safeText(tm, lb.text, Offset(sx(lb.at.x) - r.size.width / 2f, sy(lb.at.y) - r.size.height / 2f), TextStyle(fontSize = 12.sp, color = areaCol, fontWeight = FontWeight.Normal))
+                val r = tm.measure(lb.text, TextStyle(fontSize = 16.sp, color = areaCol, fontWeight = FontWeight.Normal))
+                safeText(tm, lb.text, Offset(sx(lb.at.x) - r.size.width / 2f, sy(lb.at.y) - r.size.height / 2f), TextStyle(fontSize = 16.sp, color = areaCol, fontWeight = FontWeight.Normal))
             }
             // 유구 외곽: 선/면 + 꼭짓점 번호
             for (o in state.outlines) {
@@ -84,9 +84,9 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
                 drawPath(path, col, style = Stroke(2.5f * density, pathEffect = if (o.active) PathEffect.dashPathEffect(floatArrayOf(10f * density, 6f * density)) else null))
                 o.pts.forEachIndexed { i, q ->
                     drawCircle(col, 4.5f * density, Offset(sx(q.x), sy(q.y)))
-                    safeText(tm, "${i + 1}", Offset(sx(q.x) + 6f * density, sy(q.y) + 2f * density), TextStyle(fontSize = 12.sp, color = col, fontWeight = FontWeight.Normal))
+                    safeText(tm, "${i + 1}", Offset(sx(q.x) + 6f * density, sy(q.y) + 2f * density), TextStyle(fontSize = 16.sp, color = col, fontWeight = FontWeight.Normal))
                 }
-                if (o.pts.size >= 2) safeText(tm, o.label, Offset(sx(o.pts[0].x) - 4f * density, sy(o.pts[0].y) - 24f * density), TextStyle(fontSize = 12.sp, color = col, fontWeight = FontWeight.Normal))
+                if (o.pts.size >= 2) safeText(tm, o.label, Offset(sx(o.pts[0].x) - 4f * density, sy(o.pts[0].y) - 24f * density), TextStyle(fontSize = 16.sp, color = col, fontWeight = FontWeight.Normal))
             }
             // 이동 꼬리
             if (state.trail.size >= 2) {
@@ -120,9 +120,9 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
                 {
                     // 0.1.14 점 이름 배경색(검정/흰색)
                     val dark = st.labelBg == kr.archsurvey.map.LabelBg.BLACK
-                    val lay = tm.measure(m.name, TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Normal))
+                    val lay = tm.measure(m.name, TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Normal))
                     drawRect(if (dark) t.ink.copy(alpha = 0.85f) else t.bg.copy(alpha = 0.85f), Offset(lt.x - 2f * density, lt.y), androidx.compose.ui.geometry.Size(lay.size.width + 4f * density, lay.size.height.toFloat()))
-                    drawText(tm, m.name, lt, TextStyle(fontSize = 12.sp, color = if (dark) t.bg else t.ink, fontWeight = FontWeight.Normal))
+                    drawText(tm, m.name, lt, TextStyle(fontSize = 16.sp, color = if (dark) t.bg else t.ink, fontWeight = FontWeight.Normal))
                 }
             }
             // 0.1.14 찾아갈 목표(깃발/십자)
@@ -144,7 +144,7 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
                 drawCircle(t.bg, 12f * density, o); drawCircle(t.primary, 12f * density, o, style = Stroke(2.5f * density))
                 drawLine(t.primary, Offset(o.x - 8f * density, o.y), Offset(o.x + 8f * density, o.y), 2.5f * density)
                 drawLine(t.primary, Offset(o.x, o.y - 8f * density), Offset(o.x, o.y + 8f * density), 2.5f * density)
-                haloText(tm, sk.text, Offset(o.x + 14f * density, o.y - 22f * density), TextStyle(fontSize = 13.sp, color = t.primary, fontWeight = FontWeight.Medium), t)
+                haloText(tm, sk.text, Offset(o.x + 14f * density, o.y - 22f * density), TextStyle(fontSize = 16.sp, color = t.primary, fontWeight = FontWeight.Medium), t)
             }
             // 0.1.30 T24: 폰 위치(참고) — 회색 속 빈 원 + 정확도 원 + 이름표. 수신기 표시(색 채운 모양)와 다르게
             state.phone?.let { ph ->
@@ -157,7 +157,7 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
                 drawCircle(grey, 8f * density, o, style = Stroke(3f * density))
                 val lt = Offset(o.x + 12f * density, o.y + 6f * density)
                 if (lt.x >= -200f * density && lt.y >= -40f * density && lt.x < size.width && lt.y < size.height) {
-                    val ts = TextStyle(fontSize = 11.sp, color = t.inkSub, fontWeight = FontWeight.Normal)
+                    val ts = TextStyle(fontSize = 16.sp, color = t.inkSub, fontWeight = FontWeight.Normal)
                     val lay = tm.measure(ph.label, ts)
                     drawRect(t.bg.copy(alpha = 0.85f), Offset(lt.x - 2f * density, lt.y), androidx.compose.ui.geometry.Size(lay.size.width + 4f * density, lay.size.height.toFloat()))
                     drawText(tm, ph.label, lt, ts)
@@ -262,11 +262,11 @@ private fun DrawScope.drawDigOutline(tm: androidx.compose.ui.text.TextMeasurer, 
     when (o.kind) {
         "area" -> {
             drawPath(path, ink, style = Stroke(3f * density, pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f * density, 7f * density))))
-            haloText(tm, o.label, Offset(sx(o.pts[0].x) + 6f * density, sy(o.pts[0].y) + 4f * density), TextStyle(fontSize = 12.sp, color = ink, fontFamily = Fonts.serif), t)
+            haloText(tm, o.label, Offset(sx(o.pts[0].x) + 6f * density, sy(o.pts[0].y) + 4f * density), TextStyle(fontSize = 16.sp, color = ink, fontFamily = Fonts.serif), t)
         }
         "trench" -> {
             drawPath(path, ink, style = Stroke(2f * density, pathEffect = PathEffect.dashPathEffect(floatArrayOf(7f * density, 5f * density))))
-            haloText(tm, o.label, Offset(sx(cx), sy(cy)), TextStyle(fontSize = 12.sp, color = ink, fontFamily = Fonts.mono), t)
+            haloText(tm, o.label, Offset(sx(cx), sy(cy)), TextStyle(fontSize = 16.sp, color = ink, fontFamily = Fonts.mono), t)
         }
         else -> if (o.active) {
             drawPath(path, t.primary, style = Stroke(2.5f * density))
@@ -275,11 +275,11 @@ private fun DrawScope.drawDigOutline(tm: androidx.compose.ui.text.TextMeasurer, 
                 if (i == o.pts.lastIndex) drawCircle(t.primary, 6.5f * density, p)
                 else { drawCircle(Color.White, 5.5f * density, p); drawCircle(t.primary, 5.5f * density, p, style = Stroke(2f * density)) }
             }
-            haloText(tm, o.label, Offset(sx(o.pts.last().x) - 20f * density, sy(o.pts.last().y) + 10f * density), TextStyle(fontSize = 15.sp, color = t.primary, fontFamily = Fonts.serif), t)
+            haloText(tm, o.label, Offset(sx(o.pts.last().x) - 20f * density, sy(o.pts.last().y) + 10f * density), TextStyle(fontSize = 16.sp, color = t.primary, fontFamily = Fonts.serif), t)
         } else {
             if (closed) drawPath(path, Color(0xFFF2E8DC).copy(alpha = 0.78f))
             drawPath(path, ink, style = Stroke(2.2f * density))
-            val st = TextStyle(fontSize = 15.sp, color = ink, fontFamily = Fonts.serif)
+            val st = TextStyle(fontSize = 16.sp, color = ink, fontFamily = Fonts.serif)
             val w = tm.measure(o.label, st).size.width
             haloText(tm, o.label, Offset(sx(cx) - w / 2f, sy(cy) - 10f * density), st, t)
         }
@@ -294,7 +294,7 @@ private fun DrawScope.drawSection(tm: androidx.compose.ui.text.TextMeasurer, s: 
     val dx = b.x - a.x; val dy = b.y - a.y; val len = kotlin.math.hypot(dx, dy).coerceAtLeast(1f)
     val nx = -dy / len * 8f * density; val ny = dx / len * 8f * density
     for (e in listOf(a, b)) drawLine(ink, Offset(e.x - nx, e.y - ny), Offset(e.x + nx, e.y + ny), 2.2f * density)
-    haloText(tm, s.label, Offset(a.x - 8f * density, a.y + 10f * density), TextStyle(fontSize = 12.sp, color = ink), t)
+    haloText(tm, s.label, Offset(a.x - 8f * density, a.y + 10f * density), TextStyle(fontSize = 16.sp, color = ink), t)
 }
 
 /** 유물 검은 네모+번호 · 레벨 ✕(+해발) · 기준점 △ · 말뚝 ✚ · 토층 끝 · 유구 꼭짓점(작은 점) */
@@ -305,24 +305,24 @@ private fun DrawScope.drawDigMarker(tm: androidx.compose.ui.text.TextMeasurer, m
         kr.archsurvey.map.MapSym.ARTIFACT -> {
             drawRect(Color.White, Offset(o.x - 5.5f * d, o.y - 5.5f * d), androidx.compose.ui.geometry.Size(11f * d, 11f * d))
             drawRect(ink, Offset(o.x - 4f * d, o.y - 4f * d), androidx.compose.ui.geometry.Size(8f * d, 8f * d))
-            m.label?.let { haloText(tm, it, Offset(o.x - 6f * d, o.y + 7f * d), TextStyle(fontSize = 12.sp, color = ink, fontFamily = Fonts.mono), t) }
+            m.label?.let { haloText(tm, it, Offset(o.x - 6f * d, o.y + 7f * d), TextStyle(fontSize = 16.sp, color = ink, fontFamily = Fonts.mono), t) }
         }
         kr.archsurvey.map.MapSym.LEVEL -> {
             drawLine(ink, Offset(o.x - 5f * d, o.y - 5f * d), Offset(o.x + 5f * d, o.y + 5f * d), 2f * d)
             drawLine(ink, Offset(o.x - 5f * d, o.y + 5f * d), Offset(o.x + 5f * d, o.y - 5f * d), 2f * d)
-            m.label?.let { haloText(tm, it, Offset(o.x + 7f * d, o.y - 8f * d), TextStyle(fontSize = 12.sp, color = ink, fontFamily = Fonts.mono), t) }
+            m.label?.let { haloText(tm, it, Offset(o.x + 7f * d, o.y - 8f * d), TextStyle(fontSize = 16.sp, color = ink, fontFamily = Fonts.mono), t) }
         }
         kr.archsurvey.map.MapSym.BM -> {
             val tri = Path().apply { moveTo(o.x, o.y - 9f * d); lineTo(o.x - 8f * d, o.y + 6f * d); lineTo(o.x + 8f * d, o.y + 6f * d); close() }
             drawPath(tri, Color.White); drawPath(tri, ink, style = Stroke(2.2f * d))
-            m.label?.let { haloText(tm, it, Offset(o.x + 11f * d, o.y - 9f * d), TextStyle(fontSize = 12.sp, color = ink, fontFamily = Fonts.mono), t) }
+            m.label?.let { haloText(tm, it, Offset(o.x + 11f * d, o.y - 9f * d), TextStyle(fontSize = 16.sp, color = ink, fontFamily = Fonts.mono), t) }
         }
         kr.archsurvey.map.MapSym.STAKE -> {
             drawLine(ink, Offset(o.x - 6f * d, o.y), Offset(o.x + 6f * d, o.y), 2.2f * d); drawLine(ink, Offset(o.x, o.y - 6f * d), Offset(o.x, o.y + 6f * d), 2.2f * d)
         }
         kr.archsurvey.map.MapSym.SECTION -> {
             drawCircle(ink, 3f * d, o)
-            m.label?.let { haloText(tm, it, Offset(o.x + 6f * d, o.y - 18f * d), TextStyle(fontSize = 12.sp, color = ink), t) }
+            m.label?.let { haloText(tm, it, Offset(o.x + 6f * d, o.y - 18f * d), TextStyle(fontSize = 16.sp, color = ink), t) }
         }
         kr.archsurvey.map.MapSym.VERTEX, kr.archsurvey.map.MapSym.DOT -> {}
     }

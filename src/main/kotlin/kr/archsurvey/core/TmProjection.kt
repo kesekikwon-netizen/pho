@@ -13,6 +13,11 @@ enum class KoreanTmZone(val epsg: Int, val labelKo: String, val lon0: Double) {
     EAST(5187, "동부원점 (EPSG:5187)", 129.0),
     EAST_SEA(5188, "동해원점 (EPSG:5188)", 131.0);
 
+    /** 0.1.46 화면 표시용 짧은 이름(서부·중부·동부·동해). 표시 전용, 좌표 계산과 무관 */
+    val shortKo: String get() = labelKo.substring(0, 2)
+    /** 머리줄 표기 「EPSG:5187 동부」 */
+    val displayKo: String get() = "EPSG:$epsg $shortKo"
+
     companion object {
         fun fromEpsg(e: Int) = entries.firstOrNull { it.epsg == e } ?: CENTRAL
     }

@@ -55,7 +55,7 @@ fun SetupSheet(c: SurveyController) {
                 BasicTextField(
                     memo, { if (it.length <= 60) memo = it.replace("\n", " ") }, singleLine = true, textStyle = Ty.body.copy(color = t.ink),
                     cursorBrush = SolidColor(t.accent), modifier = Modifier.fillMaxWidth().testTag("setup_memo"),
-                    decorationBox = { inner -> if (memo.isEmpty()) Text("메모 입력 (다음 점 하나에만)", style = Ty.small.copy(fontSize = 14.sp), color = t.inkSub); inner() },
+                    decorationBox = { inner -> if (memo.isEmpty()) Text("메모 입력 (다음 점 하나에만)", style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub); inner() },
                 )
             }
             Row(
@@ -99,7 +99,7 @@ fun SetupSheet(c: SurveyController) {
                 LinkBtn("점만", "setup_link_point", link == Link.POINT, Modifier.weight(1f)) { link = Link.POINT; newLink = false }
                 LinkBtn("새 연결 시작", "setup_new_link", newLink, Modifier.weight(1f)) { newLink = !newLink; if (newLink && link == Link.POINT) link = Link.LINE }
             }
-            if (link != Link.POINT) Text("선·면은 외곽 취득을 켜고 위치 종류를 ‘유구 경계점’으로 맞춰요" + if (newLink) " · 앞 외곽은 마무리해요" else "", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.testTag("setup_link_note"))
+            if (link != Link.POINT) Text("선·면은 외곽 취득을 켜고 위치 종류를 ‘유구 경계점’으로 맞춰요" + if (newLink) " · 앞 외곽은 마무리해요" else "", style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, modifier = Modifier.testTag("setup_link_note"))
             // 목업 16 「경사센서 사용」: 이 앱은 폰 기포(참고용, 좌표 미보정). 수신기 IMU 아님
             val tc = c.tilt
             val b = tc?.bubble
@@ -112,7 +112,7 @@ fun SetupSheet(c: SurveyController) {
                     b == null -> "읽는 중…"
                     else -> "X " + signedDms(Math.toDegrees(kotlin.math.asin(b.x.coerceIn(-1.0, 1.0)))) + " · Y " + signedDms(Math.toDegrees(kotlin.math.asin(b.y.coerceIn(-1.0, 1.0))))
                 }
-                Text(txt, style = Ty.coord.copy(fontSize = 13.sp), color = t.ink, maxLines = 1)
+                Text(txt, style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, maxLines = 1)
             }
           }
             Row(Modifier.fillMaxWidth().height(56.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

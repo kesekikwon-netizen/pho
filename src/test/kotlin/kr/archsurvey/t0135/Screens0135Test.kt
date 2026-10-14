@@ -1,5 +1,7 @@
 package kr.archsurvey.t0135
 
+import kr.archsurvey.settingsTab
+
 import android.content.Context
 import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
@@ -113,11 +115,11 @@ open class Screens0135Test {
         rule.onNodeWithTag("features_summary").assertExists()
         shot("10_features")
         dig { c.hub.back(); c.hub.open(ToolScreen.SETTINGS) }
-        rule.onNodeWithTag("set_receiver").assertExists()
-        rule.onNodeWithTag("set_pole").assertExists()
-        rule.onNodeWithTag("zone_toggle").assertExists()
+        rule.settingsTab(1).onNodeWithTag("set_receiver").assertExists()
+        rule.settingsTab(1).onNodeWithTag("set_pole").assertExists()
+        rule.settingsTab(1).onNodeWithTag("zone_toggle").assertExists()
         shot("11_settings")
-        rule.onNodeWithTag("mapbase_toggle").assertExists()
+        rule.settingsTab(2).onNodeWithTag("mapbase_toggle").assertExists()
         shot("12_settings_advanced")
         dig { c.hub.closeAll(); c.ui.hideToast() }
         assertTrue("점이 있으면 좌표계 잠김", c.dig.crsLocked)

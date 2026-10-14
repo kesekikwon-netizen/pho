@@ -56,7 +56,7 @@ internal fun D43Logo(size: Int = 36) {
     }
 }
 
-/** 시안 ① 홈 · 이어서 측량: 작업 카드 · 3칸 지표 · [이어서 측량][다른 작업] · 측량 전 준비 5단계 · 바로 가기 5 · 상태줄 */
+/** 0.1.46 시안 s01 홈: 지금 작업 카드(상태 칩 + 큰 「측량 계속하기」) · 다른 작업 · 새 작업 · 바로가기 3 · 측량 전 준비 */
 @Composable
 fun HomeToday(c: SurveyController) {
     rememberTick()
@@ -64,67 +64,114 @@ fun HomeToday(c: SurveyController) {
     val steps = d.prepSteps(ntripNow())
     val done = kr.archsurvey.dig.TodayPrep.doneCount(steps)
     val last = c.points.lastOrNull()
+    val site = c.jobs?.currentSite
     Column(Modifier.fillMaxSize().background(D.bg).testTag("home_screen")) {
-        Row(Modifier.fillMaxWidth().height(68.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            D43Logo()
-            Spacer(Modifier.width(10.dp))
-            Text("발굴 측량", style = DTy.serifM.copy(fontSize = 22.sp), color = D.ink, maxLines = 1, modifier = Modifier.testTag("home_title"))
-            Box(Modifier.padding(horizontal = 8.dp).width(1.dp).height(18.dp).background(D.line))
-            Text("현장 GNSS", style = DTy.small, color = D.sub, maxLines = 1, modifier = Modifier.weight(1f))
+        Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).padding(start = 20.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("발굴 측량", style = DTy.h1, color = D.ink, maxLines = 1, modifier = Modifier.testTag("home_title"))
+                Text(site ?: "현장 GNSS", style = DTy.small, color = D.sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
             D43StatusPill(c)
             HeaderIcon(Glyph.MENU, "메뉴", "home_settings") { c.drawerOpen = true }
         }
-        Box(Modifier.padding(horizontal = 16.dp)) { DRule() }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
-            Spacer(Modifier.height(14.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("이어서 측량", style = DTy.tiny, color = D.sub, modifier = Modifier.weight(1f))
-                last?.let { Text(timeLabel(it.measuredAtMs, c.nowMs()) + " 저장", style = DTy.monoS, color = D.sub, modifier = Modifier.testTag("home_saved_at")) }
-            }
-            Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(c.projectName, style = DTy.serif, color = D.ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("home_job"))
-                // 작업 정보(좌표계 · 높이 · 배경지도)
-                Box(Modifier.size(48.dp).hClickable { c.jobs?.openInfo() ?: c.hub.open(ToolScreen.JOB_INFO) }.semantics { contentDescription = "작업 정보" }.testTag("home_job_btn"), contentAlignment = Alignment.Center) {
-                    GlyphIcon(Glyph.CHEVRON_RIGHT, D.sub, 14.dp)
+        Box(Modifier.fillMaxWidth().height(1.dp).background(D.hair))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(Modifier.height(10.dp))
+            // 지금 작업 카드
+            val cardShape = RoundedCornerShape(20.dp)
+            Column(Modifier.fillMaxWidth().clip(cardShape).background(D.card).border(1.dp, D.hair, cardShape).padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("지금 작업", style = DTy.small, color = D.sub)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(c.projectName, style = DTy.h1.copy(fontSize = 24.sp, lineHeight = 30.sp), color = D.ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("home_job"))
+                    Box(Modifier.size(48.dp).hClickable { c.jobs?.openInfo() ?: c.hub.open(ToolScreen.JOB_INFO) }.semantics { contentDescription = "작업 정보" }.testTag("home_job_btn"), contentAlignment = Alignment.Center) {
+                        GlyphIcon(Glyph.CHEVRON_RIGHT, D.sub, 16.dp)
+                    }
+                }
+                Text(listOfNotNull(c.zone.displayKo, "오늘 ${d.todayCount()}점", last?.let { "마지막 " + SimpleDateFormat("HH:mm", Locale.KOREA).format(Date(it.measuredAtMs)) }, "해발 ${c.geoid.shortKo}").joinToString(" · "),
+                    style = DTy.small, color = D.sub, maxLines = 2, modifier = Modifier.testTag("home_job_info"))
+                last?.let { Text(timeLabel(it.measuredAtMs, c.nowMs()) + " 저장 · " + it.name, style = DTy.small, color = D.sub, maxLines = 1, modifier = Modifier.testTag("home_saved_at")) }
+                c.jobs?.currentFolder?.let { Text("폴더 · $it", style = DTy.small, color = D.weak, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("home_job_folder")) }
+                Row(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val conn = c.connection
+                    val rx = if (c.gv.noReceiver) "수신기 없음" else (conn?.profile?.displayName?.let { HeaderModel.shortModel(it) } ?: "수신기") + " 연결"
+                    HomeChip(rx, if (c.gv.noReceiver) D.bad else D.fix, "home_chip_rx")
+                    if (conn?.form?.enabled == true && conn.form.mount.isNotBlank()) HomeChip(conn.form.mount, D.fix, "home_chip_vrs")
+                    HomeChip("폴 " + String.format(Locale.US, "%.2f", c.antenna.inputValueM) + " m", D.accent, "home_chip_pole")
+                }
+                Box(
+                    Modifier.fillMaxWidth().height(FieldIvory.measureButton).clip(RoundedCornerShape(18.dp)).background(FieldIvory.primary)
+                        .hClickable { c.goToSurvey() }.semantics { contentDescription = "측량 계속하기" }.testTag("home_survey"),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("측량 계속하기", style = DTy.h1.copy(fontSize = 24.sp), color = FieldIvory.onPrimary)
+                        Text("지도에서 바로 측량", style = DTy.small, color = FieldIvory.onPrimary)
+                    }
                 }
             }
-            val site = c.jobs?.currentSite
-            Text(listOfNotNull(site, "EPSG:${c.zone.epsg}", "해발 ${c.geoid.shortKo}").joinToString(" · "), style = DTy.small, color = D.sub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp).testTag("home_job_info"))
-            c.jobs?.currentFolder?.let { Text("폴더 · $it", style = DTy.tiny, color = D.weak, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp).testTag("home_job_folder")) }
-            Spacer(Modifier.height(10.dp))
-            DMetrics(listOf(
-                Triple("마지막 점", last?.name ?: "—", ""),
-                Triple("오늘", "${d.todayCount()}", "점"),
-                Triple("폴", String.format(Locale.US, "%.2f", c.antenna.inputValueM), "m"),
-            ), "home_ledger", topRule = true)
-            Spacer(Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                DPrimary("이어서 측량", "home_survey", Modifier.weight(1f).height(62.dp)) { c.goToSurvey() }
-                DSecondary("다른 작업", "home_card_open", Modifier.width(112.dp).height(62.dp)) { c.jobs?.openList() ?: c.hub.open(ToolScreen.JOB_OPEN) }
+            // 다른 작업
+            Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("다른 작업", style = DTy.small.copy(fontWeight = FontWeight.Bold), color = D.sub, modifier = Modifier.weight(1f))
+                Box(Modifier.heightIn(min = 48.dp).hClickable { c.jobs?.openList() ?: c.hub.open(ToolScreen.JOB_OPEN) }.padding(horizontal = 8.dp).testTag("home_card_open"), contentAlignment = Alignment.Center) {
+                    Text("전체 보기 ›", style = DTy.small, color = D.accent)
+                }
             }
-            // 0.1.39 「새 작업」은 홈에서 한 번(사용자 요청 유지) — 시안 자리를 해치지 않게 가는 점선 단추
-            DChip("+ 새 작업 · 폴더 만들기", false, "home_new_job", Modifier.fillMaxWidth().padding(top = 10.dp), dashed = true) { c.jobs?.openNew() ?: c.ui.toast("작업 관리를 쓸 수 없어요") }
-            Spacer(Modifier.height(16.dp))
-            DRule()
-            Row(Modifier.padding(top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.Bottom) {
+            val listShape = RoundedCornerShape(18.dp)
+            Column(Modifier.fillMaxWidth().clip(listShape).background(D.card).border(1.dp, D.hair, listShape)) {
+                val others = c.jobs?.list?.filter { it.name != c.projectName }?.take(2).orEmpty()
+                others.forEachIndexed { i, j ->
+                    HomeListRow(Glyph.FOLDER, j.name, "${j.points}점" + (j.lastAtMs?.let { " · " + SimpleDateFormat("MM-dd", Locale.KOREA).format(Date(it)) } ?: ""), "home_other_$i") { c.jobs?.open(j.name) }
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(D.hair))
+                }
+                HomeListRow(Glyph.PLUS, "새 작업", "선택만으로 만들기", "home_new_job", plain = true) { c.jobs?.openNew() ?: c.ui.toast("작업 관리를 쓸 수 없어요") }
+            }
+            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HomeTileBox(Glyph.LIST, "점 목록", "home_points", Modifier.weight(1f)) { c.homeOpen = false; c.hub.open(ToolScreen.FEATURES) }
+                HomeTileBox(Glyph.EXPORT, "내보내기", "home_export", Modifier.weight(1f)) { c.exporter?.openScreen() }
+                HomeTileBox(Glyph.BT, "수신기", "home_receiver", Modifier.weight(1f)) { c.connection?.openScreen() ?: c.ui.toast("연결 화면을 열 수 없어요") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HomeTileBox(Glyph.GRID, "구역·그리드", "home_areas", Modifier.weight(1f)) { c.homeOpen = false; c.hub.open(ToolScreen.AREAS) }
+                HomeTileBox(Glyph.LOCATE, "점 찾아가기", "home_goto", Modifier.weight(1f)) { c.hub.open(ToolScreen.GOTO) }
+                HomeTileBox(Glyph.SLIDERS, "설정", "home_settings2", Modifier.weight(1f)) { c.hub.open(ToolScreen.SETTINGS) }
+            }
+            Row(Modifier.padding(top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.Bottom) {
                 Text("측량 전 준비", style = DTy.h2, color = D.ink)
                 Text("  ${steps.size}개 중 ${done}개 끝남", style = DTy.small, color = D.sub, modifier = Modifier.testTag("prep_count"))
             }
             steps.forEachIndexed { i, s -> D43PrepRow(c, i, s, i == steps.lastIndex) }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
         }
-        Column(Modifier.fillMaxWidth().background(D.bg)) {
-            Box(Modifier.padding(horizontal = 16.dp)) { DRule(false) }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
-                DIconTile(Glyph.LIST, "측량한 것", "home_points", Modifier.weight(1f)) { c.homeOpen = false; c.hub.open(ToolScreen.FEATURES) }
-                DIconTile(Glyph.GRID, "구역·그리드", "home_areas", Modifier.weight(1f)) { c.homeOpen = false; c.hub.open(ToolScreen.AREAS) }
-                DIconTile(Glyph.LOCATE, "점 찾아가기", "home_goto", Modifier.weight(1f)) { c.hub.open(ToolScreen.GOTO) }
-                DIconTile(Glyph.EXPORT, "내보내기", "home_export", Modifier.weight(1f)) { c.exporter?.openScreen() }
-                DIconTile(Glyph.SLIDERS, "설정", "home_settings2", Modifier.weight(1f)) { c.hub.open(ToolScreen.SETTINGS) }
-            }
-            DFootLine(listOf(homeHint(c, steps), backupLabel(c)), "home_foot")
+        DFootLine(listOf(homeHint(c, steps), backupLabel(c)), "home_foot")
+    }
+}
+
+@Composable
+private fun HomeChip(text: String, color: Color, tag: String) {
+    Text(text, style = DTy.small.copy(fontWeight = FontWeight.Bold), color = color, maxLines = 1,
+        modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(color.copy(alpha = 0.12f)).padding(horizontal = 10.dp, vertical = 4.dp).testTag(tag))
+}
+
+@Composable
+private fun HomeListRow(g: Glyph, title: String, sub: String, tag: String, plain: Boolean = false, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).hClickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp).testTag(tag), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(if (plain) D.chip else FieldIvory.primarySoft), contentAlignment = Alignment.Center) { GlyphIcon(g, if (plain) D.ink else D.accent, 22.dp) }
+        Column(Modifier.weight(1f).padding(start = 14.dp)) {
+            Text(title, style = DTy.bodyB, color = D.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(sub, style = DTy.small, color = D.sub, maxLines = 1)
         }
+        GlyphIcon(Glyph.CHEVRON_RIGHT, D.sub, 16.dp)
+    }
+}
+
+@Composable
+private fun HomeTileBox(g: Glyph, label: String, tag: String, modifier: Modifier, onClick: () -> Unit) {
+    val sh = RoundedCornerShape(16.dp)
+    Column(modifier.heightIn(min = 76.dp).clip(sh).background(D.card).border(1.5.dp, D.line, sh).hClickable(onClickLabel = label, onClick = onClick).padding(vertical = 8.dp).testTag(tag),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        GlyphIcon(g, D.ink, 24.dp)
+        Spacer(Modifier.height(6.dp))
+        Text(label, style = DTy.small.copy(fontWeight = FontWeight.Bold), color = D.ink, maxLines = 1)
     }
 }
 

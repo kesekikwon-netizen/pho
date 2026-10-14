@@ -16,7 +16,7 @@ class JobFolderWriter(val localRoot: File) {
         d.mkdirs()
         val f = File(d, name)
         if (f.isFile && f.length() == bytes.size.toLong() && f.readBytes().contentEquals(bytes)) return null
-        f.writeBytes(bytes)
+        kr.archsurvey.io.AtomicFiles.writeBytes(f, bytes)
         return f
     }
 
@@ -26,7 +26,7 @@ class JobFolderWriter(val localRoot: File) {
         val d = File(dir(rel), sub).also { it.mkdirs() }
         val f = File(d, name)
         if (f.isFile && f.length() == src.length()) return null
-        src.inputStream().use { i -> f.outputStream().use { o -> i.copyTo(o) } }
+        src.inputStream().use { i -> kr.archsurvey.io.AtomicFiles.copy(i, f) }
         return f
     }
 

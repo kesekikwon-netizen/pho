@@ -1,5 +1,7 @@
 package kr.archsurvey.ui
 
+import kr.archsurvey.settingsTab
+
 import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.*
@@ -57,7 +59,7 @@ class TiltScreenTest {
     @Test fun bubbleShowsAngleAndWarnsOverLimitWithoutAddingButtons() {
         val (c, tc) = setup()
         rule.runOnUiThread { repeat(60) { tc.onSample(tiltReading(0.8, 0.4)) } }; rule.waitForIdle()
-        rule.onNodeWithTag("tilt_bubble").assertExists().assertHasNoClickAction()
+        rule.onNodeWithTag("tilt_bubble", useUnmergedTree = true).assertExists() // 0.1.46: 「다음 점」 줄(누르면 무엇을 잴까요) 안에 합쳐짐 — 기포 표시 자체는 단추가 아님
         rule.onNodeWithTag("tilt_angle", useUnmergedTree = true).assertTextContains("0.9°", substring = true)
         shot("k1_bubble_ok")
         rule.runOnUiThread { repeat(80) { tc.onSample(tiltReading(2.6, 1.2)) } }; rule.waitForIdle()
@@ -77,7 +79,7 @@ class TiltScreenTest {
         val p = FakeTiltPlatform()
         val (c, tc) = setup(p)
         rule.runOnUiThread { repeat(60) { tc.onSample(tiltReading(3.0)) }; c.hub.open(ToolScreen.SETTINGS) }; rule.waitForIdle()
-        rule.onNodeWithTag("tilt_toggle").performScrollTo().performClick(); rule.waitForIdle()
+        rule.settingsTab(1).onNodeWithTag("tilt_toggle").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("tilt_plus").performScrollTo().performClick(); rule.waitForIdle()
         assertEquals(2.5, p.limitDeg, 0.0)
         rule.onNodeWithTag("tilt_policy_block").performScrollTo().performClick(); rule.waitForIdle()
@@ -85,14 +87,14 @@ class TiltScreenTest {
         rule.onNodeWithTag("tilt_calibrate").performScrollTo().performClick(); rule.waitForIdle()
         assertNotNull(p.reference)
         rule.onNodeWithTag("tilt_note").assertTextContains("영점을 잡았어요", substring = true)
-        rule.onNodeWithTag("tilt_toggle").performScrollTo()
+        rule.settingsTab(1).onNodeWithTag("tilt_toggle").performScrollTo()
         shot("k4_settings_tilt")
     }
 
     @Test fun noSensorPhoneShowsNoticeAndNoBubble() {
         val (c, _) = setup(FakeTiltPlatform(available = false))
-        rule.onNodeWithTag("tilt_bubble").assertDoesNotExist()
+        rule.onNodeWithTag("tilt_bubble", useUnmergedTree = true).assertDoesNotExist()
         rule.runOnUiThread { c.hub.open(ToolScreen.SETTINGS) }; rule.waitForIdle()
-        rule.onNodeWithTag("tilt_no_sensor").performScrollTo().assertExists()
+        rule.settingsTab(1).onNodeWithTag("tilt_no_sensor").performScrollTo().assertExists()
     }
 }

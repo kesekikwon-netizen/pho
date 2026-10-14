@@ -1,5 +1,7 @@
 package kr.archsurvey.ui
 
+import kr.archsurvey.settingsTab
+
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -77,8 +79,8 @@ class Ui0128VoiceTest {
         val (c) = setup(RecognizerMode.ON_DEVICE)
         c.hub.open(ToolScreen.SETTINGS)
         rule.waitForIdle()
-        rule.onNodeWithTag("set_voice_save").performScrollTo()
-        rule.onNodeWithTag("set_voice_save").assertExists()
+        rule.settingsTab(2).onNodeWithTag("set_voice_save").performScrollTo()
+        rule.settingsTab(2).onNodeWithTag("set_voice_save").assertExists()
         rule.onNodeWithTag("set_voice_mode").assertTextContains("오프라인", substring = true)
     }
 }

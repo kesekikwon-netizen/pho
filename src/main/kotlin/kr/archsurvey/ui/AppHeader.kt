@@ -75,12 +75,12 @@ fun StatusPill(c: SurveyController, modifier: Modifier = Modifier) {
         Row(Modifier.height(36.dp).clip(shape).background(t.raised).border(1.dp, t.line.copy(alpha = 0.5f), shape), verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.padding(start = 10.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 GlyphIcon(Glyph.SAT, t.ink, 14.dp)
-                Text(p.sats, style = Ty.coord.copy(fontSize = 13.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("pill_sats"))
+                Text(p.sats, style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("pill_sats"))
             }
             Box(Modifier.width(1.dp).fillMaxHeight().background(t.line.copy(alpha = 0.5f)))
-            Text(p.correction, style = Ty.small.copy(fontSize = 12.sp), color = corrColor, maxLines = 1, modifier = Modifier.padding(horizontal = 8.dp).testTag("pill_corr"))
+            Text(p.correction, style = Ty.small.copy(fontSize = 16.sp), color = corrColor, maxLines = 1, modifier = Modifier.padding(horizontal = 8.dp).testTag("pill_corr"))
             Box(Modifier.fillMaxHeight().background(fbg).padding(horizontal = 12.dp).testTag("pill_fix_bg"), contentAlignment = Alignment.Center) {
-                Text(p.fix, style = Ty.label.copy(fontSize = 13.sp), color = ffg, maxLines = 1, modifier = Modifier.testTag("pill_fix"))
+                Text(p.fix, style = Ty.label.copy(fontSize = 16.sp), color = ffg, maxLines = 1, modifier = Modifier.testTag("pill_fix"))
             }
         }
     }
@@ -115,7 +115,7 @@ fun AppHeader(
             }
         }
         if (!compact && c != null) {
-            Text("작업 · " + c.projectName, style = Ty.small.copy(fontSize = 12.sp, lineHeight = 15.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            Text("작업 · " + c.projectName, style = Ty.small.copy(fontSize = 16.sp, lineHeight = 21.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 6.dp).testTag("header_job"))
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.35f)))
@@ -169,16 +169,16 @@ internal fun StatusBand(c: SurveyController, compact: Boolean = false, modifier:
         Box(Modifier.size(10.dp).clip(CircleShape).background(dot))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(main, style = Ty.label.copy(fontSize = 14.sp, lineHeight = 17.sp), color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).testTag("status_main"))
-                if (compact && detail != null) Text(" · $detail", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("status_detail"))
+                Text(main, style = Ty.label.copy(fontSize = 16.sp, lineHeight = 21.sp), color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).testTag("status_main"))
+                if (compact && detail != null) Text(" · $detail", style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("status_detail"))
                 else Spacer(Modifier.weight(1f))
-                if (sigma != null) Text("±" + f3(sigma) + " m", style = Ty.coord.copy(fontSize = 13.sp), color = t.ink, maxLines = 1, modifier = Modifier.padding(start = 8.dp).testTag("status_sigma"))
-                else if (!notConnected && c.gv.sigmaMissingOnFix) Text("H — · V — · " + HeaderModel.SIGMA_MISSING, style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1, modifier = Modifier.padding(start = 8.dp).testTag("status_sigma_note"))
+                if (sigma != null) Text("±" + f3(sigma) + " m", style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, maxLines = 1, modifier = Modifier.padding(start = 8.dp).testTag("status_sigma"))
+                else if (!notConnected && c.gv.sigmaMissingOnFix) Text("H — · V — · " + HeaderModel.SIGMA_MISSING, style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, maxLines = 1, modifier = Modifier.padding(start = 8.dp).testTag("status_sigma_note"))
             }
             if (!compact) Row(verticalAlignment = Alignment.CenterVertically) {
-                if (sub != null) Text(sub, style = Ty.small.copy(fontSize = 12.sp, lineHeight = 15.sp), color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = detail == null).testTag("status_sub"))
-                if (sub != null && detail != null) Text(" · ", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub)
-                if (detail != null) Text(detail, style = Ty.small.copy(fontSize = 12.sp, lineHeight = 15.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("status_detail"))
+                if (sub != null) Text(sub, style = Ty.small.copy(fontSize = 16.sp, lineHeight = 21.sp), color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = detail == null).testTag("status_sub"))
+                if (sub != null && detail != null) Text(" · ", style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub)
+                if (detail != null) Text(detail, style = Ty.small.copy(fontSize = 16.sp, lineHeight = 21.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("status_detail"))
             }
         }
     }
@@ -231,8 +231,8 @@ fun GnssInfoDialog(c: SurveyController) {
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
             rows.forEachIndexed { i, (k, v) ->
                 Row(Modifier.fillMaxWidth().height(34.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(k, style = Ty.small.copy(fontSize = 13.sp), color = t.inkSub, modifier = Modifier.weight(1f))
-                    Text(v, style = Ty.coord.copy(fontSize = 13.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("gnss_info_$i"))
+                    Text(k, style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, modifier = Modifier.weight(1f))
+                    Text(v, style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("gnss_info_$i"))
                 }
                 if (i < rows.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.25f)))
             }

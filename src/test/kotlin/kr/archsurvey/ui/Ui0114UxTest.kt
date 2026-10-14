@@ -1,5 +1,7 @@
 package kr.archsurvey.ui
 
+import kr.archsurvey.settingsTab
+
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -71,13 +73,13 @@ class Ui0114UxTest {
         setup()
         rule.onNodeWithTag("home_settings2").performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
         assertTrue("탭 햅틱", TapHaptics.taps >= 1)
-        rule.onNodeWithTag("zone_toggle").performClick(); rule.waitForIdle()
+        rule.settingsTab(1).onNodeWithTag("zone_toggle").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("job_exit").performClick(); rule.waitForIdle()
         assertTrue(TapHaptics.taps >= 3)
         // 진동 끔 → 탭 햅틱도 끔
         rule.runOnUiThread { c.settingsState!!.changeVibration(false) }; rule.waitForIdle()
         val before = TapHaptics.taps
-        rule.onNodeWithTag("zone_toggle").performClick(); rule.waitForIdle()
+        rule.settingsTab(1).onNodeWithTag("zone_toggle").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("job_exit").performClick(); rule.waitForIdle()
         assertEquals(before, TapHaptics.taps)
     }

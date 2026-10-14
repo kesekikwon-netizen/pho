@@ -33,7 +33,7 @@ class AndroidBgFiles(private val ctx: Context, private val docs: DocBridge, priv
         for (u in uris) {
             val name = displayName(u)?.replace(Regex("[\\\\/:*?\"<>|]"), "_") ?: "file_${out.size}"
             val dst = File(dir, name)
-            runCatching { ctx.contentResolver.openInputStream(u)?.use { i -> dst.outputStream().use { o -> i.copyTo(o) } } }
+            runCatching { ctx.contentResolver.openInputStream(u)?.use { i -> kr.archsurvey.io.AtomicFiles.copy(i, dst) } }
                 .onSuccess { if (dst.exists()) out += dst }
         }
         return out

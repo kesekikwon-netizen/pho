@@ -1,5 +1,7 @@
 package kr.archsurvey.ui
 
+import kr.archsurvey.settingsTab
+
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -72,7 +74,7 @@ class Ui0116HapticTest {
         assertTrue("탭 카운트", TapHaptics.taps >= 1)
         // Robolectric 에서는 performHapticFeedback 가 보통 false → Vibrator 경로
         assertTrue("직접 진동기 펄스(시스템 터치진동 OFF 대비)", TapHaptics.directPulses >= 1)
-        rule.onNodeWithTag("zone_toggle").performClick(); rule.waitForIdle()
+        rule.settingsTab(1).onNodeWithTag("zone_toggle").performClick(); rule.waitForIdle()
         assertTrue(TapHaptics.taps >= 2)
         assertTrue(TapHaptics.directPulses >= 2)
     }

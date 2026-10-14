@@ -73,7 +73,7 @@ fun PointConfirmScreen(c: SurveyController) {
             rows.forEachIndexed { i, (k, v) ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 5.dp).testTag("confirm_row_$i")) {
                     Text(k, style = DTy.small, color = D.sub, modifier = Modifier.width(82.dp))
-                    Text(v, style = DTy.mono.copy(fontSize = 13.5.sp), color = D.ink)
+                    Text(v, style = DTy.mono.copy(fontSize = 16.sp), color = D.ink)
                 }
             }
             if (p.samples.isNotEmpty()) {

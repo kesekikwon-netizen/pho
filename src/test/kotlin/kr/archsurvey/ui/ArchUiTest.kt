@@ -115,14 +115,14 @@ class ArchUiTest {
         start()
         ui { c.hub.open(ToolScreen.TYPES) }
         val n0 = c.types.size
-        rule.onNodeWithTag("type_new_field").performTextInput("토층점"); rule.onNodeWithTag("type_add").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("type_new_field").performScrollTo().performTextInput("토층점"); rule.onNodeWithTag("type_add").performScrollTo().performClick(); rule.waitForIdle()
         assertEquals(n0 + 1, c.types.size); assertEquals("토층점", c.types.last())
-        rule.onNodeWithTag("type_new_field").performTextInput("아주아주긴이름이다아"); rule.onNodeWithTag("type_add").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("types_msg").assertExists()
+        rule.onNodeWithTag("type_new_field").performScrollTo().performTextInput("아주아주긴이름이다아"); rule.onNodeWithTag("type_add").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("types_msg").performScrollTo().assertExists()
         assertEquals(n0 + 1, c.types.size)
-        rule.onNodeWithTag("type_up_$n0").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("type_up_$n0").performScrollTo().performClick(); rule.waitForIdle()
         assertEquals("토층점", c.types[n0 - 1])
-        rule.onNodeWithTag("type_del_${n0 - 1}").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("type_del_${n0 - 1}").performScrollTo().performClick(); rule.waitForIdle()
         assertFalse(c.types.contains("토층점"))
         shot("a3_types")
     }
@@ -132,7 +132,7 @@ class ArchUiTest {
         val p = c.points.single()
         ui { c.dupPrompt = DupPrompt(p.copy(name = "새"), p, 0.012, SurveyStatus.FIXED) }
         rule.onNodeWithTag("dup_sheet").assertExists()
-        rule.onNodeWithTag("dup_text").assertTextContains("0.012", substring = true)
+        rule.onNodeWithTag("dup_text").assertTextContains("0.01 m", substring = true)
         rule.onNodeWithTag("dup_resurvey").assertExists(); rule.onNodeWithTag("dup_new").assertExists()
         shot("a4_duplicate")
         rule.onNodeWithTag("dup_discard").performClick(); rule.waitForIdle()
@@ -174,7 +174,7 @@ class ArchUiTest {
         rule.onNodeWithTag("setup_sheet").assertExists()
         rule.onNodeWithTag("setup_name", useUnmergedTree = true).assertTextEquals(c.nextName)
         rule.onNodeWithTag("setup_memo").performTextInput("북동 모서리")
-        rule.onNodeWithTag("setup_link_area").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("setup_link_area").performScrollTo().performClick(); rule.waitForIdle()
         shot("a8_setup_sheet")
         rule.onNodeWithTag("setup_apply").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("setup_sheet").assertDoesNotExist()
@@ -185,7 +185,7 @@ class ArchUiTest {
         assertEquals("비고는 한 번만 붙는다", "", c.pendingMemo)
         // 취소는 아무것도 바꾸지 않음
         rule.onNodeWithTag("measure_button").performTouchInput { longClick() }; rule.waitForIdle()
-        rule.onNodeWithTag("setup_link_point").performClick(); rule.onNodeWithTag("setup_cancel").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("setup_link_point").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.waitForIdle(); rule.onNodeWithTag("setup_cancel").performClick(); rule.waitForIdle()
         assertTrue(c.arch.outlineMode)
     }
 }

@@ -594,7 +594,7 @@ class ConnectionController(
                     else ui.ok("마운트 목록 ${list.size}개 받음")
                 }
             } catch (e: CancellationException) { throw e } catch (e: Throwable) {
-                mountFail(e.message?.take(120) ?: e.javaClass.simpleName)
+                mountFail(UserError.of("ntrip:mounts", e, "마운트 목록을 받지 못했어요", "주소·포트·인터넷을 확인하세요"))
             }
         }
     }

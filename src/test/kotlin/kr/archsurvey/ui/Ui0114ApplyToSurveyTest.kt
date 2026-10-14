@@ -1,5 +1,7 @@
 package kr.archsurvey.ui
 
+import kr.archsurvey.settingsTab
+
 import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.*
@@ -134,7 +136,7 @@ class Ui0114ApplyToSurveyTest {
     @Test fun applyFromSettingsScreenNavigatesToSurvey() {
         setup()
         rule.onNodeWithTag("home_settings2").performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
-        rule.onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
+        rule.settingsTab(1).onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
         assertEquals("tool:JOB_INFO", c.visibleRoute())
         pickEast()
         rule.onNodeWithTag("job_apply").performClick(); rule.waitForIdle()
@@ -159,7 +161,7 @@ class Ui0114ApplyToSurveyTest {
         val before = c.jobConfig()
         cfgs.save("te1", before)
         rule.onNodeWithTag("home_settings2").performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
-        rule.onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
+        rule.settingsTab(1).onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
         pickEast()
         rule.onNodeWithTag("job_exit").performClick(); rule.waitForIdle()
         assertEquals("tool:SETTINGS", c.visibleRoute())
@@ -167,7 +169,7 @@ class Ui0114ApplyToSurveyTest {
         assertEquals(before.epsg, c.zone.epsg); assertEquals(before.geoid, c.geoid); assertEquals(before.mapBase, c.mapBase)
         assertEquals(before, cfgs.load("te1"))
         // 다시 열면 폼은 저장된 값(나가기로 바꾼 값은 버려짐)
-        rule.onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
+        rule.settingsTab(1).onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("job_zone_value", useUnmergedTree = true).assertTextContains(before.epsg.toString(), substring = true)
         rule.onNodeWithTag("tool_back").performClick(); rule.waitForIdle()
         assertEquals("tool:SETTINGS", c.visibleRoute())
@@ -222,7 +224,7 @@ class Ui0114ApplyToSurveyTest {
         setup()
         val before = c.jobConfig(); cfgs.save("te1", before)
         rule.onNodeWithTag("home_settings2").performClick() /* 0.1.38: 머리줄 ≡ = 메뉴, 설정은 아래 바로가기 */; rule.waitForIdle()
-        rule.onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
+        rule.settingsTab(1).onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
         pickEast()
         rule.runOnUiThread { backTarget(c)!!.invoke() }; rule.waitForIdle()
         assertEquals("tool:SETTINGS", c.visibleRoute())

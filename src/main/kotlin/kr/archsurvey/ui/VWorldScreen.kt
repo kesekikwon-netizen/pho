@@ -80,7 +80,7 @@ class VWorldSettingsState(private val p: MapKeyPlatform, private val scope: Coro
         val a = if (keyInput.isNotBlank()) VWorldAccess(keyInput.trim(), domainInput.trim(), lineOnly) else access.copy(domain = domainInput.trim(), lineOnly = lineOnly)
         testing = true; testResult = null
         scope.launch {
-            val r = try { withContext(io) { p.test(a) } } catch (e: Exception) { "시험 실패 (${e.javaClass.simpleName})" }
+            val r = try { withContext(io) { p.test(a) } } catch (e: Exception) { UserError.of("vworld:test", e, "시험에 실패했어요", "인터넷 연결을 확인하세요") }
             testResult = r; testing = false
             onResult?.invoke(VWorldTestText.isOk(r), "V월드 연결 시험 · $r")
         }

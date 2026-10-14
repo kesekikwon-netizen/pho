@@ -156,8 +156,8 @@ private fun MountPicker(cc: ConnectionController) {
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(m.mountPoint, style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.weight(1f))
-                            cc.mountGoodNote(m)?.let { Text(it, style = Ty.label.copy(fontSize = 12.sp), color = t.ink, modifier = Modifier.padding(end = 6.dp).testTag("mount_good_${m.mountPoint}")) }
-                            if (on) Text("선택됨", style = Ty.label.copy(fontSize = 12.sp), color = t.accentText)
+                            cc.mountGoodNote(m)?.let { Text(it, style = Ty.label.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.padding(end = 6.dp).testTag("mount_good_${m.mountPoint}")) }
+                            if (on) Text("선택됨", style = Ty.label.copy(fontSize = 16.sp), color = t.accentText)
                         }
                         Text(mountLine(m, cc.mountFromKnown), style = Ty.small, color = t.inkSub, maxLines = 2)
                         cc.mountCompatNote(m)?.let { Text(it, style = Ty.small, color = t.bad, maxLines = 1, modifier = Modifier.testTag("mount_warn_${m.mountPoint}")) }
@@ -340,7 +340,7 @@ private fun DeviceSection(cc: ConnectionController, link: kr.archsurvey.device.L
             GlyphIcon(Glyph.POLE, D.ink, 20.dp)
             Column(Modifier.weight(1f)) {
                 Text(name.replace(", ", " · "), style = DTy.bodyB.copy(fontSize = 17.sp), color = D.ink, maxLines = 1)
-                Text(addr, style = DTy.monoS.copy(fontSize = 11.sp), color = D.sub, maxLines = 1)
+                Text(addr, style = DTy.monoS.copy(fontSize = 16.sp), color = D.sub, maxLines = 1)
             }
             if (isLive) Text("연결됨", style = DTy.small, color = D.fix) else if (on) Text("고름", style = DTy.small, color = D.ink)
         }
@@ -381,7 +381,7 @@ private fun ConnHelpSection(cc: ConnectionController, link: kr.archsurvey.device
     if (cc.showDiag) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("연결 방식 " + (link.strategy ?: "—") + " · 상태 " + linkText(link.state) + (link.error?.let { " · 오류 ${it.code}" } ?: "") + " · 시도 ${link.attempt}회", style = DTy.small, color = D.ink, modifier = Modifier.testTag("conn_diag_link"))
         val d = remember(link, cc.showDiag) { cc.diagnostics() }
-        Text(d.ifBlank { "아직 기록된 진단이 없어요. 연결을 시도하면 NMEA 자동 켜기 명령·응답(ACK)과 위치 문장(GGA) 수신 여부가 여기에 남아요." }, style = DTy.monoS.copy(fontSize = 11.sp, lineHeight = 15.sp), color = D.sub, modifier = Modifier.testTag("conn_diag_text"))
+        Text(d.ifBlank { "아직 기록된 진단이 없어요. 연결을 시도하면 NMEA 자동 켜기 명령·응답(ACK)과 위치 문장(GGA) 수신 여부가 여기에 남아요." }, style = DTy.monoS.copy(fontSize = 16.sp, lineHeight = 21.sp), color = D.sub, modifier = Modifier.testTag("conn_diag_text"))
         Text("전체 기록 공유: 설정 › 버전 · 오류 기록", style = DTy.small, color = D.sub)
     }
     // 연결 전 확인: 모두 체크했으면 한 줄로 접는다
@@ -410,7 +410,7 @@ private fun ToggleLine(label: String, sub: String, on: Boolean, tag: String, war
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(label, style = Ty.body.copy(fontSize = 15.sp), color = t.ink)
+            Text(label, style = Ty.body.copy(fontSize = 16.sp), color = t.ink)
             Text(sub, style = Ty.small, color = if (warn) t.bad else t.inkSub, modifier = Modifier.testTag(tag + "_note"))
         }
         Switch(on, null, modifier = Modifier.testTag(tag), colors = blackSwitch())
@@ -423,7 +423,7 @@ private fun FormRow(label: String, content: @Composable BoxScope.() -> Unit) {
     val t = T
     Column {
         Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = Ty.body.copy(fontSize = 15.sp), color = t.ink, modifier = Modifier.width(100.dp))
+            Text(label, style = Ty.body.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.width(100.dp))
             Box(Modifier.weight(1f), content = content)
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.25f)))
@@ -437,7 +437,7 @@ private fun FormInput(value: String, tag: String, placeholder: String = "", kb: 
     Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(shape).background(t.raised).border(1.dp, t.outline.copy(alpha = 0.6f), shape).padding(horizontal = 14.dp), contentAlignment = Alignment.CenterStart) {
         androidx.compose.foundation.text.BasicTextField(
             value, onChange, singleLine = true, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag(tag),
-            textStyle = Ty.coord.copy(fontSize = 15.sp, color = t.ink), cursorBrush = androidx.compose.ui.graphics.SolidColor(t.ink),
+            textStyle = Ty.coord.copy(fontSize = 16.sp, color = t.ink), cursorBrush = androidx.compose.ui.graphics.SolidColor(t.ink),
             keyboardOptions = KeyboardOptions(keyboardType = kb),
             visualTransformation = if (hide) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
             decorationBox = { inner -> Box(Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.CenterStart) { if (value.isEmpty() && placeholder.isNotEmpty()) Text(placeholder, style = Ty.body, color = t.inkSub); inner() } },
@@ -453,7 +453,7 @@ private fun FormSelect(value: String, tag: String, onClick: () -> Unit) {
         Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(shape).background(t.raised).border(1.dp, t.outline.copy(alpha = 0.6f), shape).hClickable(onClick = onClick).padding(horizontal = 14.dp).testTag(tag),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(value, style = Ty.coord.copy(fontSize = 15.sp), color = t.ink, maxLines = 1, modifier = Modifier.weight(1f))
+        Text(value, style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, maxLines = 1, modifier = Modifier.weight(1f))
         GlyphIcon(Glyph.CHEVRON_DOWN, t.ink, 18.dp)
     }
 }
@@ -472,7 +472,7 @@ private fun VrsSection(cc: ConnectionController, ntrip: kr.archsurvey.engine.Ntr
                 Modifier.fillMaxWidth().heightIn(min = 60.dp).toggleable(cc.form.enabled, role = androidx.compose.ui.semantics.Role.Switch) { cc.updateForm(cc.form.copy(enabled = it)) }.testTag("conn_ntrip_row"),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("VRS 사용", style = Ty.body.copy(fontSize = 15.sp), color = t.ink, modifier = Modifier.weight(1f))
+                Text("VRS 사용", style = Ty.body.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.weight(1f))
                 Switch(cc.form.enabled, null, modifier = Modifier.testTag("conn_ntrip_switch"), colors = blackSwitch())
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.25f)))
@@ -529,10 +529,10 @@ private fun VrsSection(cc: ConnectionController, ntrip: kr.archsurvey.engine.Ntr
                 Box(Modifier.size(10.dp).clip(androidx.compose.foundation.shape.CircleShape).background(dot))
                 Text(ntripText(ntrip.state), style = Ty.label, color = t.ink)
             }
-            Text(meterLine, style = Ty.coord.copy(fontSize = 12.sp), color = t.ink, modifier = Modifier.testTag("conn_vrs_meter"))
+            Text(meterLine, style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.testTag("conn_vrs_meter"))
             Text(
                 "누적 " + String.format(java.util.Locale.US, "%.1f", ntrip.rtcmBytes / 1024.0) + " kB · 프레임 ${ntrip.framesOk}" + (if (ntrip.crcErrors > 0) " · CRC 오류 ${ntrip.crcErrors}" else "") + if (ntrip.paused) " · 수신기 위치 대기" else "",
-                style = Ty.coord.copy(fontSize = 12.sp), color = t.inkSub,
+                style = Ty.coord.copy(fontSize = 16.sp), color = t.inkSub,
             )
             if (ntrip.message.isNotBlank() && ntrip.state != NtripState.RECEIVING) Text(ntrip.message, style = Ty.small, color = t.inkSub, maxLines = 3)
             if (ntrip.state == NtripState.ERROR || ntrip.state == NtripState.AUTH_FAILED || ntrip.state == NtripState.RECONNECTING)
@@ -606,7 +606,7 @@ internal fun Field(label: String, value: String, tag: String, kb: KeyboardType =
         Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(shape).background(t.raised).border(1.dp, t.outline, shape).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(label, style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.widthIn(min = 72.dp, max = 110.dp))
+        Text(label, style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, modifier = Modifier.widthIn(min = 72.dp, max = 110.dp))
         androidx.compose.foundation.text.BasicTextField(
             value, onChange, singleLine = true, modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag(tag),
             textStyle = Ty.body.copy(color = t.ink), cursorBrush = androidx.compose.ui.graphics.SolidColor(t.accent),
@@ -650,7 +650,7 @@ private fun VrsSummary(cc: ConnectionController) {
                 "보내기" to (if (!f.enabled) "VRS 끔" else (if (cc.sendGga) "내 위치(GGA) 켬" else "내 위치(GGA) 끔") + (if (cc.autoRetry) " · 끊기면 다시 접속" else "")))) {
             Row(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                 Text(k, style = DTy.small, color = D.sub, modifier = Modifier.width(80.dp))
-                Text(v, style = if (k == "보내기") DTy.bodyB.copy(fontSize = 15.sp) else DTy.mono, color = D.ink, modifier = Modifier.testTag("conn_vrs_$k"))
+                Text(v, style = if (k == "보내기") DTy.bodyB.copy(fontSize = 16.sp) else DTy.mono, color = D.ink, modifier = Modifier.testTag("conn_vrs_$k"))
             }
         }
         DRule(false)

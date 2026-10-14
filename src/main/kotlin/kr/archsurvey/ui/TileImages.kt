@@ -50,11 +50,15 @@ object TileImages {
                 gate.withPermit { fetch(url) }?.let { cache.put(url, it); lastError = null; version++ }
             } catch (e: Exception) {
                 synchronized(inflight) { failedAt[url] = System.currentTimeMillis() }
+                runCatching { android.util.Log.w("TileImages", "tile fetch failed", e) }
                 lastError = VWorldTileResponse.networkErrorKo(url, e.javaClass.simpleName)
             } finally { synchronized(inflight) { inflight -= url } }
         }
         return null
     }
+
+    /** 0.1.46 오류 칩 [다시]: 실패 기록만 지우고 다시 받기(캐시는 유지) */
+    fun retry() { synchronized(inflight) { failedAt.clear() }; lastError = null; version++ }
 
     fun clear() { cache.evictAll(); synchronized(inflight) { failedAt.clear() }; lastError = null; version++ }
 

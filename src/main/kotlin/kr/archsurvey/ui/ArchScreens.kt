@@ -14,6 +14,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -202,25 +205,40 @@ fun TypesScreen(c: SurveyController) {
     }
 }
 
-/** 같은 자리를 다시 찍었을 때: 재측량 / 새 점 / 저장 안 함 */
+/**
+ * 0.1.46 같은 자리를 다시 찍었을 때(시안 s03): 딤·시트 없이 측정 패널 위 결정 바.
+ * 지도는 그대로 보이고 [덮어쓰기(재측량·이력 보관)] [새 점] [취소] 56dp 세 칸.
+ */
 @Composable
-fun DupSheet(c: SurveyController) {
-    val t = T
+fun DupDecisionBar(c: SurveyController) {
     val d = c.dupPrompt ?: return
-    Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().background(t.scrim))
-        val shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
-        Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().shadow(1.dp, shape).clip(shape).glossy(t.card).border(1.5.dp, t.outline, shape).padding(16.dp).testTag("dup_sheet"),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text("같은 자리에 점이 있어요", style = Ty.title, color = t.ink)
-            Text("방금 잰 위치가 ${d.existing.name}(${d.existing.type})에서 ${"%.3f".format(d.distM)} m 안이에요. 어떻게 할까요?", style = Ty.body, color = t.ink, modifier = Modifier.testTag("dup_text"))
-            MBtn(Modifier.fillMaxWidth().height(56.dp).testTag("dup_resurvey"), MKind.PRIMARY, 18.dp, onClick = { c.resolveDup(DupChoice.RESURVEY) }) { Text("${d.existing.name} 재측량으로 덮기 (이력 보관)", style = Ty.label, color = t.onPrimary) }
-            MBtn(Modifier.fillMaxWidth().height(48.dp).testTag("dup_new"), MKind.PLAIN, 16.dp, onClick = { c.resolveDup(DupChoice.NEW_POINT) }) { Text("새 점으로 따로 저장", style = Ty.label, color = t.ink) }
-            MBtn(Modifier.fillMaxWidth().height(48.dp).testTag("dup_discard"), MKind.PLAIN, 16.dp, onClick = { c.resolveDup(DupChoice.DISCARD) }) { Text("저장 안 함", style = Ty.label, color = t.ink) }
+    val shape = RoundedCornerShape(14.dp)
+    Column(
+        Modifier.fillMaxWidth().padding(top = 8.dp).clip(shape).background(D.card).border(2.dp, FieldIvory.float, shape).padding(12.dp)
+            .semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }.testTag("dup_sheet"),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            GlyphIcon(Glyph.INFO, FieldIvory.float, 22.dp)
+            Spacer(Modifier.width(8.dp))
+            Text("같은 자리(${"%.2f".format(java.util.Locale.US, d.distM)} m)에 ${d.existing.name} 가 있어요", style = DTy.bodyB, color = D.ink, maxLines = 2, modifier = Modifier.testTag("dup_text"))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            DupBtn("덮어쓰기", "${d.existing.name} 재측량으로 덮어쓰기, 이력 보관", "dup_resurvey", Modifier.weight(1f)) { c.resolveDup(DupChoice.RESURVEY) }
+            DupBtn("새 점", "새 점으로 따로 저장", "dup_new", Modifier.weight(1f)) { c.resolveDup(DupChoice.NEW_POINT) }
+            DupBtn("취소", "저장 안 함", "dup_discard", Modifier.weight(1f)) { c.resolveDup(DupChoice.DISCARD) }
         }
     }
+}
+
+@Composable
+private fun DupBtn(label: String, desc: String, tag: String, modifier: Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
+    Box(
+        modifier.heightIn(min = FieldIvory.minTouch).clip(shape).background(D.card).border(1.5.dp, D.line, shape)
+            .hClickable(onClick = onClick).semantics { contentDescription = desc }.testTag(tag),
+        contentAlignment = Alignment.Center,
+    ) { Text(label, style = DTy.button, color = D.ink, maxLines = 1) }
 }
 
 /** 지도 아래쪽에 겹치는 고고학 안내: 구역·그리드·칸 한 줄, 재측량 중, 외곽 취득 중 */
@@ -230,7 +248,7 @@ fun ArchOverlays(c: SurveyController) {
     val pill = Modifier.background(t.raised.copy(alpha = 0.95f), RoundedCornerShape(10.dp)).border(1.dp, t.accent, RoundedCornerShape(10.dp))
     c.resurveyTarget?.let { r ->
         Row(pill.padding(start = 10.dp).testTag("resurvey_banner"), verticalAlignment = Alignment.CenterVertically) {
-            Text("재측량 중 · ${r.name} — 측점을 누르세요", style = Ty.small.copy(fontSize = 12.sp), color = t.ink, modifier = Modifier.weight(1f, fill = false))
+            Text("재측량 중 · ${r.name} — 측점을 누르세요", style = Ty.small.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.weight(1f, fill = false))
             Box(Modifier.heightIn(min = 48.dp).hClickable { c.cancelResurvey() }.padding(horizontal = 12.dp).testTag("resurvey_cancel"), contentAlignment = Alignment.Center) { Text("취소", style = Ty.label, color = t.accentText) }
         }
     }
@@ -238,7 +256,7 @@ fun ArchOverlays(c: SurveyController) {
         val o = a.activeOutline
         val n = o?.pointRowIds?.size ?: 0
         Column(pill.padding(horizontal = 10.dp, vertical = 4.dp).testTag("outline_bar")) {
-            Text("외곽 ${o?.label ?: "(새로 시작)"} · 꼭짓점 ${n}개", style = Ty.small.copy(fontSize = 12.sp), color = t.ink, modifier = Modifier.testTag("outline_count"))
+            Text("외곽 ${o?.label ?: "(새로 시작)"} · 꼭짓점 ${n}개", style = Ty.small.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.testTag("outline_count"))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Btn(if (a.preferClosed) "선으로 끝내기" else "✓ 선으로 끝내기", Modifier.testTag("outline_finish_line")) { a.finishOutline(false) }
                 Btn(if (a.preferClosed) "✓ 면으로 닫기" else "면으로 닫기", Modifier.testTag("outline_finish_area")) { a.finishOutline(true) }
@@ -246,8 +264,8 @@ fun ArchOverlays(c: SurveyController) {
             }
         }
     }
-    a.lastSummary?.let { Text(it, style = Ty.small.copy(fontSize = 12.sp), color = t.ink, modifier = pill.padding(horizontal = 10.dp, vertical = 4.dp).testTag("outline_summary")) }
-    a.contextLine()?.let { Text(it, style = Ty.small.copy(fontSize = 12.sp), color = t.ink, maxLines = 2, modifier = pill.padding(horizontal = 10.dp, vertical = 4.dp).testTag("context_line")) }
+    a.lastSummary?.let { Text(it, style = Ty.small.copy(fontSize = 16.sp), color = t.ink, modifier = pill.padding(horizontal = 10.dp, vertical = 4.dp).testTag("outline_summary")) }
+    a.contextLine()?.let { Text(it, style = Ty.small.copy(fontSize = 16.sp), color = t.ink, maxLines = 2, modifier = pill.padding(horizontal = 10.dp, vertical = 4.dp).testTag("context_line")) }
 }
 
 /** 점 상세의 재측량 · 이력 카드 */

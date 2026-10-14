@@ -33,6 +33,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.semantics
@@ -82,7 +83,7 @@ fun SurveyMapScreen(
         // 시스템 뒤로: 열린 창부터 닫고, 지도면 홈으로
         androidx.activity.compose.BackHandler(enabled = backTarget(c) != null) { backTarget(c)?.invoke() }
         if (c.quickSheetOpen) QuickSheet(c)
-        if (c.dupPrompt != null) DupSheet(c)
+        // 0.1.46: 같은 자리 점은 지도를 가리지 않는 결정 바(DigControlArea 안 DupDecisionBar)
         if (c.tiltPrompt != null) TiltSheet(c)
         c.bg?.let { b ->
             androidx.activity.compose.BackHandler(enabled = b.screen != kr.archsurvey.ui.bg.BgScreen.NONE) { b.close() }
@@ -255,8 +256,12 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
                 ?: (if (ms.tiles.isNotEmpty()) TileImages.lastError else null)
                 ?: kr.archsurvey.map.MapLayers.modeHint(c.mapBase)
             val noticeColor = if (TileImages.lastError != null && notice == TileImages.lastError) t.bad else if (c.mapNotice() != null) t.bad else t.inkSub
-            notice?.let { Text(it, style = Ty.small, color = noticeColor, maxLines = 3, modifier = Modifier.widthIn(max = 260.dp).background(t.raised.copy(alpha = 0.92f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp).testTag("map_notice")) }
-            if (ms.tiles.isNotEmpty()) Text("© V월드(국토교통부)", style = Ty.small.copy(fontSize = 11.sp), color = t.ink, modifier = Modifier.background(t.raised.copy(alpha = 0.85f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 1.dp).testTag("map_attribution"))
+            notice?.let {
+                // 0.1.46: 오류는 표준 오류 칩(예외 이름 없이 + [다시]), 안내는 작은 흰 글상자
+                if (noticeColor == t.bad) ErrorChip(it, Modifier.widthIn(max = 300.dp), tag = "map_notice", onRetry = if (notice == TileImages.lastError) ({ TileImages.retry() }) else null)
+                else Text(it, style = Ty.small, color = noticeColor, maxLines = 3, modifier = Modifier.widthIn(max = 260.dp).background(t.raised.copy(alpha = 0.92f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp).testTag("map_notice"))
+            }
+            if (ms.tiles.isNotEmpty()) Text("© V월드(국토교통부)", style = Ty.small.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.background(t.raised.copy(alpha = 0.85f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 1.dp).testTag("map_attribution"))
             c.bg?.mapCaption()?.let {
                 Text(it, style = Ty.small, color = t.ink, modifier = Modifier.background(t.raised.copy(alpha = 0.85f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp).testTag("map_caption"))
             }
@@ -271,7 +276,7 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
                     modifier = Modifier.background(t.raised.copy(alpha = 0.95f), RoundedCornerShape(10.dp)).border(1.dp, t.accent, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 6.dp).testTag("message"))
             }
             // 0.1.35 축척 막대 글자(화면 1 cm ≈ 실제 m)
-            Text(scaleText(c.dpPerM), style = Ty.coord.copy(fontSize = 12.sp), color = t.ink,
+            Text(scaleText(c.dpPerM), style = Ty.coord.copy(fontSize = 16.sp), color = t.ink,
                 modifier = Modifier.background(t.bg.copy(alpha = 0.85f), RoundedCornerShape(8.dp)).padding(horizontal = 6.dp, vertical = 1.dp).testTag("scale_label"))
         }
     }
@@ -365,7 +370,7 @@ private fun ResultStrip(c: SurveyController) {
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             StatusIcon(PointCaution.displayStatus(p), fg, 14.dp)
-            Text(PointCaution.chip(p), style = Ty.label.copy(fontSize = 12.sp), color = fg, maxLines = 1)
+            Text(PointCaution.chip(p), style = Ty.label.copy(fontSize = 16.sp), color = fg, maxLines = 1)
         }
         GlyphIcon(Glyph.CHEVRON_UP, t.accent, 20.dp)
     }
@@ -385,7 +390,7 @@ private fun ResultPanel(c: SurveyController) {
     ) {
         if (expanded) Box(Modifier.height(SurveyDims.EXPANDED_EXTRA_DP.dp)) { ExpandedExtra(c) }
         // 0.1.14 목업 17: 「측량된 점 정보」 · 이름+고정 · X/Y/Z · 수평/수직 정밀도 · 「다음 점(Pxx)을 계속 측량할까요?」 아니요 / 예, 계속
-        Text("측량된 점 정보", style = Ty.label.copy(fontSize = 14.sp), color = t.inkSub, maxLines = 1, modifier = Modifier.height(18.dp).testTag("result_title"))
+        Text("측량된 점 정보", style = Ty.label.copy(fontSize = 16.sp), color = t.inkSub, maxLines = 1, modifier = Modifier.height(18.dp).testTag("result_title"))
         if (p != null) {
             val (bg, fg) = statusColors(t, PointCaution.displayStatus(p))
             Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -395,13 +400,13 @@ private fun ResultPanel(c: SurveyController) {
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     StatusIcon(PointCaution.displayStatus(p), fg, 14.dp)
-                    Text(PointCaution.chip(p), style = Ty.label.copy(fontSize = 12.sp), color = fg, maxLines = 1)
+                    Text(PointCaution.chip(p), style = Ty.label.copy(fontSize = 16.sp), color = fg, maxLines = 1)
                 }
                 Text(p.type, style = Ty.small, color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 MBtn(Modifier.height(40.dp).testTag("photo_count_btn"), MKind.PLAIN, 14.dp, onClick = { if (c.photos.size < MediaLimits.PHOTOS) c.addPhotoCamera() else c.toggleExpand() }) {
                     Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         GlyphIcon(Glyph.CAMERA, t.accent, 18.dp)
-                        Text("${c.photos.size}/${MediaLimits.PHOTOS}", style = Ty.coord.copy(fontSize = 12.sp), color = t.ink, modifier = Modifier.testTag("photo_count"))
+                        Text("${c.photos.size}/${MediaLimits.PHOTOS}", style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.testTag("photo_count"))
                     }
                 }
                 MBtn(Modifier.size(40.dp).testTag("voice_btn"), MKind.PRIMARY, 20.dp, onClick = { c.toggleVoice() }) { GlyphIcon(Glyph.MIC, t.onPrimary, 18.dp) }
@@ -410,12 +415,12 @@ private fun ResultPanel(c: SurveyController) {
                 }
             }
             Column(Modifier.fillMaxWidth().height(40.dp), verticalArrangement = Arrangement.Center) {
-                val m = Ty.coord.copy(fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Light)
+                val m = Ty.coord.copy(fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Light)
                 Text("X(N) ${grp3(p.northing)}  Y(E) ${grp3(p.easting)}", style = m, color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_coord"))
                 Text("Z(H) ${p.groundHeightM?.let { grp3(it) } ?: "—"}  수평 ±${p.sigmaHM?.let { f3(it) } ?: "—"}  수직 ±${p.sigmaU?.let { f3(it) } ?: "—"} m", style = m, color = t.ink, maxLines = 1, modifier = Modifier.testTag("result_h"))
             }
         }
-        Text("다음 점(${c.nextName})을 계속 측량할까요?", style = Ty.small.copy(fontSize = 13.sp), color = t.ink, maxLines = 1, modifier = Modifier.height(22.dp).padding(top = 2.dp).testTag("result_question"))
+        Text("다음 점(${c.nextName})을 계속 측량할까요?", style = Ty.small.copy(fontSize = 16.sp), color = t.ink, maxLines = 1, modifier = Modifier.height(22.dp).padding(top = 2.dp).testTag("result_question"))
         Spacer(Modifier.height(6.dp))
         Row(Modifier.fillMaxWidth().height(56.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             MBtn(Modifier.weight(1f).height(56.dp).testTag("result_no"), MKind.PLAIN, 28.dp, onClick = { c.dismissResult() }) {
@@ -507,7 +512,7 @@ private fun RecordStrip(c: SurveyController) {
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             Text("녹음 중 0:%02d / 0:%02d".format(c.voiceSeconds, MediaLimits.VOICE_SECONDS), style = Ty.label, color = t.ink, modifier = Modifier.testTag("record_text"))
-            Text(if (c.media != null) "마이크로 녹음하고 있어요 · 끝내기를 누르면 저장" else "화면 시안 — 실제 녹음은 아직 연결 전", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub)
+            Text(if (c.media != null) "마이크로 녹음하고 있어요 · 끝내기를 누르면 저장" else "화면 시안 — 실제 녹음은 아직 연결 전", style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub)
         }
         SmallButton("끝내기", "record_stop") { c.toggleVoice() }
     }
@@ -563,12 +568,12 @@ fun DrawerOverlay(c: SurveyController) {
                     // 0.1.38: 수신기 이름·상태 칩은 머리줄 알약과 같은 정보라 뺐다. 대신 작업 폴더
                     Column(Modifier.weight(1f)) {
                         Text(c.projectName, style = Ty.title.copy(fontSize = 18.sp), color = t.ink, maxLines = 1)
-                        c.jobs?.currentFolder?.let { Text(it, style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 2, modifier = Modifier.testTag("drawer_folder")) }
+                        c.jobs?.currentFolder?.let { Text(it, style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, maxLines = 2, modifier = Modifier.testTag("drawer_folder")) }
                     }
                     // 0.1.38: 톱니(설정)는 아래 「설정 · 구글 드라이브」와 같은 곳이라 뺐다
                 }
                 for (sec in DrawerMenu.sections) {
-                    Text(sec.title, style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.height(26.dp).padding(horizontal = 6.dp).wrapContentHeight(Alignment.Bottom))
+                    Text(sec.title, style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, modifier = Modifier.height(26.dp).padding(horizontal = 6.dp).wrapContentHeight(Alignment.Bottom))
                     for (it in sec.items) DrawerRow(c, it)
                 }
                 Spacer(Modifier.height(16.dp))
@@ -642,7 +647,7 @@ private fun DrawerRow(c: SurveyController, item: MenuItem) {
     ) {
         val g = menuGlyph(item.id)
         if (g != null) GlyphIcon(g, t.accent, 20.dp) else Spacer(Modifier.width(20.dp))
-        Text(item.label, style = Ty.body.copy(fontSize = 14.sp, fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.Normal else androidx.compose.ui.text.font.FontWeight.Light), color = t.ink, modifier = Modifier.weight(1f))
+        Text(item.label, style = Ty.body.copy(fontSize = 16.sp, fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.Normal else androidx.compose.ui.text.font.FontWeight.Light), color = t.ink, modifier = Modifier.weight(1f))
         item.note?.let { Text(it, style = Ty.small, color = t.inkSub) }
     }
 }
@@ -653,7 +658,7 @@ private fun FavCard(c: SurveyController, item: MenuItem, modifier: Modifier) {
     val t = T
     MBtn(modifier.height(48.dp).testTag("menu_${item.id}"), MKind.PLAIN, 14.dp, onClick = { runMenu(c, item) }) {
         menuGlyph(item.id)?.let { GlyphIcon(it, t.accent, 18.dp) }
-        Text(item.label, style = Ty.small.copy(fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = t.ink, maxLines = 1)
+        Text(item.label, style = Ty.small.copy(fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = t.ink, maxLines = 1)
     }
 }
 
@@ -799,8 +804,8 @@ internal fun TodayPointsList(c: SurveyController) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).testTag("today_points"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("오늘 점 ${list.size}", style = Ty.serifHead.copy(fontSize = 16.sp), color = t.ink)
         for (p in list) Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).hClickable { c.focusOn(p) }, verticalAlignment = Alignment.CenterVertically) {
-            Text(p.name, style = Ty.coord.copy(fontSize = 14.sp), color = t.ink, modifier = Modifier.width(76.dp))
-            Text(c.dig.whatLine(p), style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text(p.name, style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.width(76.dp))
+            Text(c.dig.whatLine(p), style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         }
     }
 }
@@ -809,7 +814,8 @@ internal fun TodayPointsList(c: SurveyController) {
 @Composable
 fun SavedToast(c: SurveyController) {
     if (!(c.phase == Phase.RESULT && c.resultStripShown && !c.pointDetailOpen && !c.homeOpen && c.hub.screen == null &&
-            c.connection?.open != true && c.exporter?.open != true && c.dupPrompt == null && c.tiltPrompt == null)) return // 다른 창 위에는 안 띄움
+            c.connection?.open != true && c.exporter?.open != true && c.dupPrompt == null && c.tiltPrompt == null &&
+            !c.setupOpen && !c.antennaSheetOpen && !c.dig.pickerOpen && !c.drawerOpen)) return // 다른 창 위에는 안 띄움
     val p = c.lastPoint ?: return
     androidx.compose.runtime.LaunchedEffect(c.resultStripSeq) { kotlinx.coroutines.delay(c.resultStripMs); c.hideResultStrip() }
     Box(Modifier.fillMaxSize().padding(top = 72.dp), contentAlignment = Alignment.TopCenter) {
@@ -819,6 +825,12 @@ fun SavedToast(c: SurveyController) {
             Modifier.clip(RoundedCornerShape(20.dp)).background(D.ink.copy(alpha = 0.9f)).hClickable { c.openPointDetail() }
                 .heightIn(min = 48.dp).padding(horizontal = 16.dp).semantics { contentDescription = "${p.name} 저장됨, 눌러서 자세히" }.testTag("saved_toast"),
             verticalAlignment = Alignment.CenterVertically,
-        ) { Text("${p.name} 저장 · $h · $s", style = Ty.label, color = D.bg, maxLines = 1, modifier = Modifier.testTag("saved_toast_text")) }
+        ) {
+            Text("${p.name} 저장 · $h · $s", style = Ty.label.copy(fontSize = 16.sp), color = D.bg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).testTag("saved_toast_text"))
+            // 0.1.46: 3초 안 한 번에 되돌리기(확인 창 없이 — 알림 자체가 확인)
+            Box(Modifier.padding(start = 8.dp).heightIn(min = 48.dp).hClickable { c.hideResultStrip(); c.undo() }.padding(horizontal = 8.dp).semantics { contentDescription = "${p.name} 되돌리기" }.testTag("saved_toast_undo"), contentAlignment = Alignment.Center) {
+                Text("되돌리기", style = Ty.label.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold), color = FieldIvory.decor)
+            }
+        }
     }
 }

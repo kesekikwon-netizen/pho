@@ -82,14 +82,14 @@ fun SplashScreen(versionLabel: String, onDone: () -> Unit) {
             val ta = splashPhase(p, 0.15f, 0.55f)
             Text(SplashSpec.TITLE, style = Ty.title.copy(fontSize = 28.sp, fontWeight = FontWeight.Light, letterSpacing = 2.sp), color = t.splashInk, modifier = Modifier.alpha(ta).testTag("splash_title"))
             Spacer(Modifier.height(6.dp))
-            Text(SplashSpec.SUBTITLE, style = Ty.small.copy(fontSize = 13.sp), color = t.splashInk.copy(alpha = 0.62f), modifier = Modifier.alpha(splashPhase(p, 0.35f, 0.75f)))
+            Text(SplashSpec.SUBTITLE, style = Ty.small.copy(fontSize = 16.sp), color = t.splashInk.copy(alpha = 0.62f), modifier = Modifier.alpha(splashPhase(p, 0.35f, 0.75f)))
         }
         Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.width(120.dp).height(2.dp).background(t.splashLine.copy(alpha = 0.18f))) {
                 Box(Modifier.fillMaxHeight().fillMaxWidth(p).background(t.splashLineDeep).testTag("splash_progress"))
             }
             Spacer(Modifier.height(12.dp))
-            Text(versionLabel, style = Ty.small.copy(fontSize = 11.sp), color = t.splashInk.copy(alpha = 0.55f), modifier = Modifier.testTag("splash_version"))
+            Text(versionLabel, style = Ty.small.copy(fontSize = 16.sp), color = t.splashInk.copy(alpha = 0.55f), modifier = Modifier.testTag("splash_version"))
         }
     }
 }

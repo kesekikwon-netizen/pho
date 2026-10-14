@@ -121,7 +121,7 @@ class SurveyEngine(
     // ---------------- 블루투스 ----------------
 
     /** BT-130 무음으로 판명된 연결 방식 — 같은 주소 치유 때 exclude. STREAMING 되면 비운다 */
-    private val silentStrategies = java.util.concurrent.ConcurrentHashMap.newKeySet<Strategy>()
+    private val silentStrategies: MutableSet<Strategy> = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<Strategy, Boolean>()) // 0.1.46: KeySetView(API 24+) 대신 — minSdk 21 lint NewApi
 
     private suspend fun gnssLoop(profile: DeviceProfile, address: String) {
         silentStrategies.clear()

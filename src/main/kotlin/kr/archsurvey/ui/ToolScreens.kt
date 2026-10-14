@@ -74,7 +74,7 @@ fun PointsScreen(c: SurveyController) {
         if (list.isNotEmpty()) {
             Seg(listOf("측점순", "그룹순", "이름순"), sort, "points_sort") { sort = it }
             Row(Modifier.fillMaxWidth().height(32.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                for ((w, k) in listOf(1.3f to "이름", 1.5f to "X(N)", 1.5f to "Y(E)", 1f to "Z(H)")) Text(k, style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.weight(w))
+                for ((w, k) in listOf(1.3f to "이름", 1.5f to "X(N)", 1.5f to "Y(E)", 1f to "Z(H)")) Text(k, style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, modifier = Modifier.weight(w))
             }
         }
         val sorted = when (sort) {
@@ -102,18 +102,18 @@ private fun PointRow(p: SavedPoint, onLong: () -> Unit, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1.3f)) {
-            Text(p.name, style = Ty.coord.copy(fontSize = 13.sp), color = t.ink, maxLines = 1, softWrap = false)
+            Text(p.name, style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, maxLines = 1, softWrap = false)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 // 상태는 색 + 아이콘 (목업 규칙: 색만으로 구분하지 않음)
                 Box(Modifier.size(14.dp).clip(RoundedCornerShape(7.dp)).background(sbg), contentAlignment = Alignment.Center) { StatusIcon(shown, sfg, 10.dp) }
-                Text(p.type + if (p.memo.isNotBlank()) " · ${p.memo}" else "", style = Ty.small.copy(fontSize = 10.sp), color = t.inkSub, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text(p.type + if (p.memo.isNotBlank()) " · ${p.memo}" else "", style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             }
             // 0.1.30 T23: 주의 이유(「σ 없음(고정)」·Float·보정 나이 초과 …) — 목록 표시만
-            PointCaution.rowReason(p)?.let { Text(it, style = Ty.small.copy(fontSize = 10.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("point_reason_${p.name}")) }
+            PointCaution.rowReason(p)?.let { Text(it, style = Ty.small.copy(fontSize = 16.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("point_reason_${p.name}")) }
             // 0.1.31: 점마다 오차(H/V 1σ). 없으면 —
-            Text(PointCaution.hv(p), style = Ty.coord.copy(fontSize = 10.sp), color = t.inkSub, maxLines = 1, softWrap = false, modifier = Modifier.testTag("point_hv_${p.name}"))
+            Text(PointCaution.hv(p), style = Ty.coord.copy(fontSize = 16.sp), color = t.inkSub, maxLines = 1, softWrap = false, modifier = Modifier.testTag("point_hv_${p.name}"))
         }
-        val m = Ty.coord.copy(fontSize = 11.sp)
+        val m = Ty.coord.copy(fontSize = 16.sp)
         Text(grp3(p.northing), style = m, color = t.ink, maxLines = 1, modifier = Modifier.weight(1.5f))
         Text(grp3(p.easting), style = m, color = t.ink, maxLines = 1, modifier = Modifier.weight(1.5f))
         Text(p.groundHeightM?.let { f3(it) } ?: "—", style = m, color = t.ink, maxLines = 1, modifier = Modifier.weight(1f))
@@ -157,14 +157,14 @@ fun PointDetailScreen(c: SurveyController) {
                     Text(k, style = Ty.label.copy(fontSize = 18.sp), color = t.ink, modifier = Modifier.width(22.dp))
                     Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.Bottom) {
                         Text(v?.let { grp3(it) } ?: "—", style = Ty.coord.copy(fontSize = 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Light), color = t.ink, maxLines = 1, modifier = Modifier.testTag("detail_$k"))
-                        Text(" m", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.padding(bottom = 3.dp))
+                        Text(" m", style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, modifier = Modifier.padding(bottom = 3.dp))
                     }
                 }
                 if (i < rows.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(t.line))
             }
         }
         // 0.1.31: 이 점의 오차(수평 H · 수직 V, 1σ). 수신기가 GST 를 안 보낸 점은 —
-        Text(PointCaution.hvLine(p), style = Ty.coord.copy(fontSize = 15.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("detail_hv"))
+        Text(PointCaution.hvLine(p), style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("detail_hv"))
         Text("좌표·높이는 바꿀 수 없어요. 잘못 쟀다면 다시 측점하세요.", style = Ty.small, color = t.inkSub)
         Text(
             "${PointCaution.label(p)}${p.sigmaHM?.let { " ±${f3(it)} m" } ?: ""} · 위성 ${p.satellites} · ${p.epochs}회 평균 · EPSG:${p.crsEpsg}" +
@@ -208,8 +208,8 @@ private fun MeasureTable(c: SurveyController, p: SavedPoint) {
         Text("측량 정보" + (prev?.let { " · 앞 점 ${it.name}" } ?: ""), style = Ty.label, color = t.ink, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
         rows.forEachIndexed { i, (k, v) ->
             Row(Modifier.fillMaxWidth().height(32.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(k, style = Ty.small.copy(fontSize = 13.sp), color = t.inkSub, modifier = Modifier.weight(1f))
-                Text(v, style = Ty.coord.copy(fontSize = 13.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("detail_m_$i"))
+                Text(k, style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, modifier = Modifier.weight(1f))
+                Text(v, style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("detail_m_$i"))
             }
         }
     }
@@ -239,7 +239,7 @@ private fun ReadRow(label: String, content: @Composable RowScope.() -> Unit) {
         Modifier.fillMaxWidth().height(48.dp).clip(shape).background(t.raised).border(1.5.dp, t.outline, shape).padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(label, style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.widthIn(min = 72.dp))
+        Text(label, style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, modifier = Modifier.widthIn(min = 72.dp))
         content()
     }
 }
@@ -411,16 +411,23 @@ fun SettingsScreen(c: SurveyController) {
             }
         }
     }
+    var tab by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(c.settingsTab) }
     ToolScaffold("설정", "settings_screen", onBack = { h.back() }, right = "이 작업에 저장") {
-        group("꼭 필요한 것", "측량 전에 한 번", first = true)
+        // 0.1.46 시안 s07: 일반 · 수신기 · 고급(위험·시험) 세 칸
+        SettingsTabs(tab) { tab = it; c.settingsTab = it }
+        if (tab == 1) {
+        group("수신기 · 보정", "측량 전에 한 번", first = true)
         val model = cc?.profile?.displayName?.let { HeaderModel.shortModel(it) } ?: "수신기"
         DLeaderRow("수신기", model + " · " + if (c.gv.noReceiver) "연결 안 됨" else c.gv.quality.labelKo, "set_receiver") { cc?.openScreen() ?: c.ui.toast("연결 화면을 열 수 없어요") }
         DLeaderRow("VRS 보정", if (cc?.form?.enabled == true) (cc.form.host.substringBefore('.').ifBlank { "VRS" } + " · 켬") else "끔", "set_vrs") { cc?.openVrs() ?: c.ui.toast("VRS 설정을 열 수 없어요") }
         DLeaderRow("폴 높이", String.format(java.util.Locale.US, "%.2f m", c.antenna.inputValueM), "set_pole") { c.antennaSheetOpen = true }
         // 좌표계·높이는 작업 정보에서만 편집. 점이 있으면 잠김
         DLeaderRow("좌표계 · 높이", "${c.zone.epsg} · ${c.geoid.shortKo}" + if (d.crsLocked) " · 잠김" else "", "zone_toggle") { c.jobs?.openInfo() ?: c.ui.toast("작업 관리를 쓸 수 없어요") }
+        c.tilt?.let { TiltSettings(it) }
+        }
         if (st == null) { Text("나머지 설정을 불러올 수 없어요", style = DTy.body, color = D.sub); return@ToolScaffold }
-        group("측정")
+        if (tab == 0) {
+        group("측정", first = true)
         val counts = listOf(1, 3, 5, 10)
         DLeaderRow("한 점 측정 횟수", "${c.epochs}회 평균", "epochs_toggle") {
             c.ui.choose(ChoiceRequest("한 점 측정 횟수", counts.map { "${it}회" + if (it == 3) " (기본)" else "" }, counts.indexOf(c.epochs), "epochs",
@@ -435,8 +442,6 @@ fun SettingsScreen(c: SurveyController) {
         DLeaderRow("기준점 허용 차이", "${Math.round(d.bmTolM * 100)} cm", "set_bm_tol") {
             c.ui.choose(ChoiceRequest("기준점 확인 허용 차이", tols.map { "$it cm" + if (it == 3) " (기본)" else "" }, tols.indexOfFirst { kotlin.math.abs(d.bmTolM - it / 100.0) < 1e-6 }, "set_bm_tol", null) { d.changeBmTol(tols[it] / 100.0) })
         }
-        c.tilt?.let { TiltSettings(it) }
-        c.voice?.let { VoiceSettingsCard(it) }
         group("발굴")
         val arts = kr.archsurvey.dig.ArtifactMode.entries
         DLeaderRow("유물 번호", d.artifactMode.labelKo, "set_art") {
@@ -465,7 +470,6 @@ fun SettingsScreen(c: SurveyController) {
         }
         group("지도")
         DLeaderRow("배경지도", c.mapBase.labelKo, "set_mapbase") { chooseMapBase(c) }
-        DLeaderRow("V월드 키 · 지적 스타일", if (c.vworld.hasKey) "키 있음" else "키 없음", "mapbase_toggle") { c.vworld.load(); c.hub.open(ToolScreen.VWORLD) }
         DLeaderRow("위치 표시", "점 · 이름표", "set_marker") { c.markerStyleOpen = true }
         DLeaderRow("화면 켜 두기", null, "set_keepscreen", toggle = st.keepScreenOn) { st.changeKeepScreenOn(!st.keepScreenOn) }
         group("보관", "점은 잴 때마다 폰에 저장")
@@ -474,6 +478,12 @@ fun SettingsScreen(c: SurveyController) {
         if (driveOpen) DriveConnectCard(c.drive, c.jobs?.currentFolder?.removePrefix("Documents/"))
         DLeaderRow("백업 · 복구", "${c.backup?.items?.size ?: 0}개 · " + backupLabel(c).removePrefix("백업 "), "set_backup") { c.backupQuickOpen = true }
         DLeaderRow("소리 · 진동", null, "set_sound", toggle = st.sound || st.vibration) { val v = !(st.sound || st.vibration); st.changeSound(v); st.changeVibration(v) }
+        }
+        if (tab == 2) {
+        group("고급 (현장에서는 바꾸지 마세요)", first = true)
+        DLeaderRow("V월드 키 · 지적 스타일", if (c.vworld.hasKey) "키 있음" else "키 없음", "mapbase_toggle") { c.vworld.load(); c.hub.open(ToolScreen.VWORLD) }
+        c.voice?.let { VoiceSettingsCard(it) }
+        }
         DRule()
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(rememberAppVersionLabel(), style = DTy.small, color = D.sub, modifier = Modifier.weight(1f).testTag("app_version"))
@@ -483,12 +493,25 @@ fun SettingsScreen(c: SurveyController) {
         if (st.showCrash) Card {
             val txt = st.crashText
             Text(if (txt.isBlank()) "기록된 오류가 없어요." else "최근 오류 기록 (문의할 때 ‘공유’로 보내 주세요)", style = Ty.label, color = D.ink)
-            if (txt.isNotBlank()) Text(txt.takeLast(4000), style = DTy.monoS.copy(fontSize = 12.sp, lineHeight = 16.sp), color = D.ink, modifier = Modifier.testTag("crash_text"))
+            if (txt.isNotBlank()) Text(txt.takeLast(4000), style = DTy.monoS.copy(fontSize = 16.sp, lineHeight = 21.sp), color = D.ink, modifier = Modifier.testTag("crash_text"))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.weight(1f)) { Btn("공유", Modifier.fillMaxWidth().testTag("crash_share")) { st.shareCrash() } }
                 Box(Modifier.weight(1f)) { Btn("지우기", Modifier.fillMaxWidth().testTag("crash_clear")) {
                     c.ui.ask(ConfirmRequest("오류 기록을 지울까요?", "지운 기록은 되살릴 수 없어요.", "지우기") { st.clearCrash() })
                 } }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsTabs(sel: Int, onSel: (Int) -> Unit) {
+    val sh = RoundedCornerShape(16.dp)
+    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp).clip(sh).background(D.chip).padding(4.dp).testTag("settings_tabs")) {
+        listOf("일반", "수신기", "고급").forEachIndexed { i, l ->
+            Box(Modifier.weight(1f).heightIn(min = FieldIvory.minTouch).clip(RoundedCornerShape(12.dp)).background(if (sel == i) D.card else androidx.compose.ui.graphics.Color.Transparent)
+                .hClickable { onSel(i) }.testTag("settings_tab_$i"), contentAlignment = Alignment.Center) {
+                Text(l, style = DTy.bodyB, color = if (sel == i) D.ink else D.sub)
             }
         }
     }
@@ -607,8 +630,7 @@ fun JobScreen(c: SurveyController) {
                 DRule(false)
                 if (jc.newDetailsOpen) {
                     JobConfigRows(c, jc, editableZone = true)
-                    TypeFallbackRow(jc.nameManual, "job_manual") { jc.nameManual = !jc.nameManual; if (jc.nameManual && jc.newName.isBlank()) jc.newName = jc.builtName }
-                    if (jc.nameManual) OutlinedTextField(jc.newName, { jc.newName = it }, singleLine = true, label = { Text("작업명 직접 입력") }, modifier = Modifier.fillMaxWidth().testTag("job_name"))
+                    // 0.1.46: 새 작업은 선택만 — 작업명 직접 입력 제거(이름은 유적·지구·날짜 선택으로 자동)
                 }
             }
             ToolScreen.JOB_OPEN -> {
@@ -634,7 +656,7 @@ fun JobScreen(c: SurveyController) {
                     for ((k, v) in listOf("자동 저장" to "잴 때마다", "백업" to "${c.backup?.items?.size ?: 0}개 · " + backupLabel(c).removePrefix("백업 "),
                             "구글 드라이브" to (if (dr?.email.isNullOrBlank()) "연결 안 함" else if (dr?.autoBackup == true) "자동 백업 켬" else "연결됨"))) {
                         if (k != "자동 저장") Box(Modifier.width(1.dp).fillMaxHeight().background(D.line))
-                        Column(Modifier.weight(1f).padding(horizontal = 8.dp)) { Text(k, style = DTy.bodyB.copy(fontSize = 14.sp), color = D.ink); Text(v, style = DTy.tiny, color = D.sub, maxLines = 1) }
+                        Column(Modifier.weight(1f).padding(horizontal = 8.dp)) { Text(k, style = DTy.bodyB.copy(fontSize = 16.sp), color = D.ink); Text(v, style = DTy.tiny, color = D.sub, maxLines = 1) }
                     }
                 }
                 Text("작업을 지우기 전에는 언제나 백업 파일을 먼저 만들어 둡니다.", style = DTy.small, color = D.sub)
@@ -764,8 +786,8 @@ private fun SamplesCard(p: SavedPoint) {
         Text("측정값 ${p.samples.size}회 · 평균에서의 편차(mm)", style = Ty.label, color = t.ink)
         for ((i, s) in p.samples.withIndex()) {
             Column(Modifier.fillMaxWidth().testTag("sample_$i")) {
-                Text("${i + 1}회  N ${String.format(Locale.US, "%.3f", s.n)}  E ${String.format(Locale.US, "%.3f", s.e)}", style = Ty.coord.copy(fontSize = 12.sp), color = t.ink, maxLines = 1)
-                Text((s.h?.let { "H ${String.format(Locale.US, "%.3f", it)} · " } ?: "") + "ΔN ${mm(s.n - n)} ΔE ${mm(s.e - e)}" + (if (s.h != null && h != null) " ΔH ${mm(s.h - h)}" else "") + " mm", style = Ty.coord.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1)
+                Text("${i + 1}회  N ${String.format(Locale.US, "%.3f", s.n)}  E ${String.format(Locale.US, "%.3f", s.e)}", style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, maxLines = 1)
+                Text((s.h?.let { "H ${String.format(Locale.US, "%.3f", it)} · " } ?: "") + "ΔN ${mm(s.n - n)} ΔE ${mm(s.e - e)}" + (if (s.h != null && h != null) " ΔH ${mm(s.h - h)}" else "") + " mm", style = Ty.coord.copy(fontSize = 16.sp), color = t.inkSub, maxLines = 1)
             }
         }
         val spread = p.samples.maxOf { kotlin.math.hypot(it.n - n, it.e - e) }

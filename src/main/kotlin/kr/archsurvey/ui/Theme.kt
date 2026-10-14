@@ -33,6 +33,8 @@ data class Tokens(
     val mapBg: Color = Color(0xFFF5F5F5),
     /** 정상(연결됨·수신 중) 초록 — 점·글자 표시용 */
     val ok: Color = Color(0xFF1E7A46),
+    /** 0.1.46 FLOAT 상태 채움(흰 글자) */
+    val float: Color = FieldIvory.float,
     /** 상태 알약·세그먼트 바탕(연한 회색) */
     val chip: Color = Color(0xFFEDECE7),
     /** 0.1.30 「수신기 없음」 글자: 주의(노랑) 계열을 회색 바탕에서 읽히게 짙게(노랑 F2B600 은 회색 위 대비 약 1.6:1) */
@@ -63,10 +65,10 @@ val LightTokens = Tokens(
     bg = c(0xFAF9F5), card = c(0xFFFFFF), line = c(0x8A8A86), outline = c(0x767672),
     ink = c(0x111111), inkSub = c(0x474744),
     // 0.1.35 사용자 시안 「조용한 도판」: 주 단추 Action Terracotta #B5573A(흰 글자 약 4.9:1), 글자 강조는 더 진하게
-    primary = c(0xB5573A), onPrimary = c(0xFFFFFF), accent = c(0x9C4A30), accentText = c(0x863A23),
+    primary = FieldIvory.primary, onPrimary = c(0xFFFFFF), accent = c(0x9C4A30), accentText = c(0x863A23),
     fixed = c(0x146536), onFixed = c(0xFFFFFF), // 0.1.31: 측량 가능 = 초록(흰 글자 7.1:1)
     caution = c(0xF2B600), onCaution = c(0x141413),
-    bad = c(0xA3123A), onBad = c(0xFFFFFF),
+    bad = FieldIvory.error, onBad = c(0xFFFFFF),
     scrim = Color(0x66111111),
     raised = c(0xFFFFFF), primaryCont = c(0xECEBE6), mapBg = c(0xEDECE8),
     ok = c(0x1E7A46), chip = c(0xEDECE7),
@@ -99,13 +101,13 @@ fun SurveyTheme(dark: Boolean = false, content: @Composable () -> Unit) {
 
 /** 번들 글꼴(OFL): Noto Sans KR 300/400, JetBrains Mono 300/400. 한글은 KS X 1001 2,350자 + 기호만 담았다(그 밖의 글자는 기기 글꼴로 대체). */
 object Fonts {
+    // 0.1.46 공용 디자인(Field Ivory v2): Pretendard(OFL) — 사진 기준점과 같은 파일
     val sans = FontFamily(
-        Font(kr.archsurvey.R.font.noto_sans_kr_light, FontWeight.Light),
-        Font(kr.archsurvey.R.font.noto_sans_kr_regular, FontWeight.Normal),
-        // 0.1.43 사용자 시안(10-12): 제목·단추 굵게 — Noto Sans KR 500/700 (같은 KS X 1001 글자만, OFL)
-        Font(kr.archsurvey.R.font.noto_sans_kr_medium, FontWeight.Medium),
-        Font(kr.archsurvey.R.font.noto_sans_kr_bold, FontWeight.SemiBold),
-        Font(kr.archsurvey.R.font.noto_sans_kr_bold, FontWeight.Bold),
+        Font(kr.archsurvey.R.font.pretendard_regular, FontWeight.Light),
+        Font(kr.archsurvey.R.font.pretendard_regular, FontWeight.Normal),
+        Font(kr.archsurvey.R.font.pretendard_semibold, FontWeight.Medium),
+        Font(kr.archsurvey.R.font.pretendard_semibold, FontWeight.SemiBold),
+        Font(kr.archsurvey.R.font.pretendard_bold, FontWeight.Bold),
     )
     /** 0.1.35 숫자: IBM Plex Mono 400/500 (가는 글씨는 JetBrains Mono Light 유지) */
     val mono = FontFamily(
@@ -128,13 +130,13 @@ object Ty {
     val serifHead = TextStyle(fontSize = 19.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.serif)
     /** 장부 숫자 */
     val ledger = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.mono)
-    val label = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
-    val body = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.sans)
-    val small = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.sans)
-    val title = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
+    val label = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
+    val body = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.sans)
+    val small = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.sans)
+    val title = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
     val bandMain = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
     val button = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
-    val coord = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.mono)
+    val coord = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.mono)
 }
 
 private fun bundledTypography(): androidx.compose.material3.Typography {

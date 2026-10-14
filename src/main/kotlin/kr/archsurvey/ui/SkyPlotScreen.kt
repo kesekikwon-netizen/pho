@@ -118,7 +118,7 @@ fun SkyPlotScreen(c: SurveyController) {
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
                     ) {
                         Box(Modifier.size(10.dp).clip(CircleShape).background(if (on) satColor(k) else t.inkSub))
-                        Text(" ${k.prefix} ${counts[k] ?: 0}", style = Ty.label.copy(fontSize = 13.sp), color = if (on) t.ink else t.inkSub, maxLines = 1)
+                        Text(" ${k.prefix} ${counts[k] ?: 0}", style = Ty.label.copy(fontSize = 16.sp), color = if (on) t.ink else t.inkSub, maxLines = 1)
                     }
                 }
             }
@@ -145,7 +145,7 @@ fun SkyPlotScreen(c: SurveyController) {
 @Composable
 private fun SatRow(a: String, b: String, cc: String, d: String, header: Boolean = false, dot: Color? = null) {
     val t = T
-    val st = if (header) Ty.small.copy(fontSize = 12.sp) else Ty.coord.copy(fontSize = 13.sp)
+    val st = if (header) Ty.small.copy(fontSize = 16.sp) else Ty.coord.copy(fontSize = 16.sp)
     val col = if (header) t.inkSub else t.ink
     Row(Modifier.fillMaxWidth().heightIn(min = 36.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1.2f), verticalAlignment = Alignment.CenterVertically) {
@@ -169,14 +169,14 @@ private fun SkyCanvas(sats: List<SatInfo>, modifier: Modifier) {
         listOf(1f, 2f / 3f, 1f / 3f).forEach { f -> drawCircle(t.line, r * f, Offset(cx, cy), style = Stroke(1.5f)) }
         drawLine(t.line.copy(alpha = 0.6f), Offset(cx - r, cy), Offset(cx + r, cy), 1f)
         drawLine(t.line.copy(alpha = 0.6f), Offset(cx, cy - r), Offset(cx, cy + r), 1f)
-        val lab = TextStyle(fontSize = 13.sp, color = t.ink)
+        val lab = TextStyle(fontSize = 16.sp, color = t.ink)
         listOf("N" to Offset(cx, cy - r - 2f), "E" to Offset(cx + r + 4f, cy), "S" to Offset(cx, cy + r + 2f), "W" to Offset(cx - r - 4f, cy)).forEach { (s, at) ->
             val m = tm.measure(s, lab)
             val x = (at.x - m.size.width / 2f).coerceIn(0f, size.width - m.size.width)
             val y = (at.y - m.size.height / 2f).coerceIn(0f, size.height - m.size.height)
             drawText(m, topLeft = Offset(x, y))
         }
-        val small = TextStyle(fontSize = 10.sp, color = t.ink)
+        val small = TextStyle(fontSize = 16.sp, color = t.ink)
         sats.forEach { s ->
             val p = SkyModel.project(s.elevDeg, s.azDeg) ?: return@forEach
             val at = Offset(cx + p.first * r, cy + p.second * r)

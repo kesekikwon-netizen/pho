@@ -131,7 +131,7 @@ class SurveyScreenshotTest {
         assertEquals(Phase.RECORDING, c.phase)
         check("recording", 0.4); shot("10_recording_mock")
         rule.onNodeWithTag("result_voice").performScrollTo().performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("measure_button").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("next_point").performClick(); rule.waitForIdle() // 0.1.46: 점 확인 화면 위에서는 「다음 점 재기」
         assertEquals("다음 점 한 번 탭 = 바로 취득 시작", Phase.ACQUIRING, c.phase)
         adv(f, 6)
         assertEquals(2, c.points.size)

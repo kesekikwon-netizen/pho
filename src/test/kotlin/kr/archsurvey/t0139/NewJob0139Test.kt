@@ -117,10 +117,9 @@ class NewJob0139Test {
         rule.onNodeWithTag("job_zone_5186").assertExists(); rule.onNodeWithTag("job_zone_5187").assertExists()
         rule.onNodeWithTag("job_manual").assertDoesNotExist()
         tap("job_details")
-        rule.onNodeWithTag("job_manual").assertExists()
-        tap("job_manual")
-        rule.onNodeWithTag("job_name").assertExists().performTextReplacement("직접 쓴 이름")
-        assertEquals("직접 쓴 이름", c.jobs!!.effectiveName)
+        // 0.1.46: 새 작업은 선택만 — 작업명 직접 입력창 없음
+        rule.onNodeWithTag("job_manual").assertDoesNotExist()
+        rule.onNodeWithTag("job_name").assertDoesNotExist()
         shot("05_new_job_details")
     }
 

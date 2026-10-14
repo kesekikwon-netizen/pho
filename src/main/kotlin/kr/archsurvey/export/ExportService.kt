@@ -106,43 +106,43 @@ class ExportService(
                         .append(String.format(Locale.US, "%.1f", v.durationMs / 1000.0)).append(',').append(Formats.utcOf(v.addedAtUtcMs)).append("\r\n")
                 }
             }
-            File(dir, "voice.csv").writeText(voiceRows.toString(), Charsets.UTF_8)
+            kr.archsurvey.io.AtomicFiles.writeText(File(dir, "voice.csv"), voiceRows.toString(), Charsets.UTF_8)
         }
         // 0.1.14: 고른 양식만 만든다(목업 11). 사진 목록 CSV 는 사진을 넣을 때 또는 기본 양식일 때
-        if (ExportFormat.CSV in formats) File(dir, "points.csv").writeText(Formats.pointsCsv(pts, byPoint), Charsets.UTF_8)
-        if (ExportFormat.CSV in formats || includePhotos) File(dir, "photos.csv").writeText(Formats.photosCsv(photoRows), Charsets.UTF_8)
-        if (ExportFormat.GEOJSON in formats) File(dir, "points.geojson").writeText(Formats.pointsGeoJson(pts, byPoint), Charsets.UTF_8)
+        if (ExportFormat.CSV in formats) kr.archsurvey.io.AtomicFiles.writeText(File(dir, "points.csv"), Formats.pointsCsv(pts, byPoint), Charsets.UTF_8)
+        if (ExportFormat.CSV in formats || includePhotos) kr.archsurvey.io.AtomicFiles.writeText(File(dir, "photos.csv"), Formats.photosCsv(photoRows), Charsets.UTF_8)
+        if (ExportFormat.GEOJSON in formats) kr.archsurvey.io.AtomicFiles.writeText(File(dir, "points.geojson"), Formats.pointsGeoJson(pts, byPoint), Charsets.UTF_8)
         // DXF: 지면 표고(표고 우선, 없으면 타원체고). 축 순서 기본 X=동·Y=북, 한글은 CP949
-        if (ExportFormat.DXF in formats) File(dir, "points.dxf").writeBytes(DxfWriter.write(pts.map { DxfPoint(it.pointId, it.easting, it.northing, it.groundMsl ?: it.groundEllipsoidalHeight) }))
+        if (ExportFormat.DXF in formats) kr.archsurvey.io.AtomicFiles.writeBytes(File(dir, "points.dxf"), DxfWriter.write(pts.map { DxfPoint(it.pointId, it.easting, it.northing, it.groundMsl ?: it.groundEllipsoidalHeight) }))
         if (ExportFormat.DRAWING_DXF in formats || ExportFormat.FIELD_CSV in formats) {
             val a = arch
             val verts = a?.outlineVertices(project).orEmpty().groupBy { it.outlineId }
             val outs = a?.outlines(project).orEmpty().map { o -> DigOutline(o.id, o.label, o.kind, o.featureType, o.closed, verts[o.id].orEmpty().sortedBy { it.orderNo }.map { it.pointRowId }) }
             val grids = a?.grids(project).orEmpty().map { kr.archsurvey.arch.GridDef(it.id, it.areaId, it.name, kr.archsurvey.core.NE(it.originN, it.originE), kr.archsurvey.core.NE(it.dirN, it.dirE), it.spacingM, it.cols, it.rows, it.crsEpsg) }
-            if (ExportFormat.DRAWING_DXF in formats) File(dir, "drawing_1-$drawingScale.dxf").writeBytes(DxfWriter.writeDrawing(DigExport.drawing(pts, outs, grids, drawingScale)))
-            if (ExportFormat.FIELD_CSV in formats) File(dir, "field_book.csv").writeText(DigExport.fieldCsv(pts, outs, byPoint.mapValues { it.value.size }), Charsets.UTF_8)
+            if (ExportFormat.DRAWING_DXF in formats) kr.archsurvey.io.AtomicFiles.writeBytes(File(dir, "drawing_1-$drawingScale.dxf"), DxfWriter.writeDrawing(DigExport.drawing(pts, outs, grids, drawingScale)))
+            if (ExportFormat.FIELD_CSV in formats) kr.archsurvey.io.AtomicFiles.writeText(File(dir, "field_book.csv"), DigExport.fieldCsv(pts, outs, byPoint.mapValues { it.value.size }), Charsets.UTF_8)
         }
-        if (ExportFormat.REPORT in formats) File(dir, "point_report.csv").writeText(MoreFormats.reportCsv(pts, byPoint), Charsets.UTF_8)
-        if (ExportFormat.KML in formats) File(dir, "points.kml").writeText(MoreFormats.kml(project, pts), Charsets.UTF_8)
+        if (ExportFormat.REPORT in formats) kr.archsurvey.io.AtomicFiles.writeText(File(dir, "point_report.csv"), MoreFormats.reportCsv(pts, byPoint), Charsets.UTF_8)
+        if (ExportFormat.KML in formats) kr.archsurvey.io.AtomicFiles.writeText(File(dir, "points.kml"), MoreFormats.kml(project, pts), Charsets.UTF_8)
         // hgis(Strata)·QGIS: 좌표계(작업 좌표계 = 점의 crsEpsg)마다 points_<EPSG>.shp/.shx/.dbf/.prj/.cpg 한 벌. 5179 를 기본으로 쓰지 않는다
         val shpEpsgs = ArrayList<Int>()
         if (ExportFormat.SHP in formats) {
             for (sh in MoreFormats.shapesByCrs(pts, byPoint)) {
                 val b = "points_${sh.epsg}"
-                File(dir, "$b.shp").writeBytes(sh.shp); File(dir, "$b.shx").writeBytes(sh.shx); File(dir, "$b.dbf").writeBytes(sh.dbf)
-                sh.prj?.let { File(dir, "$b.prj").writeText(it, Charsets.US_ASCII) }
-                File(dir, "$b.cpg").writeText(sh.cpg, Charsets.US_ASCII)
+                kr.archsurvey.io.AtomicFiles.writeBytes(File(dir, "$b.shp"), sh.shp); kr.archsurvey.io.AtomicFiles.writeBytes(File(dir, "$b.shx"), sh.shx); kr.archsurvey.io.AtomicFiles.writeBytes(File(dir, "$b.dbf"), sh.dbf)
+                sh.prj?.let { kr.archsurvey.io.AtomicFiles.writeText(File(dir, "$b.prj"), it, Charsets.US_ASCII) }
+                kr.archsurvey.io.AtomicFiles.writeText(File(dir, "$b.cpg"), sh.cpg, Charsets.US_ASCII)
                 shpEpsgs.add(sh.epsg)
             }
         }
         if (ExportFormat.HGIS_CSV in formats) {
             for ((epsg, group) in pts.groupBy { it.crsEpsg })
-                File(dir, "hgis_control_points_$epsg.csv").writeText(MoreFormats.hgisControlCsv(group), Charsets.UTF_8)
+                kr.archsurvey.io.AtomicFiles.writeText(File(dir, "hgis_control_points_$epsg.csv"), MoreFormats.hgisControlCsv(group), Charsets.UTF_8)
         }
-        File(dir, "README.txt").writeText(readme(project, pts.size, shpEpsgs), Charsets.UTF_8)
+        kr.archsurvey.io.AtomicFiles.writeText(File(dir, "README.txt"), readme(project, pts.size, shpEpsgs), Charsets.UTF_8)
 
         val zip = File(base, "${safe}_$stamp.zip")
-        ZipOutputStream(zip.outputStream().buffered()).use { z ->
+        kr.archsurvey.io.AtomicFiles.zip(zip) { z ->
             dir.walkTopDown().filter { it.isFile }.forEach { f ->
                 z.putNextEntry(ZipEntry(f.relativeTo(dir).path.replace('\\', '/')))
                 f.inputStream().use { it.copyTo(z) }

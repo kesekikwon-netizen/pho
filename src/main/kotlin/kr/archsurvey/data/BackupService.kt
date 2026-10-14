@@ -61,7 +61,7 @@ class BackupService(private val ctx: Context) {
         val points = db.query("SELECT COUNT(*) FROM points WHERE deletedAtUtcMs IS NULL").use { if (it.moveToFirst()) it.getInt(0) else 0 }
         val manifest = JSONObject().put("format", FORMAT).put("dbVersion", DB_VERSION).put("appVersion", versionName)
             .put("createdAtUtcMs", now).put("points", points).put("photos", count("photos")).put("voices", count("voice_memos"))
-        ZipOutputStream(out.outputStream().buffered()).use { z ->
+        kr.archsurvey.io.AtomicFiles.zip(out) { z ->
             z.putNextEntry(ZipEntry("manifest.json")); z.write(manifest.toString(2).toByteArray(Charsets.UTF_8)); z.closeEntry()
             z.putNextEntry(ZipEntry("survey.db")); dbFile.inputStream().use { it.copyTo(z) }; z.closeEntry()
             addTree(z, picturesDir, "photos/", skipThumbs = true)
@@ -121,7 +121,7 @@ class BackupService(private val ctx: Context) {
                     if (e.isDirectory) continue
                     val dst = File(stage, e.name)
                     if (!dst.canonicalPath.startsWith(stage.canonicalPath + File.separator)) throw BackupException("안전하지 않은 파일 경로가 들어 있어요")
-                    dst.parentFile?.mkdirs(); z.getInputStream(e).use { i -> dst.outputStream().use { o -> i.copyTo(o) } }
+                    dst.parentFile?.mkdirs(); z.getInputStream(e).use { i -> kr.archsurvey.io.AtomicFiles.copy(i, dst) }
                 }
             }
             checkDb(File(stage, "survey.db"))

@@ -38,10 +38,10 @@ private fun LedgerRow(cells: List<Triple<String, String, String>>, tagPrefix: St
             cells.forEachIndexed { i, (k, v, u) ->
                 if (i > 0) Box(Modifier.width(1.dp).fillMaxHeight().background(t.line.copy(alpha = 0.5f)))
                 Column(Modifier.weight(1f).padding(horizontal = 8.dp).testTag("${tagPrefix}_$i")) {
-                    Text(k, style = Ty.small.copy(fontSize = 11.sp), color = t.inkSub, maxLines = 1)
+                    Text(k, style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, maxLines = 1)
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(v, style = Ty.ledger.copy(fontSize = 20.sp), color = t.ink, maxLines = 1)
-                        if (u.isNotEmpty()) Text(" $u", style = Ty.small.copy(fontSize = 11.sp), color = t.inkSub)
+                        if (u.isNotEmpty()) Text(" $u", style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub)
                     }
                 }
             }
@@ -106,7 +106,7 @@ fun FeaturesScreen(c: SurveyController) {
                     for (p in pts) DTableRow(listOf(p.name to 2f, ((p.groundMslM ?: p.groundHeightM)?.let { String.format(java.util.Locale.US, "%.2f", it) } ?: "—") to 1.6f,
                         (p.sigmaHM?.let { String.format(java.util.Locale.US, "%.1f", it * 100) } ?: "—") to 1.4f,
                         java.text.SimpleDateFormat("HH:mm", java.util.Locale.KOREA).format(java.util.Date(p.measuredAtMs)) to 1.2f), "features_pt_${p.name}",
-                        firstStyle = DTy.monoS.copy(fontSize = 15.sp), monoFrom = 0, colors = mapOf(3 to D.sub), compact = true) { c.hub.openDetail(p) }
+                        firstStyle = DTy.monoS.copy(fontSize = 16.sp), monoFrom = 0, colors = mapOf(3 to D.sub), compact = true) { c.hub.openDetail(p) }
                     Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         DSecondary("이름 바꾸기", "feature_rename_${fc.id}", Modifier.weight(1f), height = 50.dp) { d.renameFor = fc.id }
                         DSecondary(if (fc.open) "이어서 재기" else "다시 열어 재기", "feature_continue_${fc.id}", Modifier.weight(1f), height = 50.dp) {
@@ -150,14 +150,14 @@ private fun FeatureCardView(c: SurveyController, fc: kr.archsurvey.dig.FeatureCa
         verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(fc.name, style = Ty.serifHead, color = if (fc.open) t.accentText else t.ink, modifier = Modifier.weight(1f).testTag("feature_name_${fc.id}"))
-            Text(if (fc.open) "재는 중" else if (fc.closed) "면 닫힘" else "선", style = Ty.label.copy(fontSize = 12.sp), color = t.inkSub)
+            Text(if (fc.open) "재는 중" else if (fc.closed) "면 닫힘" else "선", style = Ty.label.copy(fontSize = 16.sp), color = t.inkSub)
         }
-        Text("경계 ${fc.boundary} · 유물 ${if (fc.artifacts.isEmpty()) "없음" else fc.artifacts.joinToString(",")} · 레벨 ${fc.levels} · 고정 ${fc.fixedCount}/${fc.total}", style = Ty.small.copy(fontSize = 13.sp), color = t.ink)
+        Text("경계 ${fc.boundary} · 유물 ${if (fc.artifacts.isEmpty()) "없음" else fc.artifacts.joinToString(",")} · 레벨 ${fc.levels} · 고정 ${fc.fixedCount}/${fc.total}", style = Ty.small.copy(fontSize = 16.sp), color = t.ink)
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            fc.areaSqm?.let { Text("면적 ${f2(it)}㎡", style = Ty.coord.copy(fontSize = 13.sp), color = t.ink) }
-            fc.perimeterM?.let { Text("둘레 ${f2(it)} m", style = Ty.coord.copy(fontSize = 13.sp), color = t.ink) }
-            fc.depthM?.let { Text("깊이 ${f2(it)} m", style = Ty.coord.copy(fontSize = 13.sp), color = t.ink) }
-            fc.floorMeanM?.let { Text("바닥 ${f3s(it)}", style = Ty.coord.copy(fontSize = 13.sp), color = t.ink) }
+            fc.areaSqm?.let { Text("면적 ${f2(it)}㎡", style = Ty.coord.copy(fontSize = 16.sp), color = t.ink) }
+            fc.perimeterM?.let { Text("둘레 ${f2(it)} m", style = Ty.coord.copy(fontSize = 16.sp), color = t.ink) }
+            fc.depthM?.let { Text("깊이 ${f2(it)} m", style = Ty.coord.copy(fontSize = 16.sp), color = t.ink) }
+            fc.floorMeanM?.let { Text("바닥 ${f3s(it)}", style = Ty.coord.copy(fontSize = 16.sp), color = t.ink) }
         }
         if (fc.history.size > 1) Text("이전 이름: " + fc.history.dropLast(1).joinToString(" → "), style = Ty.small, color = t.inkSub)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -63,10 +63,10 @@ internal fun VoicePill(c: SurveyController) {
         Box(Modifier.size(12.dp).background(dot, CircleShape).testTag("voice_dot"))
         GlyphIcon(Glyph.MIC, t.ink, 16.dp)
         Column {
-            Text(v.indicatorText(), style = Ty.label.copy(fontSize = 13.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("voice_state"))
+            Text(v.indicatorText(), style = Ty.label.copy(fontSize = 16.sp), color = t.ink, maxLines = 1, modifier = Modifier.testTag("voice_state"))
             Text(
                 (if (online) "온라인 인식" else "기기 내 인식") + (v.issue?.let { " · $it" } ?: ""),
-                style = Ty.small.copy(fontSize = 11.sp, lineHeight = 13.sp), color = if (online || v.issue != null) t.bad else t.inkSub, maxLines = 1,
+                style = Ty.small.copy(fontSize = 16.sp, lineHeight = 21.sp), color = if (online || v.issue != null) t.bad else t.inkSub, maxLines = 1,
                 modifier = Modifier.testTag("voice_mode"),
             )
         }

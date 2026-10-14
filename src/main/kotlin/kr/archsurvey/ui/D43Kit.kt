@@ -36,25 +36,25 @@ object D {
     val card = Color(0xFFFFFFFF)
     val card2 = Color(0xFFF5F4EF)
     val chip = Color(0xFFF0EEE6)
-    val hair = Color(0xFFDEDCD1)
+    val hair = FieldIvory.line
     val line = Color(0xFFC2C0B6)
     val ink = Color(0xFF141413)
     val sub = Color(0xFF5E5D59)
     val weak = Color(0xFF73726C)
-    val primary = Color(0xFFB5573A)
+    val primary = FieldIvory.primary
     val accent = Color(0xFF9C4A2F)
-    val accentLight = Color(0xFFD97757)
+    val accentLight = FieldIvory.decor
     val sel = Color(0xFFE3DACC)
-    val fix = Color(0xFF3F6B31)
-    val caution = Color(0xFF7A5A00)
+    val fix = FieldIvory.fix
+    val caution = FieldIvory.float
     val cautionBg = Color(0xFFF7EFD6)
-    val floatDot = Color(0xFFD9A400)
+    val floatDot = FieldIvory.float
     val logoInk = Color(0xFFF2E6DA)
     val blocked = Color(0xFF5C5B57)
     val bmGold = Color(0xFFC9A227)
     val scrim = Color(0x99706F6B)
     val cautionLine = Color(0xFFE2CF94)
-    val bad = Color(0xFFA33B3B)
+    val bad = FieldIvory.error
     val dark = Color(0xFF30302E)
 }
 
@@ -63,14 +63,14 @@ object DTy {
     val h2 = TextStyle(fontFamily = Fonts.sans, fontWeight = FontWeight.Bold, fontSize = 16.sp, lineHeight = 22.sp)
     val serif = TextStyle(fontFamily = Fonts.serif, fontWeight = FontWeight.Normal, fontSize = 30.sp, lineHeight = 36.sp)
     val serifM = TextStyle(fontFamily = Fonts.serif, fontWeight = FontWeight.Normal, fontSize = 20.sp, lineHeight = 26.sp)
-    val body = TextStyle(fontFamily = Fonts.sans, fontWeight = FontWeight.Normal, fontSize = 15.sp, lineHeight = 21.sp)
+    val body = TextStyle(fontFamily = Fonts.sans, fontWeight = FontWeight.Normal, fontSize = 17.sp, lineHeight = 24.sp)
     val bodyB = body.copy(fontWeight = FontWeight.Bold)
-    val small = TextStyle(fontFamily = Fonts.sans, fontWeight = FontWeight.Normal, fontSize = 13.sp, lineHeight = 18.sp)
-    val tiny = TextStyle(fontFamily = Fonts.sans, fontWeight = FontWeight.Normal, fontSize = 11.5.sp, lineHeight = 15.sp)
-    val mono = TextStyle(fontFamily = Fonts.mono, fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 19.sp)
-    val monoS = mono.copy(fontSize = 12.sp, lineHeight = 16.sp)
+    val small = TextStyle(fontFamily = Fonts.sans, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 22.sp)
+    val tiny = TextStyle(fontFamily = Fonts.sans, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 21.sp)
+    val mono = TextStyle(fontFamily = Fonts.mono, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 22.sp)
+    val monoS = mono.copy(fontSize = 16.sp, lineHeight = 21.sp)
     val monoBig = TextStyle(fontFamily = Fonts.mono, fontWeight = FontWeight.Medium, fontSize = 24.sp, lineHeight = 30.sp)
-    val button = TextStyle(fontFamily = Fonts.sans, fontWeight = FontWeight.Bold, fontSize = 17.sp, lineHeight = 22.sp)
+    val button = TextStyle(fontFamily = Fonts.sans, fontWeight = FontWeight.Bold, fontSize = 18.sp, lineHeight = 24.sp)
 }
 
 /** 굵은 검은 선(표 머리) / 가는 선 */
@@ -265,15 +265,18 @@ fun DLeaderRow(label: String, value: String?, tag: String, toggle: Boolean? = nu
 /** 상태 알약(시안 머리줄 오른쪽): ● FIX 1.4 cm / ○ 연결 안 됨 */
 @Composable
 fun DStatusChip(text: String, sub: String?, dot: Color?, tag: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    // 0.1.46: 상태색 채움 + 흰 글자(「● FIX 1.4 cm」). 연결 안 됨은 흰 바탕 외곽선
+    val fill = dot ?: D.card
+    val on = if (dot != null) FieldIvory.onPrimary else D.ink
     Row(
-        modifier.height(48.dp).clip(RoundedCornerShape(10.dp)).background(D.card).border(1.dp, D.line, RoundedCornerShape(10.dp)).hClickable(onClick = onClick)
+        modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp)).background(fill).border(if (dot == null) 1.5.dp else 0.dp, if (dot == null) D.line else fill, RoundedCornerShape(24.dp)).hClickable(onClick = onClick)
             .padding(horizontal = 12.dp).semantics { contentDescription = text + (sub?.let { " $it" } ?: "") }.testTag(tag),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        if (dot != null) Box(Modifier.size(10.dp).clip(CircleShape).background(dot))
+        if (dot != null) Box(Modifier.size(10.dp).clip(CircleShape).background(on))
         else Box(Modifier.size(10.dp).clip(CircleShape).border(1.5.dp, D.ink, CircleShape))
-        Text(text, style = DTy.small.copy(fontWeight = FontWeight.Medium), color = D.ink, maxLines = 1, modifier = Modifier.testTag("pill_fix"))
-        if (sub != null) Text(sub, style = DTy.mono, color = D.ink, maxLines = 1, modifier = Modifier.testTag("pill_sigma"))
+        Text(text, style = DTy.small.copy(fontWeight = FontWeight.Bold), color = on, maxLines = 1, modifier = Modifier.testTag("pill_fix"))
+        if (sub != null) Text(sub, style = DTy.small.copy(fontWeight = FontWeight.Medium), color = on, maxLines = 1, modifier = Modifier.testTag("pill_sigma"))
     }
 }
 

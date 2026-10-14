@@ -1,5 +1,7 @@
 package kr.archsurvey.ui
 
+import kr.archsurvey.settingsTab
+
 import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.*
@@ -149,7 +151,7 @@ class ToolScreensTest {
         setup(points = 0) // 0.1.12: 점이 있는 작업은 좌표계를 못 바꾼다 → 빈 작업에서
         rule.runOnUiThread { c.hub.open(ToolScreen.SETTINGS) }; rule.waitForIdle()
         // 0.1.13: 설정에서 좌표계 줄 → 작업 정보로 이동(즉시저장 경로 제거)
-        rule.onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
+        rule.settingsTab(1).onNodeWithTag("zone_toggle").performScrollTo().performClick(); rule.waitForIdle()
         assertEquals(ToolScreen.JOB_INFO, c.hub.screen)
         rule.onNodeWithTag("job_zone").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("jobzone_" + kr.archsurvey.core.KoreanTmZone.entries.indexOfFirst { it.epsg == 5187 }).performClick(); rule.waitForIdle()
@@ -194,13 +196,13 @@ class ToolScreensTest {
         setup()
         rule.runOnUiThread { c.openPointDetail() }; rule.waitForIdle() // 0.1.45: 눌러야 열림
         rule.onNodeWithTag("point_confirm").assertExists()
-        rule.onNodeWithTag("result_photo").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("result_photo").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("result_photo").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("result_photo").performScrollTo().performClick(); rule.waitForIdle()
         assertEquals(2, c.photos.size)
-        rule.onNodeWithTag("result_voice").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("result_voice").performScrollTo().performClick(); rule.waitForIdle()
         assertEquals(Phase.RECORDING, c.phase)
         shot("t13_recording")
-        rule.onNodeWithTag("result_voice").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("result_voice").performScrollTo().performClick(); rule.waitForIdle()
         assertEquals(1, c.voices.size)
         shot("t14_expanded_with_media")
     }
@@ -224,7 +226,7 @@ class ToolScreensTest {
     @Test fun jobInfoFromSettingsBacksToSettings() {
         setup()
         rule.runOnUiThread { c.hub.open(ToolScreen.SETTINGS) }; rule.waitForIdle()
-        rule.onNodeWithTag("zone_toggle").performClick(); rule.waitForIdle()
+        rule.settingsTab(1).onNodeWithTag("zone_toggle").performClick(); rule.waitForIdle()
         assertEquals(ToolScreen.JOB_INFO, c.hub.screen)
         rule.runOnUiThread { c.hub.back() }; rule.waitForIdle()
         assertEquals(ToolScreen.SETTINGS, c.hub.screen)

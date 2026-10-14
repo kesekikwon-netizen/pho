@@ -83,8 +83,8 @@ internal fun CoordBox(c: SurveyController, modifier: Modifier = Modifier) {
         val rows = listOf(Triple("N", "X(N)", p?.northing?.let { grp3(it) }), Triple("E", "Y(E)", p?.easting?.let { grp3(it) }), Triple("H", "Z(H)", c.gv.altM?.let { grp3(it) }))
         for ((k, label, v) in rows) {
             Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(label, style = Ty.small.copy(fontSize = 11.sp), color = t.inkSub, modifier = Modifier.width(34.dp))
-                Text(v ?: "—", style = MonoLight.copy(fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.Normal), color = t.ink, maxLines = 1, modifier = Modifier.testTag("coord_$k"))
+                Text(label, style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, modifier = Modifier.width(34.dp))
+                Text(v ?: "—", style = MonoLight.copy(fontSize = 16.sp, lineHeight = 21.sp, fontWeight = FontWeight.Normal), color = t.ink, maxLines = 1, modifier = Modifier.testTag("coord_$k"))
             }
         }
     }
@@ -108,7 +108,7 @@ private fun RowScope.BarItem(g: Glyph, label: String, tag: String, desc: String,
     ) {
         GlyphIcon(g, t.ink, 22.dp)
         Spacer(Modifier.height(4.dp))
-        Text(label, style = Ty.small.copy(fontSize = 11.sp, lineHeight = 13.sp, fontWeight = FontWeight.Normal), color = t.ink, maxLines = 2, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
+        Text(label, style = Ty.small.copy(fontSize = 16.sp, lineHeight = 21.sp, fontWeight = FontWeight.Normal), color = t.ink, maxLines = 2, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -163,30 +163,30 @@ internal fun ControlArea(c: SurveyController) {
                         }
                         strictBlock && c.gv.sigmaMissingOnFix -> {
                             Text(SigmaText.STRICT_BUTTON, style = Ty.button.copy(fontSize = 18.sp, lineHeight = 22.sp), color = t.onPrimary)
-                            Text(SigmaText.STRICT_BUTTON_SUB, style = Ty.small.copy(fontSize = 11.sp, lineHeight = 13.sp), color = t.onPrimary, maxLines = 1, modifier = Modifier.testTag("measure_disabled_reason"))
+                            Text(SigmaText.STRICT_BUTTON_SUB, style = Ty.small.copy(fontSize = 16.sp, lineHeight = 21.sp), color = t.onPrimary, maxLines = 1, modifier = Modifier.testTag("measure_disabled_reason"))
                         }
                         strictBlock -> {
                             Text("측점 불가", style = Ty.button.copy(fontSize = 18.sp, lineHeight = 22.sp), color = t.onPrimary)
-                            Text("엄격 · FIX 필요", style = Ty.small.copy(fontSize = 11.sp, lineHeight = 13.sp), color = t.onPrimary, maxLines = 1, modifier = Modifier.testTag("measure_disabled_reason"))
+                            Text("엄격 · FIX 필요", style = Ty.small.copy(fontSize = 16.sp, lineHeight = 21.sp), color = t.onPrimary, maxLines = 1, modifier = Modifier.testTag("measure_disabled_reason"))
                         }
                         blocked -> {
                             Text("측점 불가", style = Ty.button.copy(fontSize = 18.sp, lineHeight = 22.sp), color = t.onPrimary)
-                            Text(reason.textKo, style = Ty.small.copy(fontSize = 11.sp, lineHeight = 13.sp), color = t.onPrimary, maxLines = 1, modifier = Modifier.testTag("measure_disabled_reason"))
+                            Text(reason.textKo, style = Ty.small.copy(fontSize = 16.sp, lineHeight = 21.sp), color = t.onPrimary, maxLines = 1, modifier = Modifier.testTag("measure_disabled_reason"))
                         }
                         caution && c.gv.sigmaMissingOnFix -> {
                             GlyphIcon(Glyph.POLE, t.onPrimary, 24.dp)
                             Text("측량하기", style = Ty.button.copy(fontSize = 18.sp, lineHeight = 22.sp), color = t.onPrimary, maxLines = 1)
-                            Text(c.nextName + " · " + HeaderModel.SIGMA_MISSING, style = Ty.coord.copy(fontSize = 11.sp, lineHeight = 13.sp), color = t.onPrimary, maxLines = 1, modifier = Modifier.testTag("measure_sigma_hint"))
+                            Text(c.nextName + " · " + HeaderModel.SIGMA_MISSING, style = Ty.coord.copy(fontSize = 16.sp, lineHeight = 21.sp), color = t.onPrimary, maxLines = 1, modifier = Modifier.testTag("measure_sigma_hint"))
                         }
                         caution -> {
                             GlyphIcon(Glyph.POLE, t.onPrimary, 24.dp)
                             Text("주의 측점", style = Ty.button.copy(fontSize = 18.sp, lineHeight = 22.sp), color = t.onPrimary, maxLines = 1)
-                            Text(c.nextName + " · 확인 후", style = Ty.coord.copy(fontSize = 11.sp, lineHeight = 13.sp), color = t.onPrimary, maxLines = 1, modifier = Modifier.testTag("measure_caution_hint"))
+                            Text(c.nextName + " · 확인 후", style = Ty.coord.copy(fontSize = 16.sp, lineHeight = 21.sp), color = t.onPrimary, maxLines = 1, modifier = Modifier.testTag("measure_caution_hint"))
                         }
                         else -> {
                             GlyphIcon(Glyph.POLE, t.onPrimary, 24.dp)
                             Text("측량하기", style = Ty.button.copy(fontSize = 18.sp, lineHeight = 22.sp), color = t.onPrimary, maxLines = 1)
-                            Text(c.nextName, style = Ty.coord.copy(fontSize = 11.sp, lineHeight = 13.sp), color = t.onPrimary, maxLines = 1)
+                            Text(c.nextName, style = Ty.coord.copy(fontSize = 16.sp, lineHeight = 21.sp), color = t.onPrimary, maxLines = 1)
                         }
                     }
                 }
@@ -272,6 +272,6 @@ internal fun TiltBubble(tc: TiltController, modifier: Modifier = Modifier) {
                 drawCircle(col, 5.dp.toPx(), androidx.compose.ui.geometry.Offset(c0.x + (sx * (r - 5.dp.toPx())).toFloat(), c0.y + (sy * (r - 5.dp.toPx())).toFloat()))
             }
         }
-        Text(label, style = Ty.coord.copy(fontSize = 12.sp), color = if (over) t.ink else t.inkSub, maxLines = 1, modifier = Modifier.testTag("tilt_angle"))
+        Text(label, style = Ty.coord.copy(fontSize = 16.sp), color = if (over) t.ink else t.inkSub, maxLines = 1, modifier = Modifier.testTag("tilt_angle"))
     }
 }

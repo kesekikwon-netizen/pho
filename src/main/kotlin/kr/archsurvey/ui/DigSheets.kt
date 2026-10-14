@@ -47,7 +47,7 @@ internal fun DigSheet(title: String, tag: String, onClose: () -> Unit, content: 
 }
 
 @Composable
-private fun SectionTitle(s: String) { Text(s, style = Ty.small.copy(fontSize = 12.sp, fontWeight = FontWeight.Medium), color = T.accentText) }
+private fun SectionTitle(s: String) { Text(s, style = Ty.small.copy(fontSize = 16.sp, fontWeight = FontWeight.Medium), color = T.accentText) }
 
 @Composable
 private fun Tile(title: String, sub: String?, on: Boolean, tag: String, modifier: Modifier, onClick: () -> Unit) {
@@ -58,7 +58,7 @@ private fun Tile(title: String, sub: String?, on: Boolean, tag: String, modifier
         verticalArrangement = Arrangement.Center,
     ) {
         Text(title, style = Ty.label.copy(fontSize = 16.sp, fontWeight = FontWeight.Medium), color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (sub != null) Text(sub, style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (sub != null) Text(sub, style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -199,7 +199,7 @@ internal fun DigStatusSheet(c: SurveyController) {
             for ((i, s) in steps.withIndex()) Light(s.title, s.sub, s.state == kr.archsurvey.dig.StepState.DONE, "light_$i", Modifier.weight(1f))
             Light("고정(FIX)", c.gv.quality.labelKo, fixOk, "light_2", Modifier.weight(1f))
         }
-        c.dig.causeLine(ntripNow())?.let { Text(it, style = Ty.label.copy(fontSize = 15.sp), color = t.ink, modifier = Modifier.testTag("status_cause")) }
+        c.dig.causeLine(ntripNow())?.let { Text(it, style = Ty.label.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.testTag("status_cause")) }
         val g = c.gv
         val rows = listOf(
             "수평 · 수직 정밀도" to ((g.status.sigmaHM?.let { String.format(Locale.US, "%.1f", it * 100) } ?: "—") + " · " + (g.sigmaVM?.let { String.format(Locale.US, "%.1f", it * 100) } ?: "—") + " cm"),
@@ -209,8 +209,8 @@ internal fun DigStatusSheet(c: SurveyController) {
             "자세히" to HeaderModel.metrics(g),
         )
         for ((k, v) in rows) Row(Modifier.fillMaxWidth()) {
-            Text(k, style = Ty.small.copy(fontSize = 13.sp), color = t.inkSub, modifier = Modifier.width(130.dp))
-            Text(v, style = Ty.coord.copy(fontSize = 14.sp), color = t.ink)
+            Text(k, style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, modifier = Modifier.width(130.dp))
+            Text(v, style = Ty.coord.copy(fontSize = 16.sp), color = t.ink)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MBtn(Modifier.weight(1f).height(52.dp).testTag("status_receiver"), MKind.PLAIN, 14.dp, onClick = { close(); c.connection?.openScreen() }) { Text("수신기 연결", style = Ty.label, color = t.ink) }
@@ -226,9 +226,9 @@ private fun Light(title: String, sub: String, ok: Boolean, tag: String, modifier
     Column(modifier.clip(RoundedCornerShape(12.dp)).background(t.raised).border(1.5.dp, if (ok) t.fixed else t.caution, RoundedCornerShape(12.dp)).padding(10.dp).testTag(tag)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(12.dp).clip(CircleShape).background(if (ok) t.fixed else t.caution))
-            Text(" $title", style = Ty.label.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium), color = t.ink, maxLines = 1)
+            Text(" $title", style = Ty.label.copy(fontSize = 16.sp, fontWeight = FontWeight.Medium), color = t.ink, maxLines = 1)
         }
-        Text(sub, style = Ty.small.copy(fontSize = 11.sp), color = t.inkSub, maxLines = 2)
+        Text(sub, style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, maxLines = 2)
     }
 }
 

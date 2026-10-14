@@ -95,8 +95,8 @@ class Ui0112Test {
         rule.onNodeWithTag("jobgeoid_" + GeoidModel.entries.indexOf(GeoidModel.EGM96)).performClick(); rule.waitForIdle()
         rule.onNodeWithTag("job_map").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("jobmap_" + MapBase.entries.indexOf(MapBase.CADASTRAL)).performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("job_manual").performScrollTo().performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("job_name").performScrollTo().performTextReplacement("동부-트렌치1")
+        // 0.1.46: 화면에 이름 입력창 없음(선택만). 모델 이름 지정 경로로 시험
+        rule.runOnIdle { c.jobs!!.newName = "동부-트렌치1" }; rule.waitForIdle()
         shot("03_job_new_filled")
         rule.onNodeWithTag("job_create").performClick(); rule.waitForIdle()
         assertEquals("동부-트렌치1", c.projectName)

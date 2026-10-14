@@ -247,7 +247,7 @@ class DriveSyncController(
             if (!silentOk) onResult?.invoke(true, notice!!)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            error = (e as? DriveException)?.message ?: "드라이브 올리기에 실패했어요 (${e.javaClass.simpleName})"
+            error = (e as? DriveException)?.message ?: UserError.of("drive:upload", e, "드라이브 올리기에 실패했어요", "인터넷 연결을 확인하세요")
             if (!silentOk) onResult?.invoke(false, error!!)
         } finally { running = false }
     }
@@ -300,7 +300,7 @@ class DriveSyncController(
             onResult?.invoke(true, notice!!)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            error = (e as? DriveException)?.message ?: "Drive 백업에 실패했어요 (${e.javaClass.simpleName})"
+            error = (e as? DriveException)?.message ?: UserError.of("drive:backup", e, "Drive 백업에 실패했어요", "인터넷 연결을 확인하세요")
             onResult?.invoke(false, error!!)
         } finally { running = false }
     }
@@ -324,7 +324,7 @@ class DriveSyncController(
             if (!silentOk) onResult?.invoke(true, notice!!)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            error = (e as? DriveException)?.message ?: "Drive 측점 업로드에 실패했어요 (${e.javaClass.simpleName})"
+            error = (e as? DriveException)?.message ?: UserError.of("drive:points", e, "Drive 측점 업로드에 실패했어요", "인터넷 연결을 확인하세요")
             onResult?.invoke(false, error!!)
         } finally { running = false }
     }

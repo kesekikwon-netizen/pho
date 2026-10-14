@@ -164,7 +164,7 @@ class BackgroundController(
     private fun cornersFile(id: String) = cornersDir?.let { File(it, "corners_${id.filter { c -> c.isLetterOrDigit() }}.json") }
     private fun writeCorners(id: String, c: List<LonLat>) {
         val f = cornersFile(id) ?: return
-        runCatching { f.parentFile?.mkdirs(); f.writeText(JSONArray().apply { c.forEach { put(JSONArray(listOf(it.lon, it.lat))) } }.toString()) }
+        runCatching { f.parentFile?.mkdirs(); kr.archsurvey.io.AtomicFiles.writeText(f, JSONArray().apply { c.forEach { put(JSONArray(listOf(it.lon, it.lat))) } }.toString()) }
     }
     private fun readCorners(id: String): List<LonLat>? {
         val f = cornersFile(id)?.takeIf { it.exists() } ?: return null

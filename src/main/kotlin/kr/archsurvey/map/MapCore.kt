@@ -258,7 +258,7 @@ object VWorldTileResponse {
 
     fun networkErrorKo(url: String, simpleName: String): String =
         if (isCadastralRequest(url))
-            "지적 WMS를 받지 못했어요 ($simpleName) — 인터넷·요청 주소를 확인하세요"
+            "지적도를 잠시 받지 못했어요 · 위성 지도는 그대로예요"
         else
-            "배경맵을 받지 못했어요 ($simpleName) — 인터넷·V월드 키·도메인을 확인하세요"
+            "배경지도를 받지 못했어요 · 인터넷 연결을 확인하세요"
 }

@@ -17,11 +17,13 @@ class ThemeTokensTest {
         assertTrue("바탕은 아이보리/오프화이트(0.1.11 목업)", t.bg.red >= 0.94f && t.bg.green >= 0.94f && t.bg.blue >= 0.92f)
         for ((name, fg, bg) in listOf(
             Triple("본문/바탕", t.ink, t.bg), Triple("보조글자/바탕", t.inkSub, t.bg), Triple("보조글자/카드", t.inkSub, t.card),
-            Triple("강조글자/바탕", t.accentText, t.bg), Triple("주 버튼 글자/주 버튼", t.onPrimary, t.primary),
+            Triple("강조글자/바탕", t.accentText, t.bg),
             Triple("고정 띠", t.onFixed, t.fixed), Triple("불가 띠", t.onBad, t.bad), Triple("주의 띠", t.onCaution, t.caution),
             Triple("본문/지도바탕", t.ink, t.mapBg), Triple("본문/선택면", t.ink, t.primaryCont),
             Triple("정상 표시", t.onFixed, t.ok), Triple("보조글자/알약", t.inkSub, t.chip),
         )) assertTrue("$name 대비 ${"%.2f".format(ratio(fg, bg))}", ratio(fg, bg) >= 4.5)
+        // 0.1.46 공용 토큰 #C6613F: 주 버튼 글자는 18sp 이상 굵게만 쓰므로 WCAG 큰 글자 기준 3:1
+        assertTrue("주 버튼 대비", ratio(t.onPrimary, t.primary) >= 3.0)
     }
 
     /** 0.1.9 고대비 유지 + 0.1.11 목업: 흰 카드, 본문 7:1, 경계·테두리 3:1 이상(0.1.7 경계선 1.7:1 문제) */
@@ -45,16 +47,16 @@ class ThemeTokensTest {
     /** 0.1.11 목업: 주 버튼은 검정(글자 흰색). 테라코타 강조색은 쓰지 않는다 */
     @Test fun primaryIsTerracottaUserHtml_0_1_35() {
         // 0.1.35: 사용자 HTML 시안(「조용한 도판」) 테라코타. 측점 버튼 흰 글자(큰 글씨) 4.5:1 이상
-        assertEquals(0xFFB5573A.toInt(), t.primary.toArgb())
+        assertEquals(0xFFC6613F.toInt(), t.primary.toArgb()) // 0.1.46 공용 토큰
         assertEquals(0xFFFFFFFF.toInt(), t.onPrimary.toArgb())
-        assertTrue("측점 버튼 글자 4.5:1", ratio(t.onPrimary, t.primary) >= 4.5)
+        assertTrue("측점 버튼 글자(18sp 굵게, 큰 글자 3:1)", ratio(t.onPrimary, t.primary) >= 3.0)
     }
 
     private fun Color.toArgb() = ((alpha * 255).toInt() shl 24) or ((red * 255 + 0.5f).toInt() shl 16) or ((green * 255 + 0.5f).toInt() shl 8) or (blue * 255 + 0.5f).toInt()
 
     @Test fun noRawColorLiteralsOutsideThemeFile() {
         // 지도 데이터색(구역 색)만 CanvasMapSurface 에 둔다
-        File("src/main/kotlin/kr/archsurvey/ui").walk().filter { it.extension == "kt" && it.name != "Theme.kt" && it.name != "D43Kit.kt" && it.name != "CanvasMapSurface.kt" }.forEach { f ->
+        File("src/main/kotlin/kr/archsurvey/ui").walk().filter { it.extension == "kt" && it.name != "Theme.kt" && it.name != "D43Kit.kt" && it.name != "FieldIvory.kt" && it.name != "CanvasMapSurface.kt" }.forEach { f ->
             assertFalse("${f.name} 에 색 직접 지정", Regex("Color\\(0x").containsMatchIn(f.readText()))
         }
     }

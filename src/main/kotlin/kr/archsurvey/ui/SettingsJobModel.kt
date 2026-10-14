@@ -248,7 +248,7 @@ class JobController(
             try { block() }
             catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                error = (e as? JobException)?.message ?: "$label 중 문제가 생겼어요 (${e.javaClass.simpleName})"
+                error = (e as? JobException)?.message ?: UserError.of("job:$label", e, "$label 중 문제가 생겼어요", "다시 시도하세요")
                 c.ui.fail("$label 실패 · $error")
             } finally { busy = false }
             if (error == null) notice?.let { c.ui.ok(it) }

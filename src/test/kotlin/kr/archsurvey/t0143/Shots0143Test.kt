@@ -182,7 +182,7 @@ class Shots0143Test {
         org.junit.Assert.assertTrue(c.points.size == n + 2 || c.phase == Phase.ACQUIRING || c.dupPrompt != null)
         rule.onNodeWithTag("point_confirm").assertDoesNotExist()
         // ~2초 뒤 알림 사라짐
-        rule.mainClock.advanceTimeBy(2500); rule.waitForIdle()
+        rule.mainClock.advanceTimeBy(3500); rule.waitForIdle()
         rule.onNodeWithTag("saved_toast").assertDoesNotExist()
         rule.onNodeWithTag("measure_button").assertIsDisplayed()
     }

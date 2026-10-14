@@ -251,8 +251,8 @@ fun ImuScreen(c: SurveyController) {
                     Text("허용 ${tc.f1(tc.limitDeg)}° · 폴 ${f3(pole)} m", style = Ty.small, color = t.inkSub)
                     val xd = b?.let { Math.toDegrees(kotlin.math.asin(it.x.coerceIn(-1.0, 1.0))) }
                     val yd = b?.let { Math.toDegrees(kotlin.math.asin(it.y.coerceIn(-1.0, 1.0))) }
-                    Text("X ${xd?.let { signedDms(it) } ?: "—"}", style = Ty.coord.copy(fontSize = 13.sp), color = t.ink, modifier = Modifier.testTag("imu_x"))
-                    Text("Y ${yd?.let { signedDms(it) } ?: "—"}", style = Ty.coord.copy(fontSize = 13.sp), color = t.ink, modifier = Modifier.testTag("imu_y"))
+                    Text("X ${xd?.let { signedDms(it) } ?: "—"}", style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.testTag("imu_x"))
+                    Text("Y ${yd?.let { signedDms(it) } ?: "—"}", style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.testTag("imu_y"))
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

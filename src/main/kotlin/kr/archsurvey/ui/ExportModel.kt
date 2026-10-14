@@ -89,7 +89,7 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
             }
             catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                error = "내보내기에 실패했어요 (${e.javaClass.simpleName}). 저장 공간을 확인하고 다시 시도하세요."
+                error = UserError.of("export", e, "내보내기에 실패했어요", "저장 공간을 확인하고 다시 시도하세요")
                 onResult?.invoke(false, error!!)
             }
             finally { running = false }
@@ -100,7 +100,7 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
         val o = output ?: return
         runCatching { platform.share(o) }
             .onSuccess { notice = "공유 창을 열었어요 · 받을 앱을 고르세요"; onResult?.invoke(true, "무선 전송 · ${o.fileName} 공유 창을 열었어요") }
-            .onFailure { notice = "공유 창을 열지 못했어요 (${it.javaClass.simpleName})"; onResult?.invoke(false, notice!!) }
+            .onFailure { notice = UserError.of("share", it, "공유 창을 열지 못했어요"); onResult?.invoke(false, notice!!) }
     }
     fun saveAs() { output?.let { o -> platform.saveAs(o) { ok -> notice = if (ok) "파일로 저장했어요" else "저장을 취소했거나 실패했어요"; onResult?.invoke(ok, notice!!) } } }
 

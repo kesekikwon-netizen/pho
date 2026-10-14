@@ -37,7 +37,7 @@ fun HomeScreen(c: SurveyController) {
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(versionShort(rememberAppVersionLabel()), style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, modifier = Modifier.testTag("home_version"))
+            Text(versionShort(rememberAppVersionLabel()), style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, modifier = Modifier.testTag("home_version"))
             BigSurveyCard { c.hub.open(ToolScreen.SURVEY_HUB) }  // 0.1.14 목업 02→08: 일반 측량 메뉴
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 HomeTile(Glyph.POLYGON, "유구 외곽", "외곽선을 이어 측량", "home_outline", Modifier.weight(1f)) {
@@ -99,7 +99,7 @@ private fun HomeTile(g: Glyph?, title: String, sub: String, tag: String, modifie
         }
         Spacer(Modifier.weight(1f))
         Text(title, style = Ty.title.copy(fontSize = 17.sp), color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(sub, style = Ty.small.copy(fontSize = 11.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(sub, style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -132,8 +132,8 @@ private fun HomeConnBar(c: SurveyController) {
     ) {
         GlyphIcon(Glyph.BT, t.ink, 20.dp)
         Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
-        Text(bar.left, style = Ty.label.copy(fontSize = 14.sp), color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("home_conn_left"))
-        Text(bar.right, style = Ty.small.copy(fontSize = 12.sp), color = if (bar.rightTone == Tone.BAD) t.bad else t.inkSub, maxLines = 1, modifier = Modifier.testTag("home_conn_right"))
+        Text(bar.left, style = Ty.label.copy(fontSize = 16.sp), color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("home_conn_left"))
+        Text(bar.right, style = Ty.small.copy(fontSize = 16.sp), color = if (bar.rightTone == Tone.BAD) t.bad else t.inkSub, maxLines = 1, modifier = Modifier.testTag("home_conn_right"))
     }
 }
 
