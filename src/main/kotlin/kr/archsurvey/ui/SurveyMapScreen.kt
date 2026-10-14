@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -92,7 +93,6 @@ fun SurveyMapScreen(
         if (c.setupOpen) SetupSheet(c)
         if (c.antennaSheetOpen) AntennaSheet(c)
         if (c.hub.screen != null) ToolHost(c)
-        SavedToast(c) // 0.1.45 측정 뒤 지도 위 작은 알림(탭을 막지 않음)
         if (pointConfirmVisible(c)) PointConfirmScreen(c) // 0.1.45: 알림·점을 눌렀을 때만
         DigOverlays(c) // 0.1.35 무엇을 잴까요 · 지도에 보이기 · 지금 상태 · 메뉴 · 유구 이름 바꾸기
         c.exporter?.let { if (it.open) ExportScreen(it) }
@@ -213,61 +213,62 @@ fun NotConnectedCard(c: SurveyController, modifier: Modifier) {
 fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
     val t = T
     val ms = c.mapState()
+    val density = androidx.compose.ui.platform.LocalDensity.current.density
+    var mapSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     Box(
-        modifier.fillMaxWidth().testTag("map_area").pointerInput(Unit) {
-            // 0.1.21: 한 손가락 팬 + 두 손가락 핀치 줌(중심점 고정)
-            detectTransformGestures { centroid, pan, zoom, _ ->
+        modifier.fillMaxWidth().testTag("map_area").oneThumbMap(
+            // 0.1.50 오른손 #6: 한 엄지 끌기 = 이동 · 두 번 탭 후 위아래 끌기 = 확대 · 두 손가락은 예전처럼 · 왼쪽 끝 24dp 는 시스템 뒤로
+            onPan = { pan ->
                 val ppm = (c.dpPerM * density).toFloat()
-                if (pan.x != 0f || pan.y != 0f) {
-                    c.panBy((-pan.x / ppm).toDouble(), (pan.y / ppm).toDouble(), c.mapState().center)
-                }
-                if (zoom != 1f) {
-                    val fx = ((centroid.x - size.width / 2f) / ppm).toDouble()
-                    val fy = (-(centroid.y - size.height / 2f) / ppm).toDouble()
-                    c.scaleBy(zoom.toDouble(), fx, fy)
-                }
-            }
-        },
+                c.panBy((-pan.x / ppm).toDouble(), (pan.y / ppm).toDouble(), c.mapState().center)
+            },
+            onZoom = { zoom, at ->
+                val ppm = (c.dpPerM * density).toFloat()
+                val fx = ((at.x - mapSize.width / 2f) / ppm).toDouble()
+                val fy = (-(at.y - mapSize.height / 2f) / ppm).toDouble()
+                c.scaleBy(zoom.toDouble(), fx, fy)
+            },
+        ).onSizeChanged { mapSize = it },
     ) {
         map.Draw(ms, Modifier.fillMaxSize())
-        // 0.1.43 시안 ②: 위 「재는 것」 띠 + 레이어 / 오른쪽 가운데 내 위치(어두움) · + − 맞춤 / 왼쪽 아래 축척
+        // 0.1.50 오른손 시안 01: 위 = 오류 칩 한 줄(접힘) + 드물게 쓰는 배경지도·맞춤 / 오른쪽 아래 = 내 위치 · 확대 · 축소(엄지 영역).
+        // 점 종류는 아래 「다음 점」 줄을 눌러 바꾼다(지도 위 띠 없앰)
+        val notice = c.mapNotice()
+            ?: (if (ms.tiles.isNotEmpty()) TileImages.lastError else null)
+            ?: kr.archsurvey.map.MapLayers.modeHint(c.mapBase)
+        val noticeColor = if (TileImages.lastError != null && notice == TileImages.lastError) t.bad else if (c.mapNotice() != null) t.bad else t.inkSub
         Column(Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 12.dp, end = 72.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            MapNowBanner(c)
+            notice?.let {
+                // 0.1.46 표준 오류 칩(예외 이름 없이 + [다시]) · 0.1.50 지도 맨 위 한 줄로 접음
+                if (noticeColor == t.bad) ErrorChip(it, Modifier.fillMaxWidth(), tag = "map_notice", onRetry = if (notice == TileImages.lastError) ({ TileImages.retry() }) else null, maxLines = 1)
+                else Text(it, style = Ty.small, color = noticeColor, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.background(t.raised.copy(alpha = 0.92f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp).testTag("map_notice"))
+            }
             StakeCard(c)
             BmResultCard(c)
         }
         Column(Modifier.align(Alignment.TopEnd).padding(end = 12.dp, top = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             MapSquareBtn(Glyph.LAYERS, "지도에 보이기", "tool_layers") { c.dig.layersOpen = true }
-        }
-        Column(Modifier.align(Alignment.CenterEnd).padding(end = 12.dp, top = 40.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            MapSquareBtn(Glyph.LOCATE, "내 위치 고정/해제", "tool_locate", dark = c.follow || true, selected = c.follow) { if (c.follow) c.follow = false else c.recenter() }
-            Column(Modifier.width(48.dp).clip(RoundedCornerShape(10.dp)).background(D.card).border(1.dp, D.line, RoundedCornerShape(10.dp))) {
-                MapGroupBtn("확대", "tool_zoom_in") { GlyphIcon(Glyph.PLUS, D.ink, 18.dp) }
-                Box(Modifier.fillMaxWidth().height(1.dp).background(D.hair))
-                MapGroupBtn("축소", "tool_zoom_out") { GlyphIcon(Glyph.MINUS, D.ink, 18.dp) }
-                Box(Modifier.fillMaxWidth().height(1.dp).background(D.hair))
+            Box(Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)).background(D.card).border(1.dp, D.line, RoundedCornerShape(10.dp))) {
                 MapGroupBtn("전체 보기", "tool_fit") { Text("맞춤", style = DTy.tiny.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium), color = D.ink) }
             }
         }
-        Column(Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 6.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            // 0.1.12 V월드: 키 없음 안내 · 오류 · 출처 표시(약관)
-            // 키없음 → 타일오류(지적 WMS 구분) → 위성만 모드 안내 순
-            val notice = c.mapNotice()
-                ?: (if (ms.tiles.isNotEmpty()) TileImages.lastError else null)
-                ?: kr.archsurvey.map.MapLayers.modeHint(c.mapBase)
-            val noticeColor = if (TileImages.lastError != null && notice == TileImages.lastError) t.bad else if (c.mapNotice() != null) t.bad else t.inkSub
-            notice?.let {
-                // 0.1.46: 오류는 표준 오류 칩(예외 이름 없이 + [다시]), 안내는 작은 흰 글상자
-                if (noticeColor == t.bad) ErrorChip(it, Modifier.widthIn(max = 300.dp), tag = "map_notice", onRetry = if (notice == TileImages.lastError) ({ TileImages.retry() }) else null)
-                else Text(it, style = Ty.small, color = noticeColor, maxLines = 3, modifier = Modifier.widthIn(max = 260.dp).background(t.raised.copy(alpha = 0.92f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp).testTag("map_notice"))
+        Column(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 8.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MapSquareBtn(Glyph.LOCATE, if (c.follow) "따라가기 끄기" else "내 위치 따라가기", "tool_locate", dark = true, selected = c.follow, size = FieldIvory.minTouch) { if (c.follow) c.follow = false else c.recenter() }
+                Column(Modifier.width(FieldIvory.minTouch).clip(RoundedCornerShape(10.dp)).background(D.card).border(1.dp, D.line, RoundedCornerShape(10.dp))) {
+                    MapGroupBtn("확대", "tool_zoom_in", FieldIvory.minTouch) { GlyphIcon(Glyph.PLUS, D.ink, 20.dp) }
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(D.hair))
+                    MapGroupBtn("축소", "tool_zoom_out", FieldIvory.minTouch) { GlyphIcon(Glyph.MINUS, D.ink, 20.dp) }
+                }
             }
+            // 0.1.12 V월드 출처 표시(약관) · 배경 레이어 이름
             if (ms.tiles.isNotEmpty()) Text("© V월드(국토교통부)", style = Ty.small.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.background(t.raised.copy(alpha = 0.85f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 1.dp).testTag("map_attribution"))
             c.bg?.mapCaption()?.let {
                 Text(it, style = Ty.small, color = t.ink, modifier = Modifier.background(t.raised.copy(alpha = 0.85f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp).testTag("map_caption"))
             }
         }
         val h = c.antennaResult?.totalToApcM
-        Column(Modifier.align(Alignment.BottomStart).padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.align(Alignment.BottomStart).padding(start = 8.dp, top = 8.dp, bottom = 8.dp, end = 140.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             // 0.1.14: 위치 종류(코드) 칩 — 하단 툴바가 목업처럼 선·면·삭제·새 연결이 되면서 지도 왼쪽 아래로
             ArchOverlays(c)
             VoicePill(c) // 0.1.28 T14 듣는 중 표시
@@ -275,6 +276,7 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
                 Text(msg, style = Ty.body, color = t.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.background(t.raised.copy(alpha = 0.95f), RoundedCornerShape(10.dp)).border(1.dp, t.accent, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 6.dp).testTag("message"))
             }
+            SavedToast(c) // 0.1.50 오른손 #4: 저장 알림은 지도 아래 왼쪽(되돌리기는 알림 안 오른쪽 끝, 측량 단추와 멀리)
             // 0.1.35 축척 막대 글자(화면 1 cm ≈ 실제 m)
             Text(scaleText(c.dpPerM), style = Ty.coord.copy(fontSize = 16.sp), color = t.ink,
                 modifier = Modifier.background(t.bg.copy(alpha = 0.85f), RoundedCornerShape(8.dp)).padding(horizontal = 6.dp, vertical = 1.dp).testTag("scale_label"))
@@ -300,18 +302,18 @@ internal fun MapNowBanner(c: SurveyController) {
 }
 
 @Composable
-private fun MapSquareBtn(g: Glyph, desc: String, tag: String, dark: Boolean = false, selected: Boolean = false, onClick: () -> Unit) {
+private fun MapSquareBtn(g: Glyph, desc: String, tag: String, dark: Boolean = false, selected: Boolean = false, size: androidx.compose.ui.unit.Dp = 48.dp, onClick: () -> Unit) {
     Box(
-        Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)).background(if (dark) D.dark else D.card).border(if (selected) 2.dp else 1.dp, if (selected) D.accentLight else if (dark) D.dark else D.line, RoundedCornerShape(10.dp))
+        Modifier.size(size).clip(RoundedCornerShape(10.dp)).background(if (dark) D.dark else D.card).border(if (selected) 2.dp else 1.dp, if (selected) D.accentLight else if (dark) D.dark else D.line, RoundedCornerShape(10.dp))
             .hClickable(onClick = onClick).semantics { contentDescription = desc }.testTag(tag),
         contentAlignment = Alignment.Center,
     ) { GlyphIcon(g, if (dark) Color.White else D.ink, 22.dp) }
 }
 
 @Composable
-private fun MapGroupBtn(desc: String, tag: String, content: @Composable () -> Unit) {
+private fun MapGroupBtn(desc: String, tag: String, height: androidx.compose.ui.unit.Dp = 48.dp, content: @Composable () -> Unit) {
     val c = LocalSurvey.current
-    Box(Modifier.fillMaxWidth().height(48.dp).hClickable {
+    Box(Modifier.fillMaxWidth().height(height).hClickable {
         when (tag) { "tool_zoom_in" -> c?.zoomIn(); "tool_zoom_out" -> c?.zoomOut(); else -> c?.fitAll() }
     }.semantics { contentDescription = desc }.testTag(tag), contentAlignment = Alignment.Center) { content() }
 }
@@ -816,7 +818,7 @@ fun SavedToast(c: SurveyController) {
             !c.setupOpen && !c.antennaSheetOpen && !c.dig.pickerOpen && !c.drawerOpen)) return // 다른 창 위에는 안 띄움
     val p = c.lastPoint ?: return
     androidx.compose.runtime.LaunchedEffect(c.resultStripSeq) { kotlinx.coroutines.delay(c.resultStripMs); c.hideResultStrip() }
-    Box(Modifier.fillMaxSize().padding(top = 72.dp), contentAlignment = Alignment.TopCenter) {
+    run {
         val h = p.groundHeightM?.let { "해발 " + String.format(java.util.Locale.US, "%.2f", it) + " m" } ?: "해발 —"
         val s = p.sigmaHM?.let { "±" + String.format(java.util.Locale.US, "%.1f", it * 100) + " cm" } ?: "±—"
         Row(
@@ -824,7 +826,7 @@ fun SavedToast(c: SurveyController) {
                 .heightIn(min = 48.dp).padding(horizontal = 16.dp).semantics { contentDescription = "${p.name} 저장됨, 눌러서 자세히" }.testTag("saved_toast"),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("${p.name} 저장 · $h · $s", style = Ty.label.copy(fontSize = 16.sp), color = D.bg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).testTag("saved_toast_text"))
+            Text("${p.name} 저장 · $h · $s", style = Ty.label.copy(fontSize = 16.sp, lineHeight = 20.sp), color = D.bg, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).padding(vertical = 4.dp).testTag("saved_toast_text"))
             // 0.1.46: 3초 안 한 번에 되돌리기(확인 창 없이 — 알림 자체가 확인)
             Box(Modifier.padding(start = 8.dp).heightIn(min = 48.dp).hClickable { c.hideResultStrip(); c.undo() }.padding(horizontal = 8.dp).semantics { contentDescription = "${p.name} 되돌리기" }.testTag("saved_toast_undo"), contentAlignment = Alignment.Center) {
                 Text("되돌리기", style = Ty.label.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold), color = FieldIvory.decor)

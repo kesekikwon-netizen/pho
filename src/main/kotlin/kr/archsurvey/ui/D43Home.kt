@@ -98,45 +98,9 @@ fun HomeToday(c: SurveyController) {
                     if (conn?.form?.enabled == true && conn.form.mount.isNotBlank()) HomeChip(conn.form.mount, D.fix, "home_chip_vrs")
                     HomeChip("폴 " + String.format(Locale.US, "%.2f", c.antenna.inputValueM) + " m", D.accent, "home_chip_pole")
                 }
-                Box(
-                    Modifier.fillMaxWidth().height(FieldIvory.measureButton).clip(RoundedCornerShape(18.dp)).background(FieldIvory.primary)
-                        .hClickable { c.goToSurvey() }.semantics { contentDescription = "측량 계속하기" }.testTag("home_survey"),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("측량 계속하기", style = DTy.h1.copy(fontSize = 24.sp), color = FieldIvory.onPrimary)
-                        Text("지도에서 바로 측량", style = DTy.small, color = FieldIvory.onPrimary)
-                    }
-                }
-            }
-            // 다른 작업
-            Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("다른 작업", style = DTy.small.copy(fontWeight = FontWeight.Bold), color = D.sub, modifier = Modifier.weight(1f))
-                Box(Modifier.heightIn(min = 48.dp).hClickable { c.jobs?.openList() ?: c.hub.open(ToolScreen.JOB_OPEN) }.padding(horizontal = 8.dp).testTag("home_card_open"), contentAlignment = Alignment.Center) {
-                    Text("전체 보기 ›", style = DTy.small, color = D.accent)
-                }
-            }
-            val listShape = RoundedCornerShape(18.dp)
-            Column(Modifier.fillMaxWidth().clip(listShape).background(D.card).border(1.dp, D.hair, listShape)) {
-                val others = c.jobs?.list?.filter { it.name != c.projectName }?.take(2).orEmpty()
-                others.forEachIndexed { i, j ->
-                    HomeListRow(Glyph.FOLDER, j.name, "${j.points}점" + (j.lastAtMs?.let { " · " + SimpleDateFormat("MM-dd", Locale.KOREA).format(Date(it)) } ?: ""), "home_other_$i") { c.jobs?.open(j.name) }
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(D.hair))
-                }
-                HomeListRow(Glyph.PLUS, "새 작업", "선택만으로 만들기", "home_new_job", plain = true) { c.jobs?.openNew() ?: c.ui.toast("작업 관리를 쓸 수 없어요") }
-            }
-            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                HomeTileBox(Glyph.LIST, "점 목록", "home_points", Modifier.weight(1f)) { c.homeOpen = false; c.hub.open(ToolScreen.POINTS) }
-                HomeTileBox(Glyph.EXPORT, "내보내기", "home_export", Modifier.weight(1f)) { c.exporter?.openScreen() }
-                HomeTileBox(Glyph.BT, "수신기", "home_receiver", Modifier.weight(1f)) { c.connection?.openScreen() ?: c.ui.toast("연결 화면을 열 수 없어요") }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                HomeTileBox(Glyph.FACE, "유구별 보기", "home_features", Modifier.weight(1f)) { c.homeOpen = false; c.hub.open(ToolScreen.FEATURES) }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                HomeTileBox(Glyph.GRID, "구역·그리드", "home_areas", Modifier.weight(1f)) { c.homeOpen = false; c.hub.open(ToolScreen.AREAS) }
-                HomeTileBox(Glyph.LOCATE, "점 찾아가기", "home_goto", Modifier.weight(1f)) { c.hub.open(ToolScreen.GOTO) }
-                HomeTileBox(Glyph.SLIDERS, "설정", "home_settings2", Modifier.weight(1f)) { c.hub.open(ToolScreen.SETTINGS) }
+                // 0.1.50 오른손 #7: 폴 확인 띠(아래 한 줄)는 지금 작업 카드 안 배지로
+                Text(homeHint(c, steps), style = DTy.small.copy(fontWeight = FontWeight.Medium), color = D.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(D.chip).padding(horizontal = 10.dp, vertical = 6.dp).testTag("home_foot"))
             }
             Row(Modifier.padding(top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.Bottom) {
                 Text("측량 전 준비", style = DTy.h2, color = D.ink)
@@ -144,9 +108,39 @@ fun HomeToday(c: SurveyController) {
             }
             steps.forEachIndexed { i, s -> D43PrepRow(c, i, s, i == steps.lastIndex) }
             BatteryGuideCard(Modifier.padding(top = 8.dp)) // 0.1.48
+            Text(backupLabel(c), style = DTy.small, color = D.sub, modifier = Modifier.padding(start = 4.dp).testTag("home_backup"))
             Spacer(Modifier.height(8.dp))
         }
-        DFootLine(listOf(homeHint(c, steps), backupLabel(c)), "home_foot")
+        // 0.1.50 오른손 #7: 자리만 바꿈 — 드문 것(구역·찾아가기·설정 / 새 작업·다른 작업·유구별)은 위, 자주 쓰는 것(점 목록·내보내기·수신기)은 아래,
+        // 「측량 계속하기」는 화면 맨 아래 고정(104dp, 엄지 쉬움)
+        Box(Modifier.fillMaxWidth().height(1.dp).background(D.hair))
+        Column(Modifier.fillMaxWidth().background(D.bg).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp).testTag("home_dock"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HomeTileBox(Glyph.GRID, "구역·그리드", "home_areas", Modifier.weight(1f), small = true) { c.homeOpen = false; c.hub.open(ToolScreen.AREAS) }
+                HomeTileBox(Glyph.LOCATE, "점 찾아가기", "home_goto", Modifier.weight(1f), small = true) { c.hub.open(ToolScreen.GOTO) }
+                HomeTileBox(Glyph.SLIDERS, "설정", "home_settings2", Modifier.weight(1f), small = true) { c.hub.open(ToolScreen.SETTINGS) }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HomeTileBox(Glyph.PLUS, "새 작업", "home_new_job", Modifier.weight(1f), small = true) { c.jobs?.openNew() ?: c.ui.toast("작업 관리를 쓸 수 없어요") }
+                HomeTileBox(Glyph.FOLDER, "다른 작업", "home_card_open", Modifier.weight(1f), small = true) { c.jobs?.openList() ?: c.hub.open(ToolScreen.JOB_OPEN) }
+                HomeTileBox(Glyph.FACE, "유구별", "home_features", Modifier.weight(1f), small = true) { c.homeOpen = false; c.hub.open(ToolScreen.FEATURES) }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HomeTileBox(Glyph.LIST, "점 목록", "home_points", Modifier.weight(1f)) { c.homeOpen = false; c.hub.open(ToolScreen.POINTS) }
+                HomeTileBox(Glyph.EXPORT, "내보내기", "home_export", Modifier.weight(1f)) { c.exporter?.openScreen() }
+                HomeTileBox(Glyph.BT, "수신기", "home_receiver", Modifier.weight(1f)) { c.connection?.openScreen() ?: c.ui.toast("연결 화면을 열 수 없어요") }
+            }
+            Box(
+                Modifier.fillMaxWidth().height(MEASURE_RH).clip(RoundedCornerShape(18.dp)).background(FieldIvory.primary)
+                    .hClickable { c.goToSurvey() }.semantics { contentDescription = "측량 계속하기" }.testTag("home_survey"),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("측량 계속하기", style = DTy.h1.copy(fontSize = 24.sp), color = FieldIvory.onPrimary)
+                    Text("지도에서 바로 측량", style = DTy.small, color = FieldIvory.onPrimary)
+                }
+            }
+        }
     }
 }
 
@@ -169,12 +163,11 @@ private fun HomeListRow(g: Glyph, title: String, sub: String, tag: String, plain
 }
 
 @Composable
-private fun HomeTileBox(g: Glyph, label: String, tag: String, modifier: Modifier, onClick: () -> Unit) {
+private fun HomeTileBox(g: Glyph, label: String, tag: String, modifier: Modifier, small: Boolean = false, onClick: () -> Unit) {
     val sh = RoundedCornerShape(16.dp)
-    Column(modifier.heightIn(min = 76.dp).clip(sh).background(D.card).border(1.5.dp, D.line, sh).hClickable(onClickLabel = label, onClick = onClick).padding(vertical = 8.dp).testTag(tag),
+    Column(modifier.heightIn(min = if (small) FieldIvory.minTouch else 76.dp).clip(sh).background(D.card).border(1.5.dp, D.line, sh).hClickable(onClickLabel = label, onClick = onClick).padding(vertical = 8.dp).testTag(tag),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        GlyphIcon(g, D.ink, 24.dp)
-        Spacer(Modifier.height(6.dp))
+        if (!small) { GlyphIcon(g, D.ink, 24.dp); Spacer(Modifier.height(6.dp)) }
         Text(label, style = DTy.small.copy(fontWeight = FontWeight.Bold), color = D.ink, maxLines = 1)
     }
 }

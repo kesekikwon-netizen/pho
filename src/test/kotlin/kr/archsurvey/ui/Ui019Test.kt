@@ -187,7 +187,7 @@ class Ui019Test {
         val (c, _, _) = setup(src = f)
         fun adv(n: Int) { rule.runOnIdle { repeat(n) { f.emitNext() } }; rule.waitForIdle() }
         adv(3)
-        rule.onNodeWithTag("measure_button").performClick(); rule.waitForIdle()
+        org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofMillis(900)); rule.onNodeWithTag("measure_button").performClick() /* 0.1.50 연타 0.8초 막기 */; rule.waitForIdle()
         assertEquals(Phase.ACQUIRING, c.phase)
         // 0.1.35 X4: 진행은 측점 단추 안(지도·내 위치를 가리지 않음)
         rule.onNodeWithTag("measure_progress", useUnmergedTree = true).assertExists()
@@ -217,9 +217,9 @@ class Ui019Test {
         val f = FakeGnssSource(FakeScenarios.fieldWalk())
         val (c, _, _) = setup(src = f)
         rule.runOnIdle { repeat(3) { f.emitNext() } }; rule.waitForIdle()
-        rule.onNodeWithTag("measure_button").performClick(); rule.waitForIdle()
+        org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofMillis(900)); rule.onNodeWithTag("measure_button").performClick() /* 0.1.50 연타 0.8초 막기 */; rule.waitForIdle()
         // 0.1.35: 재는 중 측점 단추 다시 누름 = 중지
-        rule.onNodeWithTag("measure_button").performClick(); rule.waitForIdle()
+        org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofMillis(900)); rule.onNodeWithTag("measure_button").performClick() /* 0.1.50 연타 0.8초 막기 */; rule.waitForIdle()
         assertNotEquals(Phase.ACQUIRING, c.phase); assertEquals(0, c.points.size)
     }
 

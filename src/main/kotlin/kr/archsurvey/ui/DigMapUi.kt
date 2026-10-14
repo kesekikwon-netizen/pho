@@ -159,16 +159,24 @@ internal fun DigControlArea(c: SurveyController) {
     rememberTick()
     Column(Modifier.fillMaxWidth().background(D.bg).padding(horizontal = 16.dp).testTag("control_area")) {
         DupDecisionBar(c)
+        // 0.1.50 오른손 #1: 면 닫기·메모·사진은 한 칸 더 위(측량 단추 중심에서 70dp 이상) — 장갑·걷는 중 오터치 방지
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (feature) MiniAction(Glyph.FACE, if (c.dig.closeArmed) "닫기 취소" else "면 닫기", "tool_close_area", Modifier.weight(1f), on = c.dig.closeArmed) { c.dig.armClose() }
+            MiniAction(Glyph.MIC, if (c.voiceSeconds > 0) "녹음 끝" else "메모", "tool_memo", Modifier.weight(1f), on = c.voiceSeconds > 0) { c.toggleVoice() }
+            MiniAction(Glyph.CAMERA, "사진", "tool_photo", Modifier.weight(1f)) { if (c.lastPoint != null) c.addPhotoCamera() else c.ui.toast("점을 잰 뒤 사진을 붙일 수 있어요") }
+            if (c.dig.undoIsReopen) MiniAction(Glyph.UNDO, "면 닫기 되돌리기", "tool_undo", Modifier.weight(1f)) { c.askUndo() }
+        }
+        // 0.1.50 오른손 #2: 「다음 점 P-0005 · 유구 경계 ▾」 줄 자체를 누르면 종류 시트 · 아래 16dp 는 누를 것 없음(#1)
         // 0.1.46 시안 s03: [다음 점 P-0006 · 유구 경계 (눌러서 바꾸기)] [폴 1.60 m] 한 줄 → 큰 측정 단추. 지도 비율을 넓힌다
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val (head, tail) = c.dig.nowLine()
             Column(
-                Modifier.weight(1f).heightIn(min = FieldIvory.minTouch).clip(RoundedCornerShape(12.dp)).hClickable { c.dig.pickerOpen = true }
+                Modifier.weight(1f).heightIn(min = FieldIvory.minTouch).clip(RoundedCornerShape(12.dp)).background(D.card).border(1.5.dp, D.line, RoundedCornerShape(12.dp)).hClickable { c.dig.pickerOpen = true }.padding(horizontal = 12.dp, vertical = 4.dp)
                     .semantics { contentDescription = "다음 점 ${c.nextName}, 지금 재는 것 $head ${tail ?: ""}. 눌러서 바꾸기" }.testTag("now_row"),
                 verticalArrangement = Arrangement.Center,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("다음 점", style = DTy.small, color = D.sub)
+                    Text("다음 점 · 눌러서 종류", style = DTy.small, color = D.sub, maxLines = 1)
                     c.tilt?.let { tc ->
                         val a = tc.angleDeg
                         if (a != null && tc.state != TiltState.OFF && tc.state != TiltState.NO_SENSOR) {
@@ -184,6 +192,7 @@ internal fun DigControlArea(c: SurveyController) {
                     Text(c.nextName, style = DTy.monoBig.copy(fontSize = 22.sp), color = D.ink, maxLines = 1, modifier = Modifier.testTag("next_name"))
                     Text(" · $head", style = DTy.body.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold), color = D.accent, maxLines = 1, modifier = Modifier.testTag("now_kind"))
                     if (tail != null) Text(" · $tail", style = DTy.body.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold), color = D.accent, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).testTag("now_target"))
+                    Text(" ▾", style = DTy.body.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold), color = D.accent, maxLines = 1)
                 }
             }
             val pole = String.format(Locale.US, "%.2f", c.antenna.inputValueM)
@@ -196,17 +205,11 @@ internal fun DigControlArea(c: SurveyController) {
                 Text("$pole m", style = DTy.mono.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold), color = D.ink, maxLines = 1, modifier = Modifier.testTag("antenna_input"))
             }
         }
-        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (feature) MiniAction(Glyph.FACE, if (c.dig.closeArmed) "닫기 취소" else "면 닫기", "tool_close_area", Modifier.weight(1f), on = c.dig.closeArmed) { c.dig.armClose() }
-            MiniAction(Glyph.MIC, if (c.voiceSeconds > 0) "녹음 끝" else "메모", "tool_memo", Modifier.weight(1f), on = c.voiceSeconds > 0) { c.toggleVoice() }
-            MiniAction(Glyph.CAMERA, "사진", "tool_photo", Modifier.weight(1f)) { if (c.lastPoint != null) c.addPhotoCamera() else c.ui.toast("점을 잰 뒤 사진을 붙일 수 있어요") }
-            if (c.dig.undoIsReopen) MiniAction(Glyph.UNDO, "면 닫기 되돌리기", "tool_undo", Modifier.weight(1f)) { c.askUndo() }
-        }
         Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             // 0.1.46 시안 s03: [점 목록] + 큰 「측량」. 면 닫기·사진·메모는 위 작은 줄(한 번 탭), 되돌리기는 저장 알림 안
             val side: @Composable RowScope.() -> Unit = {
                 val sh = RoundedCornerShape(16.dp)
-                Column(Modifier.width(96.dp).height(FieldIvory.measureButton).clip(sh).background(D.card).border(1.5.dp, D.line, sh)
+                Column(Modifier.width(96.dp).height(MEASURE_RH).clip(sh).background(D.card).border(1.5.dp, D.line, sh)
                     .hClickable { c.hub.open(ToolScreen.POINTS) }.semantics { contentDescription = "점 목록" }.testTag("tool_points"),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                     GlyphIcon(Glyph.LIST, D.ink, 26.dp); Spacer(Modifier.height(6.dp)); Text("점 목록", style = DTy.small.copy(fontWeight = FontWeight.Bold), color = D.ink, maxLines = 1)
@@ -226,9 +229,10 @@ internal fun DigControlArea(c: SurveyController) {
                     else -> { label = "측량"; sub = c.gv.status.sigmaHM?.let { "±" + String.format(Locale.US, "%.1f", it * 100) + " cm" } ?: "" }
                 }
                 Box(
-                    Modifier.weight(1f).height(FieldIvory.measureButton).clip(RoundedCornerShape(16.dp))
+                    Modifier.weight(1f).height(MEASURE_RH).clip(RoundedCornerShape(16.dp))
                         .background(if (!busy && (notConn || dim) && !armed) t43Blocked else D.primary)
-                        .hCombinedClickable(onLongClick = { if (!busy && !armed) c.setupOpen = true }) { if (busy) c.cancelAcquire() else if (notConn && !armed) { c.connection?.openScreen() ?: c.onMeasure() } else c.onMeasure() }
+                        // 0.1.50 오른손 #9: 손을 뗄 때 실행 · 8dp 넘게 밀리면 취소 · 연타 0.8초 막기(길게 = 설정은 그대로)
+                        .releaseTap(label, onLongClick = { if (!busy && !armed) c.setupOpen = true }) { if (busy) c.cancelAcquire() else if (notConn && !armed) { c.connection?.openScreen() ?: c.onMeasure() } else c.onMeasure() }
                         .testTag("measure_button"),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -249,6 +253,9 @@ internal fun DigControlArea(c: SurveyController) {
 }
 
 private val t43Blocked get() = D.blocked
+
+/** 0.1.50 오른손 #1: 측량 단추 104dp(오른쪽 정렬 · 오른손 기본) */
+internal val MEASURE_RH = 104.dp
 
 /** 0.1.46 작은 보조 동작(한 번 탭, 56dp 높이) */
 @Composable

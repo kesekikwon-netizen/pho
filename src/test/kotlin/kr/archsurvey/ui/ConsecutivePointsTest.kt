@@ -53,7 +53,7 @@ class ConsecutivePointsTest {
         repeat(3) { i ->
             // 이전 점의 결과 띠가 떠 있어도 측점 버튼은 보이고 눌린다
             rule.onNodeWithTag("measure_button").assertIsDisplayed().assertHasClickAction()
-            rule.onNodeWithTag("measure_button").performClick(); taps++; rule.waitForIdle()
+            org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofMillis(900)); rule.onNodeWithTag("measure_button").performClick() /* 0.1.50 연타 0.8초 막기 */; taps++; rule.waitForIdle()
             assertEquals("탭 ${i + 1}번 직후 곧바로 취득 시작", Phase.ACQUIRING, c.phase)
             adv(f, 5)
             assertEquals(Phase.RESULT, c.phase)
@@ -70,11 +70,11 @@ class ConsecutivePointsTest {
 
     @Test fun nextPointButtonOnExpandedPanelStartsAcquisitionWithOneTap() {
         val (f, spy, c) = setup(); adv(f, 3)
-        rule.onNodeWithTag("measure_button").performClick(); adv(f, 5)
+        org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofMillis(900)); rule.onNodeWithTag("measure_button").performClick() /* 0.1.50 연타 0.8초 막기 */; adv(f, 5)
         // 0.1.35 X3: 장부 카드를 닫지 않아도 측점 단추(「다음 점」) 한 번 = 바로 다음 측정
         rule.onNodeWithTag("point_confirm").assertDoesNotExist(); rule.onNodeWithTag("saved_toast").assertExists()
         rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("측량") // 0.1.46 s03: 「측량」
-        rule.onNodeWithTag("measure_button").performClick(); rule.waitForIdle()
+        org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofMillis(900)); rule.onNodeWithTag("measure_button").performClick() /* 0.1.50 연타 0.8초 막기 */; rule.waitForIdle()
         assertEquals(Phase.ACQUIRING, c.phase)
         adv(f, 5)
         assertEquals(2, c.points.size)
@@ -83,22 +83,22 @@ class ConsecutivePointsTest {
 
     @Test fun resultStripHidesByItselfAndNeverBlocksMeasure() {
         val (f, _, c) = setup(); adv(f, 3)
-        rule.onNodeWithTag("measure_button").performClick(); adv(f, 5)
+        org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofMillis(900)); rule.onNodeWithTag("measure_button").performClick() /* 0.1.50 연타 0.8초 막기 */; adv(f, 5)
         rule.onNodeWithTag("saved_toast").assertExists()
         rule.runOnIdle { c.hideResultStrip() }; rule.waitForIdle()
         rule.onNodeWithTag("saved_toast").assertDoesNotExist(); rule.onNodeWithTag("point_confirm").assertDoesNotExist()
         assertEquals(Phase.RESULT, c.phase)
-        rule.onNodeWithTag("measure_button").performClick(); rule.waitForIdle()
+        org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofMillis(900)); rule.onNodeWithTag("measure_button").performClick() /* 0.1.50 연타 0.8초 막기 */; rule.waitForIdle()
         assertEquals(Phase.ACQUIRING, c.phase)
     }
 
     @Test fun unavailableStillBlocksAndUndoIsInQuickMenu() {
         val (f, _, c) = setup(); adv(f, 3)
-        rule.onNodeWithTag("measure_button").performClick(); adv(f, 5)
+        org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofMillis(900)); rule.onNodeWithTag("measure_button").performClick() /* 0.1.50 연타 0.8초 막기 */; adv(f, 5)
         assertEquals(1, c.points.size)
         // 불가(단독) 구간에서는 저장 차단 정책 유지
         rule.runOnIdle { f.skipToNextSegment(); f.skipToNextSegment() }; adv(f, 2)
-        rule.onNodeWithTag("measure_button").performClick(); rule.waitForIdle()
+        org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofMillis(900)); rule.onNodeWithTag("measure_button").performClick() /* 0.1.50 연타 0.8초 막기 */; rule.waitForIdle()
         assertNotEquals(Phase.ACQUIRING, c.phase)
         assertEquals(1, c.points.size)
         assertTrue(c.message!!.contains("측점할 수 없어요"))
