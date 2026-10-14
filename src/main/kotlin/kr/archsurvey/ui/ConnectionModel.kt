@@ -638,6 +638,7 @@ class ConnectionController(
             REGION_MOUNT.matches(m.mountPoint.trim()) -> Gvrs.REGION_NOTE
             else -> null
         }
+        RtcmMountCompat.r10CmrNote(profile, m.mountPoint, m.format, m.formatDetails)?.let { return it }
         val minor = RtcmMountCompat.detectMinor(m.mountPoint, m.format, m.formatDetails) ?: return null
         val rec = RecommendedMount.pick(profile, mounts, "")
         return when {
