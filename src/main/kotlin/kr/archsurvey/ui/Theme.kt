@@ -60,13 +60,14 @@ private fun c(h: Long) = Color(0xFF000000 or h)
  * 시스템 다크 모드와 무관하게 항상 이 토큰을 쓴다.
  */
 val LightTokens = Tokens(
-    bg = c(0xFAF9F5), card = c(0xFFFFFF), line = c(0x8A8A86), outline = c(0x767672),
-    ink = c(0x111111), inkSub = c(0x474744),
+    bg = FieldIvory.bg, card = FieldIvory.card, line = c(0x8A8A86), outline = c(0x767672),
+    ink = FieldIvory.ink, inkSub = FieldIvory.inkSub,
     // 0.1.35 사용자 시안 「조용한 도판」: 주 단추 Action Terracotta #B5573A(흰 글자 약 4.9:1), 글자 강조는 더 진하게
-    primary = c(0xB5573A), onPrimary = c(0xFFFFFF), accent = c(0x9C4A30), accentText = c(0x863A23),
-    fixed = c(0x146536), onFixed = c(0xFFFFFF), // 0.1.31: 측량 가능 = 초록(흰 글자 7.1:1)
-    caution = c(0xF2B600), onCaution = c(0x141413),
-    bad = c(0xA3123A), onBad = c(0xFFFFFF),
+    // 0.1.8 Field Ivory(두 앱 공용, FieldIvory.kt): 주 행동 #C6613F · FIX #1F7A3A · FLOAT #A86400 · 오류 #B42318
+    primary = FieldIvory.primary, onPrimary = FieldIvory.onPrimary, accent = FieldIvory.pressed, accentText = FieldIvory.pressed,
+    fixed = FieldIvory.fix, onFixed = c(0xFFFFFF),
+    caution = FieldIvory.float, onCaution = c(0xFFFFFF),
+    bad = FieldIvory.error, onBad = c(0xFFFFFF),
     scrim = Color(0x66111111),
     raised = c(0xFFFFFF), primaryCont = c(0xECEBE6), mapBg = c(0xEDECE8),
     ok = c(0x1E7A46), chip = c(0xEDECE7),
@@ -99,10 +100,14 @@ fun SurveyTheme(dark: Boolean = false, content: @Composable () -> Unit) {
 
 /** 번들 글꼴(OFL): Noto Sans KR 300/400, JetBrains Mono 300/400. 한글은 KS X 1001 2,350자 + 기호만 담았다(그 밖의 글자는 기기 글꼴로 대체). */
 object Fonts {
+    /** 0.1.8 Field Ivory: Pretendard(OFL 1.1, assets/licenses/OFL-Pretendard.txt). Light 요청도 Regular 로(햇빛 아래 가는 글씨 금지) */
     val sans = FontFamily(
-        Font(kr.archsurvey.R.font.noto_sans_kr_light, FontWeight.Light),
-        Font(kr.archsurvey.R.font.noto_sans_kr_regular, FontWeight.Normal),
-        Font(kr.archsurvey.R.font.noto_sans_kr_regular, FontWeight.Medium),
+        Font(kr.archsurvey.R.font.pretendard_regular, FontWeight.Light),
+        Font(kr.archsurvey.R.font.pretendard_regular, FontWeight.Normal),
+        Font(kr.archsurvey.R.font.pretendard_semibold, FontWeight.Medium),
+        Font(kr.archsurvey.R.font.pretendard_semibold, FontWeight.SemiBold),
+        Font(kr.archsurvey.R.font.pretendard_bold, FontWeight.Bold),
+        Font(kr.archsurvey.R.font.pretendard_bold, FontWeight.ExtraBold),
     )
     /** 0.1.35 숫자: IBM Plex Mono 400/500 (가는 글씨는 JetBrains Mono Light 유지) */
     val mono = FontFamily(
@@ -125,13 +130,13 @@ object Ty {
     val serifHead = TextStyle(fontSize = 19.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.serif)
     /** 장부 숫자 */
     val ledger = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.mono)
-    val label = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
-    val body = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.sans)
-    val small = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.sans)
+    val label = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
+    val body = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.sans)
+    val small = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.sans)
     val title = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
     val bandMain = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
     val button = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Normal, fontFamily = Fonts.sans)
-    val coord = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.mono)
+    val coord = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Light, fontFamily = Fonts.mono)
 }
 
 private fun bundledTypography(): androidx.compose.material3.Typography {

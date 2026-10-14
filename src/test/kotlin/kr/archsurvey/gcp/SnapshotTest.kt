@@ -142,7 +142,7 @@ class SnapshotTest {
         rule.runOnIdle { c.openObj(c.book!!.objs[1].id); c.openTargets() }
         show(c)
         rule.onNodeWithTag("targets").assertIsDisplayed(); rule.onNodeWithTag("qtag_done_1", useUnmergedTree = true).assertExists()
-        rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("표적 4 재기")
+        rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("표적 #4 측량")
         shot("m06-targets")
         rule.runOnIdle { val (la, lo) = Geo.latLon(194890.0, 573975.0); r.gnss.emit(q = kr.archsurvey.core.FixQuality.RTK_FLOAT, lat = la, lon = lo) }
         rule.mainClock.advanceTimeBy(1500); rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("FIX 기다리는 중"); shot("m06b-targets-float-blocked")
@@ -157,7 +157,7 @@ class SnapshotTest {
         rule.runOnIdle { r.measure(4, 194953.0, 574012.0) }
         rule.onNodeWithTag("targets").assertIsDisplayed(); rule.onNodeWithTag("map_area").assertIsDisplayed()
         assertNull(c.ui.confirm); assertEquals(Screen.TARGETS, c.screen)
-        rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("표적 5 재기")
+        rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("표적 #5 측량")
         shot("m06e-after-save-next-target", keepToast = true)
         rule.runOnIdle { c.openAddSlot() }; shot("m06d-add-target-number")
     }

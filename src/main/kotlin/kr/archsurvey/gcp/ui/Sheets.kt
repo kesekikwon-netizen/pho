@@ -38,7 +38,7 @@ fun ObjListSheet(c: GcpController) {
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
                 ) {
                     Text("${counts[st] ?: 0}", style = Ty.ledger.copy(fontSize = 20.sp), color = if (on) t.onPrimary else if (st == Stage.DONE) t.fixed else t.ink)
-                    Text(st.ko, style = Ty.small.copy(fontSize = 11.sp), color = if (on) t.onPrimary else t.inkSub, maxLines = 1)
+                    Text(st.ko, style = Ty.small.copy(fontSize = 16.sp), color = if (on) t.onPrimary else t.inkSub, maxLines = 1)
                 }
             }
         }
@@ -54,9 +54,9 @@ fun ObjListSheet(c: GcpController) {
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(r.obj.name, style = Ty.serifHead.copy(fontSize = 18.sp), color = t.ink, maxLines = 1)
-                    Text((r.session?.let { "${it.no}차 ${it.label} · " } ?: "") + "표적 ${r.measured}/${r.slots}", style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1)
+                    Text((r.session?.let { "${it.no}차 ${it.label} · " } ?: "") + "표적 ${r.measured}/${r.slots}", style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, maxLines = 1)
                 }
-                Text(r.stage.ko, style = Ty.label.copy(fontSize = 13.sp), color = when (r.stage) { Stage.DONE -> t.fixed; Stage.MEASURE -> t.accentText; else -> t.ink },
+                Text(r.stage.ko, style = Ty.label.copy(fontSize = 16.sp), color = when (r.stage) { Stage.DONE -> t.fixed; Stage.MEASURE -> t.accentText; else -> t.ink },
                     modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(t.chip).padding(horizontal = 8.dp, vertical = 4.dp))
             }
         }
@@ -93,7 +93,7 @@ fun NewObjSheet(c: GcpController, f: NewObjForm) {
                 ) {
                     Text("${f.no}", style = Ty.ledger.copy(fontSize = 44.sp), color = T.ink, modifier = Modifier.testTag("objno_value"))
                     Text(" 호 ${f.kind.ko}", style = Ty.serifHead.copy(fontSize = 22.sp), color = T.ink, modifier = Modifier.weight(1f))
-                    Text("번호판 ›", style = Ty.label.copy(fontSize = 14.sp), color = T.primary)
+                    Text("번호판 ›", style = Ty.label.copy(fontSize = 16.sp), color = T.primary)
                 }
                 if (f.no in f.used) Caption("${f.no}호 ${f.kind.ko} 은(는) 이미 있어요", T.bad, "objno_taken")
                 val nx = ObjNames.next(f.used)
@@ -102,7 +102,7 @@ fun NewObjSheet(c: GcpController, f: NewObjForm) {
                     for ((i, n) in quick.withIndex()) Tile("${n}호", f.no == n, "objno_q_$n", Modifier.weight(1f), sub = if (i == 0) "다음 번호" else null) { c.pickObjNo(n) }
                 }
             }
-            Text("1차 이름", style = Ty.label.copy(fontSize = 14.sp), color = T.ink)
+            Text("1차 이름", style = Ty.label.copy(fontSize = 16.sp), color = T.ink)
             TileGrid(SessionLabels.ALL, 4, 6.dp) { l -> Tile(l, l == f.label, "label_$l", Modifier.weight(1f), height = 56.dp) { c.pickLabel(l) } }
             Caption("표적 칸: #" + QrPayload.ranges(f.slots) + " · 칸 번호는 측점 화면에서 길게 눌러 바꿔요")
             f.nearNote?.let { Caption(it, T.accentText, "near_note") }
@@ -151,7 +151,7 @@ fun NumPickSheet(c: GcpController, p: NumPick) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(if (p.value == 0) "—" else "${p.value}", style = Ty.ledger.copy(fontSize = 44.sp), color = t.ink, modifier = Modifier.weight(1f).testTag("numpad_value"))
-            Text(when { p.taken -> "이미 있음"; p.value in p.near -> "근처 대상과 겹침"; else -> "" }, style = Ty.label.copy(fontSize = 13.sp), color = if (p.taken) t.bad else t.accentText, modifier = Modifier.testTag("numpad_warn"))
+            Text(when { p.taken -> "이미 있음"; p.value in p.near -> "근처 대상과 겹침"; else -> "" }, style = Ty.label.copy(fontSize = 16.sp), color = if (p.taken) t.bad else t.accentText, modifier = Modifier.testTag("numpad_warn"))
         }
         // 빠른 고르기: 다음 빈 번호 몇 개
         val free = generateSequence(1) { it + 1 }.filter { it !in p.used && it !in p.near }.take(4).toList()
@@ -178,7 +178,7 @@ fun NewSiteSheet(c: GcpController, f: NewSiteForm) {
     BottomSheet("새 유적", "newsite_sheet", onClose = { c.newSite = null }, bottom = {
         Btn("만들기", "newsite_ok", Modifier.weight(1f), enabled = f.name() != null, sub = (f.name() ?: "이름을 고르세요") + " · EPSG:${f.epsg}") { c.submitNewSite() }
     }) {
-        Text("이름", style = Ty.label.copy(fontSize = 14.sp), color = t.ink)
+        Text("이름", style = Ty.label.copy(fontSize = 16.sp), color = t.ink)
         f.addressNote?.let { Caption(it, if (f.locating) t.inkSub else t.accentText, "newsite_addr") }
         for ((i, s) in f.suggestions.withIndex()) Tile(s, f.typed == null && f.base == s, "site_sug_$i", Modifier.fillMaxWidth(), height = 56.dp) { c.newSite = f.copy(base = s, typed = null) }
         if (f.typed != null) {
@@ -186,7 +186,7 @@ fun NewSiteSheet(c: GcpController, f: NewSiteForm) {
             androidx.compose.material3.OutlinedTextField(f.typed, { c.newSite = f.copy(typed = it.take(40)) }, Modifier.fillMaxWidth().testTag("site_typed"), singleLine = true,
                 label = { Text("유적 이름 직접 입력") })
         } else Tile("직접 입력…", false, "site_type", Modifier.fillMaxWidth(), sub = "목록에 없을 때만 · 자판", height = 52.dp) { c.newSite = f.copy(typed = f.base ?: "") }
-        Text("지구", style = Ty.label.copy(fontSize = 14.sp), color = t.ink)
+        Text("지구", style = Ty.label.copy(fontSize = 16.sp), color = t.ink)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Tile("없음", f.district == null, "district_none", Modifier.weight(1f), height = 52.dp) { c.newSite = f.copy(district = null) }
             for (n in 1..4) Tile("$n", f.district == n, "district_$n", Modifier.weight(1f), height = 52.dp, big = true) { c.newSite = f.copy(district = n) }
@@ -194,7 +194,7 @@ fun NewSiteSheet(c: GcpController, f: NewSiteForm) {
                 c.numPick = NumPick(PickFor.District, "몇 지구?", f.district ?: 5, emptySet(), max = 99)
             }
         }
-        Text("좌표계 (수신기와 같게)", style = Ty.label.copy(fontSize = 14.sp), color = t.ink)
+        Text("좌표계 (수신기와 같게)", style = Ty.label.copy(fontSize = 16.sp), color = t.ink)
         TileGrid(GcpController.EPSGS, 2) { e -> Tile("${GcpController.epsgLabel(e)}원점", e == f.epsg, "epsg_$e", Modifier.weight(1f), sub = "EPSG:$e", height = 64.dp) { c.newSite = f.copy(epsg = e) } }
         Caption("위치가 있으면 경도로 원점을 미리 골라요. 높이는 수신기 값 그대로(지오이드 설정 없음).")
     }

@@ -40,6 +40,8 @@ interface GcpPrefs {
     var lastEpsg: Int
     var volumeKey: Boolean
     var lastSiteId: Long
+    /** 0.1.8: 평균 측정 중 체크포인트(MeasureCheckpoint.encode). 끝나거나 취소하면 "" */
+    var measureCheckpoint: String
     /** 기기별 폴 높이(m). 없으면 null → R10 1.6 / SP60 1.8 */
     fun pole(profileId: String): Double?
     fun setPole(profileId: String, m: Double)
@@ -154,8 +156,24 @@ class GcpController(
     /** 0.1.5: 마지막에 쓴 유적이 있으면 그 폴더 목록부터(시안 「폴더 = 첫 화면」) */
     fun start() = scope.launch {
         reloadSites().join()
+        val cp = MeasureCheckpoint.decode(prefs.measureCheckpoint)
+        if (cp != null) { prefs.measureCheckpoint = ""; if (clock() - cp.startedAt < MeasureCheckpoint.MAX_AGE_MS && resumeInterrupted(cp)) return@launch }
         val last = prefs.lastSiteId
         if (last > 0 && sites.any { it.site.id == last } && screen == Screen.SITES) openSite(last)
+    }
+
+    /** 0.1.8 평균 측정 중 앱이 죽었으면 그 유적·대상·차수·표적 화면으로 돌아온다. 반쯤 모은 평균은 쓰지 않는다(폴이 움직였을 수 있음) → 그 표적을 다시 잰다 */
+    var interrupted by mutableStateOf<MeasureCheckpoint?>(null); private set
+    private suspend fun resumeInterrupted(cp: MeasureCheckpoint): Boolean {
+        if (sites.none { it.site.id == cp.siteId }) return false
+        openSite(cp.siteId).join()
+        val b = book ?: return false
+        if (b.objs.none { it.id == cp.objId } || b.sessions.none { it.id == cp.sessionId }) return true
+        objId = cp.objId; sessionId = cp.sessionId
+        stack = listOf(Screen.SITES, Screen.OBJECTS, Screen.OBJ, Screen.TARGETS)
+        interrupted = cp
+        ui.toast("표적 #${cp.tag} 평균이 ${(cp.progress * 100).toInt()}%에서 끊겼어요 · 다시 재세요")
+        return true
     }
 
     // ================= 이동 =================
@@ -426,7 +444,7 @@ class GcpController(
         }
     }
 
-    fun cancelMeasure() { measureJob?.cancel(); measureJob = null; measuringTag = null; progress = 0f; ui.toast("측점을 취소했어요 · 저장하지 않았어요") }
+    fun cancelMeasure() { measureJob?.cancel(); measureJob = null; measuringTag = null; progress = 0f; prefs.measureCheckpoint = ""; ui.toast("측점을 취소했어요 · 저장하지 않았어요") }
 
     private fun startMeasure(tag: Int, allowNoSigma: Boolean) {
         val b = book ?: return
@@ -434,10 +452,17 @@ class GcpController(
         val profileId = connection?.profile?.id ?: DeviceProfiles.R10_ID
         val pole = poleM(profileId)
         val apc = apcFor(profileId, pole)
-        measuringTag = tag; progress = 0f
+        measuringTag = tag; progress = 0f; interrupted = null
+        val cp = MeasureCheckpoint(b.site.id, s.objId, s.id, tag, clock(), 0f)
+        prefs.measureCheckpoint = cp.encode()
+        var savedStep = 0
         measureJob = scope.launch {
-            val r = measurer.measure(prefs.epochs, tmZone(b.site.epsg), apc, allowNoSigma) { progress = it }
-            measuringTag = null; measureJob = null
+            val r = measurer.measure(prefs.epochs, tmZone(b.site.epsg), apc, allowNoSigma) { p ->
+                progress = p
+                val step = (p * 10).toInt()   // 10% 마다 체크포인트
+                if (step > savedStep) { savedStep = step; prefs.measureCheckpoint = cp.copy(progress = p).encode() }
+            }
+            measuringTag = null; measureJob = null; prefs.measureCheckpoint = ""
             when (r) {
                 is MeasureResult.Aborted -> { ui.fail(r.reasonKo); onFeedback?.invoke(FeedbackEvent.SURVEY_FAIL) }
                 is MeasureResult.Ok -> afterMeasure(s, tag, r.m, pole, apc, deviceName())
@@ -603,5 +628,17 @@ class GcpController(
         fun epsgForLon(lon: Double) = when { lon < 126.0 -> 5185; lon < 128.0 -> 5186; lon < 130.0 -> 5187; else -> 5188 }
         fun tmZone(epsg: Int): KoreanTmZone = KoreanTmZone.fromEpsg(epsg)
         fun epsgLabel(epsg: Int) = when (epsg) { 5185 -> "서부"; 5186 -> "중부"; 5187 -> "동부"; 5188 -> "동해"; else -> "" }
+    }
+}
+
+/** 0.1.8 평균 측정 체크포인트(프로세스가 죽어도 남는 한 줄) */
+data class MeasureCheckpoint(val siteId: Long, val objId: Long, val sessionId: Long, val tag: Int, val startedAt: Long, val progress: Float) {
+    fun encode() = "v1|$siteId|$objId|$sessionId|$tag|$startedAt|$progress"
+    companion object {
+        const val MAX_AGE_MS = 30 * 60_000L
+        fun decode(s: String): MeasureCheckpoint? {
+            val p = s.split('|'); if (p.size != 7 || p[0] != "v1") return null
+            return runCatching { MeasureCheckpoint(p[1].toLong(), p[2].toLong(), p[3].toLong(), p[4].toInt(), p[5].toLong(), p[6].toFloat()) }.getOrNull()
+        }
     }
 }

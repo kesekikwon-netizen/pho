@@ -31,10 +31,10 @@ class AndroidGcpFiles(private val ctx: Context, private val zone: ZoneId = ZoneI
         val xmlName = Names.xmlName(o, s, epsg)
         val dir = localObj(book.site, o).apply { mkdirs() }
         val xml = File(dir, xmlName); val txt = File(dir, Names.txtName(o, s, epsg))
-        xml.writeText(ItwinXml.write(shots, epsg), Charsets.UTF_8)
-        txt.writeText(ItwinXml.txt(shots), Charsets.UTF_8)
+        kr.archsurvey.gcp.data.SafeFile.write(xml, ItwinXml.write(shots, epsg))
+        kr.archsurvey.gcp.data.SafeFile.write(txt, ItwinXml.txt(shots))
         val list = File(localSite(book.site), Names.listCsvName(book.site))
-        list.writeText(ListCsv.write(book, zone), Charsets.UTF_8) // BOM 은 ListCsv 가 붙임
+        kr.archsurvey.gcp.data.SafeFile.write(list, ListCsv.write(book, zone)) // BOM 은 ListCsv 가 붙임
         var where = "앱 폴더"
         var err: String? = null
         if (Build.VERSION.SDK_INT >= 29) {
@@ -82,7 +82,7 @@ class AndroidGcpFiles(private val ctx: Context, private val zone: ZoneId = ZoneI
     override fun shareZip(plan: HandoffPlan): Boolean {
         val dir = File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "handoff").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
         val zip = File(dir, plan.zipName)
-        ZipOutputStream(zip.outputStream().buffered()).use { z -> writeZip(z, plan) }
+        kr.archsurvey.gcp.data.SafeFile.writeWith(zip) { out -> val bo = out.buffered(); val z = ZipOutputStream(bo); writeZip(z, plan); z.finish(); bo.flush() }
         val send = Intent(Intent.ACTION_SEND).setType("application/zip").putExtra(Intent.EXTRA_STREAM, uri(zip))
             .putExtra(Intent.EXTRA_SUBJECT, plan.zipName.removeSuffix(".zip")).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         return runCatching { ctx.startActivity(Intent.createChooser(send, "PC로 넘기기").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
@@ -105,6 +105,8 @@ class AndroidGcpPrefs(ctx: Context) : GcpPrefs {
     override var lastEpsg: Int get() = p.getInt("lastEpsg", 5186); set(v) { p.edit().putInt("lastEpsg", v).apply() }
     override var volumeKey: Boolean get() = p.getBoolean("volumeKey", false); set(v) { p.edit().putBoolean("volumeKey", v).apply() }
     override var lastSiteId: Long get() = p.getLong("lastSite", -1); set(v) { p.edit().putLong("lastSite", v).apply() }
+    // 0.1.8: commit() — 프로세스가 곧 죽어도 디스크에 남게
+    override var measureCheckpoint: String get() = p.getString("measureCp", "") ?: ""; set(v) { p.edit().putString("measureCp", v).commit() }
     override fun pole(profileId: String): Double? = if (p.contains("pole_$profileId")) p.getFloat("pole_$profileId", 1.6f).toDouble().let { Math.round(it * 1000) / 1000.0 } else null
     override fun setPole(profileId: String, m: Double) { p.edit().putFloat("pole_$profileId", m.toFloat()).apply() }
 }

@@ -67,9 +67,29 @@ abstract class GcpDb : RoomDatabase() {
     companion object {
         @Volatile private var inst: GcpDb? = null
         fun get(c: Context): GcpDb = inst ?: synchronized(this) {
-            inst ?: // 0.1.0 은 폰에 설치된 적 없음(사용자 기기 확인 전) → 1→2 는 새로 만든다
-                Room.databaseBuilder(c.applicationContext, GcpDb::class.java, "gcp.db").fallbackToDestructiveMigrationFrom(1).build().also { inst = it }
+            // 0.1.8: 파괴적 마이그레이션 없음. 알려진 모든 옛 스키마 → 현재 경로가 없으면 Room 이 멈춘다(기록을 지우지 않음)
+            inst ?: Room.databaseBuilder(c.applicationContext, GcpDb::class.java, "gcp.db").addMigrations(*ALL_MIGRATIONS).build().also { inst = it }
         }
+
+        /** 1(0.1.0: 약호 code·seq·name 있음) → 2(0.1.1: 종류+호수). 기록은 그대로 옮긴다. no = 같은 유적·종류 안 순서(seq 순) */
+        val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `site_new` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `epsg` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL)")
+                // 이름이 겹치면(v1 은 code 만 유일) 뒤 것에 약호를 붙여 유일하게
+                db.execSQL("INSERT INTO site_new (id, name, epsg, createdAt) SELECT s.id, CASE WHEN EXISTS(SELECT 1 FROM site t WHERE t.name = s.name AND t.id < s.id) THEN s.name || ' ' || s.code ELSE s.name END, s.epsg, s.createdAt FROM site s")
+                db.execSQL("DROP TABLE site")
+                db.execSQL("ALTER TABLE site_new RENAME TO site")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_site_name` ON `site` (`name`)")
+
+                db.execSQL("CREATE TABLE IF NOT EXISTS `obj_new` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `siteId` INTEGER NOT NULL, `kind` TEXT NOT NULL, `no` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `deleted` INTEGER NOT NULL)")
+                db.execSQL("INSERT INTO obj_new (id, siteId, kind, no, createdAt, deleted) SELECT o.id, o.siteId, o.kind, (SELECT COUNT(*) FROM obj p WHERE p.siteId = o.siteId AND p.kind = o.kind AND (p.seq < o.seq OR (p.seq = o.seq AND p.id <= o.id))), o.createdAt, o.deleted FROM obj o")
+                db.execSQL("DROP TABLE obj")
+                db.execSQL("ALTER TABLE obj_new RENAME TO obj")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_obj_siteId` ON `obj` (`siteId`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_obj_siteId_kind_no` ON `obj` (`siteId`, `kind`, `no`)")
+            }
+        }
+        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2)
     }
 }
 

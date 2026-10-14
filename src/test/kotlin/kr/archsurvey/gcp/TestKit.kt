@@ -34,6 +34,7 @@ class MemPrefs : GcpPrefs {
     override var lastEpsg = 5187
     override var volumeKey = false
     override var lastSiteId = -1L
+    override var measureCheckpoint = ""
     val poles = HashMap<String, Double>()
     override fun pole(profileId: String) = poles[profileId]
     override fun setPole(profileId: String, m: Double) { poles[profileId] = m }

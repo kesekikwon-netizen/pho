@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -41,11 +42,20 @@ fun SiteMapScreen(c: GcpController, env: GcpEnv) {
     LaunchedEffect(g.gga) { c.onFix() }
     Column(Modifier.fillMaxSize().background(t.bg).testTag("site_map")) {
         GTopBar(b.site.name + " · 지도", { c.back() }, c, onMenu = { c.menuOpen = true })
-        Box(Modifier.weight(1f)) {
-            MapArea(c, env, Modifier.fillMaxSize())
-            if (c.measuringTag != null) MeasuringChip(c, Modifier.align(Alignment.TopCenter).padding(top = 10.dp, start = 76.dp, end = 76.dp))
+        // 0.1.8: 펼침(600dp 이상) = 왼쪽 지도 / 오른쪽 판
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val wide = maxWidth >= FieldIvory.unfoldedMinWidth
+            val map: @Composable (Modifier) -> Unit = { m ->
+                Box(m) {
+                    MapArea(c, env, Modifier.fillMaxSize())
+                    if (c.measuringTag != null) MeasuringChip(c, Modifier.align(Alignment.TopCenter).padding(top = 10.dp, start = 76.dp, end = 76.dp))
+                }
+            }
+            if (wide) Row(Modifier.fillMaxSize().testTag("site_map_unfolded")) {
+                map(Modifier.weight(1f).fillMaxHeight())
+                Column(Modifier.width(FieldIvory.sidePanel).fillMaxHeight().verticalScroll(androidx.compose.foundation.rememberScrollState())) { ControlArea(c) }
+            } else Column(Modifier.fillMaxSize()) { map(Modifier.weight(1f).fillMaxWidth()); ControlArea(c) }
         }
-        ControlArea(c)
     }
 }
 
@@ -105,16 +115,18 @@ fun MapArea(c: GcpController, env: GcpEnv, modifier: Modifier) {
                     .border(1.dp, t.outline, RoundedCornerShape(18.dp)).padding(16.dp).testTag("no_position_card"),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("수신기를 연결하면 위성지도와 지적도가 나와요", style = Ty.label.copy(fontSize = 15.sp), color = t.ink, textAlign = TextAlign.Center)
+                Text("수신기를 연결하면 위성지도와 지적도가 나와요", style = Ty.label.copy(fontSize = 16.sp), color = t.ink, textAlign = TextAlign.Center)
                 Btn("수신기 연결하기", "no_position_connect", Modifier.fillMaxWidth(), height = 56.dp) { c.openReceiver() }
             }
         }
         Column(Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 6.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            val notice = MapLayers.fallbackMessage(MapBase.SATELLITE_CADASTRAL, access.key)?.let { "V월드 키가 없어 배경지도를 못 보여줘요 · 설정 › 고급" } ?: TileImages.lastError
-            notice?.let { Text(it, style = Ty.small, color = t.bad, maxLines = 3, modifier = Modifier.widthIn(max = 260.dp).background(t.raised.copy(alpha = 0.92f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp).testTag("map_notice")) }
-            if (ms.tiles.isNotEmpty()) Text("© V월드(국토교통부) · 위성 + 지적", style = Ty.small.copy(fontSize = 11.sp), color = t.ink, modifier = Modifier.background(t.raised.copy(alpha = 0.85f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 1.dp).testTag("map_attribution"))
+            if (ms.tiles.isNotEmpty()) Text("© V월드(국토교통부) · 위성 + 지적", style = Ty.small.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.background(t.raised.copy(alpha = 0.85f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 1.dp).testTag("map_attribution"))
         }
-        Text(scaleText(c.dpPerM), style = Ty.coord.copy(fontSize = 12.sp), color = t.ink,
+        // 0.1.8 g08: 예외 원문(SocketTimeoutException 등)은 화면에 내지 않는다 → 한 문장 무엇 + 한 문장 영향 + [다시]
+        MapErrorChip.of(MapLayers.fallbackMessage(MapBase.SATELLITE_CADASTRAL, access.key) != null, TileImages.lastError)?.let { e ->
+            ErrorChip(e, Modifier.align(Alignment.BottomCenter).padding(start = 10.dp, end = 10.dp, bottom = 34.dp)) { TileImages.clear() }
+        }
+        Text(scaleText(c.dpPerM), style = Ty.coord.copy(fontSize = 16.sp), color = t.ink,
             modifier = Modifier.align(Alignment.BottomStart).padding(8.dp).background(t.bg.copy(alpha = 0.85f), RoundedCornerShape(8.dp)).padding(horizontal = 6.dp, vertical = 1.dp).testTag("scale_label"))
     }
 }
@@ -169,7 +181,7 @@ private fun NowRow(c: GcpController) {
         ) {
             Column(Modifier.weight(1f)) {
                 val st = if (o != null && s != null) c.stageNow() else null
-                Text("지금 재는 것" + (st?.let { " · ${it.ko}" } ?: ""), style = Ty.small.copy(fontSize = 11.sp), color = if (st == Stage.MEASURE || st == null) t.inkSub else G.dot, maxLines = 1, modifier = Modifier.testTag("now_stage"))
+                Text("지금 재는 것" + (st?.let { " · ${it.ko}" } ?: ""), style = Ty.small.copy(fontSize = 16.sp), color = if (st == Stage.MEASURE || st == null) t.inkSub else G.dot, maxLines = 1, modifier = Modifier.testTag("now_stage"))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(o?.name ?: "대상을 고르세요", style = Ty.label.copy(fontSize = 17.sp, fontWeight = FontWeight.Medium), color = t.ink, maxLines = 1, modifier = Modifier.testTag("now_obj"))
                     if (s != null) Text(" · ${s.no}차 ${s.label}", style = Ty.label.copy(fontSize = 17.sp, fontWeight = FontWeight.Medium), color = G.dot, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("now_session"))
@@ -183,7 +195,7 @@ private fun NowRow(c: GcpController) {
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
         ) {
             Text(String.format(Locale.US, "%.1f", c.poleM()), style = Ty.ledger.copy(fontSize = 20.sp), color = t.ink, maxLines = 1)
-            Text("폴 m", style = Ty.small.copy(fontSize = 11.sp), color = t.inkSub)
+            Text("폴 m", style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub)
         }
     }
 }
@@ -196,9 +208,9 @@ private fun TargetRow(c: GcpController, s: Session) {
     val many = s.slots.size > 4
     Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 8.dp).testTag("qtag_row"), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.width(52.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Target", style = Ty.label.copy(fontSize = 12.sp), color = t.ink, maxLines = 1)
-            Text("${c.activeShots().size}/${s.slots.size}", style = Ty.coord.copy(fontSize = 13.sp), color = if (c.activeShots().size >= Pipeline.MIN_TARGETS) G.ok else G.dot, maxLines = 1, modifier = Modifier.testTag("qtag_count"))
-            if (locked) Text("잠김", style = Ty.small.copy(fontSize = 10.sp), color = t.inkSub)
+            Text("Target", style = Ty.label.copy(fontSize = 16.sp), color = t.ink, maxLines = 1)
+            Text("${c.activeShots().size}/${s.slots.size}", style = Ty.coord.copy(fontSize = 16.sp), color = if (c.activeShots().size >= Pipeline.MIN_TARGETS) G.ok else G.dot, maxLines = 1, modifier = Modifier.testTag("qtag_count"))
+            if (locked) Text("잠김", style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub)
         }
         val cell: @Composable (Int, Int, Modifier) -> Unit = { i, tag, m ->
             val shot = c.shotOf(tag)
@@ -216,7 +228,7 @@ private fun TargetRow(c: GcpController, s: Session) {
                     Text("$tag", style = Ty.ledger.copy(fontSize = if (tag >= 100) 22.sp else 28.sp), color = if (now) G.onDark else t.ink, maxLines = 1)
                     if (shot != null && !now) Text("✓", style = Ty.label.copy(fontSize = 18.sp), color = G.dark, modifier = Modifier.testTag("qtag_done_$tag"))
                 }
-                if (now) Text("재는 중", style = Ty.small.copy(fontSize = 10.sp), color = G.onDark, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp))
+                if (now) Text("재는 중", style = Ty.small.copy(fontSize = 16.sp), color = G.onDark, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp))
             }
         }
         if (many) Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -224,7 +236,7 @@ private fun TargetRow(c: GcpController, s: Session) {
         } else s.slots.forEachIndexed { i, tag -> cell(i, tag, Modifier.weight(1f)) }
         if (!many && s.slots.size < 4) repeat(4 - s.slots.size) { Spacer(Modifier.weight(1f)) }
         if (!locked) Box(
-            Modifier.size(width = 48.dp, height = 60.dp).clip(RoundedCornerShape(14.dp)).background(t.raised).border(1.dp, t.outline, RoundedCornerShape(14.dp))
+            Modifier.size(width = 56.dp, height = 60.dp).clip(RoundedCornerShape(14.dp)).background(t.raised).border(1.dp, t.outline, RoundedCornerShape(14.dp))
                 .hClickable(onClickLabel = "표적 더하기") { c.openAddSlot() }.testTag("add_slot"),
             contentAlignment = Alignment.Center,
         ) { Text("+", style = Ty.title.copy(fontSize = 28.sp), color = G.dark) }
@@ -235,13 +247,13 @@ private fun TargetRow(c: GcpController, s: Session) {
 private fun RowScope.SideBtn(g: Glyph, label: String, tag: String, on: Boolean = false, onClick: () -> Unit) {
     val t = T
     Column(
-        Modifier.width(76.dp).height(84.dp).clip(RoundedCornerShape(16.dp)).background(if (on) G.sel else t.raised)
+        Modifier.width(80.dp).height(FieldIvory.measureButton).clip(RoundedCornerShape(16.dp)).background(if (on) G.sel else t.raised)
             .border(if (on) 2.dp else 1.dp, if (on) G.dark else t.outline, RoundedCornerShape(16.dp)).hClickable(onClickLabel = label, onClick = onClick).testTag(tag),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
     ) {
         GlyphIcon(g, t.ink, 22.dp)
         Spacer(Modifier.height(6.dp))
-        Text(label, style = Ty.label.copy(fontSize = 13.sp), color = t.ink, maxLines = 1)
+        Text(label, style = Ty.label.copy(fontSize = 16.sp), color = t.ink, maxLines = 1)
     }
 }
 
@@ -267,14 +279,46 @@ private fun MeasureButton(c: GcpController, modifier: Modifier) {
     }
     val dim = !busy && !noObj && (locked || (blocked && !notConn))
     Box(
-        modifier.height(84.dp).clip(RoundedCornerShape(18.dp)).background(if (dim || (notConn && !noObj && !busy)) G.lineStrong else G.dark)
+        modifier.height(FieldIvory.measureButton).clip(RoundedCornerShape(20.dp)).background(if (dim || (notConn && !noObj && !busy)) G.lineStrong else G.dark)
             .hClickable(onClickLabel = label) { if (!locked || busy) c.onMeasureButton() }.testTag("measure_button"),
         contentAlignment = Alignment.Center,
     ) {
         if (busy) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(c.progress.coerceIn(0f, 1f)).height(6.dp).background(Color.White.copy(alpha = 0.85f)).testTag("measure_progress"))
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(label, style = Ty.button.copy(fontSize = 22.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium), color = G.onDark, maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.testTag("measure_label"))
-            Text(sub, style = Ty.small.copy(fontSize = 12.sp, lineHeight = 15.sp), color = G.onDark, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 8.dp).testTag("measure_sub"))
+            Text(sub, style = Ty.small.copy(fontSize = 16.sp, lineHeight = 21.sp), color = G.onDark, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 8.dp).testTag("measure_sub"))
         }
+    }
+}
+
+/** 지도 오류 칩 문구(원문 예외 이름은 버린다) */
+data class MapErrorChip(val what: String, val effect: String, val retry: Boolean) {
+    companion object {
+        fun of(noKey: Boolean, raw: String?): MapErrorChip? = when {
+            noKey -> MapErrorChip("V월드 키가 없어 배경지도를 못 보여줘요", "측량은 그대로 돼요 · 설정 › 고급에서 키 확인", retry = false)
+            raw == null -> null
+            raw.contains("지적") -> MapErrorChip("지적도를 잠시 못 불러왔어요", "위성 지도와 측량은 정상이에요", retry = true)
+            else -> MapErrorChip("위성 지도를 잠시 못 불러왔어요", "측량은 정상이에요 · 인터넷을 확인하세요", retry = true)
+        }
+    }
+}
+
+@Composable
+fun ErrorChip(e: MapErrorChip, modifier: Modifier = Modifier, onRetry: () -> Unit) {
+    Row(
+        modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(16.dp))
+            .padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp).testTag("map_notice"),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        GlyphIcon(Glyph.LAYERS, FieldIvory.float, 24.dp)
+        Column(Modifier.weight(1f)) {
+            Text(e.what, style = Ty.label.copy(fontWeight = FontWeight.Bold), color = G.ink, maxLines = 2, modifier = Modifier.testTag("map_notice_what"))
+            Text(e.effect, style = Ty.small, color = G.sub, maxLines = 2)
+        }
+        if (e.retry) Box(
+            Modifier.heightIn(min = FieldIvory.minTouch).widthIn(min = FieldIvory.minTouch).clip(RoundedCornerShape(12.dp)).background(G.sel)
+                .hClickable(onClickLabel = "다시") { onRetry() }.padding(horizontal = 12.dp).testTag("map_notice_retry"),
+            contentAlignment = Alignment.Center,
+        ) { Text("다시", style = Ty.label.copy(fontWeight = FontWeight.Bold), color = G.dot) }
     }
 }

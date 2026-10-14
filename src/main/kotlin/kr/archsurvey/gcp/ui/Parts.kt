@@ -43,10 +43,11 @@ import java.util.Locale
  * 공용 Theme(측량 앱과 같은 파일)는 건드리지 않고 이 앱 화면만 이 값을 쓴다.
  */
 object G {
-    val bg = Color(0xFFFAF9F5); val ink = Color(0xFF141413); val sub = Color(0xFF5E5D59); val faint = Color(0xFF8C8B86)
-    val dark = Color(0xFF30302E); val onDark = Color(0xFFFAF9F5)
-    val soft = Color(0xFFE8E6DC); val chip = Color(0xFFF0EEE6); val line = Color(0xFFDEDCD1); val lineStrong = Color(0xFFB0AEA5)
-    val sel = Color(0xFFE3DACC); val dot = Color(0xFFD97757); val ok = Color(0xFF3F6B31); val bad = Color(0xFFA33B3B); val warn = Color(0xFF7A5A00)
+    // 0.1.8 Field Ivory(FieldIvory.kt, 발굴 측량과 같은 값): 주 단추 검정 → 테라코타
+    val bg = FieldIvory.bg; val ink = FieldIvory.ink; val sub = FieldIvory.inkSub; val faint = FieldIvory.onDisabled
+    val dark = FieldIvory.primary; val onDark = FieldIvory.onPrimary
+    val soft = Color(0xFFFFFFFF); val chip = FieldIvory.disabled; val line = Color(0xFFD6D1C4); val lineStrong = Color(0xFF8C8B86)
+    val sel = FieldIvory.primarySoft; val dot = FieldIvory.pressed; val ok = FieldIvory.fix; val bad = FieldIvory.error; val warn = FieldIvory.float
     val white = Color(0xFFFFFFFF)
 }
 
@@ -100,14 +101,14 @@ fun GcpPill(src: GnssSource, modifier: Modifier = Modifier, onClick: () -> Unit)
         else -> G.faint to G.lineStrong
     }
     Row(
-        modifier.height(44.dp).clip(RoundedCornerShape(22.dp)).background(G.white)
+        modifier.height(48.dp).clip(RoundedCornerShape(22.dp)).background(G.white)
             .border(1.5.dp, border, RoundedCornerShape(24.dp)).hClickable(onClickLabel = "수신기") { onClick() }
             .padding(horizontal = 12.dp).semantics { contentDescription = p.text + (p.sub?.let { " $it" } ?: "") }.testTag("status_pill"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(Modifier.size(12.dp).clip(CircleShape).background(dot))
-        Text(p.short, style = Ty.label.copy(fontSize = 15.sp, fontWeight = FontWeight.Bold), color = G.ink, maxLines = 1, modifier = Modifier.testTag("pill_fix"))
-        p.sub?.takeIf { p.tone == PTone.FIXED }?.let { Text(it.removePrefix("±") + " cm", style = Ty.coord.copy(fontSize = 13.sp), color = G.sub, maxLines = 1) }
+        Text(p.short, style = Ty.label.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold), color = G.ink, maxLines = 1, modifier = Modifier.testTag("pill_fix"))
+        p.sub?.takeIf { p.tone == PTone.FIXED }?.let { Text(it.removePrefix("±") + " cm", style = Ty.coord.copy(fontSize = 16.sp), color = G.sub, maxLines = 1) }
     }
 }
 
@@ -121,7 +122,7 @@ fun GcpHeader(title: String, sub: String?, src: GnssSource?, onBack: (() -> Unit
             Column(Modifier.weight(1f).padding(start = 2.dp), verticalArrangement = Arrangement.Center) {
                 val n = title.codePointCount(0, title.length)
                 Text(title, style = Ty.label.copy(fontSize = (if (n <= 8) 19 else if (n <= 14) 17 else 15).sp, lineHeight = 21.sp, fontWeight = FontWeight.Bold), color = G.ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("header_title"))
-                if (sub != null) Text(sub, style = Ty.small.copy(fontSize = 12.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("header_sub"))
+                if (sub != null) Text(sub, style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("header_sub"))
             }
             if (src != null) GcpPill(src, Modifier.padding(horizontal = 4.dp), onPill)
             if (onMenu != null) IconBtn(Glyph.MENU, "메뉴", "menu", onMenu)
@@ -132,7 +133,7 @@ fun GcpHeader(title: String, sub: String?, src: GnssSource?, onBack: (() -> Unit
 
 @Composable
 fun IconBtn(g: Glyph, desc: String, tag: String, onClick: () -> Unit) {
-    Box(Modifier.size(48.dp).clip(RoundedCornerShape(24.dp)).hClickable(onClickLabel = desc) { onClick() }.semantics { contentDescription = desc }.testTag(tag), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(FieldIvory.minTouch).clip(RoundedCornerShape(28.dp)).hClickable(onClickLabel = desc) { onClick() }.semantics { contentDescription = desc }.testTag(tag), contentAlignment = Alignment.Center) {
         GlyphIcon(g, T.ink, 24.dp)
     }
 }
@@ -143,7 +144,7 @@ fun Tile(label: String, selected: Boolean, tag: String, modifier: Modifier = Mod
     val t = T
     val shape = RoundedCornerShape(14.dp)
     Column(
-        modifier.heightIn(min = height).clip(shape)
+        modifier.heightIn(min = maxOf(height, FieldIvory.minTouch)).clip(shape)
             .background(when { !enabled -> G.chip; selected -> G.dark; else -> G.white })
             .border(if (selected) 2.dp else 1.dp, if (selected) G.dark else if (enabled) G.line else G.line.copy(alpha = 0.5f), shape)
             .hClickable(enabled = enabled, onClickLabel = label) { onClick() }.padding(horizontal = 8.dp, vertical = 6.dp).testTag(tag),
@@ -151,7 +152,7 @@ fun Tile(label: String, selected: Boolean, tag: String, modifier: Modifier = Mod
     ) {
         Text(label, style = (if (big) Ty.ledger.copy(fontSize = 24.sp) else Ty.label.copy(fontSize = 17.sp, fontWeight = FontWeight.Medium)), color = when { !enabled -> G.faint; selected -> G.onDark; else -> G.ink },
             maxLines = 2, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
-        if (sub != null) Text(sub, style = Ty.small.copy(fontSize = 12.sp), color = if (selected) G.onDark else G.sub, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+        if (sub != null) Text(sub, style = Ty.small.copy(fontSize = 16.sp), color = if (selected) G.onDark else G.sub, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
     }
 }
 
@@ -161,12 +162,13 @@ fun Btn(label: String, tag: String, modifier: Modifier = Modifier, primary: Bool
     val t = T
     val shape = RoundedCornerShape(16.dp)
     Column(
-        modifier.heightIn(min = height).clip(shape).background(when { !enabled -> G.lineStrong; primary -> G.dark; else -> G.soft })
+        modifier.heightIn(min = maxOf(height, FieldIvory.minTouch)).clip(shape).background(when { !enabled -> FieldIvory.disabled; primary -> G.dark; else -> G.white })
+            .then(if (enabled && !primary) Modifier.border(1.dp, G.line, shape) else Modifier)
             .hClickable(enabled = enabled, onClickLabel = label) { onClick() }.padding(horizontal = 10.dp, vertical = 6.dp).testTag(tag),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
     ) {
-        Text(label, style = Ty.label.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold), color = if (primary || !enabled) G.onDark else G.ink, maxLines = 1, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
-        if (sub != null) Text(sub, style = Ty.small.copy(fontSize = 12.sp), color = if (primary || !enabled) G.onDark else G.sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(label, style = Ty.label.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold), color = when { !enabled -> FieldIvory.onDisabled; primary -> G.onDark; else -> G.ink }, maxLines = 1, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
+        if (sub != null) Text(sub, style = Ty.small.copy(fontSize = 16.sp), color = when { !enabled -> FieldIvory.onDisabled; primary -> G.onDark; else -> G.sub }, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -194,7 +196,7 @@ fun BottomSheet(title: String, tag: String, onClose: () -> Unit, maxHeightFrac: 
 
 @Composable
 fun Caption(text: String, color: Color = T.inkSub, tag: String = "") {
-    Text(text, style = Ty.small.copy(fontSize = 13.sp, lineHeight = 17.sp), color = color, modifier = if (tag.isEmpty()) Modifier else Modifier.testTag(tag))
+    Text(text, style = Ty.small.copy(fontSize = 16.sp, lineHeight = 21.sp), color = color, modifier = if (tag.isEmpty()) Modifier else Modifier.testTag(tag))
 }
 
 /** 타일을 [cols] 칸씩 줄지어 */
