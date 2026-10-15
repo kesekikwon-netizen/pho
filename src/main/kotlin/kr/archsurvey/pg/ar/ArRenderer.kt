@@ -305,27 +305,29 @@ class ArRenderer(
 
     // 바닥 격자 + 찍은 사진마다 카메라 사각뿔(PIX4Dcatch 처럼). 사진 수·바닥 높이가 바뀔 때만 다시 만듦
     private var frustumFor = -1; private var floorFor = Float.NaN; private var guideBuf: FloatBuffer? = null; private var guideN = 0
+    private val frustums = kr.archsurvey.pg.live.FrustumLines(); private var gridArr: FloatArray? = null
     private fun drawGuides() {
         if (lineProg == 0) return
         val stills = engine.session.stills; val fy = engine.floorY
-        if (stills.size != frustumFor || (fy.isFinite() && (floorFor.isNaN() || abs(fy - floorFor) > 0.05f))) {
-            frustumFor = stills.size; floorFor = fy
-            val v = ArrayList<Float>()
-            fun line(a: FloatArray, b: FloatArray, c: FloatArray) { v.addAll(a.toList()); v.addAll(c.toList()); v.addAll(b.toList()); v.addAll(c.toList()) }
-            if (fy.isFinite()) { // 1 m 격자, 카메라(첫 자세) 주변 ±8 m
-                val g = floatArrayOf(0.55f, 0.6f, 0.7f, 0.22f)
-                for (i in -8..8) { line(floatArrayOf(i.toFloat(), fy, -8f), floatArrayOf(i.toFloat(), fy, 8f), g); line(floatArrayOf(-8f, fy, i.toFloat()), floatArrayOf(8f, fy, i.toFloat()), g) }
+        // 0.0.10: 사진 장수 제한 없음 — 사각뿔은 새 사진만 덧붙임(FrustumLines), 격자는 바닥 높이가 바뀔 때만
+        val frChanged = frustums.sync(stills) { p -> val m = FloatArray(16); com.google.ar.core.Pose(floatArrayOf(p[0].toFloat(), p[1].toFloat(), p[2].toFloat()), floatArrayOf(p[3].toFloat(), p[4].toFloat(), p[5].toFloat(), p[6].toFloat())).toMatrix(m, 0); m }
+        if (frChanged || frustumFor < 0 || (fy.isFinite() && (floorFor.isNaN() || abs(fy - floorFor) > 0.05f))) {
+            frustumFor = stills.size
+            if (fy.isFinite() && (floorFor.isNaN() || abs(fy - floorFor) > 0.05f) || gridArr == null) {
+                floorFor = fy
+                val v = ArrayList<Float>()
+                fun line(a: FloatArray, b: FloatArray, c: FloatArray) { v.addAll(a.toList()); v.addAll(c.toList()); v.addAll(b.toList()); v.addAll(c.toList()) }
+                if (fy.isFinite()) { // 1 m 격자, 카메라(첫 자세) 주변 ±8 m
+                    val g = floatArrayOf(0.55f, 0.6f, 0.7f, 0.22f)
+                    for (i in -8..8) { line(floatArrayOf(i.toFloat(), fy, -8f), floatArrayOf(i.toFloat(), fy, 8f), g); line(floatArrayOf(-8f, fy, i.toFloat()), floatArrayOf(8f, fy, i.toFloat()), g) }
+                }
+                gridArr = v.toFloatArray()
             }
-            val oc = floatArrayOf(1f, 0.62f, 0.15f, 0.95f)
-            for (st in stills) {
-                val p = st.pose ?: continue
-                val m = FloatArray(16); com.google.ar.core.Pose(floatArrayOf(p[0].toFloat(), p[1].toFloat(), p[2].toFloat()), floatArrayOf(p[3].toFloat(), p[4].toFloat(), p[5].toFloat(), p[6].toFloat())).toMatrix(m, 0)
-                fun w(x: Float, y: Float, z: Float) = floatArrayOf(m[0] * x + m[4] * y + m[8] * z + m[12], m[1] * x + m[5] * y + m[9] * z + m[13], m[2] * x + m[6] * y + m[10] * z + m[14])
-                val d = 0.12f; val hw = (d * st.w / 2 / st.fx).toFloat(); val hh = (d * st.h / 2 / st.fy).toFloat()
-                val o = w(0f, 0f, 0f); val a = w(-hw, hh, -d); val b = w(hw, hh, -d); val c = w(hw, -hh, -d); val e = w(-hw, -hh, -d)
-                line(o, a, oc); line(o, b, oc); line(o, c, oc); line(o, e, oc); line(a, b, oc); line(b, c, oc); line(c, e, oc); line(e, a, oc)
-            }
-            guideN = v.size / 7; guideBuf = fbuf(v.toFloatArray())
+            val g = gridArr ?: FloatArray(0)
+            val total = g.size + frustums.floats
+            if (guideBuf == null || guideBuf!!.capacity() < total) guideBuf = ByteBuffer.allocateDirect(maxOf(total, 4096) * 2 * 4).order(ByteOrder.nativeOrder()).asFloatBuffer()
+            guideBuf!!.clear(); guideBuf!!.put(g); guideBuf!!.put(frustums.data, 0, frustums.floats); guideBuf!!.position(0)
+            guideN = total / 7
         }
         val b = guideBuf ?: return; if (guideN == 0) return
         GLES20.glEnable(GLES20.GL_BLEND); GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
