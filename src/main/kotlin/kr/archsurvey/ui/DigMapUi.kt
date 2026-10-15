@@ -100,9 +100,7 @@ internal fun DigCauseLine(c: SurveyController) {
     val t = T
     rememberTick()
     val strict = c.settingsState?.requireFixed == true
-    val line = c.dig.causeLine(ntripNow())?.let { base ->
-        if (strict && c.gv.displayStatus == SurveyStatus.CAUTION) "$base · 엄격 모드: FIX 때만 저장" else base
-    } ?: (if (c.gv.sigmaMissingOnFix) "고정이지만 정밀도 정보가 오지 않아요 · " + (if (strict) "엄격 모드는 저장 잠김" else "저장하면 「주의」 표시") else null)
+    val line = mapGuideLine(c)
     if (line == null) return
     val noRx = c.gv.noReceiver
     Row(
@@ -110,9 +108,16 @@ internal fun DigCauseLine(c: SurveyController) {
             .padding(horizontal = 16.dp, vertical = 8.dp).testTag("cause_line"),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(line, style = Ty.label.copy(fontSize = 16.sp, lineHeight = 21.sp), color = t.ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("status_sub"))
-        if (noRx) Text("연결", style = Ty.label.copy(fontWeight = FontWeight.Medium), color = t.primary, modifier = Modifier.padding(start = 8.dp).testTag("cause_connect"))
+        Text(line, style = Ty.label.copy(fontSize = 16.sp, lineHeight = 21.sp), color = t.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).testTag("status_sub"))
     }
+}
+
+/** 0.1.56 S1: 지도 위 안내 한 줄(없으면 null) */
+internal fun mapGuideLine(c: SurveyController): String? {
+    val strict = c.settingsState?.requireFixed == true
+    return c.dig.causeLine(ntripNow())?.let { base ->
+        if (strict && c.gv.displayStatus == SurveyStatus.CAUTION) "$base · 엄격 모드: FIX 때만 저장" else base
+    } ?: (if (c.gv.sigmaMissingOnFix) "고정이지만 정밀도 정보가 오지 않아요 · " + (if (strict) "엄격 모드는 저장 잠김" else "저장하면 「주의」 표시") else null)
 }
 
 /** 0.1.43 시안 ②: 「재는 것」 드롭다운(누르면 무엇을 잴까요) */
@@ -168,10 +173,10 @@ internal fun DigControlArea(c: SurveyController) {
         val showClose = feature && (!mini || polygonActive)
         val showMemo = !mini || c.voiceSeconds > 0
         if (showClose || showMemo || !mini || c.dig.undoIsReopen) Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (showClose) MiniAction(Glyph.FACE, if (c.dig.closeArmed) "닫기 취소" else "면 닫기", "tool_close_area", Modifier.weight(1f), on = c.dig.closeArmed) { c.dig.armClose() }
+            if (showClose) MiniAction(Glyph.FACE, if (c.dig.closeArmed) "닫기 취소" else "경계 닫기(면)", "tool_close_area", Modifier.weight(1f), on = c.dig.closeArmed) { c.dig.armClose() }
             if (showMemo) MiniAction(Glyph.MIC, if (c.voiceSeconds > 0) "녹음 끝" else "메모", "tool_memo", Modifier.weight(1f), on = c.voiceSeconds > 0) { c.toggleVoice() }
             if (!mini) MiniAction(Glyph.CAMERA, "사진", "tool_photo", Modifier.weight(1f)) { if (c.lastPoint != null) c.addPhotoCamera() else c.ui.toast("점을 잰 뒤 사진을 붙일 수 있어요") }
-            if (c.dig.undoIsReopen) MiniAction(Glyph.UNDO, "면 닫기 되돌리기", "tool_undo", Modifier.weight(1f)) { c.askUndo() }
+            if (c.dig.undoIsReopen) MiniAction(Glyph.UNDO, "경계 닫기 되돌리기", "tool_undo", Modifier.weight(1f)) { c.askUndo() }
         }
         // 0.1.50 오른손 #2: 「다음 점 P-0005 · 유구 경계 ▾」 줄 자체를 누르면 종류 시트 · 아래 16dp 는 누를 것 없음(#1)
         // 0.1.46 시안 s03: [다음 점 P-0006 · 유구 경계 (눌러서 바꾸기)] [폴 1.60 m] 한 줄 → 큰 측정 단추. 지도 비율을 넓힌다
@@ -196,7 +201,7 @@ internal fun DigControlArea(c: SurveyController) {
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(c.nextName, style = DTy.monoBig.copy(fontSize = 22.sp), color = D.ink, maxLines = 1, modifier = Modifier.testTag("next_name"))
+                    Text(kr.archsurvey.job.TargetNames.toScreen(c.nextName), style = DTy.monoBig.copy(fontSize = 22.sp), color = D.ink, maxLines = 1, modifier = Modifier.testTag("next_name"))
                     Text(" · $head", style = DTy.body.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold), color = D.accent, maxLines = 1, modifier = Modifier.testTag("now_kind"))
                     if (tail != null) Text(" · $tail", style = DTy.body.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold), color = D.accent, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).testTag("now_target"))
                     Text(" ▾", style = DTy.body.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold), color = D.accent, maxLines = 1)
@@ -212,6 +217,8 @@ internal fun DigControlArea(c: SurveyController) {
                 Text("$pole m", style = DTy.mono.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold), color = D.ink, maxLines = 1, modifier = Modifier.testTag("antenna_input"))
             }
         }
+        // 0.1.56 M1: 작업에서 한 번 승인한 뒤 플로트면 측점 단추 바로 위 주황 한 줄(점마다 창 없음)
+        c.floatBanner()?.let { Text(it, style = DTy.bodyB, color = D.caution, maxLines = 1, modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).testTag("float_banner")) }
         Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             // 0.1.46 시안 s03: [점 목록] + 큰 「측량」. 면 닫기·사진·메모는 위 작은 줄(한 번 탭), 되돌리기는 저장 알림 안
             val side: @Composable RowScope.() -> Unit = {
@@ -227,7 +234,7 @@ internal fun DigControlArea(c: SurveyController) {
                 val armed = c.dig.closeArmed
                 val label: String; val sub: String
                 when {
-                    armed -> { label = "면 닫기 확인"; sub = c.dig.closePreview() ?: "" }
+                    armed -> { label = "경계 닫기 확인"; sub = c.dig.closePreview() ?: "" }
                     busy -> { label = "재는 중 ${c.measureCount.coerceAtMost(c.epochs)}/${c.epochs}"; sub = "누르면 중지" }
                     notConn -> { label = MEASURE_NO_RECEIVER; sub = "눌러서 연결" }
                     strictBlock -> { label = "FIX 기다리는 중"; sub = "정밀도가 아직 부족해요 · 잠시 기다려요" }

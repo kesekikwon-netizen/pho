@@ -346,7 +346,7 @@ fun PointMenuSheet(c: SurveyController, p: SavedPoint) {
             Box(Modifier.align(Alignment.CenterHorizontally).width(44.dp).height(5.dp).clip(CircleShape).background(D.line))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(cur.name, style = DTy.h1, color = D.ink, modifier = Modifier.testTag("point_menu_title"))
+                    Text(kr.archsurvey.job.TargetNames.toScreen(cur.name), style = DTy.h1, color = D.ink, modifier = Modifier.testTag("point_menu_title"))
                     Text(java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.KOREA).format(java.util.Date(cur.measuredAtMs)) + " · " + PointCaution.hvLine(cur), style = DTy.small, color = D.sub, maxLines = 2, modifier = Modifier.testTag("point_menu_hv"))
                 }
                 val okSt = PointCaution.displayStatus(cur) == kr.archsurvey.core.SurveyStatus.FIXED
@@ -364,9 +364,9 @@ fun PointMenuSheet(c: SurveyController, p: SavedPoint) {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 val sh = RoundedCornerShape(14.dp)
                 Box(Modifier.weight(1f).heightIn(min = FieldIvory.minTouch).clip(sh).border(1.5.dp, if (isLast) FieldIvory.error.copy(alpha = 0.5f) else D.line, sh)
-                    .hCombinedClickable(onLongClick = { if (isLast) { close(); c.askUndo() } }) { c.ui.toast(if (isLast) "삭제는 길게 누르세요" else "기록 보존을 위해 마지막 점만 지울 수 있어요") }
+                    .hCombinedClickable(onLongClick = { if (isLast) { close(); c.askUndo() } }) { if (isLast) { close(); c.askUndo() } else c.ui.toast("기록 보존을 위해 마지막 점만 지울 수 있어요") } // 0.1.56 S8: 눌러도(확인 창) 지우기
                     .semantics { contentDescription = if (isLast) "삭제, 길게 누르기" else "삭제는 마지막 점만" }.testTag("pm_delete"), contentAlignment = Alignment.Center) {
-                    Text(if (isLast) "삭제 (길게 누름)" else "삭제는 마지막 점만", style = DTy.bodyB, color = if (isLast) FieldIvory.error else D.weak)
+                    Text(if (isLast) "삭제" else "삭제는 마지막 점만", style = DTy.bodyB, color = if (isLast) FieldIvory.error else D.weak)
                 }
                 DPrimary("닫기", "pm_close", Modifier.weight(1f), height = FieldIvory.minTouch, color = FieldIvory.primary) { close() }
             }

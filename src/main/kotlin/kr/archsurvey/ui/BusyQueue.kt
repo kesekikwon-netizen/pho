@@ -44,7 +44,7 @@ object BusyOps {
             }
         }
         if (cc != null && cc.mountLoad == MountLoad.LOADING && !cc.mountPickerOpen) out += BusyOp("mount", "마운트 목록 받는 중 (다운로드)", 15)
-        if (c.exporter?.running == true) out += BusyOp("export", "내보내기 파일 만드는 중", 10)
+        if (c.exporter?.running == true) out += BusyOp("export", "PC로 보낼 파일 만드는 중", 10)
         c.backup?.let { b -> if (b.running) out += BusyOp("backup", (b.runningLabel.ifBlank { "백업" }) + " 처리 중", 15) }
         c.drive?.let { d -> if (d.running) out += BusyOp("drive", (d.runningLabel.ifBlank { "Drive" }) + " 중", 20) }
         if (c.vworld.testing) out += BusyOp("vworld", "V월드 타일 받는 중 (연결 시험)", 8)

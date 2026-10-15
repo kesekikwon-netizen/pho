@@ -162,10 +162,13 @@ class DigLogicTests {
         assertEquals("재기", s[4].action)
     }
     @Test fun todayPrepAllDoneAndVrsOffCountsAsDone() {
-        val s = TodayPrep.steps(prep(ntripOn = false, pole = true, bm = true))
+        // 0.1.56 M2: VRS 꺼짐은 FIX(●) 중일 때만 ✓(회색 「수신기 보정으로 FIX 중」), 아니면 주황 [켜기]
+        val s = TodayPrep.steps(prep(ntripOn = false, ntripOk = false, pole = true, bm = true).copy(fixNow = true))
         assertTrue(s.all { it.state == StepState.DONE })
         assertTrue(TodayPrep.allDone(s))
-        assertEquals("VRS 안 씀 · 수신기 보정만", s[1].sub)
+        assertEquals("수신기 보정으로 FIX 중", s[1].sub)
+        val off = TodayPrep.steps(prep(ntripOn = false, ntripOk = false, pole = true, bm = true))
+        assertFalse(TodayPrep.allDone(off)); assertEquals("VRS 꺼짐 — 켜야 cm 정밀도", off[1].sub); assertEquals("켜기", off[1].action)
         val fail = TodayPrep.steps(prep(pole = true, bm = false))
         assertEquals(StepState.NEXT, fail[4].state)
         assertTrue(fail[4].sub.contains("다시"))

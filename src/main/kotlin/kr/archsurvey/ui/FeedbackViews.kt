@@ -66,9 +66,10 @@ private fun ToastView(ui: FeedbackHub) {
 @Composable
 private fun ConfirmDialog(ui: FeedbackHub, r: ConfirmRequest) {
     val t = T
-    Box(Modifier.fillMaxSize().background(t.scrim).hClickable { ui.answer(false) }, contentAlignment = Alignment.Center) {
+    // 0.1.56 M1: sheet = 화면 아래쪽 시트(지도 중앙·전체를 덮지 않음)
+    Box(if (r.sheet) Modifier.fillMaxSize() else Modifier.fillMaxSize().background(t.scrim).hClickable { ui.answer(false) }, contentAlignment = if (r.sheet) Alignment.BottomCenter else Alignment.Center) {
         Column(
-            Modifier.padding(24.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(t.bg).border(1.dp, t.line, RoundedCornerShape(20.dp))
+            (if (r.sheet) Modifier.padding(8.dp) else Modifier.padding(24.dp)).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(t.bg).border(1.dp, t.line, RoundedCornerShape(20.dp))
                 .hClickable(enabled = false) {}.padding(20.dp).testTag("confirm_dialog"),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {

@@ -53,16 +53,23 @@ class AndroidJobFolder(private val ctx: Context, private val settings: SettingsS
         JobFolderSnapshot(rel, writer.snapshot(rel))
     }
 
-    /** 내보내기 묶음(파일들) → 작업 폴더 내보내기/<묶음>/. 반환 = 화면에 보일 공용 경로(못 만들면 기기 안 경로) */
-    suspend fun addExport(job: String, exportDir: File, zip: File?): String = withContext(Dispatchers.IO) {
-        val rel = relOf(job)
-        val sub = "${JobFolders.EXPORTS}/${exportDir.name}"
-        val files = exportDir.listFiles()?.filter { it.isFile }.orEmpty()
-        var pub = true
-        for (f in files) writer.copyIn(rel, sub, f)?.let { if (!publish(rel, sub, it)) pub = false }
-        zip?.let { z -> writer.copyIn(rel, JobFolders.EXPORTS, z)?.let { if (!publish(rel, JobFolders.EXPORTS, it)) pub = false } }
-        if (pub && android.os.Build.VERSION.SDK_INT >= 29) "${JobFolders.display(rel)}/$sub" else File(writer.dir(rel), sub).path
+    /** 0.1.56 「PC로 보내기」: zip 하나 → Documents/발굴조사/[폴더/]작업/측량/보내기/<작업>_측량.zip (덮어쓰기, 직전 1개는 이전/).
+     *  반환 = (보낼 파일, 화면 경로 한 줄). Android 9 이하 = 앱 폴더 경로 */
+    suspend fun addSend(job: String, zip: File): Pair<File, String> = withContext(Dispatchers.IO) {
+        val jobRel = relOf(job)
+        val sendRel = kr.archsurvey.job.SendFolder.sendRel(jobRel)
+        val name = kr.archsurvey.job.SendFolder.zipName(job)
+        val (dst, prev) = kr.archsurvey.job.SendFolder.place(writer.dir(sendRel), zip, name)
+        var pub = android.os.Build.VERSION.SDK_INT >= 29
+        if (pub && prev != null) publishAt("${JobFolders.PUBLIC_PARENT}/$sendRel/${kr.archsurvey.job.SendFolder.PREV}/", prev)
+        if (pub && !publishAt("${JobFolders.PUBLIC_PARENT}/$sendRel/", dst)) pub = false
+        dst to (if (pub) kr.archsurvey.job.SendFolder.display(jobRel, job) else kr.archsurvey.job.SendFolder.displayLocal(dst))
     }
+
+    /** 보내기 앞 화면 경로(완료 화면과 같은 글) */
+    fun sendDisplay(job: String): String =
+        if (android.os.Build.VERSION.SDK_INT >= 29) kr.archsurvey.job.SendFolder.display(relOf(job), job)
+        else kr.archsurvey.job.SendFolder.displayLocal(File(writer.dir(kr.archsurvey.job.SendFolder.sendRel(relOf(job))), kr.archsurvey.job.SendFolder.zipName(job)))
 
     /** 백업 ZIP 사본 → 지금 작업 폴더 백업/ */
     suspend fun addBackup(job: String, zip: File) = withContext(Dispatchers.IO) {
@@ -71,12 +78,14 @@ class AndroidJobFolder(private val ctx: Context, private val settings: SettingsS
     }
 
     /** 공용 Documents 로 한 파일(같은 이름이 있으면 덮어씀). Android 9 이하는 저장소 권한이 없어 앱 폴더에만 */
-    private fun publish(rel: String, sub: String?, f: File): Boolean {
+    private fun publish(rel: String, sub: String?, f: File): Boolean =
+        publishAt("${JobFolders.PUBLIC_PARENT}/$rel/" + (sub?.let { "$it/" } ?: ""), f)
+
+    private fun publishAt(relPath: String, f: File): Boolean {
         if (android.os.Build.VERSION.SDK_INT < 29) return false
         return runCatching {
             val cr = ctx.contentResolver
             val coll = android.provider.MediaStore.Files.getContentUri("external")
-            val relPath = "${JobFolders.PUBLIC_PARENT}/$rel/" + (sub?.let { "$it/" } ?: "")
             val existing = cr.query(coll, arrayOf(android.provider.MediaStore.MediaColumns._ID),
                 "${android.provider.MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${android.provider.MediaStore.MediaColumns.DISPLAY_NAME}=?",
                 arrayOf(relPath, f.name), null)?.use { c -> if (c.moveToFirst()) android.content.ContentUris.withAppendedId(coll, c.getLong(0)) else null }

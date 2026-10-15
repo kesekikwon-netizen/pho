@@ -44,7 +44,7 @@ fun MoreMenu(c: SurveyController) {
                 MoreItem(Glyph.LIST, "점 목록", "more_points") { go { c.homeOpen = false; c.hub.open(ToolScreen.POINTS) } },
                 MoreItem(Glyph.CAMERA, "사진", "more_photo") { go { if (c.lastPoint != null) c.addPhotoCamera() else c.ui.toast("점을 잰 뒤 사진을 붙일 수 있어요") } },
                 MoreItem(Glyph.MIC, if (c.voiceSeconds > 0) "녹음 끝" else "메모", "more_memo") { go { c.toggleVoice() } },
-                if (c.dig.kind == DigKind.FEATURE) MoreItem(Glyph.FACE, if (c.dig.closeArmed) "닫기 취소" else "면 닫기", "more_close_area") { go { c.dig.armClose() } } else null,
+                if (c.dig.kind == DigKind.FEATURE) MoreItem(Glyph.FACE, if (c.dig.closeArmed) "닫기 취소" else "경계 닫기(면)", "more_close_area") { go { c.dig.armClose() } } else null,
                 MoreItem(Glyph.LAYERS, "레이어", "more_layers") { go { c.homeOpen = false; c.dig.layersOpen = true } },
                 MoreItem(Glyph.EXTENT, "맞춤", "more_fit") { go { c.fitAll() } },
                 MoreItem(Glyph.PLUS, if (Minimal.zoomButtons) "확대 단추 숨기기" else "확대 단추 보이기", "more_zoom_buttons", on = Minimal.zoomButtons) { Minimal.setZoomButtons(ctx, !Minimal.zoomButtons) },
@@ -55,17 +55,32 @@ fun MoreMenu(c: SurveyController) {
                 MoreItem(Glyph.GRID, "구역·그리드", "more_areas") { go { c.homeOpen = false; c.hub.open(ToolScreen.AREAS) } },
                 MoreItem(Glyph.LOCATE, "점 찾아가기", "more_goto") { go { c.hub.open(ToolScreen.GOTO) } },
                 MoreItem(Glyph.FACE, "유구별", "more_features") { go { c.homeOpen = false; c.hub.open(ToolScreen.FEATURES) } },
-                MoreItem(Glyph.EXPORT, "내보내기", "more_export") { go { c.exporter?.openScreen() } },
+                MoreItem(Glyph.EXPORT, "PC로 보내기 (예전 내보내기)", "more_export") { go { c.exporter?.openScreen() } },
             ))
             MoreHead("설정")
             MoreGrid(listOf(
                 MoreItem(Glyph.SLIDERS, "설정", "more_settings") { go { c.hub.open(ToolScreen.SETTINGS) } },
                 MoreItem(Glyph.BT, "수신기", "more_receiver") { go { c.connection?.openScreen() ?: c.ui.toast("연결 화면을 열 수 없어요") } },
+                // 0.1.56 S8: 길게 누르기 전용이던 「측점 설정」(측량 단추 길게)을 누름 메뉴에도
+                MoreItem(Glyph.SLIDERS, "측점 설정", "more_setup") { go { c.setupOpen = true } },
+                // 0.1.56 M6: 예전 내보내기 폴더는 옮기지 않음 — 여기서 열기
+                MoreItem(Glyph.FOLDER, "예전 보내기 폴더 열기", "more_old_exports") { go { openOldExportFolder(ctx, c) } },
                 MoreItem(Glyph.MENU, "전체 메뉴", "more_drawer") { go { c.drawerOpen = true } },
             ))
         }
     }
 }
+
+/** 0.1.56 M6: 예전 `Documents/ExcavationSurvey` 를 파일 앱으로(새 권한 없음). 못 열면 경로 안내만 */
+internal fun openOldExportFolder(ctx: android.content.Context, c: SurveyController) {
+    val ok = runCatching {
+        val uri = android.provider.DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:Documents/" + kr.archsurvey.job.JobFolders.ROOT)
+        ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(uri, android.provider.DocumentsContract.Document.MIME_TYPE_DIR)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION))
+    }.isSuccess
+    if (!ok) c.ui.ask(ConfirmRequest("예전 보내기 폴더", OLD_EXPORTS_TEXT, "확인", cancelLabel = "닫기") {})
+}
+internal const val OLD_EXPORTS_TEXT = "예전 파일은 옮기지 않고 그대로 있어요 · 내 파일 › Documents › ExcavationSurvey"
 
 internal class MoreItem(val g: Glyph, val label: String, val tag: String, val on: Boolean = false, val onClick: () -> Unit)
 

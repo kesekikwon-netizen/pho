@@ -108,8 +108,13 @@ fun HomeToday(c: SurveyController) {
                     HomeChip("폴 " + String.format(Locale.US, "%.2f", c.antenna.inputValueM) + " m", D.accent, "home_chip_pole")
                 }
                 // 0.1.50 오른손 #7: 폴 확인 띠(아래 한 줄)는 지금 작업 카드 안 배지로
-                Text(homeHint(c, steps), style = DTy.small.copy(fontWeight = FontWeight.Medium), color = D.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(D.chip).padding(horizontal = 10.dp, vertical = 6.dp).testTag("home_foot"))
+                // 0.1.56 S9: 폴 높이 확인 단추를 카드 안 오른쪽 아래(엄지 1탭, 화면 이동 없음)
+                val poleOpen = steps.any { it.id == "pole" && it.state != StepState.DONE }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(homeHint(c, steps), style = DTy.small.copy(fontWeight = FontWeight.Medium), color = D.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(D.chip).padding(horizontal = 10.dp, vertical = 6.dp).testTag("home_foot"))
+                    if (poleOpen) DSecondary("폴 맞아요", "home_pole_ok", Modifier.height(48.dp)) { c.dig.confirmPole() }
+                }
             }
             if (!Minimal.on) {
             Row(Modifier.padding(top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.Bottom) {
@@ -125,7 +130,7 @@ fun HomeToday(c: SurveyController) {
                 open.forEachIndexed { k, (i, s) -> D43PrepRow(c, i, s, k == open.lastIndex) }
                 if (open.isEmpty()) Text("준비 끝 · 수신기·VRS 자동 연결됨", style = DTy.small.copy(fontWeight = FontWeight.Bold), color = D.fix, modifier = Modifier.padding(start = 4.dp, top = 6.dp).testTag("home_prep_done"))
                 // 위험 4: 자동 백업이 꺼져 있으면 작은 「백업 안 됨」(기존 백업 표시 재사용)
-                if (c.drive?.autoBackup != true) Text("백업 안 됨" + backupLabel(c).let { if (it.endsWith("—")) "" else " · 마지막 $it" } + " · ⋯ 내보내기", style = DTy.small.copy(fontWeight = FontWeight.Bold), color = D.bad, modifier = Modifier.padding(start = 4.dp, top = 6.dp).testTag("home_backup_off"))
+                if (c.drive?.autoBackup != true) Text("백업 안 됨" + backupLabel(c).let { if (it.endsWith("—")) "" else " · 마지막 $it" } + " · ⋯ PC로 보내기", style = DTy.small.copy(fontWeight = FontWeight.Bold), color = D.bad, modifier = Modifier.padding(start = 4.dp, top = 6.dp).testTag("home_backup_off"))
                 Text("나머지 기능은 ⋯ 안에 있어요", style = DTy.small, color = D.sub, modifier = Modifier.padding(start = 4.dp, top = 6.dp).testTag("home_more_hint"))
             }
             Spacer(Modifier.height(8.dp))
@@ -144,16 +149,16 @@ fun HomeToday(c: SurveyController) {
                 HomeTileBox(Glyph.LOCATE, "점 찾아가기", "home_goto", Modifier.weight(1f), small = true) { c.hub.open(ToolScreen.GOTO) }
                 HomeTileBox(Glyph.SLIDERS, "설정", "home_settings2", Modifier.weight(1f), small = true) { c.hub.open(ToolScreen.SETTINGS) }
             }
-            // 0.1.51 새 작업 쉽게: 「+ 새 작업」은 오른쪽(엄지 쪽)·테라코타 테두리로 눈에 띄게 → 다음 화면 「만들고 측량 시작」 한 번
+            // 0.1.56 S6: 자주 쓰는 셋(다른 작업 · PC로 보내기 · + 새 작업)은 맨 아래 엄지 줄(오른쪽 우선), 위 타일에서는 뺐다(중복 없음)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                HomeTileBox(Glyph.FOLDER, "다른 작업", "home_card_open", Modifier.weight(1f), small = true) { c.jobs?.openList() ?: c.hub.open(ToolScreen.JOB_OPEN) }
                 HomeTileBox(Glyph.FACE, "유구별", "home_features", Modifier.weight(1f), small = true) { c.homeOpen = false; c.hub.open(ToolScreen.FEATURES) }
-                HomeTileBox(Glyph.PLUS, "+ 새 작업", "home_new_job", Modifier.weight(1f), small = true, accent = true) { c.jobs?.openNew() ?: c.ui.toast("작업 관리를 쓸 수 없어요") }
+                HomeTileBox(Glyph.LIST, "점 목록", "home_points", Modifier.weight(1f), small = true) { c.homeOpen = false; c.hub.open(ToolScreen.POINTS) }
+                HomeTileBox(Glyph.BT, "수신기", "home_receiver", Modifier.weight(1f), small = true) { c.connection?.openScreen() ?: c.ui.toast("연결 화면을 열 수 없어요") }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                HomeTileBox(Glyph.LIST, "점 목록", "home_points", Modifier.weight(1f)) { c.homeOpen = false; c.hub.open(ToolScreen.POINTS) }
-                HomeTileBox(Glyph.EXPORT, "내보내기", "home_export", Modifier.weight(1f)) { c.exporter?.openScreen() }
-                HomeTileBox(Glyph.BT, "수신기", "home_receiver", Modifier.weight(1f)) { c.connection?.openScreen() ?: c.ui.toast("연결 화면을 열 수 없어요") }
+            Row(Modifier.testTag("home_thumb_row"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HomeTileBox(Glyph.FOLDER, "다른 작업", "home_card_open", Modifier.weight(1f)) { c.jobs?.openList() ?: c.hub.open(ToolScreen.JOB_OPEN) }
+                HomeTileBox(Glyph.EXPORT, kr.archsurvey.job.SendFolder.BUTTON, "home_export", Modifier.weight(1f)) { c.exporter?.openScreen() }
+                HomeTileBox(Glyph.PLUS, "+ 새 작업", "home_new_job", Modifier.weight(1f), accent = true) { c.jobs?.openNew() ?: c.ui.toast("작업 관리를 쓸 수 없어요") }
             }
             }
             Box(
@@ -239,7 +244,7 @@ private fun D43PrepRow(c: SurveyController, i: Int, s: kr.archsurvey.dig.PrepSte
                 Text(s.title, style = DTy.body.copy(fontWeight = FontWeight.Medium, fontSize = 16.sp), color = D.ink)
                 if (s.state == StepState.NEXT) Text("  다음", style = DTy.small.copy(fontWeight = FontWeight.Medium), color = D.accentLight, modifier = Modifier.testTag("prep_${s.id}_next"))
             }
-            Text(s.sub, style = DTy.small, color = D.sub, maxLines = 2, modifier = Modifier.testTag("prep_${s.id}_sub"))
+            Text(s.sub, style = if (s.warn) DTy.small.copy(fontWeight = FontWeight.Bold) else DTy.small, color = if (s.warn) D.caution else D.sub, maxLines = 2, modifier = Modifier.testTag("prep_${s.id}_sub"))
         }
         s.action?.let { a ->
             DSecondary(a, "prep_${s.id}_act", Modifier.padding(top = 2.dp).height(48.dp).widthIn(min = 70.dp)) { prepAction(c, s.id) }

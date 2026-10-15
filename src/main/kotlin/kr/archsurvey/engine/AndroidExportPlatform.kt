@@ -47,9 +47,13 @@ class AndroidExportPlatform(
         }
         lastZip = r.zip
         // 0.1.38: 공용 사본 = Documents/ExcavationSurvey/[상위/]작업/내보내기/<작업_시각>/ (예전 …/hgis/… 대신)
-        val folder = jobFolder?.let { f -> runCatching { f.addExport(job, r.dir, r.zip) }.onFailure { kr.archsurvey.diag.CrashLog.record("작업 폴더 내보내기", it) }.getOrNull() } ?: r.publicFolder
-        return ExportOutput(r.zip.name, r.zip.length(), r.zip.path, r.pointCount, r.photoCount, r.voiceCount, folder)
+        // 0.1.56 M6·S5: 새 뿌리 발굴조사/…/측량/보내기/<작업>_측량.zip (덮어쓰기 + 이전/ 1개). 경로 한 줄은 앞 화면과 같은 글
+        val sent = jobFolder?.let { f -> runCatching { f.addSend(job, r.zip) }.onFailure { kr.archsurvey.diag.CrashLog.record("PC로 보내기 저장", it) }.getOrNull() }
+        val file = sent?.first ?: r.zip
+        return ExportOutput(file.name, file.length(), file.path, r.pointCount, r.photoCount, r.voiceCount, null, where = sent?.second ?: kr.archsurvey.job.SendFolder.displayLocal(r.zip))
     }
+
+    override fun sendWhere(): String? = jobFolder?.let { runCatching { it.sendDisplay(project()) }.getOrNull() }
 
     override fun share(out: ExportOutput) {
         ctx.startActivity(svc.shareIntent(File(out.path)))

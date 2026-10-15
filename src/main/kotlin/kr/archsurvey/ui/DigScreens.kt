@@ -70,7 +70,7 @@ fun FeaturesScreen(c: SurveyController) {
     ToolScaffold("측량한 것", "features_screen", onBack = { c.hub.back() }, bottom = {
         DBottomBar {
             DSecondary("점 목록 전체", "features_all_points", Modifier.weight(1f)) { c.hub.open(ToolScreen.POINTS) }
-            DPrimary("내보내기", "features_export", Modifier.weight(1.4f)) { c.exporter?.openScreen() }
+            DPrimary("PC로 보내기", "features_export", Modifier.weight(1.4f)) { c.exporter?.openScreen() }
         }
     }) {
         Text("점 ${c.points.size}   유구 ${cards.size}   유물 ${c.points.count { it.artifactNo != null }}   오늘 ${d.todayCount()}", style = DTy.monoS, color = D.sub, modifier = Modifier.testTag("features_summary"))
@@ -103,7 +103,7 @@ fun FeaturesScreen(c: SurveyController) {
                     val pts = c.points.filter { p -> p.featureId == fc.id || c.arch.outlines.any { it.id == fc.id && p.rowId in it.pointRowIds } }
                     DSectionLabel("${fc.name}의 점", Modifier.padding(top = 8.dp))
                     DTableHead(listOf("번호" to 2f, "해발 m" to 1.6f, "수평 cm" to 1.4f, "시각" to 1.2f))
-                    for (p in pts) DTableRow(listOf(p.name to 2f, ((p.groundMslM ?: p.groundHeightM)?.let { String.format(java.util.Locale.US, "%.2f", it) } ?: "—") to 1.6f,
+                    for (p in pts) DTableRow(listOf(kr.archsurvey.job.TargetNames.toScreen(p.name) to 2f, ((p.groundMslM ?: p.groundHeightM)?.let { String.format(java.util.Locale.US, "%.2f", it) } ?: "—") to 1.6f,
                         (p.sigmaHM?.let { String.format(java.util.Locale.US, "%.1f", it * 100) } ?: "—") to 1.4f,
                         java.text.SimpleDateFormat("HH:mm", java.util.Locale.KOREA).format(java.util.Date(p.measuredAtMs)) to 1.2f), "features_pt_${p.name}",
                         firstStyle = DTy.monoS.copy(fontSize = 16.sp), monoFrom = 0, colors = mapOf(3 to D.sub), compact = true) { c.hub.openDetail(p) }

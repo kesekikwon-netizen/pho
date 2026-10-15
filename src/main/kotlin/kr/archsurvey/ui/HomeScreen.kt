@@ -52,7 +52,7 @@ fun HomeScreen(c: SurveyController) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 HomeTile(Glyph.FOLDER, "작업 관리", "새 작업 · 열기 · 전송", "home_jobs", Modifier.weight(1f)) { c.hub.open(ToolScreen.JOB_HUB) }
-                HomeTile(Glyph.SHARE, "내보내기", "CSV · DXF · GeoJSON", "home_export", Modifier.weight(1f)) { c.exporter?.openScreen() ?: run { c.message = "내보내기는 이 빌드에 없어요" } }
+                HomeTile(Glyph.SHARE, "PC로 보내기", "CSV · DXF · GeoJSON", "home_export", Modifier.weight(1f)) { c.exporter?.openScreen() ?: run { c.message = "내보내기는 이 빌드에 없어요" } }
             }
             c.message?.let { Text(it, style = Ty.body, color = t.ink, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(t.raised).border(1.dp, t.ink, RoundedCornerShape(12.dp)).padding(12.dp).testTag("home_message")) }
         }

@@ -100,13 +100,14 @@ class Ui0114UxTest {
         rule.onNodeWithTag("export_run").performClick(); rule.waitForIdle()
         assertTrue(c.exporter!!.running)
         rule.onNodeWithTag("busy_queue").assertExists()
-        rule.onNodeWithTag("busy_op_export", useUnmergedTree = true).assertTextContains("내보내기", substring = true)
+        rule.onNodeWithTag("busy_op_export", useUnmergedTree = true).assertTextContains("PC로 보낼 파일", substring = true)
         rule.onNodeWithTag("busy_gauge_export").assertExists()
         rule.runOnUiThread { exp.gate.complete(ExportOutput("te1.zip", 2048, "/x/te1.zip", 3, 0, 0)) }; rule.waitForIdle()
         assertFalse(c.exporter!!.running)
         rule.onNodeWithTag("busy_queue").assertDoesNotExist()
-        assertEquals(ToastKind.OK, c.ui.toastKind)
-        assertTrue(c.ui.toast!!.contains("te1.zip"))
+        // 0.1.56 M5: 화면을 가리는 토스트 0 — 완료는 화면 안 경로 한 줄
+        assertNull(c.ui.toast)
+        rule.onNodeWithTag("export_saved_path").assertExists()
     }
 
     @Test fun exportFailureShowsErrorMessage() {
@@ -114,9 +115,9 @@ class Ui0114UxTest {
         rule.runOnUiThread { c.homeOpen = false; c.exporter!!.openScreen() }; rule.waitForIdle()
         rule.onNodeWithTag("export_run").performClick(); rule.waitForIdle()
         rule.runOnUiThread { exp.gate.completeExceptionally(java.io.IOException("disk")) }; rule.waitForIdle()
-        assertEquals(ToastKind.ERROR, c.ui.toastKind)
-        rule.onNodeWithTag("toast_error_mark", useUnmergedTree = true).assertExists()
-        assertTrue(TapHaptics.errors >= 1)
+        // 0.1.56 M5: 오류는 화면 안 카드 한 곳(토스트 없음)
+        assertNull(c.ui.toast)
+        rule.onNodeWithTag("export_error").assertExists()
     }
 
     @Test fun vworldTestResultMessage() {

@@ -152,7 +152,7 @@ class Shots0143Test {
         rule.onNodeWithTag("epochs_toggle").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("choice_sheet").assertExists()
         rule.runOnIdle { c.ui.dismissChoice(); c.hub.closeAll(); c.exporter?.openScreen() }; rule.waitForIdle()
-        rule.onNodeWithTag("export_run").assertTextContains("파일 5개", substring = true)
+        rule.onNodeWithTag("export_run").assertTextContains("PC로 보내기", substring = true) // 0.1.56 M5
         rule.onAllNodes(androidx.compose.ui.test.hasText("iTwin", substring = true), useUnmergedTree = true).assertCountEquals(0)
         rule.runOnIdle { c.exporter?.close(); c.connection?.openScreen() }; rule.waitForIdle()
         rule.onNodeWithTag("conn_diag_toggle").performScrollTo().performClick(); rule.waitForIdle()

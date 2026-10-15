@@ -401,6 +401,7 @@ class DigController(private val c: SurveyController) {
             poleM = c.antenna.inputValueM, modelShort = model, poleConfirmedToday = poleConfirmedToday,
             epsg = c.zone.epsg, heightLabel = c.geoid.shortKo, crsReady = true,
             bmName = bmName, bmCheckedToday = bmToday != null, bmPassedToday = bmToday, bmKnown = c.points.any { it.digKind == DigKind.BM.id && it.digTag == bmName },
+            fixNow = receiverLive && c.gv.status.status == SurveyStatus.FIXED,
         ))
     }
 

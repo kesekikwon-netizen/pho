@@ -200,22 +200,36 @@ object SectionLabels {
 }
 
 enum class StepState { DONE, NEXT, TODO }
-data class PrepStep(val id: String, val title: String, val sub: String, val state: StepState, val action: String?)
+data class PrepStep(val id: String, val title: String, val sub: String, val state: StepState, val action: String?,
+    /** 0.1.56 M2: 주황 경고 줄 */
+    val warn: Boolean = false)
 data class PrepInput(
     val receiverLive: Boolean, val receiverLabel: String, val ntripEnabled: Boolean, val ntripReceiving: Boolean, val ntripLabel: String,
     val poleM: Double, val modelShort: String, val poleConfirmedToday: Boolean, val epsg: Int, val heightLabel: String, val crsReady: Boolean,
     val bmName: String, val bmCheckedToday: Boolean, val bmPassedToday: Boolean?, val bmKnown: Boolean,
+    /** 0.1.56 M2: 지금 FIX(●) 중 */
+    val fixNow: Boolean = false,
 )
 
 /** 홈 「오늘 준비」 5단계: 수신기 · VRS · 폴 높이 확인 · 좌표계·높이 · 기준점 확인. 끝나지 않은 첫 단계가 「다음」 */
 object TodayPrep {
+    const val VRS_OFF_WARN = "VRS 꺼짐 — 켜야 cm 정밀도"
+    const val VRS_OFF_FIX = "수신기 보정으로 FIX 중"
     fun steps(i: PrepInput): List<PrepStep> {
         val pole = String.format(Locale.US, "%.1f", i.poleM)
         val raw = listOf(
             Triple("receiver", i.receiverLive, PrepStep("receiver", "수신기",
                 if (i.receiverLive) "${i.receiverLabel} · 연결됨" else "${i.receiverLabel} · 연결 안 됨 · 수신기를 켜고 위성을 잡은 뒤", StepState.TODO, if (i.receiverLive) null else "연결")),
-            Triple("vrs", !i.ntripEnabled || i.ntripReceiving, PrepStep("vrs", "VRS 보정",
-                if (!i.ntripEnabled) "VRS 안 씀 · 수신기 보정만" else if (i.ntripReceiving) "${i.ntripLabel} 수신 중" else "${i.ntripLabel} · 아직 안 들어와요", StepState.TODO, if (!i.ntripEnabled || i.ntripReceiving) null else "보기")),
+            // 0.1.56 M2: VRS 꺼짐은 ✓ 아님 — FIX 아니면 주황 「VRS 꺼짐 — 켜야 cm 정밀도 [켜기]」, FIX(●) 중이면 회색 「수신기 보정으로 FIX 중」 ✓
+            Triple("vrs", i.ntripReceiving || (!i.ntripEnabled && i.fixNow), PrepStep("vrs", "VRS 보정",
+                when {
+                    !i.ntripEnabled && i.fixNow -> VRS_OFF_FIX
+                    !i.ntripEnabled -> VRS_OFF_WARN
+                    i.ntripReceiving -> "${i.ntripLabel} 수신 중"
+                    else -> "${i.ntripLabel} · 아직 안 들어와요"
+                }, StepState.TODO,
+                when { i.ntripReceiving -> null; !i.ntripEnabled && i.fixNow -> null; !i.ntripEnabled -> "켜기"; else -> "보기" },
+                warn = !i.ntripReceiving && !(!i.ntripEnabled && i.fixNow))),
             Triple("pole", i.poleConfirmedToday, PrepStep("pole", "폴 높이 확인",
                 if (i.poleConfirmedToday) "${i.modelShort} · $pole m · 오늘 확인함" else "${i.modelShort} · $pole m · 폴 눈금과 같나요?", StepState.TODO, if (i.poleConfirmedToday) null else "맞아요")),
             Triple("crs", i.crsReady, PrepStep("crs", "좌표계 · 높이",
@@ -274,7 +288,7 @@ data class CauseInput(
 
 /** X12: 고정이 안 되는 이유를 사람 말 한 줄로 */
 object CauseLine {
-    const val NO_RECEIVER = "수신기가 연결되지 않았어요 · 수신기를 켜고 연결하세요"
+    const val NO_RECEIVER = "수신기 연결 안 됨 · 누르면 연결" // 0.1.56 S1: 원인 · 누르면 행동, 한 줄
     const val INTERNET = "인터넷이 약해 보정이 안 와요 · 다시 잇는 중이에요"
     const val STALLED = "보정이 수신기로 전달되지 않아요 · 수신기 블루투스 입력을 확인하세요"
     const val SKY = "위성이 가려져요 · 나무·벽에서 조금 떨어져 보세요"

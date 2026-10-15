@@ -10,7 +10,10 @@ enum class ToastKind { INFO, OK, ERROR }
 /** 확인 대화상자: 되돌릴 수 없거나 조심할 동작 앞에서 */
 data class ConfirmRequest(
     val title: String, val body: String, val okLabel: String,
-    val cancelLabel: String = "취소", val danger: Boolean = false, val onOk: () -> Unit,
+    val cancelLabel: String = "취소", val danger: Boolean = false,
+    /** 0.1.56 M1: 아래쪽 시트(지도 중앙을 덮지 않음, 어둡게 가리지 않음) */
+    val sheet: Boolean = false,
+    val onOk: () -> Unit,
 )
 
 /** 선택 창: 목록에서 하나 고르기 */

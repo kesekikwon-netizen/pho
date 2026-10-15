@@ -324,9 +324,9 @@ class VoiceGatePath0128Tests {
         r.c.answerTilt(true)
         assertNull("주의 확인을 다시 묻지 않음", r.c.ui.confirm); assertEquals(Phase.ACQUIRING, r.c.phase)
         r.emit(4); assertEquals(1, r.c.points.size); assertTrue(r.c.points.single().cautionFlag)
-        // 기울기만(주의 승인 없이) 승인했으면 주의 확인은 그대로 묻는다
-        r.c.onMeasure(); r.c.ui.answer(false)
-        assertNull(r.c.tiltPrompt); assertTrue(r.c.message == null || r.c.points.size == 1)
+        // 0.1.56 M1: 이 작업에서 주의를 한 번 승인했으면 다시 묻지 않음(점마다 창 없음) — 기울기 확인만 따로
+        r.c.onMeasure()
+        assertNull(r.c.ui.confirm); assertNotNull(r.c.tiltPrompt)
     }
 
     @Test fun tiltScreenAnswerEndsVoiceConfirm() {

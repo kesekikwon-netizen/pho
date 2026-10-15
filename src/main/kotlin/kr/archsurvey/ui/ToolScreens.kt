@@ -109,7 +109,7 @@ private fun PointRow(p: SavedPoint, onLong: () -> Unit, onClick: () -> Unit) {
         Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).border(1.5.dp, D.line, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.PIN, FieldIvory.primary, 22.dp) }
         Column(Modifier.weight(1f).padding(start = 12.dp)) {
             Row(verticalAlignment = Alignment.Bottom) {
-                Text(p.name, style = DTy.bodyB.copy(fontSize = 18.sp), color = D.ink, maxLines = 1, softWrap = false)
+                Text(kr.archsurvey.job.TargetNames.toScreen(p.name), style = DTy.bodyB.copy(fontSize = 18.sp), color = D.ink, maxLines = 1, softWrap = false)
                 Text(" · " + p.type.ifBlank { "종류 없음" }, style = DTy.small, color = D.ink, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             }
             Text("N ${grp3(p.northing)} E ${grp3(p.easting)} H ${p.groundHeightM?.let { String.format(java.util.Locale.US, "%.2f", it) } ?: "—"}", style = DTy.small, color = D.sub, maxLines = 2)
@@ -129,11 +129,11 @@ fun PointDetailScreen(c: SurveyController) {
     val t = T; val h = c.hub
     val p = h.selected
     if (p == null) { h.back(); return }
-    ToolScaffold(p.name, "point_detail", onBack = { h.back() }, bottom = {
+    ToolScaffold(kr.archsurvey.job.TargetNames.toScreen(p.name), "point_detail", onBack = { h.back() }, bottom = {
         // 0.1.14 목업 21 하단: 지도에서 보기 / 편집 저장
         DualBar("지도에서 보기", "detail_map_bar", { c.focusOn(p); c.goToSurvey() }, if (h.saved && !h.dirty) "저장했어요" else "편집 저장", "point_save", h.dirty) { h.saveEdit() }
     }) {
-        ReadRow("점 이름") { Text(p.name, style = Ty.coord.copy(fontSize = 18.sp), color = t.ink, modifier = Modifier.testTag("detail_name")) }
+        ReadRow("점 이름") { Text(kr.archsurvey.job.TargetNames.toScreen(p.name), style = Ty.coord.copy(fontSize = 18.sp), color = t.ink, modifier = Modifier.testTag("detail_name")) }
         var typeOpen by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
         SelectRow("위치 종류", h.editType.trim().ifBlank { p.type }, typeOpen, "edit_type_toggle") { typeOpen = !typeOpen }
         if (typeOpen) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -417,7 +417,7 @@ fun SettingsScreen(c: SurveyController) {
         }
     }
     var tab by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(c.settingsTab) }
-    ToolScaffold("설정", "settings_screen", onBack = { h.back() }, right = "이 작업에 저장") {
+    ToolScaffold("설정", "settings_screen", onBack = { h.back() }, right = "이 작업에만 적용") {
         // 0.1.46 시안 s07: 일반 · 수신기 · 고급(위험·시험) 세 칸
         SettingsTabs(tab) { tab = it; c.settingsTab = it }
         if (tab == 1) {
@@ -585,7 +585,8 @@ fun JobScreen(c: SurveyController) {
             // 0.1.39: 큰 단추 하나 — 작업+폴더를 만들고 바로 측량 지도로
             ToolScreen.JOB_NEW -> DBottomBar {
                 DSecondary("취소", "job_cancel", Modifier.weight(1f)) { h.back() }
-                DPrimary(if (jc.busy) "만드는 중…" else "만들기", "job_create", Modifier.weight(1.9f), enabled = !jc.busy) { jc.create() }
+                // 0.1.56 M4: 이름이 비면 꺼짐 + 단추 안 「이름을 쓰세요」
+                DPrimary(when { jc.busy -> "만드는 중…"; jc.newName.isBlank() -> "이름을 쓰세요"; else -> "만들기" }, "job_create", Modifier.weight(1.9f), enabled = jc.canCreate) { jc.create() }
             }
             ToolScreen.JOB_OPEN -> DBottomBar {
                 DSecondary("백업 · 복구", "job_backup", Modifier.weight(1f)) { c.backupQuickOpen = true }
@@ -607,26 +608,45 @@ fun JobScreen(c: SurveyController) {
                 OutlinedTextField(jc.newName, { jc.newName = it }, singleLine = true, textStyle = DTy.h1.copy(fontSize = 22.sp),
                     placeholder = { Text("예) 교동 2호 주거지", style = DTy.body, color = D.weak) },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
-                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { jc.create() }),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { if (jc.canCreate) jc.create() }),
                     modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).focusRequester(focus).testTag("job_name"))
-                SectionHead("폴더 (비우면 바로 아래)")
+                // 0.1.56 S2: 같은 이름 작업 → [그 작업 열기] 한 번
+                jc.sameName?.let { n ->
+                    Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("같은 이름 작업이 있어요", style = DTy.bodyB, color = D.caution, modifier = Modifier.weight(1f).testTag("job_same_name"))
+                        DSecondary("그 작업 열기", "job_open_same", Modifier.height(48.dp)) { jc.openSameName() }
+                    }
+                }
+                SectionHead("폴더 (비우면 발굴조사 바로 아래)")
                 OutlinedTextField(jc.newSite, { jc.newSite = it }, singleLine = true, textStyle = DTy.body,
                     placeholder = { Text("예) 강릉 교동 유적", style = DTy.body, color = D.weak) },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
-                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { jc.create() }),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { if (jc.canCreate) jc.create() }),
                     modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("job_group"))
+                // 0.1.56 S3: 전에 직접 쓴 폴더 칩(최대 3) — 누르면 칸에 채움만
+                if (jc.recentFolders.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    jc.recentFolders.forEachIndexed { i, f -> DSecondary(f, "job_recent_$i", Modifier.weight(1f).height(48.dp)) { jc.pickRecentFolder(f) } }
+                }
                 Text("저장 위치 · " + jc.newFolderPreview, style = DTy.small, color = D.sub, maxLines = 2, modifier = Modifier.testTag("job_folder_preview"))
                 DRule(false)
+                // 0.1.56 M3: 지난 작업 좌표계로 만들고, 지금 위치 추천이 다르면 주황 한 줄 + [바꾸기]
+                jc.zoneMismatchText()?.let { msg ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(msg, style = DTy.bodyB, color = D.caution, modifier = Modifier.weight(1f).testTag("job_zone_mismatch"))
+                        DSecondary("바꾸기", "job_zone_switch", Modifier.height(48.dp)) { jc.applyRecommendedZone() }
+                    }
+                }
                 Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).hClickable { jc.newDetailsOpen = !jc.newDetailsOpen }.testTag("job_details"), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${jc.formZone.shortKo} ${jc.formZone.epsg} · 높이 ${jc.formGeoid.shortKo} · ${jc.formMap.labelKo}", style = DTy.body, color = D.ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    // 0.1.56 S7: 약어 대신 이름+번호
+                    Text("좌표계 ${jc.formZone.nameEpsg} · 높이 ${jc.formGeoid.labelKo} · ${jc.formMap.labelKo}", style = DTy.body, color = D.ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     Text(if (jc.newDetailsOpen) "접기 ⌃" else "바꾸기 ›", style = DTy.small, color = D.accent)
                 }
                 DRule(false)
                 if (jc.newDetailsOpen) {
                     SectionHead("좌표계 원점")
                     val zones = kr.archsurvey.core.KoreanTmZone.entries
-                    ChoiceGrid(zones.mapIndexed { i, z -> GridItem(z.shortKo + " " + z.epsg + if (jc.recommendedZone == z) " · 추천" else "", "job_zone_${z.epsg}", jc.formZone == z, span = if (i == zones.lastIndex) 3 else 1) { jc.formZone = z } }, modifier = Modifier.testTag("job_zone_seg"))
-                    Text(if (jc.recommendedZone != null) "지금 위치(경도)로 추천 원점을 표시했어요. 첫 점을 재면 잠깁니다." else "아직 위치가 없어 고른 원점으로 둡니다. 첫 점을 재면 잠깁니다.", style = DTy.small, color = D.sub, modifier = Modifier.testTag("job_zone_note"))
+                    ChoiceGrid(zones.mapIndexed { i, z -> GridItem(z.nameEpsg + if (jc.recommendedZone == z) " · 위치 추천" else "", "job_zone_${z.epsg}", jc.formZone == z, span = if (i == zones.lastIndex) 3 else 1) { jc.formZone = z } }, modifier = Modifier.testTag("job_zone_seg"))
+                    Text("기본은 지난 작업 좌표계예요. 첫 점을 재면 잠깁니다.", style = DTy.small, color = D.sub, modifier = Modifier.testTag("job_zone_note"))
                     SectionHead("배경 지도")
                     val maps = listOf(kr.archsurvey.map.MapBase.SATELLITE_CADASTRAL to "위성 + 지적", kr.archsurvey.map.MapBase.SATELLITE to "위성만", kr.archsurvey.map.MapBase.CADASTRAL to "일반 + 지적")
                     ChoiceGrid(maps.map { (m, l) -> GridItem(l, "job_newmap_${m.id}", jc.formMap == m) { jc.formMap = m } })
@@ -636,7 +656,11 @@ fun JobScreen(c: SurveyController) {
             ToolScreen.JOB_OPEN -> {
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text("최근 작업", style = DTy.bodyB, color = D.ink); Text(" ${jc.list.size}개", style = DTy.tiny, color = D.sub, modifier = Modifier.weight(1f))
-                    Text("길게 누르면 지우기", style = DTy.tiny, color = D.sub)
+                    // 0.1.56 S8: 길게 누르기 없이도 지우기(고르기 창)
+                    DSecondary("지우기…", "job_delete_pick", Modifier.height(48.dp)) {
+                        val l = jc.list
+                        if (l.isNotEmpty()) c.ui.choose(ChoiceRequest("지울 작업 고르기", l.map { it.name }, -1, "job_del", "고른 뒤 한 번 더 확인해요") { i -> l.getOrNull(i)?.let { jc.askDelete(it) } })
+                    }
                 }
                 Text("열려 있는 작업: ${jc.current}", style = DTy.tiny.copy(fontSize = 1.sp), color = androidx.compose.ui.graphics.Color.Transparent, modifier = Modifier.testTag("job_current"))
                 Column {

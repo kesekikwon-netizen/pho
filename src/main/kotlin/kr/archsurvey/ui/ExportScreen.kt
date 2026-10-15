@@ -44,10 +44,14 @@ fun ExportScreen(ec: ExportController) {
         sc?.dig?.drawScale?.let { ec.scale = it }
         if (ec.formats == ExportFormat.DEFAULT) ec.formats = ExportFormat.EVENING // 시안 기본: 도면·Shape·점 목록·야장
     }
-    ToolScaffold("내보내기", "export_screen", onBack = { ec.close() }, bottom = {
+    ToolScaffold(kr.archsurvey.job.SendFolder.BUTTON, "export_screen", onBack = { ec.close() }, bottom = {
         DBottomBar {
-            if (out == null) DPrimary(if (ec.running) "만드는 중…" else "파일 ${exportFileCount(ec)}개 내보내기 · 공유", "export_run", Modifier.weight(1f),
-                enabled = !ec.running && (s?.points ?: 0) > 0 && ec.formats.isNotEmpty()) { ec.runAndShare() }
+            // 0.1.56 M5·M8: 단추 이름 「PC로 보내기」(세 앱 「…로 보내기」), 잰 점 0개면 꺼짐 + 「잰 점이 없어요」
+            if (out == null) DPrimary(when {
+                ec.running -> "만드는 중…"
+                s != null && s.points == 0 -> kr.archsurvey.job.SendFolder.EMPTY
+                else -> kr.archsurvey.job.SendFolder.BUTTON
+            }, "export_run", Modifier.weight(1f), enabled = ec.canSend) { ec.runAndShare() }
             else {
                 DSecondary("파일로 저장", "export_save", Modifier.weight(1f)) { ec.saveAs() }
                 DPrimary("다시 공유", "export_share", Modifier.weight(1.4f)) { ec.share() }
@@ -58,9 +62,16 @@ fun ExportScreen(ec: ExportController) {
         if (s == null) Text("불러오는 중…", style = DTy.small, color = D.sub)
         else Text("점 ${s.points} · 유구 ${sc?.dig?.featureOutlines()?.size ?: 0} · 사진 ${s.photos} · 음성 ${s.voices} · EPSG:${sc?.zone?.epsg ?: ""}", style = DTy.monoS, color = D.sub, modifier = Modifier.testTag("export_summary"))
         if ((s?.fakePoints ?: 0) > 0) Text("이전 시험 버전에서 수신기 없이 만든 점이 ${s!!.fakePoints}개 들어 있어요. 실측 데이터와 섞이지 않게 확인하세요.", style = DTy.small, color = D.bad, modifier = Modifier.testTag("export_fake_warning"))
-        ec.savedText?.let { Text(it, style = DTy.bodyB, color = D.ink, modifier = Modifier.testTag("export_saved_path")) }
         DRule()
         if (out == null) {
+            if (s != null && s.points == 0) Text(kr.archsurvey.job.SendFolder.EMPTY, style = DTy.bodyB, color = D.sub, modifier = Modifier.testTag("export_empty"))
+            // 0.1.56 S4: 옵션은 접어 두기 — 첫 화면 조작 = 보내기 단추 + 이 한 줄
+            Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).hClickable { ec.optionsOpen = !ec.optionsOpen }.testTag("export_options"), verticalAlignment = Alignment.CenterVertically) {
+                Text("들어가는 것: " + includedSummary(ec), style = DTy.bodyB, color = D.ink, modifier = Modifier.weight(1f).testTag("export_options_text"))
+                GlyphIcon(if (ec.optionsOpen) Glyph.CHEVRON_DOWN else Glyph.CHEVRON_RIGHT, D.sub, 14.dp)
+            }
+        }
+        if (out == null && ec.optionsOpen) {
             DSectionLabel("도면 축척 · 글자 크기가 맞춰집니다")
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.width(230.dp)) {
@@ -91,23 +102,26 @@ fun ExportScreen(ec: ExportController) {
                 GlyphIcon(if (more) Glyph.CHEVRON_DOWN else Glyph.CHEVRON_RIGHT, D.sub, 14.dp)
             }
             if (more) for (f in MORE) ExportCheckRow(f in ec.formats, f.labelKo, f.ext, "", "export_fmt_${f.id}") { ec.toggleFormat(f) }
-            DRule(false)
-            val folder = sc?.jobs?.currentFolder?.let { it.replace("Documents/", "폰 문서 › ").replace("/", " › ") + " › 내보내기" } ?: "폰 문서 › ExcavationSurvey › 내보내기"
-            Text("저장 위치 · $folder", style = DTy.small, color = D.sub, modifier = Modifier.testTag("export_where"))
         }
+        // 0.1.56 M5: 경로 표기 한 가지 — 보내기 앞·완료 같은 글
+        if (out == null) ec.where?.let { Text(it, style = DTy.small, color = D.sub, modifier = Modifier.testTag("export_where")) }
         ec.error?.let { ErrorCardView(ErrorCard("-", it, "다시 시도하거나, 계속 안 되면 화면을 캡처해 알려 주세요.", false), "export_error") }
         if (out != null) {
             Text("파일을 만들었어요", style = DTy.h2, color = D.ink, modifier = Modifier.testTag("export_done"))
-            Text(out.fileName, style = DTy.mono, color = D.ink, modifier = Modifier.testTag("export_filename"))
+            ec.savedText?.let { Text(it, style = DTy.bodyB, color = D.ink, modifier = Modifier.testTag("export_saved_path")) }
             Text("${ec.formats.size}개 양식 · ${ExportController.sizeText(out.sizeBytes)} · 점 ${out.points}개 · 사진 ${out.photos}장 · 음성 ${out.voices}개", style = DTy.small, color = D.sub, modifier = Modifier.testTag("export_result_counts"))
-            out.publicFolder?.let { folder ->
-                Text("hgis용 폴더: 내장 저장공간/$folder", style = DTy.body, color = D.ink, modifier = Modifier.testTag("export_public_folder"))
-                Text("USB로 PC에 연결해 이 폴더를 PC에 복사한 뒤, 안의 points_EPSG.shp 를 hgis 지도에 끌어 놓으세요.", style = DTy.small, color = D.sub)
-            }
-            DSecondary("파일 다시 고르기", "export_again", Modifier.fillMaxWidth().height(52.dp)) { ec.openScreen() }
+            DSecondary("양식 바꿔 다시 만들기", "export_again", Modifier.fillMaxWidth().height(52.dp)) { ec.openScreen(); ec.optionsOpen = true }
             ec.notice?.let { Text(it, style = DTy.small, color = D.sub, modifier = Modifier.testTag("export_notice")) }
         }
     }
+}
+
+/** 0.1.56 S4: 접힌 줄 「DXF·Shape·CSV·… N개」 */
+internal fun includedSummary(ec: ExportController): String {
+    val names = MAIN_LINES.filter { l -> if (l.f != null) l.f in ec.formats else (ec.includePhotos || ec.includeVoices) }.map { it.f?.let { f -> when (f) {
+        ExportFormat.DRAWING_DXF, ExportFormat.DXF -> "DXF"; ExportFormat.SHP -> "Shape"; ExportFormat.CSV -> "CSV"; ExportFormat.FIELD_CSV -> "야장"; else -> f.labelKo } } ?: "사진·음성" } +
+        MORE.filter { it in ec.formats }.map { it.labelKo }
+    return names.distinct().joinToString("·") + " ${exportFileCount(ec)}개 ›"
 }
 
 @Composable

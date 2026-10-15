@@ -182,7 +182,7 @@ class ToolScreensTest {
         rule.runOnUiThread { c.exporter!!.openScreen() }; rule.waitForIdle()
         rule.onNodeWithTag("export_fake_warning").assertExists()
         rule.onNodeWithTag("export_run").performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("export_filename").assertExists()
+        rule.onNodeWithTag("export_saved_path").assertExists() // 0.1.56 M5 경로 한 가지
         shot("t10_export_done")
         rule.runOnUiThread { c.exporter!!.close(); c.backup!!.openScreen() }; rule.waitForIdle()
         rule.onNodeWithTag("backup_item_0").assertExists()
@@ -213,6 +213,7 @@ class ToolScreensTest {
         setup()
         val ex = exp
         rule.runOnUiThread { c.exporter!!.openScreen() }; rule.waitForIdle()
+        rule.onNodeWithTag("export_options").performScrollTo().performClick(); rule.waitForIdle() // 0.1.56 S4 접힘
         rule.onNodeWithTag("export_scale_100").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("export_today_only").performScrollTo().performClick(); rule.waitForIdle()
         rule.onNodeWithTag("export_run").performClick(); rule.waitForIdle()

@@ -622,6 +622,15 @@ class SurveyController(
         })
     }
 
+    /** 0.1.56 M1: 이 작업에서 주의(플로트) 측점을 한 번 승인함 — 저장 상태 1비트(작업 이름). 화면 설정 없음 */
+    var floatOkJob by mutableStateOf<String?>(null)
+    /** 0.1.56 M1: 측점 단추 위 주황 한 줄(승인한 작업 + 지금 주의 상태일 때만) */
+    fun floatBanner(): String? {
+        if (floatOkJob != projectName || gv.noReceiver || gv.status.status != SurveyStatus.CAUTION) return null
+        val cm = gv.status.sigmaHM?.let { String.format(java.util.Locale.US, "%.0f", it * 100) } ?: "—"
+        return "◐ 플로트 ±${cm}cm로 저장 중"
+    }
+
     fun onMeasure() {
         if (phase == Phase.ACQUIRING || phase == Phase.RECORDING) return
         // 0.1.35: 「면 닫기」 미리보기 중이면 측점 단추 = 면 닫기 확인
@@ -641,15 +650,18 @@ class SurveyController(
                 feedback?.invoke(false)
                 return
             }
-            SavePolicy.ALLOW_WITH_WARNING -> if (!qualityBypass) {
+            // 0.1.56 M1: 주의(플로트 등) 확인은 작업당 1번(아래쪽 시트). 승인한 작업에선 다시 묻지 않고 측점 단추 위 한 줄만
+            SavePolicy.ALLOW_WITH_WARNING -> if (!qualityBypass && floatOkJob != projectName) {
                 val hint = if (st.reason == StatusReason.NO_SIGMA) PrecisionGuide.noSigmaHint(deviceIdProvider())?.let { " ($it)" } ?: "" else ""
                 val noSigma = st.reason == StatusReason.NO_SIGMA
                 val req = ConfirmRequest(
                     if (noSigma) SigmaText.CONFIRM_TITLE else "주의 상태에서 측점할까요?",
                     if (noSigma) SigmaText.CONFIRM_BODY + (hint.takeIf { it.isNotEmpty() } ?: "") else "${st.reason.textKo}$hint · 저장은 되지만 주의 표시가 기록돼요.",
                     if (noSigma) SigmaText.CONFIRM_OK else "그래도 측점",
+                    sheet = true,
                 ) {
                     qualityConfirm = null
+                    floatOkJob = projectName
                     qualityBypass = true
                     try { onMeasure() } finally { qualityBypass = false }
                 }
@@ -1166,7 +1178,7 @@ class SurveyController(
         val layers = mapTiles()
         return MapViewState(
             center = center, dpPerM = dpPerM, 
-            points = dig.mapMarkers(points) { projection.toLocal(it.lat, it.lon) },
+            points = dig.mapMarkers(points) { projection.toLocal(it.lat, it.lon) }.map { m -> kr.archsurvey.job.TargetNames.toScreen(m.name).let { n -> if (n == m.name) m else m.copy(name = n) } }, // 0.1.56 M7 화면 = 표적 #N
             current = cur?.let { CurrentMarker(it, sigma, gv.displayStatus, head) }, // 0.1.30 T23-c 표시 색만
             phone = if (cur == null && pf != null && phoneAt != null) PhoneMarker(phoneAt, pf.accuracyM, PHONE_DOT_LABEL) else null,
             trail = trail.toList(), trailBreaks = trailBreaks.toSet(),

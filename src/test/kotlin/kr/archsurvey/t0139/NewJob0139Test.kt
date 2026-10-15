@@ -79,6 +79,8 @@ class NewJob0139Test {
         rule.onNodeWithTag("job_name").assertIsFocused()
         rule.onNodeWithTag("job_site_new").assertDoesNotExist()
         rule.onNodeWithTag("job_no_p1").assertDoesNotExist()
+        // 0.1.56 S3: 폴더 칸은 빈 채 시작 — 전에 쓴 폴더는 칩(누르면 채움)
+        rule.onNodeWithTag("job_recent_0").assertTextContains("강릉 교동"); tap("job_recent_0")
         rule.onNodeWithTag("job_group").assertTextContains("강릉 교동")
         rule.onNodeWithTag("job_name").performTextInput("2호 주거지")
         shot("01_new_job_typed")
@@ -91,8 +93,10 @@ class NewJob0139Test {
     @Test fun emptyName_refused_noAutoName() {
         val (c, _) = setup()
         tap("home_new_job")
+        // 0.1.56 M4: 빈 이름 = 「만들기」 꺼짐(단추 안 「이름을 쓰세요」), 오류 창·토스트 없음
+        rule.onNodeWithTag("job_create").assertIsNotEnabled()
         tap("job_create")
-        assertEquals("작업 이름을 입력하세요", c.jobs!!.error)
+        assertNull(c.jobs!!.error); assertNull(c.ui.toast)
         assertEquals(ToolScreen.JOB_NEW, c.hub.screen)
     }
 

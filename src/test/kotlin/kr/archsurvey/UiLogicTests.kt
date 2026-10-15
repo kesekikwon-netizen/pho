@@ -57,7 +57,7 @@ class DrawerMenuTest {
     @Test fun requiredEntriesExist() {
         val labels = DrawerMenu.allItems.map { it.label }
         // 0.1.38: 메뉴 하나(겹치는 칸 정리). 점 목록·계산기·작업 정보·안테나 높이·위치 종류는 다른 곳과 겹쳐 뺐다
-        for (l in listOf("+ 새 작업", "작업 열기 · 삭제", "내보내기 · 저녁 도면", "백업 · 복구", "측량한 것", "구역 · 그리드", "지도에 보이기", "점 찾아가기", "수신기 연결 · VRS", "설정 · 구글 드라이브"))
+        for (l in listOf("+ 새 작업", "작업 열기 · 삭제", "PC로 보내기 (예전 내보내기)", "백업 · 복구", "측량한 것", "구역 · 그리드", "지도에 보이기", "점 찾아가기", "수신기 연결 · VRS", "설정 · 구글 드라이브"))
             assertTrue(l, l in labels)
         assertEquals(listOf("작업", "측량", "장비 · 설정"), DrawerMenu.sections.map { it.title })
     }

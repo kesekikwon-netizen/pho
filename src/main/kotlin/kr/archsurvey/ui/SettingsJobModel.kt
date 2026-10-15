@@ -185,6 +185,18 @@ class JobController(
     val effectiveName: String get() = newName.trim() /* 0.1.55: 사용자가 쓴 이름만(자동 이름 없음) */
     /** 유적 칩: 지금 작업의 유적 + 최근 유적(위치→행정동 이름은 이 앱에 주소 API 가 없어 아직 못 함 — 마지막 쓴 것으로 대신) */
     val siteChips: List<String> get() = (listOfNotNull(currentSite) + groups).distinct().take(6)
+    /** 0.1.56 S3: 사용자가 전에 직접 쓴 폴더만, 최대 3개(미리 정한 값 없음) */
+    val recentFolders: List<String> get() = (listOfNotNull(currentSite) + groups).filter { it.isNotBlank() }.distinct().take(3)
+    fun pickRecentFolder(f: String) { newSite = f }
+    /** 0.1.56 M3: 지난 작업 좌표계와 지금 위치 추천이 다를 때 그 추천 */
+    val zoneMismatch: KoreanTmZone? get() = recommendedZone?.takeIf { it != formZone && formZone == c.zone }
+    fun zoneMismatchText(): String? = zoneMismatch?.let { "지난 작업 ${c.zone.nameEpsg} · 지금 위치는 ${it.nameEpsg}" }
+    fun applyRecommendedZone() { recommendedZone?.let { formZone = it } }
+    /** 0.1.56 M4: 이름이 비면 「만들기」 꺼짐 */
+    val canCreate: Boolean get() = !busy && newName.isNotBlank()
+    /** 0.1.56 S2: 같은 이름 작업(있으면 [그 작업 열기]) */
+    val sameName: String? get() = newName.trim().takeIf { it.isNotEmpty() }?.let { n -> (list.map { it.name } + current).firstOrNull { it.equals(n, ignoreCase = true) } }
+    fun openSameName() { val n = sameName ?: return; if (n == current) { c.goToSurvey(); return }; run("작업 열기") { platform.open(n); switched(n); notice = "‘$n’ 작업을 열었어요"; c.goToSurvey() } }
     val currentSite: String? get() = currentFolder?.removePrefix(kr.archsurvey.job.JobFolders.PUBLIC_PARENT + "/")?.let { kr.archsurvey.job.JobFolders.split(it).first }
     fun pickSite(sv: String?) { newGroupTyping = false; newSite = sv.orEmpty(); newNo = kr.archsurvey.job.NewJobName.nextNo(newSite, newStage, list.map { it.name }) }
     fun pickStage(st: kr.archsurvey.job.SurveyStage) { newStage = st; newNo = kr.archsurvey.job.NewJobName.nextNo(newSite, st, list.map { it.name }) }
@@ -195,9 +207,10 @@ class JobController(
     /** 지금 작업 폴더(홈 카드·작업 정보) */
     val currentFolder: String? get() = runCatching { platform.folderOf(current) }.getOrNull()
     /** 새 작업 창 미리보기: 만들면 생길 폴더 */
-    val newFolderPreview: String get() = kr.archsurvey.job.JobFolders.display(kr.archsurvey.job.JobFolders.relPath(
+    /** 0.1.56 M6: 보내기 저장 뿌리(세 앱 같음) Documents/발굴조사/[폴더/]작업/측량 */
+    val newFolderPreview: String get() = kr.archsurvey.job.JobFolders.PUBLIC_PARENT + "/" + listOfNotNull(kr.archsurvey.job.SendFolder.ROOT,
         newSite.ifBlank { newGroup }.trim().takeIf { it.isNotEmpty() }?.let { kr.archsurvey.job.JobFolders.sanitize(it, "폴더") },
-        kr.archsurvey.job.JobFolders.sanitize(effectiveName.ifBlank { "작업명" })))
+        kr.archsurvey.job.JobFolders.sanitize(effectiveName.ifBlank { "작업명" }), kr.archsurvey.job.SendFolder.APP).joinToString("/")
     var busy by mutableStateOf(false); private set
     var error by mutableStateOf<String?>(null); private set
     var notice by mutableStateOf<String?>(null); private set
@@ -223,7 +236,7 @@ class JobController(
     }
     fun openNew() {
         error = null; notice = null; newName = ""; newGroup = ""; nameManual = false; noTouched = false; newGroupTyping = false; newDetailsOpen = false
-        newSite = currentSite.orEmpty() /* 0.1.55: 지난 폴더 이름을 칸에 미리 적어 둠(지우거나 고칠 수 있음) */
+        newSite = "" /* 0.1.56 S3: 칸은 빈 채 시작 — 전에 쓴 폴더는 아래 칩(누르면 채움만) */
         newStage = kr.archsurvey.job.SurveyStage.inName(current) ?: kr.archsurvey.job.SurveyStage.FULL
         newNo = kr.archsurvey.job.NewJobName.nextNo(newSite, newStage, list.map { it.name } + current)
         recommendedZone = ZoneAuto.fromLon(c.gv.lon)
@@ -231,7 +244,7 @@ class JobController(
     }
     private fun openNewForm() {
         loadForm() /* 0.1.51: 높이(Geoid)·배경지도·좌표계는 지난 작업 값 그대로(예전 0.1.35: 높이만 수신기 값으로 되돌림) */
-        recommendedZone?.let { formZone = it } // 0.1.39 추천 좌표계 미리 선택(위치가 없으면 지금 작업 것)
+        // 0.1.56 M3: 좌표계 기본 = 지난 작업 값(위치 추천으로 몰래 바꾸지 않음). 다르면 화면에 주황 한 줄 + [바꾸기]
         c.hub.open(ToolScreen.JOB_NEW)
         scope.launch {
             list = runCatching { platform.list() }.getOrDefault(emptyList())
@@ -249,7 +262,7 @@ class JobController(
             catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 error = (e as? JobException)?.message ?: UserError.of("job:$label", e, "$label 중 문제가 생겼어요", "다시 시도하세요")
-                c.ui.fail("$label 실패 · $error")
+                // 0.1.56 M4: 오류는 화면 안 카드 한 곳만(토스트 같이 안 띄움)
             } finally { busy = false }
             if (error == null) notice?.let { c.ui.ok(it) }
         }
@@ -258,7 +271,7 @@ class JobController(
     fun create() {
         val name = effectiveName
         val prob = JobNames.problem(name, list.map { it.name })
-        if (prob != null) { error = prob; c.ui.fail(prob); return }
+        if (prob != null) { error = prob; return } // 0.1.56 M4: 카드 한 곳만
         val n = name.trim()
         val base = c.jobConfig()
         // 0.1.29 UX-0129-1: 새 작업은 사용자가 정한 폴 높이가 아니면 기기 기본값(R10 1.6 · SP60 1.8)으로 시작

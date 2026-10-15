@@ -169,6 +169,6 @@ class ExportControllerTest {
         e.openScreen(); e.runHgis()
         assertEquals(kr.archsurvey.export.ExportFormat.HGIS, p.last)
         assertEquals("Documents/ExcavationSurvey/hgis/작업1_t", e.output!!.publicFolder)
-        assertTrue(e.notice!!.contains("Documents/ExcavationSurvey/hgis/작업1_t"))
+        // 0.1.56 M5: 경로 표기는 한 가지(저장 경로 한 줄) — hgis 따로 안내 없음
     }
 }

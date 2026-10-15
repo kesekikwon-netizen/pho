@@ -39,7 +39,7 @@ class Removal0138Test {
 
     @Test fun sourceHasNoPhotogrammetryLeftovers() {
         val main = File("src/main/kotlin")
-        val hits = main.walkTopDown().filter { it.isFile && it.extension == "kt" }.filter { f ->
+        val hits = main.walkTopDown().filter { it.isFile && it.extension == "kt" && it.name != "TargetNames.kt" /* 0.1.56 M7 세 앱 이름 규칙 */ }.filter { f ->
             val t = f.readText(); listOf("AprilTag", "QuickTag", "GcpAutoSaver", "ItwinGcpExport", "ItwinCaptureXml", "ITWIN_XML", "Target #").any { it in t }
         }.map { it.name }.toList()
         assertEquals(emptyList<String>(), hits)

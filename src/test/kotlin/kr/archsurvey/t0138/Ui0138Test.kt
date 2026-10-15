@@ -98,7 +98,7 @@ class Ui0138Test {
         rule.onNodeWithTag("job_group").performTextInput("광령리 유적")
         rule.runOnIdle { c.jobs!!.newName = "A트렌치" }
         rule.waitForIdle()
-        rule.onNodeWithTag("job_folder_preview", useUnmergedTree = true).assertTextContains("Documents/ExcavationSurvey/광령리 유적/A트렌치", substring = true)
+        rule.onNodeWithTag("job_folder_preview", useUnmergedTree = true).assertTextContains("Documents/발굴조사/광령리 유적/A트렌치/측량" /* 0.1.56 M6 */, substring = true)
         shot("03_new_job")
         rule.onNodeWithTag("job_create").performClick(); rule.waitForIdle()
         assertEquals("광령리 유적", jobs.lastGroup)

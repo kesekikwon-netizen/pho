@@ -16,6 +16,8 @@ data class ExportOutput(
     /** UX-0127-1: iTwin XML 에서 높이가 없어 뺀 점 수·번호 */
     val itwinDroppedCount: Int = 0,
     val itwinDroppedNames: List<String> = emptyList(),
+    /** 0.1.56 M5: 저장 경로 한 줄(보내기 앞 화면과 같은 글) */
+    val where: String? = null,
 )
 
 /** 내보내기에 필요한 Android 기능. 시험에서는 가짜로 바꾼다. */
@@ -34,6 +36,8 @@ interface ExportPlatform {
     fun share(out: ExportOutput)
     /** 파일 저장 위치 고르기(시스템 문서 선택기). 끝나면 onDone(성공 여부) */
     fun saveAs(out: ExportOutput, onDone: (Boolean) -> Unit)
+    /** 0.1.56 M5: 보낼 파일 경로 한 줄(만들기 전). 모르면 null */
+    fun sendWhere(): String? = null
 }
 
 /** 3-G 내보내기 화면 상태. 만들기 → 결과 카드(공유/파일로 저장). */
@@ -69,7 +73,13 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
     fun openScreen() { open = true; output = null; error = null; notice = null; refresh() }
     fun close() { open = false }
 
-    fun refresh() { scope.launch { summary = runCatching { platform.summary() }.getOrNull() } }
+    fun refresh() { where = runCatching { platform.sendWhere() }.getOrNull(); scope.launch { summary = runCatching { platform.summary() }.getOrNull() } }
+    /** 0.1.56 M5: 저장 경로 한 줄(앞·완료 같은 글) */
+    var where by mutableStateOf<String?>(null); private set
+    /** 0.1.56 M8: 잰 점이 0개면 보내기 꺼짐 */
+    val canSend: Boolean get() = !running && (summary?.points ?: 0) > 0 && formats.isNotEmpty()
+    /** 0.1.56 S4: 들어가는 것 접기(기본 접힘) */
+    var optionsOpen by mutableStateOf(false)
 
     /** 0.1.55 한 번 누르기: 만들고 바로 공유 창. 저장 위치는 [savedText] 로 화면에 남긴다 */
     fun runAndShare() { shareAfter = true; run() }
@@ -80,8 +90,9 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
     fun run() {
         if (running) { shareAfter = false; return }
         val s = summary
-        if (s != null && s.points == 0) { shareAfter = false; error = "내보낼 점이 없어요. 먼저 측점을 하세요."; onResult?.invoke(false, error!!); return }
-        if (formats.isEmpty()) { shareAfter = false; error = "양식을 하나 이상 고르세요."; onResult?.invoke(false, error!!); return }
+        // 0.1.56 M8: 잰 점 0개 = 만들지 않음(빈 zip 0). M5: 토스트 없이 화면 안에만
+        if (s == null || s.points == 0) { shareAfter = false; error = kr.archsurvey.job.SendFolder.EMPTY; return }
+        if (formats.isEmpty()) { shareAfter = false; error = "양식을 하나 이상 고르세요."; return }
         val fs = formats
         val thenShare = shareAfter; shareAfter = false
         running = true; error = null; notice = null; output = null; savedText = null
@@ -89,17 +100,14 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
             try {
                 val o = platform.exportBundle(fs, includePhotos && (s?.photos ?: 1) > 0, includeVoices && (s?.voices ?: 1) > 0, itwinKeepNames, scale, if (todayOnly) todayKey() else null)
                 output = o
-                o.publicFolder?.let { notice = hgisFolderText(it) }
-                onResult?.invoke(true, "내보내기 파일을 만들었어요 · ${o.fileName} (${sizeText(o.sizeBytes)}) · ${fs.size}개 양식 · " +
-                    (if (o.publicFolder != null) "PC로 옮길 폴더: 내장 저장공간/${o.publicFolder}" else "전송 방식을 고르세요") +
-                    "")
-                savedText = "저장됨 · 내장 저장공간/" + (o.publicFolder?.trimEnd('/')?.plus("/") ?: "") + o.fileName
+                // 0.1.56 M5: 토스트 없음 · 경로 한 가지(앞 화면과 같은 글)
+                o.where?.let { where = it }
+                savedText = o.where ?: where ?: o.fileName
                 if (thenShare) share()
             }
             catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                error = UserError.of("export", e, "내보내기에 실패했어요", "저장 공간을 확인하고 다시 시도하세요")
-                onResult?.invoke(false, error!!)
+                error = UserError.of("export", e, "PC로 보내기에 실패했어요", "저장 공간을 확인하고 다시 시도하세요")
             }
             finally { running = false }
         }
@@ -108,10 +116,10 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
     fun share() {
         val o = output ?: return
         runCatching { platform.share(o) }
-            .onSuccess { notice = "공유 창을 열었어요 · 받을 앱을 고르세요"; onResult?.invoke(true, "무선 전송 · ${o.fileName} 공유 창을 열었어요") }
-            .onFailure { notice = UserError.of("share", it, "공유 창을 열지 못했어요"); onResult?.invoke(false, notice!!) }
+            .onSuccess { notice = "공유 창을 열었어요 · 받을 앱을 고르세요" }
+            .onFailure { notice = UserError.of("share", it, "공유 창을 열지 못했어요") }
     }
-    fun saveAs() { output?.let { o -> platform.saveAs(o) { ok -> notice = if (ok) "파일로 저장했어요" else "저장을 취소했거나 실패했어요"; onResult?.invoke(ok, notice!!) } } }
+    fun saveAs() { output?.let { o -> platform.saveAs(o) { ok -> notice = if (ok) "파일로 저장했어요" else "저장을 취소했거나 실패했어요" } } }
 
     companion object {
         fun hgisFolderText(folder: String) =

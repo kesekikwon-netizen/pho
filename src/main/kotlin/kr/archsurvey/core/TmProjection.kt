@@ -17,6 +17,8 @@ enum class KoreanTmZone(val epsg: Int, val labelKo: String, val lon0: Double) {
     val shortKo: String get() = labelKo.substring(0, 2)
     /** 머리줄 표기 「EPSG:5187 동부」 */
     val displayKo: String get() = "EPSG:$epsg $shortKo"
+    /** 0.1.56 S7: 이름+번호 「동부(EPSG 5187)」 */
+    val nameEpsg: String get() = "$shortKo(EPSG $epsg)"
 
     companion object {
         fun fromEpsg(e: Int) = entries.firstOrNull { it.epsg == e } ?: CENTRAL

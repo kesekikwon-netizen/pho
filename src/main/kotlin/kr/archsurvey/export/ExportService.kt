@@ -73,7 +73,8 @@ class ExportService(
         /** 0.1.38: false = 공용 hgis 폴더에 따로 두지 않음(작업 폴더 내보내기/ 로 대신) */
         publishHgis: Boolean = true,
     ): ExportResult {
-        val all = dao.pointsOf(project)
+        // 0.1.56 M7: 표적 이름은 파일 규칙으로(TargetNames.toFile)
+        val all = dao.pointsOf(project).map { p -> kr.archsurvey.job.TargetNames.toFile(p.pointId).let { n -> if (n == p.pointId) p else p.copy(pointId = n) } }
         val pts = if (todayKey == null) all else DigExport.todayOnly(all, todayKey) { kr.archsurvey.dig.DayKey.of(it) }
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val base = File(ctx.getExternalFilesDir("Documents") ?: ctx.filesDir, "exports").also { it.mkdirs() }
@@ -140,6 +141,8 @@ class ExportService(
                 kr.archsurvey.io.AtomicFiles.writeText(File(dir, "hgis_control_points_$epsg.csv"), MoreFormats.hgisControlCsv(group), Charsets.UTF_8)
         }
         kr.archsurvey.io.AtomicFiles.writeText(File(dir, "README.txt"), readme(project, pts.size, shpEpsgs), Charsets.UTF_8)
+        // 0.1.56 S5: 파일 이름엔 날짜 없음(같은 이름 덮어쓰기) → 만든 날짜시각은 zip 안 info.txt
+        kr.archsurvey.io.AtomicFiles.writeText(File(dir, "info.txt"), kr.archsurvey.job.SendFolder.infoText(project, pts.size, SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())), Charsets.UTF_8)
 
         val zip = File(base, "${safe}_$stamp.zip")
         kr.archsurvey.io.AtomicFiles.zip(zip) { z ->

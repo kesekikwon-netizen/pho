@@ -94,7 +94,7 @@ class Shots0150Test {
         val root = rule.onRoot().fetchSemanticsNode().boundsInRoot
         val go = b("home_survey"); assertTrue("측량 계속하기 104dp", dp(go.height) >= 103.5f)
         assertTrue("맨 아래", dp(root.bottom - go.bottom) <= 40f)
-        assertTrue("자주 쓰는 것이 드문 것보다 아래", b("home_points").top > b("home_areas").top && b("home_export").top > b("home_new_job").top)
+        assertTrue("자주 쓰는 것이 드문 것보다 아래(0.1.56 S6: 새 작업·다른 작업·PC로 보내기 = 맨 아래 엄지 줄)", b("home_points").top > b("home_areas").top && b("home_export").top > b("home_points").top && b("home_new_job").top > b("home_points").top)
         rule.onAllNodes(hasSetTextAction()).assertCountEquals(0)
     }
 }

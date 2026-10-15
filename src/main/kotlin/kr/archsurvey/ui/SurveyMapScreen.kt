@@ -235,9 +235,11 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
         map.Draw(ms, Modifier.fillMaxSize())
         // 0.1.50 오른손 시안 01: 위 = 오류 칩 한 줄(접힘) + 드물게 쓰는 배경지도·맞춤 / 오른쪽 아래 = 내 위치 · 확대 · 축소(엄지 영역).
         // 점 종류는 아래 「다음 점」 줄을 눌러 바꾼다(지도 위 띠 없앰)
-        val notice = c.mapNotice()
+        val notice0 = c.mapNotice()
             ?: (if (ms.tiles.isNotEmpty()) TileImages.lastError else null)
             ?: kr.archsurvey.map.MapLayers.modeHint(c.mapBase)
+        // 0.1.56 S1: 위 안내는 한 줄만 — 원인 줄이 있으면 지도 위 칩은 숨김(두 겹 금지)
+        val notice = if (mapGuideLine(c) != null) null else notice0
         val noticeColor = if (TileImages.lastError != null && notice == TileImages.lastError) t.bad else if (c.mapNotice() != null) t.bad else t.inkSub
         Column(Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 12.dp, end = 72.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             notice?.let {
@@ -479,6 +481,8 @@ private fun ExpandedExtra(c: SurveyController) {
                         .hCombinedClickable(onLongClick = { confirmVoice = v }, onClick = { c.playVoice(v) }).padding(horizontal = 10.dp).testTag("voice_item_${v.id}"),
                     contentAlignment = Alignment.Center,
                 ) { Text((if (playing) "■ " else "▶ ") + "0:%02d".format((v.durationMs / 1000).toInt()), style = Ty.label, color = t.ink) }
+                // 0.1.56 S8: 길게 누르기 없이 지우기
+                Box(Modifier.size(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp)).hClickable { confirmVoice = v }.testTag("voice_del_${v.id}"), contentAlignment = Alignment.Center) { Text("✕", style = Ty.label, color = t.inkSub) }
             }
         }
         confirmPhoto?.let { ph ->
@@ -613,7 +617,7 @@ private fun runMenu(c: SurveyController, item: MenuItem) {
             MenuAction.OPEN_JOB_LIST -> { c.drawerOpen = false; c.jobs?.openList() ?: run { c.message = "작업 관리는 이 빌드에 없어요" } }
             MenuAction.OPEN_JOB_INFO -> { c.drawerOpen = false; c.jobs?.openInfo() ?: run { c.message = "작업 관리는 이 빌드에 없어요" } }
             MenuAction.OPEN_BACKUP -> { c.drawerOpen = false; c.backup?.openScreen() ?: run { c.message = "백업은 이 빌드에 없어요" } }
-            MenuAction.OPEN_EXPORT -> { c.drawerOpen = false; c.exporter?.openScreen() ?: run { c.message = "내보내기는 이 빌드에 없어요" } }
+            MenuAction.OPEN_EXPORT -> { c.drawerOpen = false; c.exporter?.openScreen() ?: run { c.message = "PC로 보내기는 이 빌드에 없어요" } }
             MenuAction.OPEN_CONNECTION -> { c.drawerOpen = false; c.connection?.openScreen() ?: run { c.message = "연결 화면은 이 빌드에 없어요" } }
         }
 }
