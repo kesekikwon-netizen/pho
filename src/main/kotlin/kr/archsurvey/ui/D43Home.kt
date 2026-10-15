@@ -74,9 +74,14 @@ fun HomeToday(c: SurveyController) {
                 Text("발굴 측량", style = DTy.h1, color = D.ink, maxLines = 1, modifier = Modifier.testTag("home_title"))
                 Text(site ?: "현장 GNSS", style = DTy.small, color = D.sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            SunToggle()
             D43StatusPill(c)
-            HeaderIcon(Glyph.MENU, "메뉴", "home_settings") { c.drawerOpen = true }
+            // 0.1.53: 미니멀이면 ⋯ (숨긴 기능 전부), 일반이면 예전 ≡ 서랍
+            if (Minimal.on) MoreIcon("home_more") else HeaderIcon(Glyph.MENU, "메뉴", "home_settings") { c.drawerOpen = true }
+        }
+        // 0.1.53: [미니멀 | 일반] + ☀ 햇빛 — 머리줄에 둘 자리가 없어 바로 아랫줄(선택만, 폰에 저장)
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 6.dp).testTag("home_mode_row"), verticalAlignment = Alignment.CenterVertically) {
+            ModeChip(D.ink, D.card, D.line, Modifier.padding(end = 8.dp))
+            SunToggle()
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(D.hair))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -106,6 +111,7 @@ fun HomeToday(c: SurveyController) {
                 Text(homeHint(c, steps), style = DTy.small.copy(fontWeight = FontWeight.Medium), color = D.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(D.chip).padding(horizontal = 10.dp, vertical = 6.dp).testTag("home_foot"))
             }
+            if (!Minimal.on) {
             Row(Modifier.padding(top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.Bottom) {
                 Text("측량 전 준비", style = DTy.h2, color = D.ink)
                 Text("  ${steps.size}개 중 ${done}개 끝남", style = DTy.small, color = D.sub, modifier = Modifier.testTag("prep_count"))
@@ -113,12 +119,26 @@ fun HomeToday(c: SurveyController) {
             steps.forEachIndexed { i, s -> D43PrepRow(c, i, s, i == steps.lastIndex) }
             BatteryGuideCard(Modifier.padding(top = 8.dp)) // 0.1.48
             Text(backupLabel(c), style = DTy.small, color = D.sub, modifier = Modifier.padding(start = 4.dp).testTag("home_backup"))
+            } else {
+                // 0.1.53 미니멀: 자동으로 끝난 준비 줄(수신기·VRS 연결 등)은 접고, 안 끝났거나 실패한 줄만(폴 「맞아요」 포함)
+                val open = steps.withIndex().filter { it.value.state != kr.archsurvey.dig.StepState.DONE }
+                open.forEachIndexed { k, (i, s) -> D43PrepRow(c, i, s, k == open.lastIndex) }
+                if (open.isEmpty()) Text("준비 끝 · 수신기·VRS 자동 연결됨", style = DTy.small.copy(fontWeight = FontWeight.Bold), color = D.fix, modifier = Modifier.padding(start = 4.dp, top = 6.dp).testTag("home_prep_done"))
+                // 위험 4: 자동 백업이 꺼져 있으면 작은 「백업 안 됨」(기존 백업 표시 재사용)
+                if (c.drive?.autoBackup != true) Text("백업 안 됨" + backupLabel(c).let { if (it.endsWith("—")) "" else " · 마지막 $it" } + " · ⋯ 내보내기", style = DTy.small.copy(fontWeight = FontWeight.Bold), color = D.bad, modifier = Modifier.padding(start = 4.dp, top = 6.dp).testTag("home_backup_off"))
+                Text("나머지 기능은 ⋯ 안에 있어요", style = DTy.small, color = D.sub, modifier = Modifier.padding(start = 4.dp, top = 6.dp).testTag("home_more_hint"))
+            }
             Spacer(Modifier.height(8.dp))
         }
         // 0.1.50 오른손 #7: 자리만 바꿈 — 드문 것(구역·찾아가기·설정 / 새 작업·다른 작업·유구별)은 위, 자주 쓰는 것(점 목록·내보내기·수신기)은 아래,
         // 「측량 계속하기」는 화면 맨 아래 고정(104dp, 엄지 쉬움)
         Box(Modifier.fillMaxWidth().height(1.dp).background(D.hair))
         Column(Modifier.fillMaxWidth().background(D.bg).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp).testTag("home_dock"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (Minimal.on) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 0.1.53 미니멀: 매일 쓰는 「+ 새 작업」만(오른쪽 엄지 쪽). 나머지는 ⋯
+                Spacer(Modifier.weight(1f))
+                HomeTileBox(Glyph.PLUS, "+ 새 작업", "home_new_job", Modifier.weight(1f), small = true, accent = true) { c.jobs?.openNew() ?: c.ui.toast("작업 관리를 쓸 수 없어요") }
+            } else {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 HomeTileBox(Glyph.GRID, "구역·그리드", "home_areas", Modifier.weight(1f), small = true) { c.homeOpen = false; c.hub.open(ToolScreen.AREAS) }
                 HomeTileBox(Glyph.LOCATE, "점 찾아가기", "home_goto", Modifier.weight(1f), small = true) { c.hub.open(ToolScreen.GOTO) }
@@ -134,6 +154,7 @@ fun HomeToday(c: SurveyController) {
                 HomeTileBox(Glyph.LIST, "점 목록", "home_points", Modifier.weight(1f)) { c.homeOpen = false; c.hub.open(ToolScreen.POINTS) }
                 HomeTileBox(Glyph.EXPORT, "내보내기", "home_export", Modifier.weight(1f)) { c.exporter?.openScreen() }
                 HomeTileBox(Glyph.BT, "수신기", "home_receiver", Modifier.weight(1f)) { c.connection?.openScreen() ?: c.ui.toast("연결 화면을 열 수 없어요") }
+            }
             }
             Box(
                 Modifier.fillMaxWidth().height(MEASURE_RH).clip(RoundedCornerShape(18.dp)).background(D.primary)
@@ -235,5 +256,13 @@ internal fun SunToggle() {
         .hClickable(onClickLabel = "햇빛 고대비") { Sunlight.set(ctx, !on) }.padding(horizontal = 10.dp)
         .semantics { contentDescription = "햇빛 고대비 " + if (on) "켬" else "끔" }.testTag("home_sun"), contentAlignment = Alignment.Center) {
         Text(if (on) "☀ 고대비" else "☀ 햇빛", style = DTy.small.copy(fontWeight = FontWeight.Bold), color = if (on) D.bg else D.ink, maxLines = 1)
+    }
+}
+
+/** 0.1.53 ⋯ 단추(미니멀): 숨긴 기능 한 곳 */
+@Composable
+internal fun MoreIcon(tag: String) {
+    Box(Modifier.size(48.dp).clip(CircleShape).hClickable(onClickLabel = "더보기") { Minimal.moreOpen = true }.semantics { contentDescription = "더보기 메뉴" }.testTag(tag), contentAlignment = Alignment.Center) {
+        Text("⋯", style = DTy.h1.copy(fontSize = 26.sp), color = D.ink)
     }
 }

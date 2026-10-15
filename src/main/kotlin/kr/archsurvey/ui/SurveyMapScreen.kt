@@ -100,6 +100,7 @@ fun SurveyMapScreen(
         c.backup?.let { if (it.open) BackupScreen(it, c.drive) }
         c.connection?.let { ConnectionHost(c, it) }
         DrawerOverlay(c)
+        if (Minimal.moreOpen) MoreMenu(c) // 0.1.53 ⋯ 메뉴
         if (c.gnssInfoOpen) GnssInfoDialog(c)
         if (c.skyPlotOpen) SkyPlotScreen(c)
         // 0.1.14 목업 14·18·20·22
@@ -247,7 +248,8 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
             StakeCard(c)
             BmResultCard(c)
         }
-        Column(Modifier.align(Alignment.TopEnd).padding(end = 12.dp, top = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // 0.1.53 미니멀: 레이어·맞춤은 ⋯ 안(배경은 마지막 값 기억 · 열 때 자동 맞춤)
+        if (!Minimal.on) Column(Modifier.align(Alignment.TopEnd).padding(end = 12.dp, top = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             MapSquareBtn(Glyph.LAYERS, "지도에 보이기", "tool_layers") { c.dig.layersOpen = true }
             Box(Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)).background(D.card).border(1.dp, D.line, RoundedCornerShape(10.dp))) {
                 MapGroupBtn("전체 보기", "tool_fit") { Text("맞춤", style = DTy.tiny.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium), color = D.ink) }
@@ -255,8 +257,10 @@ fun MapArea(c: SurveyController, map: MapSurface, modifier: Modifier) {
         }
         Column(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 8.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                MapSquareBtn(Glyph.LOCATE, if (c.follow) "따라가기 끄기" else "내 위치 따라가기", "tool_locate", dark = true, selected = c.follow, size = FieldIvory.minTouch) { if (c.follow) c.follow = false else c.recenter() }
-                Column(Modifier.width(FieldIvory.minTouch).clip(RoundedCornerShape(10.dp)).background(D.card).border(1.dp, D.line, RoundedCornerShape(10.dp))) {
+                // 0.1.53 미니멀 위험 1: 내 위치는 지도를 손으로 옮겨 따라가기가 꺼졌을 때만 나타남
+                if (!Minimal.on || !c.follow) MapSquareBtn(Glyph.LOCATE, if (c.follow) "따라가기 끄기" else "내 위치 따라가기", "tool_locate", dark = true, selected = c.follow, size = FieldIvory.minTouch) { if (c.follow) c.follow = false else c.recenter() }
+                // 위험 5: 확대 +/− 는 ⋯ 「확대 단추 보이기」로 다시 켬
+                if (!Minimal.on || Minimal.zoomButtons) Column(Modifier.width(FieldIvory.minTouch).clip(RoundedCornerShape(10.dp)).background(D.card).border(1.dp, D.line, RoundedCornerShape(10.dp))) {
                     MapGroupBtn("확대", "tool_zoom_in", FieldIvory.minTouch) { GlyphIcon(Glyph.PLUS, D.ink, 20.dp) }
                     Box(Modifier.fillMaxWidth().height(1.dp).background(D.hair))
                     MapGroupBtn("축소", "tool_zoom_out", FieldIvory.minTouch) { GlyphIcon(Glyph.MINUS, D.ink, 20.dp) }
@@ -567,6 +571,7 @@ fun DrawerOverlay(c: SurveyController) {
                     )
                     Text("발굴 측량", style = Ty.small, color = t.accentText)
                 }
+                ModeChip(D.ink, D.card, D.line, Modifier.padding(top = 6.dp)) // 0.1.53 메뉴 맨 위 [미니멀 | 일반]
                 Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                     // 0.1.38: 수신기 이름·상태 칩은 머리줄 알약과 같은 정보라 뺐다. 대신 작업 폴더
                     Column(Modifier.weight(1f)) {

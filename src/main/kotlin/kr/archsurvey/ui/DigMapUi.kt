@@ -89,6 +89,7 @@ internal fun DigHeader(c: SurveyController) {
                 Text("오늘 ${c.dig.todayCount()}점 · ${c.zone.displayKo}", style = DTy.small, color = D.sub, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("header_job"))
             }
             D43StatusPill(c, Modifier.padding(start = 6.dp))
+            if (Minimal.on) MoreIcon("map_more") // 0.1.53 미니멀: 숨긴 기능은 ⋯ 하나로
         }
     }
 }
@@ -161,10 +162,15 @@ internal fun DigControlArea(c: SurveyController) {
     Column(Modifier.fillMaxWidth().background(D.bg).padding(horizontal = 16.dp).testTag("control_area")) {
         DupDecisionBar(c)
         // 0.1.50 오른손 #1: 면 닫기·메모·사진은 한 칸 더 위(측량 단추 중심에서 70dp 이상) — 장갑·걷는 중 오터치 방지
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (feature) MiniAction(Glyph.FACE, if (c.dig.closeArmed) "닫기 취소" else "면 닫기", "tool_close_area", Modifier.weight(1f), on = c.dig.closeArmed) { c.dig.armClose() }
-            MiniAction(Glyph.MIC, if (c.voiceSeconds > 0) "녹음 끝" else "메모", "tool_memo", Modifier.weight(1f), on = c.voiceSeconds > 0) { c.toggleVoice() }
-            MiniAction(Glyph.CAMERA, "사진", "tool_photo", Modifier.weight(1f)) { if (c.lastPoint != null) c.addPhotoCamera() else c.ui.toast("점을 잰 뒤 사진을 붙일 수 있어요") }
+        // 0.1.53 미니멀: 면 닫기는 면 측량 중(점 1개 이상·닫기 대기)일 때만 자동으로, 메모는 녹음 중일 때만(끝내기), 사진은 ⋯
+        val mini = Minimal.on
+        val polygonActive = feature && (c.dig.closeArmed || (c.dig.selectedFeature?.pointRowIds?.size ?: 0) >= 1)
+        val showClose = feature && (!mini || polygonActive)
+        val showMemo = !mini || c.voiceSeconds > 0
+        if (showClose || showMemo || !mini || c.dig.undoIsReopen) Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (showClose) MiniAction(Glyph.FACE, if (c.dig.closeArmed) "닫기 취소" else "면 닫기", "tool_close_area", Modifier.weight(1f), on = c.dig.closeArmed) { c.dig.armClose() }
+            if (showMemo) MiniAction(Glyph.MIC, if (c.voiceSeconds > 0) "녹음 끝" else "메모", "tool_memo", Modifier.weight(1f), on = c.voiceSeconds > 0) { c.toggleVoice() }
+            if (!mini) MiniAction(Glyph.CAMERA, "사진", "tool_photo", Modifier.weight(1f)) { if (c.lastPoint != null) c.addPhotoCamera() else c.ui.toast("점을 잰 뒤 사진을 붙일 수 있어요") }
             if (c.dig.undoIsReopen) MiniAction(Glyph.UNDO, "면 닫기 되돌리기", "tool_undo", Modifier.weight(1f)) { c.askUndo() }
         }
         // 0.1.50 오른손 #2: 「다음 점 P-0005 · 유구 경계 ▾」 줄 자체를 누르면 종류 시트 · 아래 16dp 는 누를 것 없음(#1)
@@ -247,7 +253,8 @@ internal fun DigControlArea(c: SurveyController) {
                     }
                 }
             }
-            if (c.poleOnRight) { side(); measure() } else { measure(); side() }
+            // 0.1.53 미니멀: 점 목록은 ⋯ (측량 단추는 같은 오른쪽 끝, 104dp 높이 그대로)
+            if (Minimal.on) measure() else if (c.poleOnRight) { side(); measure() } else { measure(); side() }
         }
     }
     // 0.1.46: 지금 위치 값(해발·수평·수직)은 아래 한 줄로(예전 3칸 지표 대신). 고정이 아니면 다음 할 일 문구 우선
