@@ -32,6 +32,8 @@ object BlocksExchange {
         val photoDir: String = "photos",
         /** 0.0.12: 사진 id → 초기 자세(Poses.forExport) */
         val poses: Map<Int, Poses.Pose> = emptyMap(),
+        /** 0.0.14: R10 사진 위치(위도, 경도, 해발) — 보조값(사전값)만. 절대 좌표는 기준점(표적)이 정함 */
+        val gpsPriors: Map<Int, Triple<Double, Double, Double?>> = emptyMap(),
     )
 
     fun write(stills: List<Still>, gcps: List<Gcp>, o: Options): String {
@@ -41,10 +43,11 @@ object BlocksExchange {
         fun tag(ind: Int, name: String, v: String) = line(ind, "<$name>${esc(v)}</$name>")
         val gmap = gcps.associateBy { it.target }
         val withCoords = o.epsg != null && gmap.isNotEmpty()
+        val withSrs = withCoords
 
         line(0, "<?xml version=\"1.0\" encoding=\"utf-8\"?>")
         line(0, "<BlocksExchange version=\"2.1\">")
-        if (withCoords) {
+        if (withSrs) {
             line(1, "<SpatialReferenceSystems>"); line(2, "<SRS>")
             tag(3, "Id", "0"); tag(3, "Name", srsName(o.epsg!!)); tag(3, "Definition", "EPSG:${o.epsg}")
             line(2, "</SRS>"); line(1, "</SpatialReferenceSystems>")
@@ -52,7 +55,7 @@ object BlocksExchange {
         line(1, "<Block>")
         tag(2, "Name", o.blockName)
         tag(2, "Description", "사진측량 앱 (kr.archsurvey.pg) — AprilTag tag36h11 자동 표시")
-        if (withCoords) tag(2, "SRSId", "0")
+        if (withSrs) tag(2, "SRSId", "0")
         line(2, "<Photogroups>")
         val groups = stills.groupBy { Triple(it.w, it.h, Math.round(it.fx)) }
         var gi = 0
@@ -73,11 +76,20 @@ object BlocksExchange {
                 tag(5, "Id", "${s.id}")
                 tag(5, "ImagePath", "${o.photoDir}/${s.file}")
                 o.poses[s.id]?.let { p ->
-                    line(5, "<Pose>"); line(6, "<Rotation>")
-                    for (i in 0 until 3) for (j in 0 until 3) tag(7, "M_$i$j", num(p.rotation.a[3 * i + j], 9))
-                    line(6, "</Rotation>"); line(6, "<Center>")
+                    line(5, "<Pose>")
+                    p.rotation?.let { rot ->
+                        line(6, "<Rotation>")
+                        for (i in 0 until 3) for (j in 0 until 3) tag(7, "M_$i$j", num(rot.a[3 * i + j], 9))
+                        line(6, "</Rotation>")
+                    }
+                    line(6, "<Center>")
                     tag(7, "x", num(p.center.x, 4)); tag(7, "y", num(p.center.y, 4)); tag(7, "z", num(p.center.z, 4))
                     line(6, "</Center>"); line(5, "</Pose>")
+                }
+                o.gpsPriors[s.id]?.let { (la, lo, al) ->
+                    line(5, "<ExifData>"); line(6, "<GPS>")
+                    tag(7, "Latitude", num(la, 9)); tag(7, "Longitude", num(lo, 9)); al?.let { tag(7, "Altitude", num(it, 3)) }
+                    line(6, "</GPS>"); line(5, "</ExifData>")
                 }
                 line(4, "</Photo>")
             }

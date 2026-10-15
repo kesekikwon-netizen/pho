@@ -14,10 +14,17 @@ data class Still(
     val tags: List<TagDetection>,
     /** 0.0.12 촬영 이유(manual/first/overlap_distance/overlap_angle/timer/no_pose_timer) */
     val reason: String? = null,
+    /** 0.0.14 R10 원시 위치(안테나). R10 안 쓰면 null */
+    val gnss: kr.archsurvey.pg.r10.GnssTag? = null,
+    /** 0.0.14 촬영 순간 움직임 속도(m/s, AR) · AR 프레임 시각(elapsedRealtime ms) */
+    val speed: Double? = null,
+    val tMs: Long? = null,
 )
 
 /** GCP: 표적 번호 N(Target #N) → E, N, H */
-data class Gcp(val target: Int, val e: Double, val n: Double, val h: Double)
+data class Gcp(val target: Int, val e: Double, val n: Double, val h: Double,
+    /** 0.0.14 R10 으로 잰 경우: 표본 표준편차(수평·수직, m) · 수신기 보고 σ 평균 · 횟수 */
+    val sdH: Double? = null, val sdU: Double? = null, val sigH: Double? = null, val sigU: Double? = null, val epochs: Int? = null)
 
 data class Session(
     val name: String,
@@ -29,16 +36,23 @@ data class Session(
     val tagSizeM: Double? = null,
     val barM: Double? = null,
     val arcore: Boolean = true,
+    /** 0.0.14 안테나→카메라 레버암(폰 몸체, m) · 뒷카메라 센서 방향(도) */
+    val lever: kr.archsurvey.pg.r10.Lever = kr.archsurvey.pg.r10.Lever(),
+    val sensorDeg: Int = 90,
+    /** 0.0.14 R10 위상중심 상수(ARP→APC, m, 위쪽) — 레버암과 따로 */
+    val apcM: Double = 0.0,
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
-        put("v", 1); put("name", name); put("created", created); put("epsg", epsg); put("arcore", arcore)
+        put("v", 1); put("name", name); put("lever", JSONArray().put(lever.up).put(lever.fwd).put(lever.right)); put("sensorDeg", sensorDeg); put("apcM", apcM); put("created", created); put("epsg", epsg); put("arcore", arcore)
         tagSizeM?.let { put("tagSizeM", it) }; barM?.let { put("barM", it) }
-        put("gcps", JSONArray().apply { gcps.forEach { g -> put(JSONObject().put("t", g.target).put("e", g.e).put("n", g.n).put("h", g.h)) } })
+        put("gcps", JSONArray().apply { gcps.forEach { g -> put(JSONObject().put("t", g.target).put("e", g.e).put("n", g.n).put("h", g.h).apply { g.sdH?.let { put("sdH", it) }; g.sdU?.let { put("sdU", it) }; g.sigH?.let { put("sigH", it) }; g.sigU?.let { put("sigU", it) }; g.epochs?.let { put("ep", it) } }) } })
         put("stills", JSONArray().apply {
             stills.forEach { s ->
                 put(JSONObject().apply {
                     put("id", s.id); put("file", s.file); put("w", s.w); put("h", s.h)
-                    put("fx", s.fx); put("fy", s.fy); put("cx", s.cx); put("cy", s.cy); put("time", s.time); s.reason?.let { put("reason", it) }
+                    put("fx", s.fx); put("fy", s.fy); put("cx", s.cx); put("cy", s.cy); put("time", s.time); s.reason?.let { put("reason", it) }; s.speed?.let { put("speed", it) }; s.tMs?.let { put("tMs", it) }
+                    s.gnss?.let { g -> put("gnss", JSONObject().put("lat", g.lat).put("lon", g.lon).put("alt", g.altMsl ?: JSONObject.NULL).put("q", g.quality).put("fix", g.fixed)
+                        .put("sh", g.sigmaH ?: JSONObject.NULL).put("su", g.sigmaU ?: JSONObject.NULL).put("age", g.ageMs).put("sats", g.sats)) }
                     s.pose?.let { p -> put("pose", JSONArray().apply { p.forEach { put(it) } }) }
                     put("tags", JSONArray().apply {
                         s.tags.forEach { t ->
@@ -57,9 +71,13 @@ data class Session(
             val gs = o.optJSONArray("gcps") ?: JSONArray()
             return Session(
                 name = o.getString("name"), created = o.getLong("created"), epsg = o.optInt("epsg", 5187), arcore = o.optBoolean("arcore", true),
+                lever = o.optJSONArray("lever")?.let { l -> kr.archsurvey.pg.r10.Lever(l.optDouble(0, 0.0), l.optDouble(1, 0.0), l.optDouble(2, 0.0)) } ?: kr.archsurvey.pg.r10.Lever(),
+                sensorDeg = o.optInt("sensorDeg", 90),
+                apcM = o.optDouble("apcM", 0.0),
                 tagSizeM = if (o.has("tagSizeM")) o.getDouble("tagSizeM") else null,
                 barM = if (o.has("barM")) o.getDouble("barM") else null,
-                gcps = (0 until gs.length()).map { gs.getJSONObject(it).let { g -> Gcp(g.getInt("t"), g.getDouble("e"), g.getDouble("n"), g.getDouble("h")) } },
+                gcps = (0 until gs.length()).map { gs.getJSONObject(it).let { g -> Gcp(g.getInt("t"), g.getDouble("e"), g.getDouble("n"), g.getDouble("h"),
+                    g.optD("sdH"), g.optD("sdU"), g.optD("sigH"), g.optD("sigU"), if (g.has("ep")) g.getInt("ep") else null) } },
                 stills = (0 until st.length()).map { i ->
                     val s = st.getJSONObject(i)
                     val ta = s.optJSONArray("tags") ?: JSONArray()
@@ -73,6 +91,10 @@ data class Session(
                             TagDetection(t.getInt("id"), t.optInt("ham"), t.getDouble("cx"), t.getDouble("cy"), DoubleArray(c.length()) { c.getDouble(it) })
                         },
                         if (s.has("reason")) s.getString("reason") else null,
+                        s.optJSONObject("gnss")?.let { g -> kr.archsurvey.pg.r10.GnssTag(g.getDouble("lat"), g.getDouble("lon"), if (g.isNull("alt")) null else g.getDouble("alt"), g.optString("q"), g.optBoolean("fix"),
+                            if (g.isNull("sh")) null else g.optDouble("sh"), if (g.isNull("su")) null else g.optDouble("su"), g.optLong("age"), g.optInt("sats")) },
+                        if (s.has("speed")) s.getDouble("speed") else null,
+                        if (s.has("tMs")) s.getLong("tMs") else null,
                     )
                 },
             )
@@ -135,3 +157,5 @@ object GcpTxt {
         return out.values.sortedBy { it.target }
     }
 }
+
+private fun JSONObject.optD(k: String): Double? = if (has(k) && !isNull(k)) getDouble(k) else null

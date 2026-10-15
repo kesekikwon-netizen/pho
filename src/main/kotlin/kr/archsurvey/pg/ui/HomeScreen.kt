@@ -100,6 +100,7 @@ fun HomeScreen(store: Store, onNew: (arcore: Boolean) -> Unit, onOpen: (Session)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             Box(Modifier.width(220.dp)) {
                 PrimaryBtn("＋ 새 작업", Modifier.fillMaxWidth()) { onNew(ar == ArSupport.State.OK) }
+                OutlineBtn("R10 (선택)", Modifier.fillMaxWidth()) { kr.archsurvey.pg.r10.R10Hub.sheetOpen = true }
             }
         }
     }

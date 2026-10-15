@@ -3,3 +3,10 @@
 사진 속 표적: Target #1, Target #2, Target #3, Target #4
 좌표계: Korea 2000 / East Belt 2010 (EPSG:5187)
 좌표 있는 기준점: 4점 (block.xmlz 안에 들어 있음)
+사진 초기 자세: 16/16장 block.xmlz 에 들어 있음
+기준점 맞춤(휴대폰 미리보기): RMSE 0.0 cm, 최대 잔차 0.0 cm (Target #2)
+검사점 오차(하나 빼기): 0.0 cm
+  Target #1: 0.0 cm (dE -0.0, dN +0.0, dH +0.0)
+  Target #2: 0.0 cm (dE +0.0, dN +0.0, dH -0.0)
+  Target #3: 0.0 cm (dE -0.0, dN -0.0, dH +0.0)
+  Target #4: 0.0 cm (dE -0.0, dN -0.0, dH -0.0)

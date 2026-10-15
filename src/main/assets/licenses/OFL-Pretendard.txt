@@ -1,0 +1,4 @@
+Pretendard — Copyright (c) 2021-2023, Kil Hyung-jin (https://github.com/orioncactus/pretendard)
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is available with a FAQ at: https://openfontlicense.org
+The font is bundled unmodified (Regular, SemiBold, Bold). Reserved Font Name: none claimed.

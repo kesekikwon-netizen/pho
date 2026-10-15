@@ -81,7 +81,8 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
     val view = LocalView.current
     val loaded = remember { runCatching { store.loadChecked(name) }.getOrNull() }
     if (loaded == null) { LaunchedEffect(Unit) { kr.archsurvey.pg.diag.PgLog.e("capture: session unreadable $name"); onBack() }; return }
-    val engine = remember { LiveEngine(loaded.session) }
+    // 0.0.14: R10 레버암·센서 방향을 작업에 적어 둠(R10 없으면 기본 0 그대로)
+    val engine = remember { LiveEngine(loaded.session.copy(lever = kr.archsurvey.pg.r10.R10Prefs.lever(ctx), apcM = kr.archsurvey.pg.r10.R10Prefs.apc(ctx), sensorDeg = runCatching { kr.archsurvey.pg.r10.Sensor.backDeg(ctx) }.getOrDefault(90))) }
     var glView by remember { mutableStateOf<GLSurfaceView?>(null) }
     var tick by remember { mutableIntStateOf(0) }
     var overlay by remember { mutableStateOf<Overlay?>(null) }
@@ -113,6 +114,18 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
         kr.archsurvey.pg.diag.PgLog.i("capture leave reason=$reason photos=${engine.session.stills.size}")
         runCatching { store.save(engine.session) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("save on leave failed", it) }
         then()
+    }
+    // 0.0.14: R10 을 켰을 때만 원시 R10·AR 궤적을 이 작업 폴더에 남김(맞춤은 저장·내보내기 때)
+    DisposableEffect(kr.archsurvey.pg.r10.R10Hub.current) {
+        val hub = kr.archsurvey.pg.r10.R10Hub.current
+        if (hub != null) {
+            val dir = store.dir(name); kr.archsurvey.pg.r10.R10Hub.logDir = dir
+            val tf = java.io.File(dir, kr.archsurvey.pg.r10.RawLogs.AR)
+            val q = java.util.concurrent.LinkedBlockingQueue<String>()
+            val wr = Thread { runCatching { if (!tf.exists()) tf.writeText(kr.archsurvey.pg.r10.RawLogs.AR_HEADER + "\n"); while (true) { val l = q.take(); if (l.isEmpty()) break; val sb = StringBuilder(l).append('\n'); while (true) { val m = q.poll() ?: break; if (m.isEmpty()) { tf.appendText(sb.toString()); return@runCatching }; sb.append(m).append('\n') }; tf.appendText(sb.toString()) } } }.apply { isDaemon = true; setName("ar-track"); start() }
+            kr.archsurvey.pg.ar.ArTrackSink.sink = { t, p -> q.offer(kr.archsurvey.pg.r10.RawLogs.arLine(kr.archsurvey.pg.r10.ArSample(t, p))) }
+            onDispose { kr.archsurvey.pg.ar.ArTrackSink.sink = null; kr.archsurvey.pg.r10.R10Hub.logDir = null; q.offer(""); wr.hashCode() }
+        } else onDispose { }
     }
     DisposableEffect(Unit) {
         engine.onChange = { view.post { tick++ } }
@@ -167,6 +180,14 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                             saveAttributes()
                         }
                     }
+                    // 0.0.14: R10 을 켰을 때만 — 최신 FIX 위치(위·아래 레버암만; 수평은 내보낼 때 방향을 구해 고침). FIX 아니면 표시만
+                    val gnss = kr.archsurvey.pg.r10.R10Hub.tagIfAny()
+                    if (gnss != null) {
+                        kr.archsurvey.pg.diag.PgLog.i("r10 photo=$file q=${gnss.quality} fix=${gnss.fixed} lat=%.9f lon=%.9f alt=${gnss.altMsl} sH=${gnss.sigmaH} age=${gnss.ageMs}".format(gnss.lat, gnss.lon))
+                        // 맞춤 전: 사진엔 R10 원시(안테나) 값만. 레버암은 저장 때 맞춤이 생긴 뒤에만
+                        if (gnss.fixed) runCatching { kr.archsurvey.pg.r10.GeoExif.write(f, gnss.lat, gnss.lon, gnss.altMsl, gnss, levered = false) }
+                            .onFailure { kr.archsurvey.pg.diag.PgLog.e("r10 exif failed", it) }
+                    }
                     val td0 = System.nanoTime()
                     // P0.1 #5: 저장 사진은 원 해상도 검출(4 MP 이하 decimate 1, 넘으면 2), 오류 비트 0, 35 px 미만 버림
                     val all = TagDetector.detect(shot.gray, shot.w, shot.h, decimate = if (shot.w * shot.h > 4_000_000) 2f else 1f, maxHamming = 0)
@@ -175,7 +196,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                     tags.filter { kr.archsurvey.pg.diag.Quality.tagPx(it) < kr.archsurvey.pg.diag.Quality.TAG_GOOD_PX }.forEach { kr.archsurvey.pg.diag.PgLog.d("tag SMALL photo=$file Target#${it.target} size=%.0fpx (goal 60)".format(kr.archsurvey.pg.diag.Quality.tagPx(it))) }
                     kr.archsurvey.pg.diag.PgLog.i("photo $file ${shot.w}x${shot.h} jpeg=${shot.jpeg.size}B tags=${tags.size} detect=%.0fms".format((System.nanoTime() - td0) / 1e6))
                     tags.forEach { t -> kr.archsurvey.pg.diag.PgLog.d("  tag photo=$file Target#${t.target} id=${t.id} ham=${t.hamming} c=(%.1f,%.1f) corners=${t.corners.joinToString(",") { "%.1f".format(it) }}".format(t.cx, t.cy)) }
-                    engine.addStill(Still(id, file, shot.w, shot.h, shot.fx, shot.fy, shot.cx, shot.cy, shot.pose, System.currentTimeMillis(), tags, shot.reason), save)
+                    engine.addStill(Still(id, file, shot.w, shot.h, shot.fx, shot.fy, shot.cx, shot.cy, shot.pose, System.currentTimeMillis(), tags, shot.reason, gnss = gnss, speed = shot.speed, tMs = shot.tMs), save)
                     view.post { TapHaptics.tap(view) }
                 } finally { engine.pendingShots.decrementAndGet() } }
             })
@@ -341,6 +362,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
     if (Minimal.moreOpen) MoreSheet(onClose = { Minimal.moreOpen = false }) {
         OutlineBtn("좌표 입력", Modifier.fillMaxWidth()) { Minimal.moreOpen = false; leave("menu_gcp", onGcp) }
         OutlineBtn("결과", Modifier.fillMaxWidth()) { Minimal.moreOpen = false; leave("menu_result", onResult) }
+        OutlineBtn("R10 (선택)", Modifier.fillMaxWidth()) { Minimal.moreOpen = false; kr.archsurvey.pg.r10.R10Hub.sheetOpen = true }
         OutlineBtn("로그 공유", Modifier.fillMaxWidth()) { Minimal.moreOpen = false; runCatching { kr.archsurvey.pg.diag.PgLog.share(ctx) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("log share failed", it) } }
     }
 }

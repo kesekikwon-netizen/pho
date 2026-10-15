@@ -7,6 +7,21 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <!-- 카메라·AR 은 있으면 쓴다(없는 폰에도 설치) -->
+    <!-- 0.0.14: R10(선택). 블루투스 없는 폰에도 설치 -->
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+    <permission android:name="kr.archsurvey.permission.RECEIVER_LOCK" android:protectionLevel="signature" />
+    <uses-permission android:name="kr.archsurvey.permission.RECEIVER_LOCK" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" tools:ignore="CoarseFineLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.ar" android:required="false" />
     <uses-feature android:glEsVersion="0x00020000" android:required="true" />
@@ -17,6 +32,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:allowBackup="false"
         android:supportsRtl="false"
+        android:name="kr.archsurvey.App"
         android:theme="@style/Theme.Pg">
         <meta-data android:name="com.google.ar.core" android:value="optional" />
         <activity
@@ -30,6 +46,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <service
+            android:name="kr.archsurvey.engine.SurveyConnectionService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+        <receiver android:name="kr.archsurvey.engine.CloseOtherReceiver" android:exported="true" android:permission="kr.archsurvey.permission.RECEIVER_LOCK">
+            <intent-filter><action android:name="kr.archsurvey.action.CLOSE_APP" /></intent-filter>
+        </receiver>
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.files"

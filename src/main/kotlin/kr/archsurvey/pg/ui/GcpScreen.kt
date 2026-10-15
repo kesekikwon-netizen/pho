@@ -1,5 +1,6 @@
 package kr.archsurvey.pg.ui
 
+import kotlinx.coroutines.launch
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -43,12 +44,23 @@ fun GcpScreen(store: Store, name: String, onBack: () -> Unit) {
     var dirty by remember { mutableStateOf(false) }
     var askLeave by remember { mutableStateOf(false) }
     var srsOpen by remember { mutableStateOf(false) }
+    val r10Stats = remember { mutableStateMapOf<Int, kr.archsurvey.pg.r10.Measured>() }
+    var measuring by remember { mutableStateOf<Int?>(null) }
+    var progress by remember { mutableStateOf(0f) }
+    val scope = rememberCoroutineScope()
     val txt = remember { mutableStateMapOf<String, String>().apply {
         ses0.gcps.forEach { g -> put("${g.target}e", f(g.e)); put("${g.target}n", f(g.n)); put("${g.target}h", f(g.h)) } } }
     fun rowsNow() = (seen.keys + ses.gcps.map { it.target } + extra).distinct().sorted()
     fun collect(): List<Gcp> = rowsNow().mapNotNull { no ->
         val e = GcpCheck.num(txt["${no}e"] ?: ""); val n = GcpCheck.num(txt["${no}n"] ?: ""); val h = GcpCheck.num(txt["${no}h"] ?: "")
-        if (e != null && n != null && h != null) Gcp(no, e, n, h) else null
+        if (e != null && n != null && h != null) {
+            val old = ses.gcps.firstOrNull { it.target == no }; val m = r10Stats[no]
+            when { // 0.0.14: R10 으로 잰 값의 표본 SD·보고 σ 를 같이(값을 손으로 바꾸면 버림)
+                m != null && f(m.e) == f(e) && f(m.n) == f(n) && f(m.h) == f(h) -> Gcp(no, e, n, h, m.sdH, m.sdU, m.sigHMean, m.sigUMean, m.epochs)
+                old != null && old.e == e && old.n == n && old.h == h -> old
+                else -> Gcp(no, e, n, h)
+            }
+        } else null
     }
     fun saveAll() {
         val g = collect()
@@ -105,6 +117,24 @@ fun GcpScreen(store: Store, name: String, onBack: () -> Unit) {
                         OutlinedTextField(v, { txt[key] = it; dirty = true }, Modifier.fillMaxWidth(), label = { Text(lab) }, singleLine = true,
                             textStyle = TextStyle(fontSize = 18.sp), isError = v.isNotEmpty() && GcpCheck.num(v) == null,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next))
+                    }
+                    // 0.0.14: R10 이 연결됐을 때만 보임(없으면 지금처럼 입력·불러오기)
+                    if (kr.archsurvey.pg.r10.R10Hub.connected()) {
+                        val busy = measuring == no
+                        OutlineBtn(if (busy) "재는 중 ${(progress * 100).toInt()}%" else "R10으로 재기", Modifier.fillMaxWidth(), enabled = measuring == null) {
+                            val hub = kr.archsurvey.pg.r10.R10Hub.current ?: return@OutlineBtn
+                            measuring = no; progress = 0f; warn = null
+                            scope.launch {
+                                val r = runCatching { hub.measure(ses.epsg) { progress = it } }.getOrElse { kr.archsurvey.pg.r10.MeasureResult.Aborted("재기 실패 · ${it.message}") }
+                                measuring = null
+                                when (r) {
+                                    is kr.archsurvey.pg.r10.MeasureResult.Ok -> { r10Stats[no] = r.m; txt["${no}e"] = f(r.m.e); txt["${no}n"] = f(r.m.n); txt["${no}h"] = f(r.m.h); dirty = true
+                                        msg = "표적 #$no R10 ${r.m.epochs}회 평균" + String.format(java.util.Locale.US, " · 흩어짐 %s · 보고 σ %s", r.m.sdH?.let { "%.1f cm".format(java.util.Locale.US, it * 100) } ?: "-", r.m.sigHMean?.let { "%.1f cm".format(java.util.Locale.US, it * 100) } ?: "정보 없음")
+                                        kr.archsurvey.pg.diag.PgLog.i("gcp r10 Target#$no epochs=${r.m.epochs} sdH=${r.m.sdH} sdU=${r.m.sdU} sigH=${r.m.sigHMean} sigU=${r.m.sigUMean}") }
+                                    is kr.archsurvey.pg.r10.MeasureResult.Aborted -> { warn = "표적 #$no: " + r.reasonKo; kr.archsurvey.pg.diag.PgLog.i("gcp r10 Target#$no aborted") }
+                                }
+                            }
+                        }
                     }
                     if (e != null && n != null && h != null) GcpCheck.warn(e, n, h, ses.epsg)?.let { Txt(it, size = 14.sp, color = P.error) }
                     else if (listOf(e, n, h).any { it != null }) Txt("세 칸을 모두 채워야 쓰여요", size = 14.sp, color = P.float)

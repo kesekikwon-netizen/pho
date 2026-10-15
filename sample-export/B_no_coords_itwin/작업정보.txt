@@ -2,3 +2,4 @@
 사진: 16장
 사진 속 표적: Target #1, Target #2, Target #3, Target #4
 좌표: 없음 (앱 「좌표 입력」에서 넣고 다시 보내면 block.xmlz 에 들어갑니다)
+사진 초기 자세: 16/16장 block.xmlz 에 들어 있음

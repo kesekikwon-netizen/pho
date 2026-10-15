@@ -22,8 +22,8 @@ android {
         // 어느 폰에나 설치(안드로이드 5+). ARCore 는 7.0+ 에서만 켜고, 없으면 사진·표적·내보내기만.
         minSdk = 21
         targetSdk = 35
-        versionCode = 13
-        versionName = "0.0.13-p0"
+        versionCode = 14
+        versionName = "0.0.14-p0"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         externalNativeBuild { cmake { arguments += listOf("-DANDROID_STL=none") } }
     }
@@ -76,11 +76,15 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
+    // 0.0.14: R10(측량·사진 기준점 앱과 같은 수신기 코드) — 선택 기능
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     // ARCore (Apache-2.0). 선택 설치(manifest: com.google.ar.core = optional)
     implementation("com.google.ar:core:1.46.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20231013")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
 }
 
 // 단위시험용: 같은 AprilTag 3 C 소스를 PC(box)용 JNI 라이브러리로 빌드해 진짜 검출기를 시험한다

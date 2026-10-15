@@ -34,7 +34,11 @@ data class Overlay(
 )
 
 /** 사진 한 장(원 JPG + 밝기 + 자세·내부표정) */
-class Shot(val jpeg: ByteArray, val gray: ByteArray, val w: Int, val h: Int, val pose: DoubleArray?, val fx: Double, val fy: Double, val cx: Double, val cy: Double, val reason: String? = null)
+class Shot(val jpeg: ByteArray, val gray: ByteArray, val w: Int, val h: Int, val pose: DoubleArray?, val fx: Double, val fy: Double, val cx: Double, val cy: Double, val reason: String? = null,
+           /** 0.0.14 AR 프레임 시각(ms) · 움직임 속도(m/s) */ val tMs: Long? = null, val speed: Double? = null)
+
+/** 0.0.14: R10 이 켜졌을 때만 AR 궤적(10 Hz)을 받는 곳. 없으면 아무것도 안 함 */
+object ArTrackSink { @Volatile var sink: ((Long, DoubleArray) -> Unit)? = null }
 
 /**
  * 0.0.5 실시간 3D (설계도 11):
@@ -119,6 +123,7 @@ class ArRenderer(
         kr.archsurvey.pg.diag.PgLog.i("gl surface ${width}x$height rotation=$rotation")
     }
 
+    private var lastTrackMs = 0L
     override fun onDrawFrame(gl: GL10?) {
         resetState()
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
@@ -148,6 +153,8 @@ class ArRenderer(
             val pos = pose.translation; val q = pose.rotationQuaternion
             if (newFrame && speed.feed(frame.timestamp, pos, q)) kr.archsurvey.pg.diag.PgLog.d("too fast move=%.2f m/s rot=%.0f deg/s".format(speed.move, speed.rot))
             val slow = speed.slow(frame.timestamp)
+            ArTrackSink.sink?.let { sk -> val tMs = frame.timestamp / 1_000_000L; if (newFrame && tMs - lastTrackMs >= 100) { lastTrackMs = tMs
+                runCatching { sk(tMs, doubleArrayOf(pos[0].toDouble(), pos[1].toDouble(), pos[2].toDouble(), q[0].toDouble(), q[1].toDouble(), q[2].toDouble(), q[3].toDouble())) } } }
 
             // 0.0.11: 거리·각도·속도 조건 없음(사용자). 자동 = 2초마다, 수동 = 언제나. 막는 것은 저장 공간뿐
             if (slow && (shotRequested || now - lastRejectLog > 1000)) { lastRejectLog = now; rejectTooFast++; kr.archsurvey.pg.diag.PgLog.i("shot ADVISE too_fast move=%.2fm/s rot=%.0fdeg/s manual=$shotRequested".format(speed.move, speed.rot)) }
@@ -465,7 +472,7 @@ class ArRenderer(
         val sx = w.toDouble() / dims[0]; val sy = h.toDouble() / dims[1]
         val t = camera.pose.translation; val q = camera.pose.rotationQuaternion
         onShot(Shot(bo.toByteArray(), gray, w, h, if (!withPose) null else doubleArrayOf(t[0].toDouble(), t[1].toDouble(), t[2].toDouble(), q[0].toDouble(), q[1].toDouble(), q[2].toDouble(), q[3].toDouble()),
-            f[0] * sx, f[1] * sy, pp[0] * sx, pp[1] * sy, shotReason?.code))
+            f[0] * sx, f[1] * sy, pp[0] * sx, pp[1] * sy, shotReason?.code, lastFrameTs / 1_000_000L, speed.move))
         return true
     }
 
