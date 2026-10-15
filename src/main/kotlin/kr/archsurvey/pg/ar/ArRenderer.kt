@@ -86,6 +86,7 @@ class ArRenderer(
         GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
         GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
         session.setCameraTextureName(camTex)
+        vbo = 0; vboSrc = null // 새 GL 문맥: 예전 버퍼 번호는 무효
         bgProg = program(
             "attribute vec4 p; attribute vec2 uv; varying vec2 v; void main(){ gl_Position=p; v=uv; }",
             "#extension GL_OES_EGL_image_external : require\nprecision mediump float; varying vec2 v; uniform samplerExternalOES t; void main(){ gl_FragColor=texture2D(t,v); }")
@@ -154,6 +155,7 @@ class ArRenderer(
     }
 
     private fun drawBackground() {
+        resetState()
         GLES20.glDisable(GLES20.GL_DEPTH_TEST); GLES20.glDepthMask(false)
         GLES20.glUseProgram(bgProg)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
@@ -168,26 +170,66 @@ class ArRenderer(
         GLES20.glDepthMask(true)
     }
 
-    /** 색 점구름: 가까울수록 크게(화면 px), 깊이 시험으로 앞 점이 가림 */
+    // 점구름 VBO(GL 스레드에서만 올림)
+    private var vbo = 0; private var vboSrc: kr.archsurvey.pg.live.LiveEngine.Cloud? = null; private var vboCount = 0
+    private var probeAt = 0L
+
+    /** ARCore(session.update·깊이·카메라 영상)가 같은 GL 문맥을 쓰므로 그리기 전에 상태를 모두 우리 값으로 되돌림 */
+    private fun resetState() {
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0); GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0)
+        GLES20.glViewport(0, 0, viewW, viewH)
+        GLES20.glColorMask(true, true, true, true)
+        GLES20.glDisable(GLES20.GL_CULL_FACE); GLES20.glDisable(GLES20.GL_SCISSOR_TEST); GLES20.glDisable(GLES20.GL_STENCIL_TEST)
+        GLES20.glDisable(GLES20.GL_BLEND); GLES20.glDepthFunc(GLES20.GL_LEQUAL)
+    }
+
+    /** 색 점구름: VBO 로 올리고, 깊이 시험 없이 카메라 위에 항상 그림(가림 문제 배제). 가까울수록 크게 */
     private fun drawCloud() {
         val cb = engine.cloudBuf ?: return
-        if (cb.count == 0) return
-        GLES20.glEnable(GLES20.GL_DEPTH_TEST); GLES20.glDepthMask(true)
+        if (cb.count == 0 || cloudProg == 0) return
+        resetState()
+        if (vbo == 0) { val t = IntArray(1); GLES20.glGenBuffers(1, t, 0); vbo = t[0] }
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, vbo)
+        if (cb !== vboSrc) { cb.buf.position(0); GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, cb.count * 28, cb.buf, GLES20.GL_DYNAMIC_DRAW); vboSrc = cb; vboCount = cb.count }
+        GLES20.glDisable(GLES20.GL_DEPTH_TEST); GLES20.glDepthMask(false)
         GLES20.glUseProgram(cloudProg)
         GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(cloudProg, "m"), 1, false, vp, 0)
         GLES20.glUniform1f(GLES20.glGetUniformLocation(cloudProg, "k"), viewH * 0.012f)
         val p = GLES20.glGetAttribLocation(cloudProg, "p"); val c = GLES20.glGetAttribLocation(cloudProg, "c")
-        cb.buf.position(0); GLES20.glVertexAttribPointer(p, 3, GLES20.GL_FLOAT, false, 28, cb.buf)
-        cb.buf.position(3); GLES20.glVertexAttribPointer(c, 4, GLES20.GL_FLOAT, false, 28, cb.buf)
+        GLES20.glVertexAttribPointer(p, 3, GLES20.GL_FLOAT, false, 28, 0)
+        GLES20.glVertexAttribPointer(c, 4, GLES20.GL_FLOAT, false, 28, 12)
         GLES20.glEnableVertexAttribArray(p); GLES20.glEnableVertexAttribArray(c)
-        GLES20.glDrawArrays(GLES20.GL_POINTS, 0, cb.count)
+        GLES20.glDrawArrays(GLES20.GL_POINTS, 0, vboCount)
         GLES20.glDisableVertexAttribArray(p); GLES20.glDisableVertexAttribArray(c)
-        cb.buf.position(0)
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0); GLES20.glDepthMask(true)
         cloudFrames++
+        // 5초마다 증거: CPU 로 투영해 화면 안 점 수 + 그 점 한 곳의 실제 화소 색(그려졌는지)
+        val now = SystemClock.uptimeMillis()
+        if (now - probeAt > 5000) { probeAt = now; probe(cb) }
+    }
+
+    private fun probe(cb: kr.archsurvey.pg.live.LiveEngine.Cloud) {
+        var inside = 0; var sx = -1; var sy = -1; var want = ""
+        val step = maxOf(1, cb.count / 2000)
+        var i = 0
+        while (i < cb.count) {
+            val x = cb.buf.get(7 * i); val y = cb.buf.get(7 * i + 1); val z = cb.buf.get(7 * i + 2)
+            val o = FloatArray(4); Matrix.multiplyMV(o, 0, vp, 0, floatArrayOf(x, y, z, 1f), 0)
+            if (o[3] > 0.05f) { val nx = o[0] / o[3]; val ny = o[1] / o[3]
+                if (nx in -1f..1f && ny in -1f..1f) { inside++; if (sx < 0) { sx = ((nx + 1) / 2 * viewW).toInt(); sy = ((ny + 1) / 2 * viewH).toInt()
+                    want = "%.2f,%.2f,%.2f".format(cb.buf.get(7 * i + 3), cb.buf.get(7 * i + 4), cb.buf.get(7 * i + 5)) } } }
+            i += step
+        }
+        var got = "-"
+        if (sx >= 0) { val bb = ByteBuffer.allocateDirect(4); GLES20.glReadPixels(sx.coerceIn(0, viewW - 1), sy.coerceIn(0, viewH - 1), 1, 1, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, bb)
+            got = "%d,%d,%d".format(bb.get(0).toInt() and 255, bb.get(1).toInt() and 255, bb.get(2).toInt() and 255) }
+        kr.archsurvey.pg.diag.PgLog.d("draw probe cloud=${cb.count} onScreen~${inside * step} at=($sx,$sy) want=$want got=$got view=${viewW}x$viewH gl=0x${Integer.toHexString(GLES20.glGetError())}")
     }
 
     private fun drawMesh() {
         val m = engine.mesh ?: return
+        resetState()
         GLES20.glEnable(GLES20.GL_BLEND); GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
         GLES20.glEnable(GLES20.GL_DEPTH_TEST)
         GLES20.glUseProgram(meshProg)
@@ -384,7 +426,10 @@ class ArRenderer(
         fun program(vs: String, fs: String): Int {
             val p = GLES20.glCreateProgram()
             GLES20.glAttachShader(p, shader(GLES20.GL_VERTEX_SHADER, vs)); GLES20.glAttachShader(p, shader(GLES20.GL_FRAGMENT_SHADER, fs))
-            GLES20.glLinkProgram(p); return p
+            GLES20.glLinkProgram(p)
+            val ok = IntArray(1); GLES20.glGetProgramiv(p, GLES20.GL_LINK_STATUS, ok, 0)
+            if (ok[0] == 0) { kr.archsurvey.pg.diag.PgLog.e("GL link failed: ${GLES20.glGetProgramInfoLog(p)}"); return 0 }
+            return p
         }
     }
 }
