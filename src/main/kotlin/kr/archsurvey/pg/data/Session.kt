@@ -43,9 +43,11 @@ data class Session(
     val sensorDeg: Int = 90,
     /** 0.0.14 R10 위상중심 상수(ARP→APC, m, 위쪽) — 레버암과 따로 */
     val apcM: Double = 0.0,
+    /** 0.0.16 다음 사진 번호(늘기만 함, 지운 번호도 다시 안 씀) */
+    val nextPhotoId: Int = 1,
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
-        put("v", 1); put("name", name); put("lever", JSONArray().put(lever.up).put(lever.fwd).put(lever.right)); put("sensorDeg", sensorDeg); put("apcM", apcM); put("created", created); put("epsg", epsg); put("arcore", arcore)
+        put("v", 1); put("name", name); put("lever", JSONArray().put(lever.up).put(lever.fwd).put(lever.right)); put("sensorDeg", sensorDeg); put("apcM", apcM); put("nextPhotoId", nextPhotoId); put("created", created); put("epsg", epsg); put("arcore", arcore)
         tagSizeM?.let { put("tagSizeM", it) }; barM?.let { put("barM", it) }
         put("gcps", JSONArray().apply { gcps.forEach { g -> put(JSONObject().put("t", g.target).put("e", g.e).put("n", g.n).put("h", g.h).apply { g.sdH?.let { put("sdH", it) }; g.sdU?.let { put("sdU", it) }; g.sigH?.let { put("sigH", it) }; g.sigU?.let { put("sigU", it) }; g.epochs?.let { put("ep", it) } }) } })
         put("stills", JSONArray().apply {
@@ -76,6 +78,7 @@ data class Session(
                 lever = o.optJSONArray("lever")?.let { l -> kr.archsurvey.pg.r10.Lever(l.optDouble(0, 0.0), l.optDouble(1, 0.0), l.optDouble(2, 0.0)) } ?: kr.archsurvey.pg.r10.Lever(),
                 sensorDeg = o.optInt("sensorDeg", 90),
                 apcM = o.optDouble("apcM", 0.0),
+                nextPhotoId = o.optInt("nextPhotoId", 1),
                 tagSizeM = if (o.has("tagSizeM")) o.getDouble("tagSizeM") else null,
                 barM = if (o.has("barM")) o.getDouble("barM") else null,
                 gcps = (0 until gs.length()).map { gs.getJSONObject(it).let { g -> Gcp(g.getInt("t"), g.getDouble("e"), g.getDouble("n"), g.getDouble("h"),

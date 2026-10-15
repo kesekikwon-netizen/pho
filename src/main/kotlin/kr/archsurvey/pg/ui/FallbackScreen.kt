@@ -54,13 +54,15 @@ fun FallbackScreen(store: Store, name: String, onBack: () -> Unit, onResult: () 
         if (!ok || !f.exists() || f.length() == 0L) { f.delete(); return@rememberLauncherForActivityResult }
         busy = true
         scope.launch {
-            val st = withContext(Dispatchers.Default) { analyse(f, (session.stills.maxOfOrNull { it.id } ?: 0) + 1) }
-            if (st != null) { session = session.copy(stills = session.stills + st); store.save(session) }
+            val st = withContext(Dispatchers.Default) { analyse(f, kr.archsurvey.pg.data.PhotoIds.fileNo(f.name) ?: ((session.stills.maxOfOrNull { it.id } ?: 0) + 1)) }
+            if (st != null) { runCatching { store.files.journal(name, st) }; session = session.copy(stills = (session.stills + st).sortedBy { it.id }, nextPhotoId = maxOf(session.nextPhotoId, st.id + 1)); store.save(session) }
             busy = false
         }
     }
     fun shoot() {
-        val id = (session.stills.maxOfOrNull { it.id } ?: 0) + 1
+        // 0.0.16: 번호는 늘기만(폴더·기록·저장된 다음 번호 중 큰 값)
+        val id = kr.archsurvey.pg.data.PhotoIds.startFor(session, store.photos(name))
+        session = session.copy(nextPhotoId = id + 1)
         val f = File(store.photos(name), String.format(java.util.Locale.US, "IMG_%04d.jpg", id))
         pending = f
         val uri: Uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)

@@ -83,6 +83,10 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
     val view = LocalView.current
     val loaded = remember { runCatching { store.loadChecked(name) }.getOrNull() }
     if (loaded == null) { LaunchedEffect(Unit) { kr.archsurvey.pg.diag.PgLog.e("capture: session unreadable $name"); onBack() }; return }
+    // 0.0.16: 사진 번호(원자적, 늘기만) · 병렬 저장기(버리지 않음)
+    val ids = remember { kr.archsurvey.pg.data.PhotoIds(kr.archsurvey.pg.data.PhotoIds.startFor(loaded.session, store.photos(name))) }
+    val saver = remember { kr.archsurvey.pg.data.PhotoSaver(2) }
+    var savingLeft by remember { mutableStateOf(0) }
     // 0.0.14: R10 레버암·센서 방향을 작업에 적어 둠(R10 없으면 기본 0 그대로)
     val engine = remember { LiveEngine(loaded.session.copy(lever = kr.archsurvey.pg.r10.R10Prefs.lever(ctx), apcM = kr.archsurvey.pg.r10.R10Prefs.apc(ctx), sensorDeg = runCatching { kr.archsurvey.pg.r10.Sensor.backDeg(ctx) }.getOrDefault(90))) }
     var glView by remember { mutableStateOf<GLSurfaceView?>(null) }
@@ -115,9 +119,16 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
     fun leave(reason: String, then: () -> Unit) {
         if (leaving) return
         leaving = true
-        kr.archsurvey.pg.diag.PgLog.i("capture leave reason=$reason photos=${engine.session.stills.size}")
-        runCatching { store.save(engine.session) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("save on leave failed", it) }
-        then()
+        kr.archsurvey.pg.diag.PgLog.i("capture leave reason=$reason photos=${engine.session.stills.size} pending=${saver.pending.get()} nextId=${ids.peek()}")
+        // 0.0.16: 새 촬영을 멈추고(GL 멈춤) 남은 저장을 다 마친 뒤 마지막 저장 → 나가기. 버리지 않음
+        runCatching { glView?.onPause() }
+        Thread({
+            val ok = saver.drain { n -> view.post { savingLeft = n } }
+            engine.noteNextId(ids.peek()); engine.idle()
+            runCatching { store.save(engine.session) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("save on leave failed", it) }
+            kr.archsurvey.pg.diag.PgLog.i("capture drained ok=$ok photos=${engine.session.stills.size}")
+            view.post { savingLeft = 0; then() }
+        }, "pg-leave").start()
     }
     // 0.0.14: R10 을 켰을 때만 원시 R10·AR 궤적을 이 작업 폴더에 남김(맞춤은 저장·내보내기 때)
     DisposableEffect(kr.archsurvey.pg.r10.R10Hub.current) {
@@ -138,8 +149,8 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
             runCatching { glView?.onPause() }
             val s = opened?.session
             engine.saveCloud(store.dir(name))
-            engine.post { store.save(engine.session) } // 0.0.13: 2초 묶음 저장의 마지막 몫
-            engine.closeAfterPending()
+            // 0.0.16: 남은 저장을 마친 뒤 마지막 저장·닫기(다른 스레드, 메인 멈춤 없음)
+            Thread({ saver.drain(); engine.noteNextId(ids.peek()); engine.post { runCatching { store.save(engine.session) } }; engine.closeAfterPending(); saver.shutdown() }, "pg-drain").start()
             Thread({ runCatching { s?.pause(); s?.close() }.onFailure { kr.archsurvey.pg.diag.PgLog.e("session close failed", it) }; kr.archsurvey.pg.diag.PgLog.i("arcore session closed") }, "pg-close").start()
         }
     }
@@ -148,27 +159,32 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
         opened?.let { op ->
             ArRenderer(op.session, engine, op.depth, onOverlay = { o -> view.post { overlay = o } }, onShot = { shot ->
                 engine.pendingShots.incrementAndGet()
-                engine.post { try {
-                    val id = (engine.session.stills.maxOfOrNull { it.id } ?: 0) + 1
-                    val file = String.format(java.util.Locale.US, "IMG_%04d.jpg", id)
+                // 0.0.16: 번호는 받는 순간 원자적으로(저장 순서와 무관, 다시 쓰지 않음)
+                val id = ids.take(); val file = kr.archsurvey.pg.data.PhotoIds.fileName(id)
+                val sensorDeg = engine.session.sensorDeg
+                saver.submit { try {
                     val q = kr.archsurvey.pg.diag.Quality.check(shot.gray, shot.w, shot.h)
                     if (!q.ok) { // 0.0.11: 품질은 안내만(저장은 함)
                         kr.archsurvey.pg.diag.PgLog.i("shot ADVISE quality=${q.reason} sharp=%.1f mean=${q.mean} clipped=%.2f".format(q.sharpness, q.clipped))
                         view.post { policyMsg = q.message }
                     }
-                    if (!store.files.writePhoto(name, file, shot.jpeg)) {
-                        kr.archsurvey.pg.diag.PgLog.e("photo write failed $file free=${store.files.free()}")
-                        view.post { msg = kr.archsurvey.pg.diag.Msg.SHOT_SAVE_FAIL }
-                        return@post
-                    }
-                    val f = File(store.photos(name), file)
-                    runCatching {
-                        ExifInterface(f).apply {
+                    val gnss = kr.archsurvey.pg.r10.R10Hub.tagIfAny()
+                    if (gnss != null) kr.archsurvey.pg.diag.PgLog.i("r10 photo=$file q=${gnss.quality} fix=${gnss.fixed} lat=%.9f lon=%.9f alt=${gnss.altMsl} sH=${gnss.sigmaH} age=${gnss.ageMs}".format(gnss.lat, gnss.lon))
+                    val td0 = System.nanoTime()
+                    // P0.1 #5: 저장 사진은 원 해상도 검출(4 MP 이하 decimate 1, 넘으면 2), 오류 비트 0, 35 px 미만 버림
+                    val all = TagDetector.detect(shot.gray, shot.w, shot.h, decimate = if (shot.w * shot.h > 4_000_000) 2f else 1f, maxHamming = 0)
+                    val (tags, small) = kr.archsurvey.pg.diag.Quality.filterTags(all)
+                    small.forEach { kr.archsurvey.pg.diag.PgLog.i("tag DROP photo=$file Target#${it.target} size=%.0fpx < 35".format(kr.archsurvey.pg.diag.Quality.tagPx(it))) }
+                    tags.filter { kr.archsurvey.pg.diag.Quality.tagPx(it) < kr.archsurvey.pg.diag.Quality.TAG_GOOD_PX }.forEach { kr.archsurvey.pg.diag.PgLog.d("tag SMALL photo=$file Target#${it.target} size=%.0fpx (goal 60)".format(kr.archsurvey.pg.diag.Quality.tagPx(it))) }
+                    kr.archsurvey.pg.diag.PgLog.i("photo $file ${shot.w}x${shot.h} jpeg=${shot.jpeg.size}B tags=${tags.size} detect=%.0fms".format((System.nanoTime() - td0) / 1e6))
+                    tags.forEach { t -> kr.archsurvey.pg.diag.PgLog.d("  tag photo=$file Target#${t.target} id=${t.id} ham=${t.hamming} c=(%.1f,%.1f) corners=${t.corners.joinToString(",") { "%.1f".format(it) }}".format(t.cx, t.cy)) }
+                    val still = Still(id, file, shot.w, shot.h, shot.fx, shot.fy, shot.cx, shot.cy, shot.pose, System.currentTimeMillis(), tags, shot.reason, gnss = gnss, speed = shot.speed, tMs = shot.tMs, arSid = shot.arSid)
+                    // 0.0.16: 조각 한 번 쓰기 → EXIF 한 번(렌즈 + R10) → 기록(저널) → 이름 바꿈. 기록 없는 파일 없음
+                    val ok = kr.archsurvey.pg.data.PhotoWrite.save(store.files, name, still, shot.jpeg) { part ->
+                        ExifInterface(part).apply {
                             setAttribute(ExifInterface.TAG_MAKE, android.os.Build.MANUFACTURER); setAttribute(ExifInterface.TAG_MODEL, android.os.Build.MODEL)
-                            setAttribute(ExifInterface.TAG_DATETIME_ORIGINAL, java.text.SimpleDateFormat("yyyy:MM:dd HH:mm:ss", java.util.Locale.US).format(java.util.Date()))
                             setAttribute(ExifInterface.TAG_SOFTWARE, "kr.archsurvey.pg")
-                            setAttribute(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL.toString()) // 화소 그대로가 바른 방향(센서 방향)
-                            // 0.0.12: 렌즈·카메라 값 완비(초점 mm, 35mm 환산, 초점면 해상도, 1/1000초, 고유 ID)
+                            setAttribute(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL.toString())
                             val now = System.currentTimeMillis()
                             val sw = sensorMm?.first; val sh = sw?.let { it * shot.h / shot.w }
                             val lv = kr.archsurvey.pg.export.ExifLens.compute(shot.fx, shot.fy, shot.w, shot.h, sw, sh, now, kr.archsurvey.pg.export.ExifLens.uniqueId(name, file, now))
@@ -181,29 +197,19 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                             lv.planeYRes?.let { setAttribute(ExifInterface.TAG_FOCAL_PLANE_Y_RESOLUTION, kr.archsurvey.pg.export.ExifLens.rational(it)) }
                             if (lv.planeXRes != null) setAttribute(ExifInterface.TAG_FOCAL_PLANE_RESOLUTION_UNIT, "3")
                             setAttribute(ExifInterface.TAG_IMAGE_WIDTH, shot.w.toString()); setAttribute(ExifInterface.TAG_IMAGE_LENGTH, shot.h.toString())
+                            // R10 FIX 면 안테나 원시값(맞춤 전) — 같은 한 번의 저장에
+                            if (gnss != null && gnss.fixed) {
+                                val ypr = shot.pose?.let { kr.archsurvey.pg.r10.GeoCam.ypr(it, sensorDeg, null) }
+                                kr.archsurvey.pg.r10.GeoExif.apply(this, gnss.lat, gnss.lon, gnss.altMsl, gnss, levered = false, pitch = ypr?.second, roll = ypr?.third)
+                            }
                             saveAttributes()
                         }
                     }
-                    // 0.0.14: R10 을 켰을 때만 — 최신 FIX 위치(위·아래 레버암만; 수평은 내보낼 때 방향을 구해 고침). FIX 아니면 표시만
-                    val gnss = kr.archsurvey.pg.r10.R10Hub.tagIfAny()
-                    if (gnss != null) {
-                        kr.archsurvey.pg.diag.PgLog.i("r10 photo=$file q=${gnss.quality} fix=${gnss.fixed} lat=%.9f lon=%.9f alt=${gnss.altMsl} sH=${gnss.sigmaH} age=${gnss.ageMs}".format(gnss.lat, gnss.lon))
-                        // 맞춤 전: 사진엔 R10 원시(안테나) 값만. 레버암은 저장 때 맞춤이 생긴 뒤에만
-                        if (gnss.fixed) runCatching { val ypr = shot.pose?.let { kr.archsurvey.pg.r10.GeoCam.ypr(it, engine.session.sensorDeg, null) }
-                            kr.archsurvey.pg.r10.GeoExif.write(f, gnss.lat, gnss.lon, gnss.altMsl, gnss, levered = false, pitch = ypr?.second, roll = ypr?.third) }
-                            .onFailure { kr.archsurvey.pg.diag.PgLog.e("r10 exif failed", it) }
+                    if (!ok) {
+                        kr.archsurvey.pg.diag.PgLog.e("photo write failed $file free=${store.files.free()}")
+                        view.post { msg = kr.archsurvey.pg.diag.Msg.SHOT_SAVE_FAIL }
+                        return@submit
                     }
-                    val td0 = System.nanoTime()
-                    // P0.1 #5: 저장 사진은 원 해상도 검출(4 MP 이하 decimate 1, 넘으면 2), 오류 비트 0, 35 px 미만 버림
-                    val all = TagDetector.detect(shot.gray, shot.w, shot.h, decimate = if (shot.w * shot.h > 4_000_000) 2f else 1f, maxHamming = 0)
-                    val (tags, small) = kr.archsurvey.pg.diag.Quality.filterTags(all)
-                    small.forEach { kr.archsurvey.pg.diag.PgLog.i("tag DROP photo=$file Target#${it.target} size=%.0fpx < 35".format(kr.archsurvey.pg.diag.Quality.tagPx(it))) }
-                    tags.filter { kr.archsurvey.pg.diag.Quality.tagPx(it) < kr.archsurvey.pg.diag.Quality.TAG_GOOD_PX }.forEach { kr.archsurvey.pg.diag.PgLog.d("tag SMALL photo=$file Target#${it.target} size=%.0fpx (goal 60)".format(kr.archsurvey.pg.diag.Quality.tagPx(it))) }
-                    kr.archsurvey.pg.diag.PgLog.i("photo $file ${shot.w}x${shot.h} jpeg=${shot.jpeg.size}B tags=${tags.size} detect=%.0fms".format((System.nanoTime() - td0) / 1e6))
-                    tags.forEach { t -> kr.archsurvey.pg.diag.PgLog.d("  tag photo=$file Target#${t.target} id=${t.id} ham=${t.hamming} c=(%.1f,%.1f) corners=${t.corners.joinToString(",") { "%.1f".format(it) }}".format(t.cx, t.cy)) }
-                    val still = Still(id, file, shot.w, shot.h, shot.fx, shot.fy, shot.cx, shot.cy, shot.pose, System.currentTimeMillis(), tags, shot.reason, gnss = gnss, speed = shot.speed, tMs = shot.tMs, arSid = shot.arSid)
-                    // 0.0.15: 사진 저장 즉시 저널(앱이 죽어도 사진이 목록에 남음). 실패해도 촬영은 계속
-                    runCatching { store.files.journal(name, still) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("journal failed ${still.file}", it) }
                     engine.addStill(still, save)
                     view.post { TapHaptics.tap(view) }
                 } finally { engine.pendingShots.decrementAndGet() } }
@@ -356,6 +362,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
             // 위 띠들(가운데 상자 없음, S2)
             Column(Modifier.align(Alignment.TopCenter).padding(top = 8.dp, start = 8.dp, end = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (o != null && (o.slow || !o.tracking)) Band(if (o.slow) "천천히" else kr.archsurvey.pg.diag.Msg.tracking(o.failure), FieldIvory.error, big = true)
+                if (leaving && savingLeft > 0) Band("저장 중 ${savingLeft}장", FieldIvory.ink, big = true) // 0.0.16
                 if (paused) Band("⏸ 일시정지", FieldIvory.ink)
                 if (!autoShot && !paused) Band("자동 촬영 꺼짐 · 셔터 길게 눌러 켜기", FieldIvory.ink)
                 if (CaptureRules.noTargetWarn(pr.photos, engine.tagCounts.size)) Band(CaptureRules.NO_TARGET, Color(0xFFF2C200), ink = FieldIvory.ink) // M14

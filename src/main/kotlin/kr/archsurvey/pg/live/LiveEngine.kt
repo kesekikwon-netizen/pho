@@ -40,6 +40,10 @@ class LiveEngine(initial: Session) {
 
     fun post(r: () -> Unit) { if (!exec.isShutdown) exec.execute { runCatching(r).onFailure { kr.archsurvey.pg.diag.PgLog.e("live task failed", it) } } }
     fun close() { exec.shutdownNow() }
+    /** 0.0.16: 지금까지 넣은 일이 다 끝날 때까지 */
+    fun idle(timeoutMs: Long = 30_000): Boolean { val l = java.util.concurrent.CountDownLatch(1); if (exec.isShutdown) return true; post { l.countDown() }; return l.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS) }
+    /** 0.0.16: 다음 사진 번호를 작업에 적어 둠(저장 전) */
+    fun noteNextId(n: Int) = post { if (n > session.nextPhotoId) session = session.copy(nextPhotoId = n) }
     /** 0.0.12: 쌓인 일을 마치고 닫기(점군 저장 뒤) */
     fun closeAfterPending() { exec.shutdown() }
     private val cloudPartAt = System.currentTimeMillis()
@@ -118,7 +122,7 @@ class LiveEngine(initial: Session) {
     }
 
     fun addStill(s: Still, save: (Session) -> Unit) = post {
-        session = session.copy(stills = session.stills + s)
+        session = session.copy(stills = (session.stills + s).sortedBy { it.id }, nextPhotoId = maxOf(session.nextPhotoId, s.id + 1))
         addStillModel(s)
         val now = System.currentTimeMillis()
         if (now - lastSaveAt >= saveEveryMs) { lastSaveAt = now; save(session) }

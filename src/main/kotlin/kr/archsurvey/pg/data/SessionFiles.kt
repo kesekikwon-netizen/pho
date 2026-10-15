@@ -60,8 +60,19 @@ class SessionFiles(val root: File) {
         val extra = readJournal(File(d, JOURNAL)).let { j -> val have = s.stills.map { it.id }.toHashSet(); j.filter { it.id !in have }.distinctBy { it.id } }
         if (extra.isNotEmpty()) runCatching { kr.archsurvey.pg.diag.PgLog.i("session $name journal recovered ${extra.size} photo(s)") }
         val ph = File(d, "photos")
-        val ok = (s.stills + extra).sortedBy { it.id }.filter { File(ph, it.file).let { f -> f.exists() && f.length() > 0 } }
-        return Loaded(s.copy(stills = ok), fromBak, s.stills.size - ok.size)
+        // 0.0.16 되살리기 1: 기록은 됐는데 이름 바꾸기 전에 멈춘 조각(.part) → 완전한 JPEG 이면 이름 바꿈
+        for (st in extra) { val f = File(ph, st.file); val p = File(ph, st.file + ".part"); if (!f.exists() && p.isFile && Jpeg.complete(p)) p.renameTo(f) }
+        val recs = (s.stills + extra).sortedBy { it.id }
+        // 0.0.16 되살리기 2: 기록 없는 IMG 파일(고아) → 최소 기록으로 다시 넣음(자세 없음, 크기는 JPEG 머리에서)
+        val have = recs.map { it.file }.toHashSet(); val haveId = recs.map { it.id }.toHashSet()
+        val orphans = ph.listFiles().orEmpty().filter { it.isFile && it.name.endsWith(".jpg") && it.name !in have && it.length() > 0 }
+            .mapNotNull { f -> val no = PhotoIds.fileNo(f.name) ?: return@mapNotNull null; if (no in haveId) return@mapNotNull null
+                val (w, h) = Jpeg.size(f) ?: return@mapNotNull null
+                Still(no, f.name, w, h, 0.8 * maxOf(w, h), 0.8 * maxOf(w, h), w / 2.0, h / 2.0, null, f.lastModified(), emptyList(), "recovered") }
+        if (orphans.isNotEmpty()) runCatching { kr.archsurvey.pg.diag.PgLog.i("session $name orphan photos re-added ${orphans.size}: ${orphans.joinToString(",") { it.file }}") }
+        val ok = (recs + orphans).sortedBy { it.id }.filter { File(ph, it.file).let { f -> f.exists() && f.length() > 0 } }
+        val next = maxOf(s.nextPhotoId, (ok.maxOfOrNull { it.id } ?: 0) + 1)
+        return Loaded(s.copy(stills = ok, nextPhotoId = next), fromBak, s.stills.size - ok.count { o -> s.stills.any { it.id == o.id } })
     }
 
     fun list(): List<Session> = root.listFiles().orEmpty()
