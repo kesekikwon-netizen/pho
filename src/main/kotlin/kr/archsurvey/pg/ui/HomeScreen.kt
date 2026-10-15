@@ -38,7 +38,7 @@ import kr.archsurvey.ui.Sunlight
 import kr.archsurvey.ui.releaseTap
 
 @Composable
-fun HomeScreen(store: Store, onNew: (arcore: Boolean) -> Unit, onOpen: (Session) -> Unit) {
+fun HomeScreen(store: Store, onNew: (arcore: Boolean) -> Unit, onOpen: (Session) -> Unit, onGcp: (Session) -> Unit = {}) {
     val ctx = LocalContext.current
     var ar by remember { mutableStateOf(ArSupport.state(ctx)) }
     val sessions = remember { store.list() }
@@ -72,7 +72,8 @@ fun HomeScreen(store: Store, onNew: (arcore: Boolean) -> Unit, onOpen: (Session)
                     Txt(s.name, bold = true)
                     val tags = s.stills.flatMap { st -> st.tags.map { it.id } }.distinct().size
                     Txt("사진 ${s.stills.size}장 · 표적 ${tags}개 · ${if (s.gcps.isNotEmpty()) "좌표 ${s.gcps.size}점" else "로컬 좌표"}", size = 15.sp, color = P.sub)
-                    if (s.stills.isNotEmpty()) androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    if (s.stills.isNotEmpty()) androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, androidx.compose.ui.Alignment.End)) {
+                        OutlineBtn(if (s.gcps.isEmpty()) "좌표 입력" else "좌표 ${s.gcps.size}점") { onGcp(s) }
                         PrimaryBtn(if (one.busy == s.name) "보내는 중…" else "iTwin으로 보내기", Modifier.width(200.dp), color = P.fix) { one.run(s.name) }
                     }
                 }

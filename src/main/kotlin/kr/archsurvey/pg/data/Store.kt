@@ -55,7 +55,18 @@ class Store(private val ctx: Context) {
                     put(MediaStore.MediaColumns.MIME_TYPE, mime(f.name))
                     put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/$rel$sub")
                 }
-                val uri = cr.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: throw java.io.IOException("다운로드 폴더에 만들 수 없음: ${f.name}")
+                // 0.0.8: 같은 이름 있으면 덮어씀((1)(2) 중복 방지). 다른 앱이 만든 파일은 못 지울 수 있음 → 그 경우 새로 만듦
+            val rel = "${Environment.DIRECTORY_DOWNLOADS}/사진측량/"
+            runCatching {
+                cr.query(MediaStore.Downloads.EXTERNAL_CONTENT_URI, arrayOf(MediaStore.MediaColumns._ID),
+                    "${MediaStore.MediaColumns.DISPLAY_NAME}=? AND ${MediaStore.MediaColumns.RELATIVE_PATH}=?", arrayOf(f.name, rel), null)?.use { c ->
+                    while (c.moveToNext()) {
+                        val old = android.content.ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, c.getLong(0))
+                        runCatching { cr.delete(old, null, null) }.onFailure { kr.archsurvey.pg.diag.PgLog.w("export old delete failed") }
+                    }
+                }
+            }
+            val uri = cr.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: throw java.io.IOException("다운로드 폴더에 만들 수 없음: ${f.name}")
                 (cr.openOutputStream(uri) ?: throw java.io.IOException("쓸 수 없음: ${f.name}")).use { o -> f.inputStream().use { it.copyTo(o) } }
             }
         } else {

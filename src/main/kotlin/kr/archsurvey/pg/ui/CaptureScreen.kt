@@ -74,7 +74,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 @Composable
-fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -> Unit, onFallback: () -> Unit = onBack) {
+fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -> Unit, onFallback: () -> Unit = onBack, onGcp: () -> Unit = {}) {
     val ctx = LocalContext.current
     var leaving by remember { mutableStateOf(false) }
     val view = LocalView.current
@@ -365,6 +365,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
         }
         engine.scale?.let { Txt("축척 ${"%.4f".format(it.s)} · ${it.source}" + (it.scatterPct?.let { p -> " · ±%.1f%%".format(p) } ?: ""), size = 14.sp, color = P.sub) }
             ?: Txt("축척 추정(검증 안 됨) · ARCore 값 그대로", size = 14.sp, color = P.sub)
+        OutlineBtn("좌표 입력") { Minimal.moreOpen = false; onGcp() }
         Spacer(Modifier.height(12.dp))
         Txt("화면", bold = true)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
