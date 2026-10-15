@@ -8,3 +8,6 @@ keystore.properties
 
 # V월드 내장키(실키는 git 밖에서 복사; 템플릿만 커밋)
 src/main/kotlin/kr/archsurvey/map/VWorldDefaults.kt
+
+*.apk
+dist/

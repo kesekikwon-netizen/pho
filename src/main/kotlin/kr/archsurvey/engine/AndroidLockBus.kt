@@ -23,7 +23,7 @@ class AndroidLockBus(private val ctx: Context) : LockBus {
         /** 0.1.48: 이 프로세스에 화면(ViewModel)의 잠금 통로가 살아 있음 — 매니페스트 수신기는 비켜섬 */
         @Volatile var vmAlive = false
         fun labelFor(pkg: String) = if (pkg.startsWith("kr.archsurvey.gcp")) "사진 기준점" else "발굴 측량"
-        val PACKAGES = listOf("kr.archsurvey.field", "kr.archsurvey.gcp", "kr.archsurvey.field.debug", "kr.archsurvey.gcp.debug")
+        val PACKAGES = listOf("kr.archsurvey.field", "kr.archsurvey.gcp", "kr.archsurvey.field.debug", "kr.archsurvey.gcp.debug", "kr.archsurvey.pg", "kr.archsurvey.pg.debug")
     }
     override var onMessage: ((LockMsg) -> Unit)? = null
     private val rx = object : BroadcastReceiver() {
