@@ -54,7 +54,8 @@ object ExportFolder {
         if (tagged == 0 && g.fit == null) return ""
         val nl = "\r\n"
         return "R10: 위치 기록 ${tagged}장 · FIX ${s.stills.count { it.gnss?.fixed == true }}장 · 사진 위치 ${g.cams.size}장 (EPSG:${g.epsg}, 보조값 — 절대 좌표는 기준점이 정함)" + nl +
-            kr.archsurvey.pg.r10.GeoCam.report(g.fit) + nl +
+            kr.archsurvey.pg.r10.GeoCam.report(g) + nl +
+            "사진 위치 등급: " + g.cams.values.groupingBy { it.tier }.eachCount().entries.joinToString(" · ") { "${it.key} ${it.value}장" } + " (ANT = 맞춤 실패, FIX 안테나값 + 수직 레버암만)" + nl +
             String.format(java.util.Locale.US, "렌즈→안테나 레버암 위 %.1f · 앞 %.1f · 오른쪽 %.1f cm + 위상중심 상수 %.1f cm · 방위 %s", s.lever.up * 100, s.lever.fwd * 100, s.lever.right * 100, s.apcM * 100,
                 g.headingRad?.let { "%.1f°".format(java.util.Locale.US, Math.toDegrees(it)) } ?: "모름(레버암 미적용, 원시값만)") + nl +
             "원시 기록: r10_raw.csv · ar_track.csv (맞춤 없어도 늘 남김) · 사진별 속도는 poses.csv" + nl

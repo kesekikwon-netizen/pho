@@ -21,6 +21,32 @@ class SessionFiles(val root: File) {
         tmp.writeText(s.toJson().toString())
         if (cur.exists()) { bak.delete(); cur.renameTo(bak) }
         if (!tmp.renameTo(cur)) { tmp.copyTo(cur, overwrite = true); tmp.delete() }
+        // 0.0.15: 저장된 사진 줄은 저널에서 뺌(아직 안 들어간 줄은 남김)
+        synchronized(LOCK) {
+            val j = File(d, JOURNAL)
+            if (j.exists()) {
+                val have = s.stills.map { it.id }.toHashSet()
+                val keep = readJournal(j).filter { it.id !in have }
+                if (keep.isEmpty()) j.delete() else j.writeText(keep.joinToString("") { stillLine(it) + "\n" })
+            }
+        }
+    }
+
+    /** 0.0.15: 사진 저장 즉시 한 줄 덧붙임(2초 묶음 저장 전에 앱이 죽어도 사진이 목록에서 빠지지 않게) */
+    fun journal(name: String, st: Still) {
+        val d = dir(name); d.mkdirs()
+        synchronized(LOCK) {
+            java.io.FileOutputStream(File(d, JOURNAL), true).use { o -> o.write((stillLine(st) + "\n").toByteArray(Charsets.UTF_8)); o.fd.sync() }
+        }
+    }
+
+    companion object {
+        const val JOURNAL = "stills.jsonl"
+        private val LOCK = Any()
+        fun stillLine(st: Still): String = Session("j", 0L, listOf(st)).toJson().getJSONArray("stills").getJSONObject(0).toString()
+        fun readJournal(f: File): List<Still> = if (!f.isFile) emptyList() else f.readLines().mapNotNull { l ->
+            if (l.isBlank()) null else runCatching { Session.fromJson(JSONObject().put("name", "j").put("created", 0L).put("stills", org.json.JSONArray().put(JSONObject(l)))).stills.firstOrNull() }.getOrNull()
+        }
     }
 
     /** 손상되면 백업, 사진 파일이 없는 장은 목록에서 뺀다 */
@@ -30,8 +56,11 @@ class SessionFiles(val root: File) {
         var fromBak = false
         val s = read(File(d, "session.json")) ?: read(File(d, "session.json.bak"))?.also { fromBak = true }
             ?: throw IOException("작업 파일을 읽을 수 없음: $name")
+        // 0.0.15: 저널에만 있는 사진(마지막 저장 뒤) 되살림
+        val extra = readJournal(File(d, JOURNAL)).let { j -> val have = s.stills.map { it.id }.toHashSet(); j.filter { it.id !in have }.distinctBy { it.id } }
+        if (extra.isNotEmpty()) runCatching { kr.archsurvey.pg.diag.PgLog.i("session $name journal recovered ${extra.size} photo(s)") }
         val ph = File(d, "photos")
-        val ok = s.stills.filter { File(ph, it.file).let { f -> f.exists() && f.length() > 0 } }
+        val ok = (s.stills + extra).sortedBy { it.id }.filter { File(ph, it.file).let { f -> f.exists() && f.length() > 0 } }
         return Loaded(s.copy(stills = ok), fromBak, s.stills.size - ok.size)
     }
 

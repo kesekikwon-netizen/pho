@@ -19,6 +19,8 @@ data class Still(
     /** 0.0.14 촬영 순간 움직임 속도(m/s, AR) · AR 프레임 시각(elapsedRealtime ms) */
     val speed: Double? = null,
     val tMs: Long? = null,
+    /** 0.0.15 ARCore 세션 id(AR 좌표계가 바뀌면 다름) — 맞춤은 세션별 */
+    val arSid: String? = null,
 )
 
 /** GCP: 표적 번호 N(Target #N) → E, N, H */
@@ -50,7 +52,7 @@ data class Session(
             stills.forEach { s ->
                 put(JSONObject().apply {
                     put("id", s.id); put("file", s.file); put("w", s.w); put("h", s.h)
-                    put("fx", s.fx); put("fy", s.fy); put("cx", s.cx); put("cy", s.cy); put("time", s.time); s.reason?.let { put("reason", it) }; s.speed?.let { put("speed", it) }; s.tMs?.let { put("tMs", it) }
+                    put("fx", s.fx); put("fy", s.fy); put("cx", s.cx); put("cy", s.cy); put("time", s.time); s.reason?.let { put("reason", it) }; s.speed?.let { put("speed", it) }; s.tMs?.let { put("tMs", it) }; s.arSid?.let { put("arSid", it) }
                     s.gnss?.let { g -> put("gnss", JSONObject().put("lat", g.lat).put("lon", g.lon).put("alt", g.altMsl ?: JSONObject.NULL).put("q", g.quality).put("fix", g.fixed)
                         .put("sh", g.sigmaH ?: JSONObject.NULL).put("su", g.sigmaU ?: JSONObject.NULL).put("age", g.ageMs).put("sats", g.sats)) }
                     s.pose?.let { p -> put("pose", JSONArray().apply { p.forEach { put(it) } }) }
@@ -95,6 +97,7 @@ data class Session(
                             if (g.isNull("sh")) null else g.optDouble("sh"), if (g.isNull("su")) null else g.optDouble("su"), g.optLong("age"), g.optInt("sats")) },
                         if (s.has("speed")) s.getDouble("speed") else null,
                         if (s.has("tMs")) s.getLong("tMs") else null,
+                        if (s.has("arSid")) s.getString("arSid") else null,
                     )
                 },
             )

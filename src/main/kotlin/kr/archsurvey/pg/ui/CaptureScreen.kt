@@ -58,6 +58,8 @@ import kr.archsurvey.pg.ar.ArSupport
 import kr.archsurvey.pg.ar.Overlay
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import kr.archsurvey.pg.data.Still
 import kr.archsurvey.pg.data.Store
 import kr.archsurvey.pg.live.Gates
@@ -105,7 +107,9 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
     var hotNow by remember { mutableStateOf(false) }
     var bandSmall by remember { mutableStateOf(false) }
     val prefs = remember { ctx.getSharedPreferences("pg_prefs", android.content.Context.MODE_PRIVATE) }
-    var showVideo by remember { mutableStateOf(prefs.getBoolean("show_video", false)) }
+    // 0.0.15: 실시간 보기는 점군만(영상 바꾸기 없음 — 두 번 탭은 「따라가기」)
+    val showVideo = false
+    var freeView by remember { mutableStateOf(false) }
     var showThumb by remember { mutableStateOf(prefs.getBoolean("show_thumb", true)) }
     // 나가기: GL 스레드를 먼저 멈추고(onPause 는 GL 스레드가 끝날 때까지 기다림) 저장 → 세션 닫기는 다른 스레드에서(메인 스레드 멈춤 방지)
     fun leave(reason: String, then: () -> Unit) {
@@ -123,7 +127,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
             val tf = java.io.File(dir, kr.archsurvey.pg.r10.RawLogs.AR)
             val q = java.util.concurrent.LinkedBlockingQueue<String>()
             val wr = Thread { runCatching { if (!tf.exists()) tf.writeText(kr.archsurvey.pg.r10.RawLogs.AR_HEADER + "\n"); while (true) { val l = q.take(); if (l.isEmpty()) break; val sb = StringBuilder(l).append('\n'); while (true) { val m = q.poll() ?: break; if (m.isEmpty()) { tf.appendText(sb.toString()); return@runCatching }; sb.append(m).append('\n') }; tf.appendText(sb.toString()) } } }.apply { isDaemon = true; setName("ar-track"); start() }
-            kr.archsurvey.pg.ar.ArTrackSink.sink = { t, p -> q.offer(kr.archsurvey.pg.r10.RawLogs.arLine(kr.archsurvey.pg.r10.ArSample(t, p))) }
+            kr.archsurvey.pg.ar.ArTrackSink.sink = { t, p, sid -> q.offer(kr.archsurvey.pg.r10.RawLogs.arLine(kr.archsurvey.pg.r10.ArSample(t, p, sid))) }
             onDispose { kr.archsurvey.pg.ar.ArTrackSink.sink = null; kr.archsurvey.pg.r10.R10Hub.logDir = null; q.offer(""); wr.hashCode() }
         } else onDispose { }
     }
@@ -185,7 +189,8 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                     if (gnss != null) {
                         kr.archsurvey.pg.diag.PgLog.i("r10 photo=$file q=${gnss.quality} fix=${gnss.fixed} lat=%.9f lon=%.9f alt=${gnss.altMsl} sH=${gnss.sigmaH} age=${gnss.ageMs}".format(gnss.lat, gnss.lon))
                         // 맞춤 전: 사진엔 R10 원시(안테나) 값만. 레버암은 저장 때 맞춤이 생긴 뒤에만
-                        if (gnss.fixed) runCatching { kr.archsurvey.pg.r10.GeoExif.write(f, gnss.lat, gnss.lon, gnss.altMsl, gnss, levered = false) }
+                        if (gnss.fixed) runCatching { val ypr = shot.pose?.let { kr.archsurvey.pg.r10.GeoCam.ypr(it, engine.session.sensorDeg, null) }
+                            kr.archsurvey.pg.r10.GeoExif.write(f, gnss.lat, gnss.lon, gnss.altMsl, gnss, levered = false, pitch = ypr?.second, roll = ypr?.third) }
                             .onFailure { kr.archsurvey.pg.diag.PgLog.e("r10 exif failed", it) }
                     }
                     val td0 = System.nanoTime()
@@ -196,7 +201,10 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                     tags.filter { kr.archsurvey.pg.diag.Quality.tagPx(it) < kr.archsurvey.pg.diag.Quality.TAG_GOOD_PX }.forEach { kr.archsurvey.pg.diag.PgLog.d("tag SMALL photo=$file Target#${it.target} size=%.0fpx (goal 60)".format(kr.archsurvey.pg.diag.Quality.tagPx(it))) }
                     kr.archsurvey.pg.diag.PgLog.i("photo $file ${shot.w}x${shot.h} jpeg=${shot.jpeg.size}B tags=${tags.size} detect=%.0fms".format((System.nanoTime() - td0) / 1e6))
                     tags.forEach { t -> kr.archsurvey.pg.diag.PgLog.d("  tag photo=$file Target#${t.target} id=${t.id} ham=${t.hamming} c=(%.1f,%.1f) corners=${t.corners.joinToString(",") { "%.1f".format(it) }}".format(t.cx, t.cy)) }
-                    engine.addStill(Still(id, file, shot.w, shot.h, shot.fx, shot.fy, shot.cx, shot.cy, shot.pose, System.currentTimeMillis(), tags, shot.reason, gnss = gnss, speed = shot.speed, tMs = shot.tMs), save)
+                    val still = Still(id, file, shot.w, shot.h, shot.fx, shot.fy, shot.cx, shot.cy, shot.pose, System.currentTimeMillis(), tags, shot.reason, gnss = gnss, speed = shot.speed, tMs = shot.tMs, arSid = shot.arSid)
+                    // 0.0.15: 사진 저장 즉시 저널(앱이 죽어도 사진이 목록에 남음). 실패해도 촬영은 계속
+                    runCatching { store.files.journal(name, still) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("journal failed ${still.file}", it) }
+                    engine.addStill(still, save)
                     view.post { TapHaptics.tap(view) }
                 } finally { engine.pendingShots.decrementAndGet() } }
             })
@@ -301,7 +309,27 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                         @Suppress("DEPRECATION") renderer.rotation = (c.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager).defaultDisplay.rotation
                     }
                 }, modifier = Modifier.fillMaxSize())
-                Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures(onDoubleTap = { showVideo = !showVideo; tip = false; prefs.edit().putBoolean("tip_double_tap", true).apply() }) })
+                // 0.0.15 손가락 보기(촬영과 무관): 한 손가락 = 돌리기, 두 손가락 = 확대·이동, 두 번 탭/「따라가기」 = 카메라 따라가기
+                Box(Modifier.fillMaxSize()
+                    .pointerInput(renderer) { detectTapGestures(onDoubleTap = { renderer.touch.doubleTap(); renderer.followCamera(); freeView = false; tip = false; prefs.edit().putBoolean("tip_double_tap", true).apply() }) }
+                    .pointerInput(renderer) {
+                        awaitEachGesture {
+                            val d = awaitFirstDown(requireUnconsumed = false)
+                            renderer.touch.down(d.position.x, d.position.y)
+                            while (true) {
+                                val ev = awaitPointerEvent()
+                                val pts = ev.changes.filter { it.pressed }.map { it.position.x to it.position.y }
+                                if (pts.isEmpty()) break
+                                renderer.touch.move(pts, size.height)
+                                if (renderer.freeView && !freeView) { freeView = true; tip = false }
+                            }
+                            renderer.touch.up()
+                        }
+                    })
+                if (freeView) Box(Modifier.align(Alignment.BottomEnd).padding(10.dp).clip(RoundedCornerShape(18.dp)).background(Color.White.copy(alpha = 0.9f))
+                    .releaseTap("따라가기") { renderer.touch.doubleTap(); renderer.followCamera(); freeView = false }.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                    Txt("따라가기", size = 15.sp, bold = true, color = FieldIvory.ink)
+                }
             } else Txt("실시간 3D 를 열 수 없어요", color = Color.White, modifier = Modifier.align(Alignment.Center))
 
             val o = overlay
@@ -332,7 +360,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                 if (!autoShot && !paused) Band("자동 촬영 꺼짐 · 셔터 길게 눌러 켜기", FieldIvory.ink)
                 if (CaptureRules.noTargetWarn(pr.photos, engine.tagCounts.size)) Band(CaptureRules.NO_TARGET, Color(0xFFF2C200), ink = FieldIvory.ink) // M14
                 topBand?.let { m -> Band(if (bandSmall) m.take(14) + if (m.length > 14) "…" else "" else m, FieldIvory.float, small = bandSmall) { msg = null } }
-                if (tip) Band("화면 두 번 탭 = 영상 ↔ 점군", FieldIvory.ink)
+                if (tip) Band("끌어 돌리기 · 두 손가락 확대/이동 · 두 번 탭 = 따라가기", FieldIvory.ink)
             }
         }
         // 아래: 충분 % + 화살표 한 줄(S3) · 오른쪽 아래 [⏸][끝][셔터](M13)

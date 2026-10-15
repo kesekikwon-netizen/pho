@@ -28,7 +28,7 @@ class P0014Test {
     private fun near(a: V3, b: V3, tol: Double = 1e-9) = assertTrue("$a != $b", (a - b).norm() < tol)
 
     /** 폰 몸체 축(오른쪽·위·화면 밖, 세계)으로 ARCore 카메라 자세를 만든다(센서 90°) */
-    private fun poseFor(right: V3, up: V3, out: V3, sensorDeg: Int = 90, t: V3 = V3(0.0, 0.0, 0.0)): DoubleArray {
+    internal fun poseFor(right: V3, up: V3, out: V3, sensorDeg: Int = 90, t: V3 = V3(0.0, 0.0, 0.0)): DoubleArray {
         val a = Math.toRadians(sensorDeg.toDouble())
         val cx = right * cos(a) - up * sin(a); val cy = right * sin(a) + up * cos(a); val cz = out
         val m = arrayOf(doubleArrayOf(cx.x, cy.x, cz.x), doubleArrayOf(cx.y, cy.y, cz.y), doubleArrayOf(cx.z, cy.z, cz.z))
@@ -42,7 +42,7 @@ class P0014Test {
     }
 
     /** 정북을 보고 앞으로 pitch, 옆으로 roll 기울인 폰(세계: x=동, y=위, z=남) */
-    private fun tilted(pitchDeg: Double, rollDeg: Double, t: V3 = V3(0.0, 0.0, 0.0)): Triple<DoubleArray, V3, V3> {
+    internal fun tilted(pitchDeg: Double, rollDeg: Double, t: V3 = V3(0.0, 0.0, 0.0)): Triple<DoubleArray, V3, V3> {
         val p = Math.toRadians(pitchDeg); val r = Math.toRadians(rollDeg)
         var right = V3(1.0, 0.0, 0.0); var up = V3(0.0, 1.0, 0.0); var out = V3(0.0, 0.0, 1.0)
         // pitch: 위쪽이 북(−z)으로 기욺 — x 축 회전
@@ -82,11 +82,11 @@ class P0014Test {
         assertNull(LeverArm.heading(listOf(V3(0.0, 0.0, 0.0), V3(0.1, 0.0, 0.0)), listOf(V3(0.0, 0.0, 0.0), V3(0.1, 0.0, 0.0))))
     }
 
-    private fun tag(lat: Double, lon: Double, alt: Double, fix: Boolean, sh: Double = 0.012) = GnssTag(lat, lon, alt, if (fix) "RTK_FIXED" else "RTK_FLOAT", fix, if (fix) sh else 0.4, 0.02, 300, 24)
-    private fun still(id: Int, pose: DoubleArray?, g: GnssTag?, t: Long = 0L) = Still(id, "IMG_%04d.jpg".format(id), 4000, 3000, 3000.0, 3000.0, 2000.0, 1500.0, pose, t, emptyList(), "manual", gnss = g, speed = 0.02, tMs = t)
+    internal fun tag(lat: Double, lon: Double, alt: Double, fix: Boolean, sh: Double = 0.012) = GnssTag(lat, lon, alt, if (fix) "RTK_FIXED" else "RTK_FLOAT", fix, if (fix) sh else 0.4, 0.02, 300, 24)
+    internal fun still(id: Int, pose: DoubleArray?, g: GnssTag?, t: Long = 0L) = Still(id, "IMG_%04d.jpg".format(id), 4000, 3000, 3000.0, 3000.0, 2000.0, 1500.0, pose, t, emptyList(), "manual", gnss = g, speed = 0.02, tMs = t)
 
-    private val lat0 = 37.5; private val lon0 = 127.0
-    private fun llOf(e: Double, n: Double): Pair<Double, Double> {
+    internal val lat0 = 37.5; internal val lon0 = 127.0
+    internal fun llOf(e: Double, n: Double): Pair<Double, Double> {
         val (e0, n0) = GeoTag.en(tag(lat0, lon0, 0.0, true), 5186)
         var la = lat0; var lo = lon0
         repeat(6) { val (e1, n1) = GeoTag.en(tag(la, lo, 0.0, true), 5186); val r = GeoTag.shiftLatLon(la, lo, e0 + e - e1, n0 + n - n1); la = r.first; lo = r.second }
@@ -94,7 +94,7 @@ class P0014Test {
     }
 
     /** 가상 현장: 방위 40°, 폰 25° 숙임 + 걷는 방향으로 돌아감, 레버암. 원 모양(지름 4 m)으로 30장 */
-    private fun scene(lever: Lever, n: Int = 30, noise: Double = 0.0, badEvery: Int = 0, lagMs: Long = 0, outlierAt: Int = -1): Triple<Session, Map<Int, V3>, Pair<List<kr.archsurvey.pg.r10.Epoch>, List<kr.archsurvey.pg.r10.ArSample>>> {
+    internal fun scene(lever: Lever, n: Int = 30, noise: Double = 0.0, badEvery: Int = 0, lagMs: Long = 0, outlierAt: Int = -1): Triple<Session, Map<Int, V3>, Pair<List<kr.archsurvey.pg.r10.Epoch>, List<kr.archsurvey.pg.r10.ArSample>>> {
         val h = Math.toRadians(40.0)
         val rnd = java.util.Random(7)
         val stills = ArrayList<Still>(); val truth = HashMap<Int, V3>()
@@ -151,7 +151,7 @@ class P0014Test {
     @Test fun tiersAndGates() {
         assertEquals(GeoCam.Tier.XY, GeoCam.compute(scene(Lever(), noise = 0.02).first).fit!!.tier)   // ~3.5 cm
         assertEquals(GeoCam.Tier.NONE, GeoCam.compute(scene(Lever(), noise = 0.05).first).fit!!.tier) // 그 이상 → 좌표 없음
-        assertTrue(GeoCam.compute(scene(Lever(), noise = 0.05).first).cams.isEmpty())
+        assertTrue(GeoCam.compute(scene(Lever(), noise = 0.05).first).cams.values.all { it.tier == GeoCam.Tier.ANT }) // 0.0.15: 맞춤 실패 → 안테나값
         val few = GeoCam.compute(scene(Lever(), n = 15).first); assertEquals(GeoCam.Tier.NONE, few.fit!!.tier); assertTrue(few.fit!!.reason.contains("20"))
         // 3σ 이상치 하나: 버리고 XYZ
         val o = GeoCam.compute(scene(Lever(), n = 40, noise = 0.003, outlierAt = 5).first).fit!!

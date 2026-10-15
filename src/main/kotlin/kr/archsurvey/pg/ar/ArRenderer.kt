@@ -35,10 +35,10 @@ data class Overlay(
 
 /** 사진 한 장(원 JPG + 밝기 + 자세·내부표정) */
 class Shot(val jpeg: ByteArray, val gray: ByteArray, val w: Int, val h: Int, val pose: DoubleArray?, val fx: Double, val fy: Double, val cx: Double, val cy: Double, val reason: String? = null,
-           /** 0.0.14 AR 프레임 시각(ms) · 움직임 속도(m/s) */ val tMs: Long? = null, val speed: Double? = null)
+           /** 0.0.14 AR 프레임 시각(ms) · 움직임 속도(m/s) */ val tMs: Long? = null, val speed: Double? = null, val arSid: String? = null)
 
 /** 0.0.14: R10 이 켜졌을 때만 AR 궤적(10 Hz)을 받는 곳. 없으면 아무것도 안 함 */
-object ArTrackSink { @Volatile var sink: ((Long, DoubleArray) -> Unit)? = null }
+object ArTrackSink { @Volatile var sink: ((Long, DoubleArray, String) -> Unit)? = null }
 
 /**
  * 0.0.5 실시간 3D (설계도 11):
@@ -75,6 +75,26 @@ class ArRenderer(
     private val quad = floatArrayOf(-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f)
     private val quadBuf = fbuf(quad); private val uvBuf = fbuf(FloatArray(8))
     private val view = FloatArray(16); private val proj = FloatArray(16); private val vp = FloatArray(16)
+    // 0.0.15 손가락 보기: 그리기용 행렬(따라가기 = vp 그대로, 자유 = 공전 카메라). 촬영·겨냥은 늘 ARCore vp
+    val orbit = kr.archsurvey.pg.live.OrbitView()
+    val touch = kr.archsurvey.pg.live.TouchOrbit(orbit).also { t -> t.onBegin = { x, y -> beginFree(x, y) } }
+    private val drawVp = FloatArray(16); private val oView = FloatArray(16); private val oProj = FloatArray(16)
+    @Volatile private var eyeNow = floatArrayOf(0f, 0f, 0f)
+    private val vpCopy = FloatArray(16); private val vpLock = Any()
+    @Volatile var cloudRadius = 3.0
+    @Volatile var freeView = false; private set
+
+    /** UI 스레드: 자유 보기 시작 — 닿은 점(40 px 안의 가장 가까운 점) 또는 점군 가운데를 기준으로 */
+    private fun beginFree(x: Float, y: Float) {
+        val m = FloatArray(16); synchronized(vpLock) { vpCopy.copyInto(m) }
+        val pv = kr.archsurvey.pg.live.CloudPick.pivot(engine.voxels.gpu.data, engine.voxels.gpu.size, engine.features.gpu.data, engine.features.gpu.size, m, viewW, viewH, x, y)
+        cloudRadius = pv.radius
+        val fov = if (proj[5] != 0f) 2 * Math.atan(1.0 / proj[5]) else Math.toRadians(60.0)
+        synchronized(orbit) { orbit.begin(eyeNow, pv.point, fov) }
+        freeView = true
+        kr.archsurvey.pg.diag.PgLog.i("view free pivot=${if (pv.touched) "touched" else "centre"} dist=%.2f".format(orbit.dist))
+    }
+    fun followCamera() { synchronized(orbit) { orbit.reset() }; freeView = false; kr.archsurvey.pg.diag.PgLog.i("view follow") }
 
     private var lastDepthAt = 0L; private var lastFeatAt = 0L; private var lastShotAt = 0L; private var lastOverlayAt = 0L
     private var lastShotPos: FloatArray? = null; private var lastShotQ: FloatArray? = null
@@ -124,6 +144,9 @@ class ArRenderer(
     }
 
     private var lastTrackMs = 0L
+    /** 0.0.15 이 ARCore 세션(=AR 좌표계) id */
+    val arSid: String = java.lang.Long.toString(System.currentTimeMillis(), 36) + java.lang.Integer.toString((Math.random() * 1296).toInt(), 36)
+    private var clockLogged = false
     override fun onDrawFrame(gl: GL10?) {
         resetState()
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
@@ -149,12 +172,21 @@ class ArRenderer(
         if (tracking) {
             camera.getViewMatrix(view, 0); camera.getProjectionMatrix(proj, 0, 0.05f, 30f)
             Matrix.multiplyMM(vp, 0, proj, 0, view, 0)
+            synchronized(vpLock) { vp.copyInto(vpCopy) }
+            camera.pose.translation.let { eyeNow = floatArrayOf(it[0], it[1], it[2]) }
+            synchronized(orbit) {
+                if (orbit.free) { orbit.viewMatrix(oView); orbit.projMatrix(oProj, viewW.toFloat() / maxOf(1, viewH), cloudRadius); Matrix.multiplyMM(drawVp, 0, oProj, 0, oView, 0) }
+                else vp.copyInto(drawVp)
+            }
             val pose = camera.pose
             val pos = pose.translation; val q = pose.rotationQuaternion
             if (newFrame && speed.feed(frame.timestamp, pos, q)) kr.archsurvey.pg.diag.PgLog.d("too fast move=%.2f m/s rot=%.0f deg/s".format(speed.move, speed.rot))
             val slow = speed.slow(frame.timestamp)
             ArTrackSink.sink?.let { sk -> val tMs = frame.timestamp / 1_000_000L; if (newFrame && tMs - lastTrackMs >= 100) { lastTrackMs = tMs
-                runCatching { sk(tMs, doubleArrayOf(pos[0].toDouble(), pos[1].toDouble(), pos[2].toDouble(), q[0].toDouble(), q[1].toDouble(), q[2].toDouble(), q[3].toDouble())) } } }
+                runCatching { sk(tMs, doubleArrayOf(pos[0].toDouble(), pos[1].toDouble(), pos[2].toDouble(), q[0].toDouble(), q[1].toDouble(), q[2].toDouble(), q[3].toDouble()), arSid) } } }
+            // 0.0.15 시계 기준 점검 한 줄(세션마다 한 번): R10 도착 = elapsedRealtime, AR = frame.timestamp
+            if (!clockLogged) { clockLogged = true; val er = android.os.SystemClock.elapsedRealtimeNanos(); val up = System.nanoTime()
+                kr.archsurvey.pg.diag.PgLog.i("clock sid=$arSid frame_ms=${frame.timestamp / 1_000_000} elapsedRealtime_ms=${er / 1_000_000} nanoTime_ms=${up / 1_000_000} diff_elapsed_ms=${(er - frame.timestamp) / 1_000_000} diff_nano_ms=${(up - frame.timestamp) / 1_000_000} base=${kr.archsurvey.pg.r10.ClockCheck.base(frame.timestamp, er, up)}") }
 
             // 0.0.11: 거리·각도·속도 조건 없음(사용자). 자동 = 2초마다, 수동 = 언제나. 막는 것은 저장 공간뿐
             if (slow && (shotRequested || now - lastRejectLog > 1000)) { lastRejectLog = now; rejectTooFast++; kr.archsurvey.pg.diag.PgLog.i("shot ADVISE too_fast move=%.2fm/s rot=%.0fdeg/s manual=$shotRequested".format(speed.move, speed.rot)) }
@@ -366,7 +398,7 @@ class ArRenderer(
         GLES20.glEnable(GLES20.GL_BLEND); GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
         GLES20.glEnable(GLES20.GL_DEPTH_TEST); GLES20.glDepthMask(false)
         GLES20.glUseProgram(lineProg)
-        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(lineProg, "m"), 1, false, vp, 0)
+        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(lineProg, "m"), 1, false, drawVp, 0)
         val p = GLES20.glGetAttribLocation(lineProg, "p"); val c = GLES20.glGetAttribLocation(lineProg, "c")
         GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0)
         b.position(0); GLES20.glVertexAttribPointer(p, 3, GLES20.GL_FLOAT, false, 28, b)
@@ -384,7 +416,7 @@ class ArRenderer(
         if (probeNext) { probeNext = false; pickProbe(); if (probePx >= 0) probeCam = if (video) readPx(probePx, probePy) else intArrayOf(-1, -1, -1) }
         GLES20.glEnable(GLES20.GL_DEPTH_TEST); GLES20.glDepthMask(true)
         GLES20.glUseProgram(cloudProg)
-        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(cloudProg, "m"), 1, false, vp, 0)
+        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(cloudProg, "m"), 1, false, drawVp, 0)
         val p = GLES20.glGetAttribLocation(cloudProg, "p"); val c = GLES20.glGetAttribLocation(cloudProg, "c")
         for ((slot, g) in listOf(0 to engine.voxels.gpu, 1 to engine.features.gpu)) {
             upload(slot, g)
@@ -472,7 +504,7 @@ class ArRenderer(
         val sx = w.toDouble() / dims[0]; val sy = h.toDouble() / dims[1]
         val t = camera.pose.translation; val q = camera.pose.rotationQuaternion
         onShot(Shot(bo.toByteArray(), gray, w, h, if (!withPose) null else doubleArrayOf(t[0].toDouble(), t[1].toDouble(), t[2].toDouble(), q[0].toDouble(), q[1].toDouble(), q[2].toDouble(), q[3].toDouble()),
-            f[0] * sx, f[1] * sy, pp[0] * sx, pp[1] * sy, shotReason?.code, lastFrameTs / 1_000_000L, speed.move))
+            f[0] * sx, f[1] * sy, pp[0] * sx, pp[1] * sy, shotReason?.code, lastFrameTs / 1_000_000L, speed.move, arSid))
         return true
     }
 
@@ -481,7 +513,7 @@ class ArRenderer(
         if (tracking) {
             // 표적 위치는 작업 스레드 계산값(포지션 맵)을 쓴다 — 가벼움(표적 수 개)
             val pos = engine.tagPos
-            for ((no, p) in pos) screen(p)?.let { if (it[2] > 0) tp += Triple(no, it[0], it[1]) }
+            for ((no, p) in pos) screen(p, drawVp)?.let { if (it[2] > 0) tp += Triple(no, it[0], it[1]) }
         }
         var target: FloatArray? = null; var off = false
         engine.progress.target?.let { tg -> if (tracking) screen(tg)?.let { s ->
@@ -494,9 +526,9 @@ class ArRenderer(
     }
 
     /** 세계 → 화면 px (z = w 부호) */
-    private fun screen(p: V3): FloatArray? {
+    private fun screen(p: V3, m: FloatArray = vp): FloatArray? {
         val v = floatArrayOf(p.x.toFloat(), p.y.toFloat(), p.z.toFloat(), 1f); val o = FloatArray(4)
-        Matrix.multiplyMV(o, 0, vp, 0, v, 0)
+        Matrix.multiplyMV(o, 0, m, 0, v, 0)
         if (abs(o[3]) < 1e-6f) return null
         val nx = o[0] / o[3]; val ny = o[1] / o[3]
         return floatArrayOf((nx + 1) / 2 * viewW, (1 - ny) / 2 * viewH, o[3])
