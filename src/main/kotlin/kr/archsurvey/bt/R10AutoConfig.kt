@@ -50,6 +50,8 @@ enum class R10AutoOutcome {
     PRECISION_OK,
     /** 0.1.34: 자연 NMEA 인데 GST/GSA 없음 — 64h 를 보내지 않고 기록·안내만 */
     PRECISION_MISSING_NATURAL,
+    /** 0.1.57: 4종을 켜니 GGA 가 멈춰 GGA 만 다시 켜서 옴 */
+    GGA_ONLY_FALLBACK,
     /** 모든 포트가 NAK(거부) */
     ALL_NAK,
     /** 명령은 보냈지만 어떤 포트에서도 문장이 안 옴 */
@@ -67,7 +69,7 @@ data class R10AutoResult(
     /** 0.1.41 GETSERIAL 응답: "RSERIAL 5411457757" · "응답없음" · "-"(안 물어봄) */
     val twoWay: String = "-",
 ) {
-    val gotGga: Boolean get() = outcome == R10AutoOutcome.NATURAL || outcome == R10AutoOutcome.PORT_FOUND
+    val gotGga: Boolean get() = outcome == R10AutoOutcome.NATURAL || outcome == R10AutoOutcome.PORT_FOUND || outcome == R10AutoOutcome.GGA_ONLY_FALLBACK
     fun summary(): String = "R10 자동설정 결과=$outcome 포트=${port ?: "-"} ENQ=$enq 시도=${tried.joinToString(", ").ifEmpty { "-" }} " +
         "이후문장=${seenAfter.sorted().joinToString("/").ifEmpty { "-" }} 양방향=$twoWay ${elapsedMs}ms"
 }
@@ -260,8 +262,18 @@ class R10AutoConfig(
         }
         onStatus("R10 포트 $port 확인 · GGA·GST·GSA·GSV 켜는 중…")
         app(port, FULL_SET, on = true)
-        val seen = observe()
+        var seen = observe()
         log += "확정 포트 $port · 이후 문장 ${seen.sorted()} (${age()}ms)"
+        if ("GGA" !in seen) {
+            // 0.1.57: 4종을 켠 뒤 GGA 가 멈춤(현장 2026-10-15: 이후 문장 [] · 59 s 동안 6문장) → 위치가 안 와 측량 불가.
+            // 보충 3종을 끄고 GGA 만 다시 켠다(위치가 정밀 문장보다 먼저)
+            onStatus("R10 위치가 멈춰 GGA 만 다시 켜는 중…")
+            app(port, PRECISION_SET, on = false)
+            app(port, listOf("GGA"), on = true)
+            seen = observe()
+            log += "GGA 멈춤 → 보충 끄고 GGA 만 · 이후 문장 ${seen.sorted()} (${age()}ms)"
+            if ("GGA" in seen) return R10AutoResult(R10AutoOutcome.GGA_ONLY_FALLBACK, port, enq, tried, seen, age(), log, two)
+        }
         return R10AutoResult(R10AutoOutcome.PORT_FOUND, port, enq, tried, seen, age(), log, two)
     }
 

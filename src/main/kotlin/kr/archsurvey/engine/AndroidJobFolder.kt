@@ -20,8 +20,12 @@ class PrefsJobFolderStore(private val s: SettingsStore) : JobFolderStore {
         runCatching { val o = JSONObject(s.jobFoldersJson.ifBlank { "{}" }); for (k in o.keys()) out[k] = o.getString(k) }
         return out
     }
-    override fun put(job: String, rel: String) { s.jobFoldersJson = JSONObject(all() + (job to rel) as Map<*, *>).toString() }
-    override fun remove(job: String) { s.jobFoldersJson = JSONObject((all() - job) as Map<*, *>).toString() }
+    // 0.1.57: `all() + (job to rel) as Map` 은 `as` 가 먼저 묶여 Pair→Map 형변환 오류(ClassCastException) — 새 작업 폴더 기록 실패
+    override fun put(job: String, rel: String) { s.jobFoldersJson = encode(all() + mapOf(job to rel)) }
+    override fun remove(job: String) { s.jobFoldersJson = encode(all() - job) }
+    companion object {
+        fun encode(m: Map<String, String>): String { val o = JSONObject(); for ((k, v) in m) o.put(k, v); return o.toString() }
+    }
 }
 
 /**

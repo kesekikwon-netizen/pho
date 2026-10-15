@@ -368,7 +368,7 @@ class LinkSupervisor(
                                 setLink(LinkState.CONNECTED_NO_DATA, attempt, link.value.failures, msg = msg, strategy = t.strategyName)
                         },
                     ).enableOutput()
-                    if (r.outcome == kr.archsurvey.bt.R10AutoOutcome.PORT_FOUND) r10Port.set(r.port)
+                    if ((r.outcome == kr.archsurvey.bt.R10AutoOutcome.PORT_FOUND || r.outcome == kr.archsurvey.bt.R10AutoOutcome.GGA_ONLY_FALLBACK)) r10Port.set(r.port)
                     r10Brief = if (r.gotGga) "" else "R10 ${r.outcome} · ENQ ${r.enq} · 일련번호 ${r.twoWay} · ${t.strategyName ?: "-"}"
                     if (r.outcome != kr.archsurvey.bt.R10AutoOutcome.NATURAL)
                         CrashLog.record("진단 ${r.summary()}", RuntimeException(r.log.joinToString("\n")))
