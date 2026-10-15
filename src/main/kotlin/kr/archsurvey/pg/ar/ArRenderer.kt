@@ -34,7 +34,7 @@ data class Overlay(
 )
 
 /** 사진 한 장(원 JPG + 밝기 + 자세·내부표정) */
-class Shot(val jpeg: ByteArray, val gray: ByteArray, val w: Int, val h: Int, val pose: DoubleArray, val fx: Double, val fy: Double, val cx: Double, val cy: Double)
+class Shot(val jpeg: ByteArray, val gray: ByteArray, val w: Int, val h: Int, val pose: DoubleArray?, val fx: Double, val fy: Double, val cx: Double, val cy: Double)
 
 /**
  * 0.0.5 실시간 3D (설계도 11):
@@ -132,7 +132,6 @@ class ArRenderer(
         val camera = frame.camera
         val tracking = camera.trackingState == TrackingState.TRACKING
         lastFailure = if (tracking) null else camera.trackingFailureReason.name
-        if (!tracking && shotRequested) { shotRequested = false; kr.archsurvey.pg.diag.PgLog.i("shot REJECT reason=not_tracking $lastFailure") }
         val now = SystemClock.uptimeMillis()
         frames++
         if (camera.trackingState != lastTracking) { kr.archsurvey.pg.diag.PgLog.i("tracking $lastTracking -> ${camera.trackingState} reason=${camera.trackingFailureReason}"); lastTracking = camera.trackingState }
@@ -146,18 +145,12 @@ class ArRenderer(
             if (newFrame && speed.feed(frame.timestamp, pos, q)) kr.archsurvey.pg.diag.PgLog.d("too fast move=%.2f m/s rot=%.0f deg/s".format(speed.move, speed.rot))
             val slow = speed.slow(frame.timestamp)
 
-            val moved = lastShotPos == null || kr.archsurvey.pg.live.ArRendererMath.dist(lastShotPos!!, pos) > 0.25 || kr.archsurvey.pg.live.ArRendererMath.angDeg(lastShotQ!!, q) > 10
-            val autoDue = !paused && auto && shotsAllowed && now - lastShotAt > 2000 && moved
-            if (paused && shotRequested) { shotRequested = false; kr.archsurvey.pg.diag.PgLog.i("shot REJECT reason=paused") }
-            if (shotRequested && !shotsAllowed) { shotRequested = false; kr.archsurvey.pg.diag.PgLog.i("shot REJECT reason=policy(storage/thermal)") }
-            var wantShot = false
-            if ((shotRequested || autoDue) && slow) {
-                rejectTooFast++
-                if (shotRequested || now - lastRejectLog > 1000) { lastRejectLog = now; kr.archsurvey.pg.diag.PgLog.i("shot REJECT reason=too_fast move=%.2fm/s rot=%.0fdeg/s manual=$shotRequested (count=$rejectTooFast)".format(speed.move, speed.rot)) }
-                shotRequested = false
-            } else if (shotRequested || autoDue) wantShot = true
+            // 0.0.11: 거리·각도·속도 조건 없음(사용자). 자동 = 2초마다, 수동 = 언제나. 막는 것은 저장 공간뿐
+            if (slow && (shotRequested || now - lastRejectLog > 1000)) { lastRejectLog = now; rejectTooFast++; kr.archsurvey.pg.diag.PgLog.i("shot ADVISE too_fast move=%.2fm/s rot=%.0fdeg/s manual=$shotRequested".format(speed.move, speed.rot)) }
+            if (shotRequested && !shotsAllowed) { shotRequested = false; kr.archsurvey.pg.diag.PgLog.i("shot REJECT reason=storage") }
+            val wantShot = kr.archsurvey.pg.live.ShotPolicy.fire(shotRequested, paused, auto, shotsAllowed, now, lastShotAt)
 
-            if (newFrame && !paused) {
+            if (newFrame && (!paused || wantShot)) {
                 val featDue = now - lastFeatAt >= 100
                 val depthDue = depthOn && (wantShot || (depthIntervalMs > 0 && now - lastDepthAt >= depthIntervalMs))
                 if (featDue || depthDue || wantShot) grab(frame, camera, featDue, depthDue, wantShot, now, pos, q)
@@ -166,6 +159,18 @@ class ArRenderer(
             drawPoints(video)
             val e = GLES20.glGetError()
             if (e != GLES20.GL_NO_ERROR && glErrLogged < 20) { glErrLogged++; kr.archsurvey.pg.diag.PgLog.e("GL error 0x${Integer.toHexString(e)}") }
+        }
+        else if (newFrame) {
+            // 0.0.11: 추적이 끊겨도 사진은 찍는다(자세 없음 → 3D 칸에는 안 들어가고 내보내기에는 들어감)
+            val wantShot = kr.archsurvey.pg.live.ShotPolicy.fire(shotRequested, paused, auto, shotsAllowed, now, lastShotAt)
+            if (wantShot) {
+                val manual = shotRequested
+                val img: Image? = try { frame.acquireCameraImage() } catch (_: Throwable) { null }
+                try {
+                    if (img != null && takeShot(img, camera, withPose = false)) { shotRequested = false; lastShotAt = now; kr.archsurvey.pg.diag.PgLog.i("shot ACCEPT manual=$manual tracking=false $lastFailure") }
+                    else kr.archsurvey.pg.diag.PgLog.d("shot RETRY reason=camera_image_unavailable manual=$manual")
+                } finally { img?.close() }
+            }
         }
         if (!video && showThumb) drawThumb()
         if (now - fpsAt >= 5000) { if (fpsAt > 0) logAccept(now, tracking, camera); fpsAt = now; frames = 0 }
@@ -191,9 +196,10 @@ class ArRenderer(
             if (featDue) { lastFeatAt = now; featurePoints(frame, intr, poseM, img) }
             if (depthDue) { lastDepthAt = now; depth(frame, intr, poseM, img, wantShot) }
             if (wantShot) {
-                val manual = shotRequested; shotRequested = false
-                if (img != null && takeShot(img, camera)) { lastShotAt = now; lastShotPos = pos; lastShotQ = q; kr.archsurvey.pg.diag.PgLog.i("shot ACCEPT manual=$manual") }
-                else kr.archsurvey.pg.diag.PgLog.w("shot REJECT reason=camera_image_unavailable manual=$manual")
+                val manual = shotRequested
+                // 0.0.11: 영상이 아직 없으면 수동 요청을 버리지 않고 다음 프레임에 다시
+                if (img != null && takeShot(img, camera)) { shotRequested = false; lastShotAt = now; lastShotPos = pos; lastShotQ = q; kr.archsurvey.pg.diag.PgLog.i("shot ACCEPT manual=$manual") }
+                else kr.archsurvey.pg.diag.PgLog.d("shot RETRY reason=camera_image_unavailable manual=$manual")
             }
         } finally { img?.close() }
     }
@@ -428,7 +434,7 @@ class ArRenderer(
         }
     }
 
-    private fun takeShot(img: Image, camera: com.google.ar.core.Camera): Boolean {
+    private fun takeShot(img: Image, camera: com.google.ar.core.Camera, withPose: Boolean = true): Boolean {
         if (img.format != ImageFormat.YUV_420_888) return false
         val w = img.width; val h = img.height
         val nv21 = yuvToNv21(img)
@@ -438,7 +444,7 @@ class ArRenderer(
         val dims = intr.imageDimensions; val f = intr.focalLength; val pp = intr.principalPoint
         val sx = w.toDouble() / dims[0]; val sy = h.toDouble() / dims[1]
         val t = camera.pose.translation; val q = camera.pose.rotationQuaternion
-        onShot(Shot(bo.toByteArray(), gray, w, h, doubleArrayOf(t[0].toDouble(), t[1].toDouble(), t[2].toDouble(), q[0].toDouble(), q[1].toDouble(), q[2].toDouble(), q[3].toDouble()),
+        onShot(Shot(bo.toByteArray(), gray, w, h, if (!withPose) null else doubleArrayOf(t[0].toDouble(), t[1].toDouble(), t[2].toDouble(), q[0].toDouble(), q[1].toDouble(), q[2].toDouble(), q[3].toDouble()),
             f[0] * sx, f[1] * sy, pp[0] * sx, pp[1] * sy))
         return true
     }

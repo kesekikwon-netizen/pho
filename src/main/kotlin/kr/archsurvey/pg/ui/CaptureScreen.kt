@@ -130,10 +130,9 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                     val id = (engine.session.stills.maxOfOrNull { it.id } ?: 0) + 1
                     val file = String.format(java.util.Locale.US, "IMG_%04d.jpg", id)
                     val q = kr.archsurvey.pg.diag.Quality.check(shot.gray, shot.w, shot.h)
-                    if (!q.ok) {
-                        kr.archsurvey.pg.diag.PgLog.i("shot REJECT reason=${q.reason} sharp=%.1f mean=${q.mean} clipped=%.2f".format(q.sharpness, q.clipped))
+                    if (!q.ok) { // 0.0.11: 품질은 안내만(저장은 함)
+                        kr.archsurvey.pg.diag.PgLog.i("shot ADVISE quality=${q.reason} sharp=%.1f mean=${q.mean} clipped=%.2f".format(q.sharpness, q.clipped))
                         view.post { policyMsg = q.message }
-                        return@post
                     }
                     if (!store.files.writePhoto(name, file, shot.jpeg)) {
                         kr.archsurvey.pg.diag.PgLog.e("photo write failed $file free=${store.files.free()}")
@@ -207,7 +206,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                 val liveDepth = if (tp.depthMs == 0L) 0L else maxOf(500L, tp.depthMs)
                 if (renderer != null && renderer.depthIntervalMs != liveDepth) kr.archsurvey.pg.diag.PgLog.i("S5 throttle thermal=$st headroom=$head liveDepthMs=$liveDepth coverageMs=${maxOf(1000L, tp.meshMs)} autoShot=${tp.autoShot}")
                 renderer?.depthIntervalMs = liveDepth; engine.meshIntervalMs = maxOf(1000L, tp.meshMs)
-                renderer?.auto = autoShot && tp.autoShot
+                renderer?.auto = autoShot // 0.0.11: 발열은 안내만(자동 촬영 멈추지 않음)
                 policyMsg = tp.message
                 // S9: 단계 3↑ 미리보기 끔 + 경고 띠(단계 2↑ 갱신 간격 2배는 ThermalPolicy)
                 val hot = st >= 3

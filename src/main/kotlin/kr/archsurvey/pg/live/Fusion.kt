@@ -223,7 +223,8 @@ object Gates {
         val g5 = if (needTags > 0) min(1.0, tp.size.toDouble() / needTags) else 1.0
         val gates = listOf(g1, g2, g3, g4, g5)
         val done = greenF >= GREEN && holes <= HOLES && ovMed >= OVERLAP_MED && tagsOk == tagIds.size && (needTags == 0 || tp.size >= needTags)
-        val pct = if (done) 100 else min(99, (gates.min() * 100).toInt())
+        // 0.0.11: 최솟값이면 한 항목(예: 표적 0개)이 0 이면 계속 0% 에 갇힘 → 평균(완료일 때만 100)
+        val pct = if (done) 100 else min(99, (gates.average() * 100).toInt())
         // 다음 촬영: 부족한 칸의 가장 큰 덩어리(4이웃) 무게중심
         var target: V3? = null; var need = 0
         if (!done && bad.isNotEmpty()) {
