@@ -1,0 +1,17 @@
+16
+header_back
+status_pill
+tool_locate
+tool_zoom_in
+tool_zoom_out
+tool_fit
+map_notice
+epochs_chip
+pole_chip
+qtag_1
+qtag_2
+qtag_3
+qtag_4
+add_slot
+targets_obj
+measure_button

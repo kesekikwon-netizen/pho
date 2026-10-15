@@ -70,7 +70,7 @@ class ControllerTest {
         assertEquals(1, c.sites.size); assertEquals(4, c.sites[0].objCount)
         // 같은 이름 유적은 (2)
         c.openNewSite(); c.newSite = c.newSite!!.copy(typed = "강릉 유적"); c.submitNewSite()
-        assertEquals("강릉 유적 (2)", c.book!!.site.name)
+        assertEquals("강릉 유적", c.book!!.site.name); assertEquals(1, c.sites.size) // 0.1.18 M7: 같은 이름 = 그 유적 열기
     }
 
     /** 0.1.17: 새 유적 이름은 사용자가 씀(추천·지구 없음), 좌표계만 경도로 미리 */
@@ -111,7 +111,7 @@ class ControllerTest {
         val r = rig().siteWithObj(); val c = r.c
         r.measure(1, 194884.215, 573986.096, 4.192)
         assertEquals(1, r.files.saved.size)
-        assertEquals("iTwinGCP/강릉 유적/001호_수혈/001호_수혈_1차_EPSG5187.xml", r.files.saved.last().first)
+        assertEquals("발굴조사/사진 기준점/강릉 유적/001호_수혈/001호_수혈_1차_EPSG5187.xml", r.files.saved.last().first)
         assertNotNull(c.session!!.xmlSavedAt)
         r.measure(2, 194880.652, 573989.204, 2.883)
         assertEquals(Stage.MEASURE, c.stageNow())
@@ -127,7 +127,7 @@ class ControllerTest {
         assertEquals(Stage.HANDOFF, c.stageNow())
         assertEquals(mapOf(Stage.MEASURE to 0, Stage.PHOTO to 0, Stage.HANDOFF to 1, Stage.DONE to 0), c.counts())
         c.sendHandoff(HandoffScope.PENDING)
-        assertEquals(1, r.files.zips.size); assertEquals("강릉유적_전달_20261012.zip", r.files.zips[0].zipName)
+        assertEquals(1, r.files.zips.size); assertEquals("강릉유적_기준점.zip", r.files.zips[0].zipName)
         assertEquals(Stage.DONE, c.book!!.stageOf(c.book!!.objs[0]))
         // 보낸 뒤 다시 재면(움직임 없음) 다시 전달 필요
         c.openObj(c.book!!.objs[0].id); r.measure(3, 194877.655, 573994.437, 2.87)

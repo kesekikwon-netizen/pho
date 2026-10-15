@@ -105,12 +105,19 @@ object Names {
 
     /** 012호_주거지 / A_토층 */
     fun objFolder(o: Obj) = o.code
-    fun photoFolder(o: Obj, s: Session) = "${objFolder(o)}_${s.no}차"
-    fun xmlName(o: Obj, s: Session, epsg: Int) = "${photoFolder(o, s)}_EPSG$epsg.xml"
+    /** 0.1.18 M4: 사용자가 쓴 이름 폴더는 1차에 아무것도 붙이지 않음(2차부터만 _N차). 옛 대상은 그대로 */
+    fun photoFolder(o: Obj, s: Session) = if (o.title.isNotBlank() && s.no == 1) objFolder(o) else "${objFolder(o)}_${s.no}차"
+    fun xmlName(o: Obj, s: Session, epsg: Int) = if (o.title.isNotBlank()) "${photoFolder(o, s)}.xml" else "${photoFolder(o, s)}_EPSG$epsg.xml"
+    /** 옛 TXT 이름(0.1.17 까지). 0.1.18 부터 만들지 않음 */
     fun txtName(o: Obj, s: Session, epsg: Int) = "${photoFolder(o, s)}_EPSG$epsg.txt"
+    /** 0.1.18 M2: 참고용 좌표(엑셀) — iTwin 용 아님 */
+    const val REF_CSV = "참고용/좌표.csv"
+    fun refCsvName(o: Obj, s: Session) = if (s.no == 1) REF_CSV else "참고용/좌표_${s.no}차.csv"
     fun listCsvName(site: Site) = "${safe(site.name)}_목록.csv"
     /** 앱 결과 폴더 상대 경로(공용 Documents 밑) */
-    const val ROOT = "iTwinGCP"
+    const val ROOT = "발굴조사/사진 기준점"
+    /** 0.1.17 까지 쓰던 뿌리(옮기지 않음) */
+    const val OLD_ROOT = "iTwinGCP"
     fun objRel(site: Site, o: Obj) = "$ROOT/${siteFolder(site)}/${objFolder(o)}"
     fun siteRel(site: Site) = "$ROOT/${siteFolder(site)}"
 }

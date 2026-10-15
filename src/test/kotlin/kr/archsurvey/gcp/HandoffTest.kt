@@ -36,15 +36,15 @@ class HandoffTest {
 
     @Test fun plan_entriesNamesAndDeliveredMarks() {
         val p = Handoff.plan(book, HandoffScope.ALL, now, z)
-        assertEquals("강릉유적_전체_20261012.zip", p.zipName)
-        assertEquals("강릉유적_전달_20261012.zip", Handoff.zipName(site, HandoffScope.PENDING, now, z))
-        assertEquals(listOf("강릉유적_목록.csv", ItwinGuide.FILE,
-            "001호_주거지/001호_주거지_1차_EPSG5187.xml", "001호_주거지/001호_주거지_1차_EPSG5187.txt",
-            "003호_수혈/003호_수혈_1차_EPSG5187.xml", "003호_수혈/003호_수혈_1차_EPSG5187.txt",
-            "A_토층/A_토층_1차_EPSG5187.xml", "A_토층/A_토층_1차_EPSG5187.txt"), p.entries.map { it.first })
+        assertEquals("강릉유적_기준점.zip", p.zipName)   // 0.1.18 M6: 같은 이름 덮어쓰기
+        assertEquals("강릉유적_기준점.zip", Handoff.zipName(site, HandoffScope.PENDING, now, z))
+        assertEquals(listOf("강릉유적_목록.csv", ItwinSheet.FILE, "보낸기록.txt",
+            "001호_주거지/001호_주거지_1차_EPSG5187.xml", "001호_주거지/참고용/좌표.csv",
+            "003호_수혈/003호_수혈_1차_EPSG5187.xml", "003호_수혈/참고용/좌표.csv",
+            "A_토층/A_토층_1차_EPSG5187.xml", "A_토층/참고용/좌표.csv"), p.entries.map { it.first })
         assertEquals(listOf(11L, 31L), p.markDelivered)               // 사진 안 끝난 21 은 전달로 안 바꿈
         assertEquals(listOf("A_토층_1차"), p.noPhoto)
-        assertTrue(p.entries[2].second.contains("<Name>Target #3</Name>"))
+        assertTrue(p.entries[3].second.contains("<Name>Target #3</Name>"))
     }
 
     @Test fun listCsv_bomCrlfHeaderAndRows() {
@@ -66,6 +66,7 @@ class HandoffTest {
         assertEquals(p.entries.map { it.first }, got.keys.toList())
         assertEquals(p.entries.toMap(), got)
         assertTrue(got.getValue("강릉유적_목록.csv").startsWith("\uFEFF"))
-        assertFalse(got.values.filter { true }.drop(1).any { it.startsWith("\uFEFF") })
+        assertTrue(got.filterKeys { it.endsWith("좌표.csv") }.values.all { it.startsWith("\uFEFF") }) // 0.1.18 M2
+        assertFalse(got.filterKeys { !it.endsWith(".csv") }.values.any { it.startsWith("\uFEFF") })
     }
 }

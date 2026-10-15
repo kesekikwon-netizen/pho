@@ -65,6 +65,9 @@ object ItwinXml {
     /** iTwin 「Custom Text Format」: 머리줄 없음 · 쉼표 · 「Target #N,E,N,Z」 · CRLF (측량 앱 ItwinGcpExport.txt 와 같음) */
     fun txt(shots: List<Shot>): String = latest(shots).joinToString("") { p -> "${targetName(p.tag)},${f3(p.e)},${f3(p.n)},${f3(p.h)}\r\n" }
 
+    /** 0.1.18 M2: 참고용/좌표.csv — UTF-8 BOM · 머리줄 · 이름 원문(Target #N) · CRLF */
+    fun refCsv(shots: List<Shot>): String = "\uFEFF이름,E(동),N(북),높이\r\n" + latest(shots).joinToString("") { p -> "${targetName(p.tag)},${f3(p.e)},${f3(p.n)},${f3(p.h)}\r\n" }
+
     private fun f3(v: Double) = String.format(Locale.US, "%.3f", v)
 
     /** active 만, 번호마다 마지막에 잰 값, 번호 오름차순 */

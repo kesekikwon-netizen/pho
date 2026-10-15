@@ -1,0 +1,11 @@
+10
+site_switch
+status_pill
+menu
+stage_all
+stage_measure
+stage_photo
+stage_handoff
+obj_001호_수혈
+to_handoff
+obj_new

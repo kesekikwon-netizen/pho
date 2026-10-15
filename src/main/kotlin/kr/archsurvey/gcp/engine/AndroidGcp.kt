@@ -30,16 +30,17 @@ class AndroidGcpFiles(private val ctx: Context, private val zone: ZoneId = ZoneI
         val shots = book.active(s)
         val xmlName = Names.xmlName(o, s, epsg)
         val dir = localObj(book.site, o).apply { mkdirs() }
-        val xml = File(dir, xmlName); val txt = File(dir, Names.txtName(o, s, epsg))
+        val xml = File(dir, xmlName); val txt = File(dir, Names.refCsvName(o, s)).apply { parentFile?.mkdirs() }
         kr.archsurvey.gcp.data.SafeFile.write(xml, ItwinXml.write(shots, epsg))
-        kr.archsurvey.gcp.data.SafeFile.write(txt, ItwinXml.txt(shots))
+        kr.archsurvey.gcp.data.SafeFile.write(txt, ItwinXml.refCsv(shots))
         val list = File(localSite(book.site), Names.listCsvName(book.site))
         kr.archsurvey.gcp.data.SafeFile.write(list, ListCsv.write(book, zone)) // BOM 은 ListCsv 가 붙임
         var where = "앱 폴더"
         var err: String? = null
         if (Build.VERSION.SDK_INT >= 29) {
             runCatching {
-                publish(listOf(xml, txt), "Documents/${Names.objRel(book.site, o)}")
+                publish(listOf(xml), "Documents/${Names.objRel(book.site, o)}")
+                publish(listOf(txt), "Documents/${Names.objRel(book.site, o)}/" + Names.refCsvName(o, s).substringBeforeLast('/'))
                 publish(listOf(list), "Documents/${Names.siteRel(book.site)}")
                 where = whereLabel(book.site)
             }.onFailure { err = "Documents 폴더에 쓰지 못했어요(${it.javaClass.simpleName}) · 앱 폴더에는 저장됨" }
@@ -47,14 +48,28 @@ class AndroidGcpFiles(private val ctx: Context, private val zone: ZoneId = ZoneI
         return SaveOutcome(err == null, xmlName, where, err)
     }
 
-    override fun whereLabel(site: Site) = "내 파일 › Documents › ${Names.ROOT} › ${Names.siteFolder(site)}"
+    override fun whereLabel(site: Site) = if (Build.VERSION.SDK_INT >= 29) "내 파일 › Documents › ${Names.ROOT.replace("/", " › ")} › ${Names.siteFolder(site)}" else "앱 폴더(Android › data › ${ctx.packageName} › files) › ${Names.ROOT.replace("/", " › ")} › ${Names.siteFolder(site)}"
+
+    /** 0.1.18 M6: 같은 이름 zip 이 이미 있으면 직전본을 <이름>.bak 하나로 남긴다(그 전 .bak 은 덮어씀) */
+    @androidx.annotation.RequiresApi(29)
+    private fun backupExisting(name: String, rel: String) {
+        val cr = ctx.contentResolver
+        val coll = android.provider.MediaStore.Files.getContentUri("external")
+        val src = cr.query(coll, arrayOf(android.provider.MediaStore.MediaColumns._ID),
+            "${android.provider.MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${android.provider.MediaStore.MediaColumns.DISPLAY_NAME}=?", arrayOf("$rel/", name), null)
+            ?.use { c -> if (c.moveToFirst()) android.content.ContentUris.withAppendedId(coll, c.getLong(0)) else null } ?: return
+        val tmp = File(ctx.cacheDir, "$name.bak")
+        (cr.openInputStream(src) ?: return).use { i -> tmp.outputStream().use { i.copyTo(it) } }
+        publish(listOf(tmp), rel)
+        tmp.delete()
+    }
 
     @androidx.annotation.RequiresApi(29)
     private fun publish(files: List<File>, rel: String) {
         val cr = ctx.contentResolver
         val coll = android.provider.MediaStore.Files.getContentUri("external")
         for (f in files) {
-            val mime = when (f.extension.lowercase()) { "xml" -> "text/xml"; "csv" -> "text/csv"; "zip" -> "application/zip"; else -> "text/plain" }
+            val mime = when (f.extension.lowercase()) { "xml" -> "text/xml"; "csv" -> "text/comma-separated-values"; "zip" -> "application/zip"; "bak" -> "application/octet-stream"; else -> "text/plain" }
             val existing = cr.query(coll, arrayOf(android.provider.MediaStore.MediaColumns._ID),
                 "${android.provider.MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${android.provider.MediaStore.MediaColumns.DISPLAY_NAME}=?", arrayOf("$rel/", f.name), null)
                 ?.use { c -> if (c.moveToFirst()) android.content.ContentUris.withAppendedId(coll, c.getLong(0)) else null }
@@ -72,7 +87,7 @@ class AndroidGcpFiles(private val ctx: Context, private val zone: ZoneId = ZoneI
     override fun shareSession(book: SiteBook, o: Obj, s: Session): Boolean {
         val r = saveSession(book, o, s)
         val dir = localObj(book.site, o)
-        val files = listOf(File(dir, r.xmlName), File(dir, Names.txtName(o, s, book.site.epsg))).filter { it.exists() }
+        val files = listOf(File(dir, r.xmlName), File(dir, Names.refCsvName(o, s))).filter { it.exists() }
         if (files.isEmpty()) return false
         val send = Intent(Intent.ACTION_SEND_MULTIPLE).setType("text/xml").putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(files.map { uri(it) }))
             .putExtra(Intent.EXTRA_SUBJECT, "${o.name} ${s.no}차 iTwin 기준점").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -86,12 +101,14 @@ class AndroidGcpFiles(private val ctx: Context, private val zone: ZoneId = ZoneI
         kr.archsurvey.gcp.data.SafeFile.writeWith(zip) { out -> val bo = out.buffered(); val z = ZipOutputStream(bo); writeZip(z, plan); z.finish(); bo.flush() }
         // 0.1.17: PC 에서 바로 찾게 공용 Documents/iTwinGCP/<유적>/ 에도 zip 사본(실패해도 공유는 계속)
         lastZipWhere = null
-        if (Build.VERSION.SDK_INT >= 29 && plan.siteRel.isNotEmpty()) runCatching { publish(listOf(zip), "Documents/${plan.siteRel}") }
+        val appWhere = "앱 폴더(Android › data › ${ctx.packageName} › files › handoff) › ${zip.name}"
+        if (Build.VERSION.SDK_INT >= 29 && plan.siteRel.isNotEmpty()) runCatching { backupExisting(zip.name, "Documents/${plan.siteRel}"); publish(listOf(zip), "Documents/${plan.siteRel}") }
             .onSuccess { lastZipWhere = "내 파일 › Documents › ${plan.siteRel.replace("/", " › ")} › ${zip.name}" }
-            .onFailure { kr.archsurvey.diag.CrashLog.record("zip 공용 폴더 저장", it) }
+            .onFailure { kr.archsurvey.diag.CrashLog.record("zip 공용 폴더 저장", it); lastZipWhere = "Documents 에 못 써서 " + appWhere }
+        else lastZipWhere = appWhere // 0.1.18 M5: Android 9 이하 — 새 권한 없이 앱 폴더(경로 한 줄로 알림)
         val send = Intent(Intent.ACTION_SEND).setType("application/zip").putExtra(Intent.EXTRA_STREAM, uri(zip))
             .putExtra(Intent.EXTRA_SUBJECT, plan.zipName.removeSuffix(".zip")).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        return runCatching { ctx.startActivity(Intent.createChooser(send, "PC로 넘기기").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+        return runCatching { ctx.startActivity(Intent.createChooser(send, "iTwin으로 보내기").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
     }
 
     companion object {

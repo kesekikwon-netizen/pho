@@ -234,6 +234,7 @@ class GcpController(
     fun submitNewSite() {
         val f = newSite ?: return
         val name = f.name() ?: run { ui.fail("유적 이름을 입력하세요"); return }
+        if (sameNameSite(name) != null) { openSameNameSite(name); return } // 0.1.18 M7: 같은 이름 = 그 유적 열기(「(2)」 안 만듦)
         scope.launch {
             val r = runCatching { withContext(io) { repo.createSite(name, f.epsg) } }
             r.onSuccess { s -> prefs.lastEpsg = s.epsg; newSite = null; ui.ok("${s.name} 만들었어요"); reloadSites(); openSite(s.id) }
@@ -309,6 +310,13 @@ class GcpController(
     fun pickLabel(l: String) { val f = newObj ?: return; newObj = f.copy(label = l) }
     fun openObjNoPad() { val f = newObj ?: return; numPick = NumPick(PickFor.ObjNo, "${f.kind.ko} 호수", f.no, f.used) }
 
+    /** 0.1.18 M7: 같은 이름 폴더가 있으면 그것(없으면 null) */
+    fun sameNameObj(title: String): Obj? { val n = title.trim(); if (n.isEmpty()) return null
+        return book?.objs?.firstOrNull { it.name.equals(n, true) || ObjNames.safe(it.name).equals(ObjNames.safe(n), true) } }
+    fun openSameNameObj(title: String) { val o = sameNameObj(title) ?: return; newObj = null; openObj(o.id) }
+    fun sameNameSite(name: String): Site? { val n = name.trim(); if (n.isEmpty()) return null; return sites.map { it.site }.firstOrNull { it.name.equals(n, true) } }
+    fun openSameNameSite(name: String) { val s = sameNameSite(name) ?: return; newSite = null; openSite(s.id) }
+
     fun submitNewObj() {
         val f = newObj ?: return
         val b = book ?: return
@@ -377,7 +385,7 @@ class GcpController(
         val s = session ?: return
         if (locked()) { ui.fail(LOCKED_MSG); return }
         val near = nearTags()
-        numPick = NumPick(PickFor.AddSlot, "표적 번호 (실물 표적에 적힌 번호)", TargetChecks.nextFree(s.slots.toSet() + near, (s.slots.maxOrNull() ?: 0) + 1), s.slots.toSet(), near, TargetChecks.MAX_TAG)
+        numPick = NumPick(PickFor.AddSlot, "표적 번호 (표적 판에 적힌 번호)", TargetChecks.nextFree(s.slots.toSet() + near, (s.slots.maxOrNull() ?: 0) + 1), s.slots.toSet(), near, TargetChecks.MAX_TAG)
     }
 
     fun numDigit(d: Int) { numPick = numPick?.digit(d) }
@@ -400,11 +408,37 @@ class GcpController(
     }
 
     // ---- 재기 ----
+    /** 0.1.18 S1: 잰 칸을 한 번 누르면 그 칸이 「다시 재기 ✓」로 바뀜(이 번호). 같은 칸을 한 번 더 누르면 다시 잼. 팝업 없음 */
+    var armedRetake by mutableStateOf<Int?>(null)
+    /** 0.1.18 S1: 다시 잰 직후 5초 「되돌리기」 띠 — 앞 값 */
+    var undoShot by mutableStateOf<Shot?>(null); private set
+    var undoUntil = 0L; private set
     fun onTargetTap(tag: Int) {
         if (measuringTag != null) { cancelMeasure(); return }
         if (locked()) { ui.fail(LOCKED_MSG); return }
-        if (shotOf(tag) != null) { ui.toast("Target #$tag 은(는) 쟀어요 · 다시 재려면 길게 누르세요"); return }
+        if (shotOf(tag) != null) {
+            if (armedRetake == tag) { armedRetake = null; gateThen { allow -> startMeasure(tag, allow) } }
+            else armedRetake = tag
+            return
+        }
+        armedRetake = null
         gateThen { allow -> startMeasure(tag, allow) }
+    }
+    /** 0.1.18 S1: 되돌리기 — 다시 잰 값을 버리고 앞 값을 다시 지금 값으로(기록은 남음) */
+    fun undoRetake() {
+        val p = undoShot ?: return
+        undoShot = null
+        scope.launch {
+            withContext(io) { repo.restoreShot(p) }
+            reloadBook(); writeFiles(p.sessionId)
+            ui.ok("표적 #${p.tag} 앞 값으로 되돌렸어요")
+        }
+    }
+    fun undoVisible(now: Long = clock()): Boolean = undoShot != null && now < undoUntil
+    /** 0.1.18 S2: FIX 아닐 때 저장 단추 위 한 줄(팝업 없음). FIX 면 null */
+    fun fixWarning(): String? {
+        val r = StatusJudge.judge(source.gnss.value, source.link.value.state, source.clockMs())
+        return when (val g = MeasureGate.check(r)) { is Gate.Blocked -> "◐ ${g.reasonKo} · FIX 때만 저장해요"; else -> null }
     }
 
     /** 길게 누름: 잰 번호 = 다시 재기 확인, 안 잰 번호 = 번호 바꾸기(번호판) */
@@ -413,10 +447,10 @@ class GcpController(
         if (locked()) { ui.fail(LOCKED_MSG); return }
         val s = session ?: return
         val tag = s.slots.getOrNull(index) ?: return
-        if (shotOf(tag) == null) { numPick = NumPick(PickFor.ChangeSlot(index), "Target #$tag 번호 바꾸기", tag, s.slots.toSet() - tag, nearTags(), TargetChecks.MAX_TAG); return }
-        ui.ask(ConfirmRequest("Target #$tag 다시 잴까요?", "새 값이 앞 값과 2 cm 넘게 다르면 「표적이 움직였나요?」를 물어요. 앞 값은 기록으로 남아요.", "다시 재기") {
-            gateThen { allow -> startMeasure(tag, allow) }
-        })
+        if (shotOf(tag) == null) { numPick = NumPick(PickFor.ChangeSlot(index), "표적 #$tag 번호 바꾸기 (표적 판에 적힌 번호)", tag, s.slots.toSet() - tag, nearTags(), TargetChecks.MAX_TAG); return }
+        // 0.1.18 S1: 길게 누르기 = 바로 다시 재기(덤). 확인 팝업 없음 — 대신 저장 뒤 5초 되돌리기
+        armedRetake = null
+        gateThen { allow -> startMeasure(tag, allow) }
     }
 
     /** 큰 「측량하기」: 안 잰 첫 칸. 다 쟀으면 다음 빈 번호를 칸에 더하고 잰다 */
@@ -480,14 +514,14 @@ class GcpController(
         if (prev != null && moved == null) { save(s, tag, m, pole, apc, device, note = "", resetPhoto = false); return }
         if (prev != null && moved != null) {
             val cm = String.format(java.util.Locale.US, "%.1f", moved * 100)
-            ui.ask(ConfirmRequest("표적이 움직였나요?", "Target #$tag 새 값이 앞 값과 $cm cm 달라요.\n옮겼다면 새 값을 저장해요" + (if (s.photoDoneAt != null) " — 사진은 다시 찍어야 해요(「사진 필요」로 돌아가요)." else "."),
+            ui.ask(ConfirmRequest("표적이 움직였나요?", "표적 #$tag 새 값이 앞 값과 $cm cm 달라요.\n옮겼다면 새 값을 저장해요" + (if (s.photoDoneAt != null) " — 사진은 다시 찍어야 해요(「사진 필요」로 돌아가요)." else "."),
                 "옮겼어요 · 새 값 저장", "실수 · 앞 값 그대로") { save(s, tag, m, pole, apc, device, note = "moved ${cm}cm", resetPhoto = s.photoDoneAt != null) })
             return
         }
         val clashes = TargetChecks.clashes(tag, m.e, m.n, b.othersInProgress(s.objId))
         if (clashes.isNotEmpty()) {
             val c = clashes.first()
-            ui.ask(ConfirmRequest("번호가 겹쳐요", "${c.objName}(${c.distanceM.toInt()} m)도 Target #$tag 을(를) 써요. 한 사진에 같이 찍히면 iTwin 에서 헷갈려요.\n다른 실물 표적으로 바꾸는 걸 권해요.",
+            ui.ask(ConfirmRequest("번호가 겹쳐요", "${c.objName}(${c.distanceM.toInt()} m)도 표적 #$tag 을(를) 써요. 한 사진에 같이 찍히면 iTwin 에서 헷갈려요.\n다른 실물 표적으로 바꾸는 걸 권해요.",
                 "그래도 저장", "저장 안 함") { save(s, tag, m, pole, apc, device, note = "clash ${c.objCode}", resetPhoto = false) })
             return
         }
@@ -495,14 +529,16 @@ class GcpController(
     }
 
     private fun save(s: Session, tag: Int, m: Measured, pole: Double, apc: Double, device: String, note: String, resetPhoto: Boolean) {
+        val before = book?.active(s)?.firstOrNull { it.tag == tag }
         scope.launch {
             withContext(io) { repo.saveShot(s.id, tag, m, pole, apc, device, note, resetPhoto) }
+            if (before != null) { undoShot = before; undoUntil = clock() + UNDO_MS }
             reloadBook()
             val out = writeFiles(s.id)
             onFeedback?.invoke(FeedbackEvent.SURVEY_OK)
             val left = (session?.slots ?: emptyList()).count { shotOf(it) == null }
             if (out?.ok == true) ui.ok("#$tag 저장 · XML" + (if (left > 0) " · 다음 #${nextTag()}" else " · ${activeShots().size}개 · 더 재도 돼요"))   // 0.1.7: 화면 그대로 · 다음 표적 자동
-            else ui.fail("Target #$tag 은(는) 장부에 저장됐지만 XML 을 쓰지 못했어요 — ${out?.error ?: "알 수 없음"}")
+            else ui.fail("표적 #$tag 은(는) 장부에 저장됐지만 XML 을 쓰지 못했어요 — ${out?.error ?: "알 수 없음"}")
         }
     }
 
@@ -531,7 +567,7 @@ class GcpController(
         }
     }
 
-    // ================= PC로 넘기기 =================
+    // ================= iTwin으로 보내기 =================
     fun whereLabel(): String = book?.let { files.whereLabel(it.site) } ?: ""
     fun handoffCount(scope: HandoffScope): Int = book?.let { Handoff.count(it, scope, clock(), zone) } ?: 0
     fun handoffPlan(): HandoffPlan? = book?.let { Handoff.plan(it, handoffScope, clock(), zone) }
@@ -631,6 +667,7 @@ class GcpController(
     fun setVolumeKey(on: Boolean) { prefs.volumeKey = on; poleTick++ }
 
     companion object {
+        const val UNDO_MS = 5_000L
         const val LOCKED_MSG = "앞 차수는 잠겨 있어요 · 보기만 돼요"
         val EPOCH_CHOICES = listOf(5, 10, 20)
         const val MIN_DP_PER_M = 0.05; const val MAX_DP_PER_M = 400.0

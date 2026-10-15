@@ -28,7 +28,7 @@ fun ObjListSheet(c: GcpController) {
     val t = T
     val counts = c.counts()
     BottomSheet("대상 고르기", "obj_sheet", onClose = { c.objListOpen = false }, bottom = {
-        Btn("+ 새 대상", "obj_new", Modifier.weight(1f)) { c.openNewObj() }
+        Btn("+ 새 폴더", "obj_new", Modifier.weight(1f)) { c.openNewObj() }
     }) {
         // 진행 칸 한 줄(누르면 그것만)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.testTag("stage_row")) {
@@ -45,7 +45,7 @@ fun ObjListSheet(c: GcpController) {
             }
         }
         val rows = c.rows()
-        if (rows.isEmpty()) Caption(if (c.filter != null) "「${c.filter?.ko}」 대상이 없어요" else "아직 대상이 없어요 · 아래 「+ 새 대상」", tag = "obj_empty")
+        if (rows.isEmpty()) Caption(if (c.filter != null) "「${c.filter?.ko}」 폴더가 없어요" else "아직 폴더가 없어요 · 아래 「+ 새 폴더」를 누르고 이름을 쓰세요", tag = "obj_empty")
         for (r in rows) {
             val sel = r.obj.id == c.objId
             Row(
@@ -190,13 +190,14 @@ fun NewSiteSheet(c: GcpController, f: NewSiteForm) {
             placeholder = { Text("예) 강릉 교동 유적") },
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { if (f.name() != null) c.submitNewSite() }))
+        f.name()?.let { n -> if (c.sameNameSite(n) != null) Tile("같은 이름 유적이 있어요 · 그 유적 열기", false, "newsite_open_same", Modifier.fillMaxWidth(), height = 56.dp) { c.openSameNameSite(n) } }
         Text("좌표계 (수신기와 같게 · 위치로 미리 골라 둠)", style = Ty.label.copy(fontSize = 16.sp), color = t.ink)
         TileGrid(GcpController.EPSGS, 2) { e -> Tile("${GcpController.epsgLabel(e)}원점", e == f.epsg, "epsg_$e", Modifier.weight(1f), sub = "EPSG:$e", height = 64.dp) { c.newSite = f.copy(epsg = e) } }
         Caption("저장 위치 · 내 파일 › Documents › iTwinGCP › ${f.name() ?: "…"}")
     }
 }
 
-// ---------------- 메뉴 · PC로 넘기기 · 폴 ----------------
+// ---------------- 메뉴 · iTwin으로 보내기 · 폴 ----------------
 @Composable
 fun MenuSheet(c: GcpController) {
     BottomSheet("메뉴", "menu_sheet", onClose = { c.menuOpen = false }) {
@@ -214,7 +215,7 @@ fun MenuSheet(c: GcpController) {
             Tile(if (Minimal.zoomButtons) "확대 단추 숨기기" else "확대 단추 보이기", Minimal.zoomButtons, "menu_zoom_buttons", Modifier.fillMaxWidth()) { Minimal.setZoomButtons(ctx, !Minimal.zoomButtons) }
         }
         Tile("유적 지도", false, "menu_map", Modifier.fillMaxWidth(), sub = "위성 + 지적 · 모든 폴더의 표적 자리") { c.menuOpen = false; c.go(Screen.MAP); c.fitAll() }
-        Tile("PC로 보내기", false, "menu_handoff", Modifier.fillMaxWidth(), sub = "보낼 폴더 ${c.handoffCount(HandoffScope.PENDING)} · zip 하나로 공유") { c.oneTapHandoff() }
+        Tile("iTwin으로 보내기", false, "menu_handoff", Modifier.fillMaxWidth(), sub = "보낼 폴더 ${c.handoffCount(HandoffScope.PENDING)} · zip 하나로 공유") { c.oneTapHandoff() }
         Tile("유적 바꾸기", false, "menu_sites", Modifier.fillMaxWidth()) { c.menuOpen = false; c.openSitePicker() }
         Tile("설정", false, "menu_settings", Modifier.fillMaxWidth(), sub = "수신기 · VRS · 폴 · 평균") { c.menuOpen = false; c.go(Screen.SETTINGS) }
     }
@@ -223,8 +224,8 @@ fun MenuSheet(c: GcpController) {
 @Composable
 fun HandoffSheet(c: GcpController) {
     val b = c.book ?: return
-    BottomSheet("PC로 넘기기", "handoff_sheet", onClose = { c.handoffOpen = false }) {
-        Caption("고르면 바로 zip(목록.csv + 대상별 XML·TXT)을 만들어 공유 창을 열어요.")
+    BottomSheet("iTwin으로 보내기", "handoff_sheet", onClose = { c.handoffOpen = false }) {
+        Caption("고르면 바로 zip(목록.csv + 대상별 기준점 XML)을 만들어 공유 창을 열어요.")
         for (sc in HandoffScope.entries) {
             val n = c.handoffCount(sc)
             Tile(sc.ko, false, "handoff_${sc.name.lowercase()}", Modifier.fillMaxWidth(), sub = "대상 ${n}개", enabled = n > 0, height = 72.dp) { c.sendHandoff(sc) }

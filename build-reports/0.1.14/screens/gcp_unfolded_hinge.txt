@@ -1,0 +1,1 @@
+hinge 375dp, measure_button left 518.0dp right 738.0dp

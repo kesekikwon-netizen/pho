@@ -71,6 +71,13 @@ class GcpRepo(private val dao: GcpDao, private val clock: () -> Long = System::c
         return upd.model()
     }
 
+    /** 0.1.18 S1 되돌리기: 앞 값을 새 행으로 다시 지금 값으로(다시 잰 값은 기록으로 남음) */
+    suspend fun restoreShot(p: Shot) {
+        dao.replaceShot(ShotRow(sessionId = p.sessionId, tag = p.tag, e = p.e, n = p.n, h = p.h, lat = p.lat, lon = p.lon, sigmaH = p.sigmaH, sigmaU = p.sigmaU,
+            epochs = p.epochs, measuredAt = clock(), active = true, poleM = p.poleM, apcM = p.apcM, device = p.device, note = (p.note + " undo").trim()))
+        dao.session(p.sessionId)?.let { dao.updateSession(it.copy(changedAt = clock())) }
+    }
+
     suspend fun markXmlSaved(sessionId: Long, at: Long) { dao.session(sessionId)?.let { dao.updateSession(it.copy(xmlSavedAt = at)) } }
     suspend fun setPhotoDone(sessionId: Long, done: Boolean) { dao.session(sessionId)?.let { dao.updateSession(it.copy(photoDoneAt = if (done) clock() else null)) } }
     suspend fun markDelivered(ids: List<Long>) { if (ids.isNotEmpty()) dao.markDelivered(ids, clock()) }

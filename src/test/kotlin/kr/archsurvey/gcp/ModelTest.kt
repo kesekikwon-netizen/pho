@@ -36,7 +36,7 @@ class ModelTest {
         assertEquals("002호_수혈_2차_EPSG5187.xml", Names.xmlName(feat, s2, 5187))
         assertEquals("002호_수혈_2차_EPSG5187.txt", Names.txtName(feat, s2, 5187))
         assertEquals("B_토층_2차_EPSG5186.xml", Names.xmlName(sec, s2, 5186))
-        assertEquals("iTwinGCP/강릉 성남동 유적/012호_주거지", Names.objRel(site, dwell))
+        assertEquals("발굴조사/사진 기준점/강릉 성남동 유적/012호_주거지", Names.objRel(site, dwell))
         assertEquals("강릉성남동유적_목록.csv", Names.listCsvName(site))
         assertEquals("a b", Names.siteFolder(site.copy(name = "a/ b")))
         assertEquals("유적", Names.siteFolder(site.copy(name = "/")))

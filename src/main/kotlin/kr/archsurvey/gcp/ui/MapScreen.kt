@@ -217,7 +217,7 @@ private fun TargetRow(c: GcpController, s: Session) {
     val many = s.slots.size > 4
     Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 8.dp).testTag("qtag_row"), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.width(52.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Target", style = Ty.label.copy(fontSize = 16.sp), color = t.ink, maxLines = 1)
+            Text("표적", style = Ty.label.copy(fontSize = 16.sp), color = t.ink, maxLines = 1)
             Text("${c.activeShots().size}/${s.slots.size}", style = Ty.coord.copy(fontSize = 16.sp), color = if (c.activeShots().size >= Pipeline.MIN_TARGETS) G.ok else G.dot, maxLines = 1, modifier = Modifier.testTag("qtag_count"))
             if (locked) Text("잠김", style = Ty.small.copy(fontSize = 16.sp), color = t.inkSub)
         }
@@ -229,14 +229,15 @@ private fun TargetRow(c: GcpController, s: Session) {
                     .background(if (now) G.dark else if (shot != null) G.sel else t.raised)
                     .border(if (shot != null || now) 2.dp else 1.dp, if (shot != null || now) G.dark else t.outline, RoundedCornerShape(14.dp))
                     .hCombinedClickable(onLongClick = { c.onTargetLong(i) }) { c.onTargetTap(tag) }
-                    .semantics { contentDescription = "Target $tag" + if (shot != null) " · 잰 것, 다시 재려면 길게" else " · 누르면 바로 측점, 길게 = 번호 바꾸기" }
+                    .semantics { contentDescription = "표적 ${tag}번" + if (shot != null) " · 잰 것, 누르면 다시 재기 준비" else " · 누르면 바로 측점, 길게 = 번호 바꾸기" }
                     .testTag("qtag_$tag"),
                 contentAlignment = Alignment.Center,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text("$tag", style = Ty.ledger.copy(fontSize = if (tag >= 100) 22.sp else 28.sp), color = if (now) G.onDark else t.ink, maxLines = 1)
-                    if (shot != null && !now) Text("✓", style = Ty.label.copy(fontSize = 18.sp), color = G.dark, modifier = Modifier.testTag("qtag_done_$tag"))
+                    if (shot != null && !now && c.armedRetake != tag) Text("✓", style = Ty.label.copy(fontSize = 18.sp), color = G.dark, modifier = Modifier.testTag("qtag_done_$tag"))
                 }
+                if (shot != null && !now && c.armedRetake == tag) Text("다시 재기 ✓", style = Ty.small.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold), color = G.bad, maxLines = 1, modifier = Modifier.align(Alignment.BottomCenter).testTag("qtag_armed_$tag"))
                 if (now) Text("재는 중", style = Ty.small.copy(fontSize = 16.sp), color = G.onDark, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp))
             }
         }
@@ -279,16 +280,26 @@ private fun MeasureButton(c: GcpController, modifier: Modifier) {
     val next = if (noObj) null else c.nextTag()
     val label: String; val sub: String
     when {
-        busy -> { label = "재는 중 · Target #${c.measuringTag}"; sub = "폴을 세운 채 · 누르면 중지" }
-        noObj -> { label = "+ 새 대상"; sub = "종류 → 호수 고르기" }
+        busy -> { label = "재는 중 · 표적 #${c.measuringTag}"; sub = "폴을 세운 채 · 누르면 중지" }
+        noObj -> { label = "+ 새 폴더"; sub = "이름을 쓰면 끝" }
         locked -> { label = "앞 차수 · 보기만"; sub = "새로 재려면 「차수」에서 마지막 차수" }
         notConn -> { label = "수신기 연결"; sub = "눌러서 연결" }
         blocked -> { label = "FIX 기다리는 중"; sub = "FIX 때만 저장해요" }
-        else -> { label = "측량하기"; sub = "Target #$next" + if (c.session?.slots?.contains(next) == false) " (새 칸)" else "" }
+        else -> { label = "측량하기"; sub = "표적 #$next" + if (c.session?.slots?.contains(next) == false) " (새 칸)" else "" }
     }
     val dim = !busy && !noObj && (locked || (blocked && !notConn))
+    // 0.1.18 S1·S2: 저장 단추 바로 위 한 줄 띠(팝업 없음) — 되돌리기 5초 / FIX 아님 경고
+    var tick by remember { mutableStateOf(0L) }
+    LaunchedEffect(c.undoShot) { while (c.undoShot != null && c.undoVisible()) { kotlinx.coroutines.delay(250); tick++ } ; tick++ }
+    val warn = if (!busy && !noObj && !notConn) c.fixWarning() else null
+    Column(modifier) {
+    if (tick >= 0 && c.undoVisible()) Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).background(G.white).hClickable(onClickLabel = "되돌리기") { c.undoRetake() }.padding(horizontal = 14.dp).testTag("undo_band"), verticalAlignment = Alignment.CenterVertically) {
+        Text("표적 #${c.undoShot?.tag} 다시 쟀어요", style = Ty.label.copy(fontWeight = FontWeight.Bold), color = G.ink, modifier = Modifier.weight(1f), maxLines = 1)
+        Text("되돌리기", style = Ty.label.copy(fontWeight = FontWeight.Bold), color = G.bad)
+    } else if (warn != null) Text(warn, style = Ty.label.copy(fontWeight = FontWeight.Bold), color = G.warn, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.fillMaxWidth().background(G.white).padding(horizontal = 14.dp, vertical = 6.dp).testTag("fix_band"))
     Box(
-        /* 0.1.52 #6 눌림 스프링 */ modifier.height(FieldIvory.measureButton).pressSpring(20.dp, 34.dp).background(if (dim || (notConn && !noObj && !busy)) G.lineStrong else G.dark)
+        /* 0.1.52 #6 눌림 스프링 */ Modifier.fillMaxWidth().height(FieldIvory.measureButton).pressSpring(20.dp, 34.dp).background(if (dim || (notConn && !noObj && !busy)) G.lineStrong else G.dark)
             .hClickable(onClickLabel = label) { if (!locked || busy) c.onMeasureButton() }.testTag("measure_button"),
         contentAlignment = Alignment.Center,
     ) {
@@ -297,6 +308,7 @@ private fun MeasureButton(c: GcpController, modifier: Modifier) {
             Text(label, style = Ty.button.copy(fontSize = 22.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium), color = G.onDark, maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.testTag("measure_label"))
             Text(sub, style = Ty.small.copy(fontSize = 16.sp, lineHeight = 21.sp), color = G.onDark, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 8.dp).testTag("measure_sub"))
         }
+    }
     }
 }
 

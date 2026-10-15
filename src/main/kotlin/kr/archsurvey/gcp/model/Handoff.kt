@@ -44,7 +44,7 @@ object ListCsv {
 
 enum class HandoffScope(val ko: String, val fileWord: String) { PENDING("전달 필요", "전달"), TODAY("오늘", "오늘"), ALL("전체", "전체") }
 
-/** PC로 넘기기 zip 한 벌의 계획(내용·전달 완료로 바꿀 차수). Android 의존 없음 */
+/** iTwin으로 보내기 zip 한 벌의 계획(내용·전달 완료로 바꿀 차수). Android 의존 없음 */
 data class HandoffPlan(
     val zipName: String,
     val entries: List<Pair<String, String>>,
@@ -74,8 +74,8 @@ object Handoff {
     fun count(book: SiteBook, scope: HandoffScope, now: Long, zone: ZoneId, min: Int = Pipeline.MIN_TARGETS) = select(book, scope, now, zone, min).size
 
     fun zipName(site: Site, scope: HandoffScope, now: Long, zone: ZoneId): String {
-        val d = DateTimeFormatter.ofPattern("yyyyMMdd").withZone(zone).format(Instant.ofEpochMilli(now))
-        return "${Names.safe(site.name)}_${scope.fileWord}_$d.zip"
+        // 0.1.18 M6: 같은 이름으로 덮어씀(날짜는 zip 안 보낸기록.txt)
+        return "${Names.safe(site.name)}_기준점.zip"
     }
 
     fun plan(book: SiteBook, scope: HandoffScope, now: Long, zone: ZoneId, min: Int = Pipeline.MIN_TARGETS): HandoffPlan {
@@ -83,11 +83,12 @@ object Handoff {
         val entries = ArrayList<Pair<String, String>>()
         entries += Names.listCsvName(book.site) to ListCsv.write(book, zone, min)
         val epsg = book.site.epsg
-        entries += ItwinGuide.FILE to ItwinGuide.text(epsg)
+        entries += ItwinSheet.FILE to ItwinSheet.TEXT
+        entries += "보낸기록.txt" to "보낸 시각 " + DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(zone).format(Instant.ofEpochMilli(now)) + " · 좌표계 EPSG:$epsg · 폴더 ${sel.size}개\r\n"
         for ((o, s) in sel) {
             val shots = book.active(s)
             entries += "${Names.objFolder(o)}/${Names.xmlName(o, s, epsg)}" to ItwinXml.write(shots, epsg)
-            entries += "${Names.objFolder(o)}/${Names.txtName(o, s, epsg)}" to ItwinXml.txt(shots)
+            entries += "${Names.objFolder(o)}/${Names.refCsvName(o, s)}" to ItwinXml.refCsv(shots)
         }
         val mark = sel.filter { (_, s) -> book.stage(s, min).let { it == Stage.HANDOFF || it == Stage.DONE } }.map { it.second.id }
         val noPhoto = sel.filter { (_, s) -> s.photoDoneAt == null }.map { (o, s) -> Names.photoFolder(o, s) }
@@ -98,25 +99,3 @@ object Handoff {
 /** 목록 순서: 호수 대상(종류 순, 번호 순) 다음 토층(글자 순) — 폴더 이름 정렬과 같다 */
 val ObjOrder: Comparator<Obj> = compareBy<Obj>({ it.kind.lettered }, { if (it.kind.lettered) 0 else it.no }, { it.kind.ordinal }, { it.no })
 
-/**
- * 0.1.17: zip 안 「iTwin_불러오기.txt」. Bentley 문서(ContextCapture/iTwin Capture Modeler 「Importing control points」, KB0044805) 근거.
- * 가장 확실한 길 = Surveys XML(좌표계가 파일 안에 있어 마법사 없음). TXT 는 쉼표 구분이라 「Custom Text Format (Wizard)」 로만 읽힌다
- * (기본 TXT 읽기는 공백 구분 → 이름 「Target #1」 의 공백·쉼표 때문에 못 읽음).
- */
-object ItwinGuide {
-    const val FILE = "iTwin_불러오기.txt"
-    fun text(epsg: Int): String = listOf(
-        "iTwin Capture Modeler 에 표적 좌표 넣기",
-        "",
-        "1) 블록에 사진을 넣은 뒤 Surveys(측량) 탭 > Import surveys from file(파일에서 측량 가져오기).",
-        "2) 파일 형식은 \"ContextCapture Surveys (XML)\" 을 고르고 각 폴더의 *_EPSG$epsg.xml 을 엽니다.",
-        "   - 좌표계(EPSG:$epsg)가 파일 안에 있어 따로 고를 것이 없습니다.",
-        "3) TXT 를 쓰려면 반드시 \"Custom Text Format (Wizard)\" 를 고르고: 구분자 = 쉼표, 머리줄 없음,",
-        "   열 = 이름 · X(동) · Y(북) · Z, 좌표계 = EPSG:$epsg. (기본 TXT 읽기는 공백 구분이라 이 파일을 못 읽습니다)",
-        "4) 공중삼각측량(Aerotriangulation): Positioning = Control points, \"Use targets (QR Codes, AprilTags or ChiliTags)\" 켬,",
-        "   Targets extraction = AprilTags. 사진에서 찾은 표적과 같은 이름(Target #N)의 좌표가 저절로 합쳐집니다.",
-        "5) iTwin 이 표적 이름을 \"AprilTag #N\" 으로 붙이는 버전이면, TXT 의 이름을 그에 맞게 바꾸거나 표적 이름을 바꿔 맞춥니다.",
-        "",
-        "x = 동(E), y = 북(N), z = 수신기 높이, 정밀도 0.01 m.",
-    ).joinToString("\r\n", postfix = "\r\n")
-}

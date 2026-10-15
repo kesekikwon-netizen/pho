@@ -32,7 +32,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * 0.1.5 사용자 시안(10-12) 화면: 폴더 목록 · 폴더 안 · 표적 재기 · 재는 중 · 새 대상 · 번호 고르기 · PC로 보내기.
+ * 0.1.5 사용자 시안(10-12) 화면: 폴더 목록 · 폴더 안 · 표적 재기 · 재는 중 · 새 대상 · 번호 고르기 · iTwin으로 보내기.
  * 시안 모양을 따르되 실제 측량 흐름(FIX 때만 저장 · 차수 · 잠금 · zip 넘기기)은 그대로 둔다.
  */
 
@@ -135,7 +135,7 @@ fun ObjectsScreen(c: GcpController) {
             if (b.objs.isNotEmpty() && !Minimal.on) Segmented(listOf("전체" to "stage_all", "측량 필요" to "stage_measure", "사진 필요" to "stage_photo", "보내기" to "stage_handoff"),
                 tabs.indexOf(c.filter).coerceAtLeast(0), Modifier.testTag("stage_row")) { i -> c.filter = tabs[i] }
             Text("폴더 ${b.objs.size}개 · EPSG:${b.site.epsg}", style = Ty.small, color = G.sub, modifier = Modifier.padding(start = 4.dp, top = 8.dp).testTag("folder_count"))
-            if (rows.isEmpty()) Text(if (c.filter != null) "「${c.filter?.ko}」 폴더가 없어요" else "아직 폴더가 없어요.\n아래 「새 대상」을 누르면 종류·번호를 골라 폴더를 만들어요.",
+            if (rows.isEmpty()) Text(if (c.filter != null) "「${c.filter?.ko}」 폴더가 없어요" else "아직 폴더가 없어요.\n아래 「새 폴더」를 누르고 이름을 쓰세요.",
                 style = Ty.label, color = G.sub, modifier = Modifier.padding(vertical = 24.dp, horizontal = 8.dp).testTag("obj_empty"))
             // 차수 · 면으로 묶기(목업 「1차 · 검출면」)
             for ((group, list) in rows.groupBy { r -> r.session?.let { "${it.no}차 · ${it.label}" } ?: "차수 없음" }.toSortedMap()) {
@@ -155,19 +155,19 @@ fun ObjectsScreen(c: GcpController) {
         }
         BottomBar {
             val n = c.handoffCount(HandoffScope.PENDING)
-            // 0.1.15 미니멀: PC로 보내기는 ⋯ (자동 저장은 이미 됨) · 「새 대상」은 같은 오른쪽 자리
+            // 0.1.15 미니멀: iTwin으로 보내기는 ⋯ (자동 저장은 이미 됨) · 「새 대상」은 같은 오른쪽 자리
             if (Minimal.on) Spacer(Modifier.weight(1f)) else
             Row(Modifier.weight(1f).height(72.dp).clip(RoundedCornerShape(20.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(20.dp))
-                .hClickable(onClickLabel = "PC로 보내기") { c.oneTapHandoff() }.semantics { contentDescription = "PC로 보내기 · 보낼 폴더 $n" }.testTag("to_handoff"),
+                .hClickable(onClickLabel = "iTwin으로 보내기") { c.oneTapHandoff() }.semantics { contentDescription = "iTwin으로 보내기 · 보낼 폴더 $n" }.testTag("to_handoff"),
                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                 GlyphIcon(Glyph.SHARE, G.ink, 22.dp); Spacer(Modifier.width(10.dp))
-                Text("PC로 보내기", style = Ty.label.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold), color = G.ink, maxLines = 1)
+                Text("iTwin으로 보내기", style = Ty.label.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold), color = G.ink, maxLines = 1)
             }
             Row(Modifier.weight(1f).height(72.dp).clip(RoundedCornerShape(20.dp)).background(G.dark)
-                .hClickable(onClickLabel = "새 대상") { c.openNewObj() }.testTag("obj_new"),
+                .hClickable(onClickLabel = "새 폴더") { c.openNewObj() }.testTag("obj_new"),
                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                 GlyphIcon(Glyph.PLUS, G.onDark, 22.dp); Spacer(Modifier.width(10.dp))
-                Text("새 대상", style = Ty.label.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold), color = G.onDark, maxLines = 1)
+                Text("새 폴더", style = Ty.label.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold), color = G.onDark, maxLines = 1)
             }
         }
     }
@@ -202,7 +202,7 @@ fun ObjScreen(c: GcpController) {
                 done[0], nowStep == 0, "step_targets") { c.openTargets() }
             StepCard(2, "ID 카드", "QR · 대상 이름 · 날짜", done[1], nowStep == 1, "step_idcard") { c.openIdCard() }
             StepCard(3, "사진 찍기", if (photoDone) "다 찍었어요" else "iTwin Capture용 · ID 카드부터", done[2], false, "step_photo", null)
-            StepCard(4, "PC로 보내기", if (sent) "보냈어요" else "zip · 좌표 XML·TXT · 목록 CSV", done[3], nowStep == 3, "step_send") { c.oneTapHandoff() }
+            StepCard(4, "iTwin으로 보내기", if (sent) "보냈어요" else "zip · 기준점 XML · 참고용 CSV", done[3], nowStep == 3, "step_send") { c.oneTapHandoff() }
             FolderChip(Names.photoFolder(o, s), "obj_folder")
             Text("XML: ${Names.objFolder(o)}/${Names.xmlName(o, s, b.site.epsg)}", style = Ty.coord.copy(fontSize = 16.sp), color = G.sub, modifier = Modifier.padding(start = 4.dp).testTag("obj_xml"))
             Spacer(Modifier.height(4.dp))
@@ -226,7 +226,7 @@ fun ObjScreen(c: GcpController) {
                     locked -> BigPrimary("차수 고르기", "앞 차수는 보기만 해요", "obj_session") { c.sessionSheetOpen = true }
                     st == Stage.MEASURE -> BigPrimary("다음: 표적 재기", "1 / 4 단계 · ${n}/${s.slots.size} · FIX 때만 저장", "obj_measure") { c.openTargets() }
                     st == Stage.PHOTO -> BigPrimary("다음: ID 카드 띄우기", "2 / 4 단계 · 그다음 사진 찍기", "obj_idcard") { c.openIdCard() }
-                    st == Stage.HANDOFF -> BigPrimary("다음: PC로 보내기", "4 / 4 단계", "obj_send") { c.oneTapHandoff() }
+                    st == Stage.HANDOFF -> BigPrimary("다음: iTwin으로 보내기", "4 / 4 단계", "obj_send") { c.oneTapHandoff() }
                     else -> BigPrimary("다음 차수 만들기", "4단계 모두 끝 · 앞 차수 파일은 그대로", "obj_newsession") { c.openNewSession() }
                 }
                 }
@@ -355,11 +355,12 @@ private fun TargetsPanel(c: GcpController, o: kr.archsurvey.gcp.model.Obj, s: kr
                         .background(when { hot -> G.dark; shot != null -> G.sel; else -> G.white })
                         .border(if (hot) 0.dp else 1.dp, if (shot != null) G.dark.copy(alpha = 0.35f) else G.line, RoundedCornerShape(16.dp))
                         .hCombinedClickable(onLongClick = { c.onTargetLong(i) }) { c.onTargetTap(tag) }
-                        .semantics { contentDescription = "Target $tag" + if (shot != null) " · 잰 것, 다시 재려면 길게" else " · 누르면 바로 측점, 길게 = 번호 바꾸기" }
+                        .semantics { contentDescription = "표적 ${tag}번" + if (shot != null) " · 잰 것, 누르면 다시 재기 준비" else " · 누르면 바로 측점, 길게 = 번호 바꾸기" }
                         .padding(vertical = 6.dp).testTag("qtag_$tag"), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                         Text("$tag", style = Ty.ledger.copy(fontSize = if (tag >= 100) 20.sp else 26.sp, fontWeight = FontWeight.Medium), color = when { hot -> G.onDark; shot != null -> G.dot; else -> G.ink }, maxLines = 1)
                         when {
                             now -> Text("재는 중", style = Ty.small, color = G.onDark, maxLines = 1)
+                            shot != null && c.armedRetake == tag -> Text("다시 재기 ✓", style = Ty.small.copy(fontWeight = FontWeight.Bold), color = G.bad, maxLines = 1, modifier = Modifier.testTag("qtag_armed_$tag"))
                             shot != null -> Text("완료", style = Ty.small.copy(fontWeight = FontWeight.Medium), color = G.dot, maxLines = 1, modifier = Modifier.testTag("qtag_done_$tag"))
                             isNext -> Text("지금", style = Ty.small.copy(fontWeight = FontWeight.Medium), color = G.onDark, maxLines = 1)
                             else -> Text("대기", style = Ty.small, color = G.sub, maxLines = 1)
@@ -461,6 +462,7 @@ fun NewObjScreen(c: GcpController, f: NewObjForm) {
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { if (ok) c.submitNewObj() }),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 68.dp).focusRequester(focus).testTag("newobj_title"))
             if (f.title.isNotBlank() && prob != null) Text(prob, style = Ty.label, color = G.bad, modifier = Modifier.padding(top = 6.dp).testTag("objno_taken"))
+            if (c.sameNameObj(f.title) != null) Tile("그 폴더 열기", false, "newobj_open_same", Modifier.fillMaxWidth(), height = 56.dp) { c.openSameNameObj(f.title) }
             f.nearNote?.let { Text(it, style = Ty.label, color = G.warn, modifier = Modifier.padding(top = 4.dp).testTag("near_note")) }
             Spacer(Modifier.height(12.dp))
             Text("저장 위치 · Documents/iTwinGCP/${c.book?.site?.name ?: ""}/${if (f.title.isBlank()) "…" else ObjNames.safe(f.title)}_1차 · 표적 #" + QrPayload.ranges(f.slots) + (epsg?.let { " · EPSG:$it" } ?: ""),
@@ -527,8 +529,8 @@ fun NumPickScreen(c: GcpController, p: NumPick) {
     }
 }
 
-// =============================== PC로 보내기 ===============================
-/** g06 PC로 보내기: 무엇을 · 받는 곳 · 들어가는 파일 · zip 만들어 보내기. 형식(zip 안 목록.csv + XML·TXT)은 그대로 */
+// =============================== iTwin으로 보내기 ===============================
+/** g06 iTwin으로 보내기: 무엇을 · 받는 곳 · 들어가는 파일 · 한 번에 zip + 공유. 형식(zip 안 목록.csv + XML · 참고용 CSV · 안내문)은 그대로 */
 @Composable
 fun HandoffScreen(c: GcpController) {
     val b = c.book ?: return
@@ -536,7 +538,7 @@ fun HandoffScreen(c: GcpController) {
     val sel = Handoff.select(b, c.handoffScope, now, c.zone)
     var dest by remember { mutableStateOf(0) }
     Column(Modifier.fillMaxSize().background(G.bg).hClickable {}.testTag("handoff_sheet")) {
-        GTopBar("PC로 보내기", { c.handoffOpen = false }, c, sub = "iTwin Capture용 zip", onMenu = { c.handoffOpen = false; c.menuOpen = true })
+        GTopBar("iTwin으로 보내기", { c.handoffOpen = false }, c, sub = "iTwin Capture용 zip", onMenu = { c.handoffOpen = false; c.menuOpen = true })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
             GroupLabel("무엇을 보낼까요")
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -558,7 +560,7 @@ fun HandoffScreen(c: GcpController) {
                 CardRow(Glyph.LIST, Names.listCsvName(b.site), "폴더 · 차수 · 사진 폴더 목록", "handoff_csv") { Badge("포함", BadgeTone.DONE) }
                 CardDivider()
                 val pts = sel.sumOf { (_, s) -> b.active(s).size }
-                CardRow(Glyph.PIN, "표적 좌표 ${pts}점", "XML · TXT · EPSG:${b.site.epsg}", "handoff_xml") { Badge(if (sel.isEmpty()) "없음" else "포함", if (sel.isEmpty()) BadgeTone.NEUTRAL else BadgeTone.DONE) }
+                CardRow(Glyph.PIN, "표적 좌표 ${pts}점", "XML · EPSG:${b.site.epsg}", "handoff_xml") { Badge(if (sel.isEmpty()) "없음" else "포함", if (sel.isEmpty()) BadgeTone.NEUTRAL else BadgeTone.DONE) }
                 CardDivider()
                 val noPhoto = sel.count { it.second.photoDoneAt == null }
                 CardRow(Glyph.CAMERA, "사진", "zip에 넣지 않아요 · 사진 폴더 이름으로 PC에서 맞춰요", "handoff_photo") { if (noPhoto > 0) Badge("사진 아직 $noPhoto", BadgeTone.WARN) }
@@ -575,7 +577,7 @@ fun HandoffScreen(c: GcpController) {
         }
         Column(Modifier.fillMaxWidth().background(G.bg)) {
             Box(Modifier.fillMaxWidth().height(1.dp).background(G.line))
-            Box(Modifier.padding(16.dp)) { BigPrimary("zip 만들어 보내기", "폴더 ${sel.size}개 · 공유 창에서 보낼 곳 고르기", "handoff_send", enabled = sel.isNotEmpty()) { c.sendHandoff() } }
+            Box(Modifier.padding(16.dp)) { BigPrimary("iTwin으로 보내기", "폴더 ${sel.size}개 · 공유 창에서 보낼 곳 고르기", "handoff_send", enabled = sel.isNotEmpty()) { c.sendHandoff() } }
         }
     }
 }

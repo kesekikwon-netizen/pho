@@ -150,8 +150,8 @@ class SnapshotTest {
         rule.onNodeWithTag("measuring").assertIsDisplayed(); rule.onNodeWithTag("map_area").assertIsDisplayed()   // 0.1.7: 지도 위 작은 띠 · 지도 그대로
         rule.onNodeWithTag("measuring_count", useUnmergedTree = true).assertTextContains("/ 10", substring = true); shot("m07-measuring-on-map")
         rule.runOnIdle { c.cancelMeasure() }; rule.onNodeWithTag("targets").assertIsDisplayed()
-        rule.runOnIdle { c.onTargetLong(0) }; shot("m06c-remeasure-confirm")
-        rule.runOnIdle { c.ui.answer(false) }
+        rule.runOnIdle { c.onTargetTap(c.session!!.slots[0]) }; shot("m06c-remeasure-armed") // 0.1.18 S1: 팝업 없이 칸 안 「다시 재기 ✓」
+        rule.runOnIdle { assertNull(c.ui.confirm); c.armedRetake = null }
         // 0.1.7: 저장 뒤 화면·창 없음, 다음 표적이 바로 골라짐
         rule.runOnIdle { r.measure(4, 194953.0, 574012.0) }
         rule.onNodeWithTag("targets").assertIsDisplayed(); rule.onNodeWithTag("map_area").assertIsDisplayed()
@@ -176,7 +176,7 @@ class SnapshotTest {
         show(c)
         // 0.1.17: 한 번 누르면 바로 zip + 공유(고르기 창 없음). 보낼 것이 없으면 전체
         rule.onNodeWithTag("to_handoff").performClick(); rule.waitForIdle(); shot("m09-handoff")
-        assertEquals(1, r.files.zips.size); assertTrue(r.files.zips[0].entries.any { it.first == kr.archsurvey.gcp.model.ItwinGuide.FILE })
+        assertEquals(1, r.files.zips.size); assertTrue(r.files.zips[0].entries.any { it.first == kr.archsurvey.gcp.model.ItwinSheet.FILE })
     }
 
     @Test fun s10_sites_and_new_site_picker() {

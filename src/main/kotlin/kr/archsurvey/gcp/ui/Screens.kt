@@ -58,9 +58,9 @@ fun SitesScreen(c: GcpController) {
                 }
                 Box(Modifier.padding(horizontal = 18.dp).fillMaxWidth().height(1.dp).background(G.line))
             }
-            Text("새 유적은 지금 위치의 동 이름·최근 이름·오늘 날짜 중에서 고르고, 원점(좌표계)은 수신기 위치로 미리 골라 둡니다.", style = Ty.label.copy(fontSize = 16.sp), color = G.sub, modifier = Modifier.padding(18.dp))
+            Text("아직 유적이 없어요. 아래 「+ 새 유적」을 누르고 이름을 쓰세요. 좌표계는 수신기 위치로 미리 맞춰 둡니다.", style = Ty.label.copy(fontSize = 16.sp), color = G.sub, modifier = Modifier.padding(18.dp))
         }
-        BottomBar { Btn("+ 새 유적", "site_new", Modifier.weight(1f), height = 68.dp, sub = "이름 · 좌표계를 골라요") { c.openNewSite() } }
+        BottomBar { Btn("+ 새 유적", "site_new", Modifier.weight(1f), height = 68.dp, sub = "이름을 쓰면 끝") { c.openNewSite() } }
     }
 }
 
@@ -80,6 +80,7 @@ fun IdCardScreen(c: GcpController) {
     val ink = Color(0xFF111111)
     Column(Modifier.fillMaxSize().background(Color.White).windowInsetsPadding(WindowInsets.systemBars).padding(horizontal = 18.dp, vertical = 14.dp).testTag("idcard"), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("이 화면을 사진 세트의 첫 장으로 찍으세요", style = Ty.label.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold), color = ink, textAlign = TextAlign.Center)
+        Text("PC에서 이 사진들이 어느 폴더 것인지 알려 주는 표지예요", style = Ty.small.copy(fontSize = 14.sp), color = T.inkSub, textAlign = TextAlign.Center, maxLines = 1, modifier = Modifier.testTag("idcard_sub"))
         Spacer(Modifier.height(14.dp))
         Text(b.site.name, style = Ty.label.copy(fontSize = 18.sp), color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(o.name, style = Ty.label.copy(fontSize = 46.sp, lineHeight = 52.sp, fontWeight = FontWeight.Black), color = ink, maxLines = 1, modifier = Modifier.testTag("idcard_name"))
