@@ -46,11 +46,11 @@ fun ExportScreen(ec: ExportController) {
     }
     ToolScaffold("내보내기", "export_screen", onBack = { ec.close() }, bottom = {
         DBottomBar {
-            if (out == null) DPrimary(if (ec.running) "만드는 중…" else "파일 ${exportFileCount(ec)}개 만들기", "export_run", Modifier.weight(1f),
-                enabled = !ec.running && (s?.points ?: 0) > 0 && ec.formats.isNotEmpty()) { ec.run() }
+            if (out == null) DPrimary(if (ec.running) "만드는 중…" else "파일 ${exportFileCount(ec)}개 내보내기 · 공유", "export_run", Modifier.weight(1f),
+                enabled = !ec.running && (s?.points ?: 0) > 0 && ec.formats.isNotEmpty()) { ec.runAndShare() }
             else {
                 DSecondary("파일로 저장", "export_save", Modifier.weight(1f)) { ec.saveAs() }
-                DPrimary("공유하기", "export_share", Modifier.weight(1.4f)) { ec.share() }
+                DPrimary("다시 공유", "export_share", Modifier.weight(1.4f)) { ec.share() }
             }
         }
     }) {
@@ -58,6 +58,7 @@ fun ExportScreen(ec: ExportController) {
         if (s == null) Text("불러오는 중…", style = DTy.small, color = D.sub)
         else Text("점 ${s.points} · 유구 ${sc?.dig?.featureOutlines()?.size ?: 0} · 사진 ${s.photos} · 음성 ${s.voices} · EPSG:${sc?.zone?.epsg ?: ""}", style = DTy.monoS, color = D.sub, modifier = Modifier.testTag("export_summary"))
         if ((s?.fakePoints ?: 0) > 0) Text("이전 시험 버전에서 수신기 없이 만든 점이 ${s!!.fakePoints}개 들어 있어요. 실측 데이터와 섞이지 않게 확인하세요.", style = DTy.small, color = D.bad, modifier = Modifier.testTag("export_fake_warning"))
+        ec.savedText?.let { Text(it, style = DTy.bodyB, color = D.ink, modifier = Modifier.testTag("export_saved_path")) }
         DRule()
         if (out == null) {
             DSectionLabel("도면 축척 · 글자 크기가 맞춰집니다")

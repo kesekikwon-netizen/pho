@@ -71,13 +71,20 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
 
     fun refresh() { scope.launch { summary = runCatching { platform.summary() }.getOrNull() } }
 
+    /** 0.1.55 한 번 누르기: 만들고 바로 공유 창. 저장 위치는 [savedText] 로 화면에 남긴다 */
+    fun runAndShare() { shareAfter = true; run() }
+    private var shareAfter = false
+    /** 0.1.55 저장 위치 한 줄(내장 저장공간/…) */
+    var savedText by mutableStateOf<String?>(null); private set
+
     fun run() {
-        if (running) return
+        if (running) { shareAfter = false; return }
         val s = summary
-        if (s != null && s.points == 0) { error = "내보낼 점이 없어요. 먼저 측점을 하세요."; onResult?.invoke(false, error!!); return }
-        if (formats.isEmpty()) { error = "양식을 하나 이상 고르세요."; onResult?.invoke(false, error!!); return }
+        if (s != null && s.points == 0) { shareAfter = false; error = "내보낼 점이 없어요. 먼저 측점을 하세요."; onResult?.invoke(false, error!!); return }
+        if (formats.isEmpty()) { shareAfter = false; error = "양식을 하나 이상 고르세요."; onResult?.invoke(false, error!!); return }
         val fs = formats
-        running = true; error = null; notice = null; output = null
+        val thenShare = shareAfter; shareAfter = false
+        running = true; error = null; notice = null; output = null; savedText = null
         scope.launch {
             try {
                 val o = platform.exportBundle(fs, includePhotos && (s?.photos ?: 1) > 0, includeVoices && (s?.voices ?: 1) > 0, itwinKeepNames, scale, if (todayOnly) todayKey() else null)
@@ -86,6 +93,8 @@ class ExportController(private val platform: ExportPlatform, private val scope: 
                 onResult?.invoke(true, "내보내기 파일을 만들었어요 · ${o.fileName} (${sizeText(o.sizeBytes)}) · ${fs.size}개 양식 · " +
                     (if (o.publicFolder != null) "PC로 옮길 폴더: 내장 저장공간/${o.publicFolder}" else "전송 방식을 고르세요") +
                     "")
+                savedText = "저장됨 · 내장 저장공간/" + (o.publicFolder?.trimEnd('/')?.plus("/") ?: "") + o.fileName
+                if (thenShare) share()
             }
             catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e

@@ -54,7 +54,7 @@ class Shots0151Test {
         var taps = 0
         rule.onNodeWithTag("home_new_job").performClick(); taps++; rule.waitForIdle()
         shot("survey_2_new_job")
-        rule.onAllNodes(hasSetTextAction()).assertCountEquals(0)
+        rule.onNodeWithTag("job_name").performTextInput("새 트렌치") // 0.1.55 사용자 정책: 이름은 직접 입력
         rule.onNodeWithTag("job_create").performClick(); taps++; rule.waitForIdle()
         assertFalse("측량 지도로", c.homeOpen); assertNull(c.hub.screen)
         assertNotEquals("정밀발굴 1지구", c.projectName)

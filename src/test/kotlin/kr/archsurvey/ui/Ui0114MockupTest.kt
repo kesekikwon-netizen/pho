@@ -177,7 +177,7 @@ class Ui0114MockupTest {
         // 09 작업관리
         ui { c.hub.open(ToolScreen.JOB_HUB) }; rule.onNodeWithTag("jobhub_new").assertExists(); shot("mockup_09_job_hub")
         // 10 새 작업
-        ui { c.jobs!!.openNew(); c.jobs!!.newDetailsOpen = true }; rule.onNodeWithTag("job_zone_note").performScrollTo().assertExists() /* 0.1.39: 자동 토글 → 추천 타일 미리 고름 */; rule.onNodeWithTag("job_codes").assertDoesNotExist() /* 0.1.38: 위치 종류(코드 라이브러리)는 발굴 종류로 대체돼 숨김 */; rule.onNodeWithTag("job_site_new").assertExists(); shot("mockup_10_new_job")
+        ui { c.jobs!!.openNew(); c.jobs!!.newDetailsOpen = true }; rule.onNodeWithTag("job_zone_note").performScrollTo().assertExists() /* 0.1.39: 자동 토글 → 추천 타일 미리 고름 */; rule.onNodeWithTag("job_codes").assertDoesNotExist() /* 0.1.38: 위치 종류(코드 라이브러리)는 발굴 종류로 대체돼 숨김 */; rule.onNodeWithTag("job_name").assertExists(); shot("mockup_10_new_job")
         // 11 작업 전송 양식
         reset(); ui { c.exporter!!.openScreen() }
         rule.onNodeWithTag("export_fmt_shp").performScrollTo().performClick(); rule.waitForIdle()
@@ -188,11 +188,12 @@ class Ui0114MockupTest {
         // 12 전송 방식
         // 0.1.43 시안 ⑨: 기본 = 도면 DXF · Shape · 점 목록 · 야장 (+사진·음성 묶음) → Shape 빼고 KML 넣기 = 파일 5개
         rule.onNodeWithTag("export_run").assertTextContains("파일 5개", substring = true).performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("export_saved_path").assertExists()
         assertEquals(setOf(kr.archsurvey.export.ExportFormat.DRAWING_DXF, kr.archsurvey.export.ExportFormat.FIELD_CSV, kr.archsurvey.export.ExportFormat.CSV, kr.archsurvey.export.ExportFormat.KML), exp.lastFormats)
         rule.onNodeWithTag("export_share").assertExists(); rule.onNodeWithTag("export_save").assertExists()
         shot("mockup_12_export_method")
         rule.onNodeWithTag("export_share").performClick(); rule.waitForIdle()
-        assertEquals(1, exp.shared); assertEquals(ToastKind.OK, c.ui.toastKind)
+        assertEquals(2, exp.shared) /* 0.1.55: 만들기 = 바로 공유 1번 + 다시 공유 1번 */; assertEquals(ToastKind.OK, c.ui.toastKind)
         // 13 배경맵 설정
         reset(); ui { c.exporter!!.close(); c.bg!!.openManage() }
         rule.onNodeWithTag("bg_tab_0").assertExists(); shot("mockup_13_background")

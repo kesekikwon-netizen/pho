@@ -149,10 +149,9 @@ class Ui0114ApplyToSurveyTest {
         setup()
         rule.onNodeWithTag("home_job_btn").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("job_to_new").performScrollTo().performClick(); rule.waitForIdle()
-        rule.onNodeWithTag("job_details").performScrollTo().performClick(); rule.waitForIdle() /* 0.1.51 고르기는 「바꾸기 ›」 안 */
-        rule.onNodeWithTag("job_stage_TRIAL").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("job_name").performTextInput("시굴 트렌치") /* 0.1.55 이름은 사용자가 직접 */
         rule.onNodeWithTag("job_create").performClick(); rule.waitForIdle()
-        assertTrue(c.projectName, c.projectName.startsWith("시굴 1지구 · "))
+        assertEquals("시굴 트렌치", c.projectName)
         assertOnSurvey()
     }
 

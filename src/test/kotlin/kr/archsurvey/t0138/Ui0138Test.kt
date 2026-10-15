@@ -94,8 +94,7 @@ class Ui0138Test {
         val (c, jobs) = setup(home = false)
         rule.runOnIdle { c.jobs!!.openNew() }; rule.waitForIdle()
         // 0.1.39: 이름 직접 입력은 「자세히 › 직접 입력」, 새 유적은 「+ 새 유적」
-        rule.onNodeWithTag("job_details").performScrollTo().performClick(); rule.waitForIdle() /* 0.1.51 고르기는 「바꾸기 ›」 안 */
-        rule.onNodeWithTag("job_site_new").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("job_group").performTextClearance()
         rule.onNodeWithTag("job_group").performTextInput("광령리 유적")
         rule.runOnIdle { c.jobs!!.newName = "A트렌치" }
         rule.waitForIdle()

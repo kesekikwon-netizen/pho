@@ -71,78 +71,38 @@ class NewJob0139Test {
         return c to jobs
     }
 
-    @Test fun home_bigNewJob_twoTapsToMap_noKeyboard() {
+    /** 0.1.55: 홈 「+ 새 작업」 → 이름 칸에 바로 커서 → 쓰고 「만들기」 → 측량 지도. 폴더 칸에는 지난 폴더가 미리 적혀 있음 */
+    @Test fun home_newJob_typeName_create() {
         val (c, jobs) = setup()
-        shot("01_home_new_job")
-        rule.onNodeWithTag("home_new_job").assertIsDisplayed()
         tap("home_new_job")
         assertEquals(ToolScreen.JOB_NEW, c.hub.screen)
-        // 유적·단계는 지난 작업 것, 지구 번호는 다음 빈 번호, 날짜 자동
-        rule.onNodeWithTag("job_built_name", useUnmergedTree = true).assertTextEquals("강릉 교동 · 정밀발굴 2지구 · 10-12")
-        rule.onNodeWithTag("job_name").assertDoesNotExist()   // 키보드 칸 없음(직접 입력 접힘)
-        rule.onNodeWithTag("job_group").assertDoesNotExist()
-        shot("02_new_job")
+        rule.onNodeWithTag("job_name").assertIsFocused()
+        rule.onNodeWithTag("job_site_new").assertDoesNotExist()
+        rule.onNodeWithTag("job_no_p1").assertDoesNotExist()
+        rule.onNodeWithTag("job_group").assertTextContains("강릉 교동")
+        rule.onNodeWithTag("job_name").performTextInput("2호 주거지")
+        shot("01_new_job_typed")
         tap("job_create")
-        assertEquals("강릉 교동 · 정밀발굴 2지구 · 10-12", jobs.current)
+        assertEquals("2호 주거지", c.projectName)
         assertEquals("강릉 교동", jobs.lastGroup)
-        assertFalse(c.homeOpen); assertNull(c.hub.screen)  // 바로 측량 지도
-        rule.onNodeWithTag("measure_button").assertExists()
-        assertEquals(2, taps)
-        shot("03_map_after_create")
-    }
-
-    @Test fun pickStageAndNumber_buildsName_folderUnderSite() {
-        val (c, jobs) = setup()
-        tap("home_new_job")
-        tap("job_details")
-        tap("job_stage_TRIAL")
-        rule.onNodeWithTag("job_built_name", useUnmergedTree = true).assertTextEquals("강릉 교동 · 시굴 1지구 · 10-12")
-        repeat(11) { tap("job_no_p1") } // 0.1.43 시안: − / + 만
-        rule.onNodeWithTag("job_built_name", useUnmergedTree = true).assertTextEquals("강릉 교동 · 시굴 12지구 · 10-12")
-        tap("job_no_m1")
-        rule.onNodeWithTag("job_folder_preview", useUnmergedTree = true).assertTextContains("Documents/ExcavationSurvey/강릉 교동/", substring = true)
-        tap("job_site_none")
-        rule.onNodeWithTag("job_built_name", useUnmergedTree = true).assertTextEquals("시굴 1지구 · 10-12")
-        tap("job_site_강릉 교동")
-        shot("04_new_job_trial_11")
-        tap("job_create")
-        assertEquals("강릉 교동 · 시굴 1지구 · 10-12", jobs.current)
         assertNull(c.hub.screen)
     }
 
-    @Test fun zoneTiles_recommendedPreselected_detailsHidden() {
+    @Test fun emptyName_refused_noAutoName() {
         val (c, _) = setup()
         tap("home_new_job")
-        rule.onNodeWithTag("job_zone_5186").assertDoesNotExist() // 0.1.51: 고르기는 「바꾸기 ›」 안
-        tap("job_details")
-        val rec = c.jobs!!.recommendedZone
-        if (rec != null) rule.onNodeWithTag("job_zone_${rec.epsg}").assertExists()
-        rule.onNodeWithTag("job_zone_5186").assertExists(); rule.onNodeWithTag("job_zone_5187").assertExists()
-        rule.onNodeWithTag("job_manual").assertDoesNotExist()
-        // 0.1.46: 새 작업은 선택만 — 작업명 직접 입력창 없음
-        rule.onNodeWithTag("job_manual").assertDoesNotExist()
-        rule.onNodeWithTag("job_name").assertDoesNotExist()
-        shot("05_new_job_details")
+        tap("job_create")
+        assertEquals("작업 이름을 입력하세요", c.jobs!!.error)
+        assertEquals(ToolScreen.JOB_NEW, c.hub.screen)
     }
 
-    @Test fun newSite_isOptionalKeyboard_fallback() {
+    @Test fun clearFolder_putsJobAtTop() {
         val (c, jobs) = setup()
         tap("home_new_job")
-        tap("job_details")
-        tap("job_site_new")
-        rule.onNodeWithTag("job_group").performScrollTo().performTextInput("광령리")
-        rule.onNodeWithTag("job_built_name", useUnmergedTree = true).assertTextEquals("광령리 · 정밀발굴 2지구 · 10-12")
+        rule.onNodeWithTag("job_group").performTextClearance()
+        rule.onNodeWithTag("job_name").performTextInput("시험")
         tap("job_create")
-        assertEquals("광령리", jobs.lastGroup)
-        assertNull(c.hub.screen)
-    }
-
-    @Test fun drawer_firstItem_isNewJob_cardOpensList() {
-        val (c, _) = setup()
-        assertEquals("job_new", DrawerMenu.sections.first().items.first().id)
-        assertEquals("+ 새 작업", DrawerMenu.sections.first().items.first().label)
-        rule.onNodeWithTag("home_card_new").assertDoesNotExist() // 같은 단추 두 번 없음
-        rule.onNodeWithTag("home_card_open").performClick(); rule.waitForIdle()
-        assertEquals(ToolScreen.JOB_OPEN, c.hub.screen)
+        assertNull(jobs.lastGroup)
+        assertEquals("시험", c.projectName)
     }
 }

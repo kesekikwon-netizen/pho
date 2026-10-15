@@ -182,7 +182,7 @@ class JobController(
     val builtName: String get() = kr.archsurvey.job.NewJobName.unique(
         kr.archsurvey.job.NewJobName.build(newSite.ifBlank { null }, newStage, newNo, mmdd), (list.map { it.name } + current))
     /** 실제로 만들 이름 */
-    val effectiveName: String get() = if (nameManual) newName.trim() else builtName
+    val effectiveName: String get() = newName.trim() /* 0.1.55: 사용자가 쓴 이름만(자동 이름 없음) */
     /** 유적 칩: 지금 작업의 유적 + 최근 유적(위치→행정동 이름은 이 앱에 주소 API 가 없어 아직 못 함 — 마지막 쓴 것으로 대신) */
     val siteChips: List<String> get() = (listOfNotNull(currentSite) + groups).distinct().take(6)
     val currentSite: String? get() = currentFolder?.removePrefix(kr.archsurvey.job.JobFolders.PUBLIC_PARENT + "/")?.let { kr.archsurvey.job.JobFolders.split(it).first }
@@ -223,7 +223,7 @@ class JobController(
     }
     fun openNew() {
         error = null; notice = null; newName = ""; newGroup = ""; nameManual = false; noTouched = false; newGroupTyping = false; newDetailsOpen = false
-        newSite = currentSite.orEmpty()
+        newSite = currentSite.orEmpty() /* 0.1.55: 지난 폴더 이름을 칸에 미리 적어 둠(지우거나 고칠 수 있음) */
         newStage = kr.archsurvey.job.SurveyStage.inName(current) ?: kr.archsurvey.job.SurveyStage.FULL
         newNo = kr.archsurvey.job.NewJobName.nextNo(newSite, newStage, list.map { it.name } + current)
         recommendedZone = ZoneAuto.fromLon(c.gv.lon)
