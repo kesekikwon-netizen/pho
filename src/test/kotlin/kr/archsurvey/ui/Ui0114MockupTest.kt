@@ -79,8 +79,8 @@ class Ui0114MockupTest {
     private class Media : MediaPlatform {
         val ph = ArrayList<PhotoItem>(); val vo = ArrayList<VoiceItem>()
         override suspend fun photos(pointRowId: Long) = ph.toList(); override suspend fun voices(pointRowId: Long) = vo.toList()
-        override fun takePhoto(pointId: String, pointRowId: Long, onDone: (Boolean) -> Unit) { ph.add(PhotoItem(ph.size + 1L, "x.jpg")); onDone(true) }
-        override fun pickPhotos(pointId: String, pointRowId: Long, remaining: Int, onDone: (Int) -> Unit) = onDone(0)
+        override fun takePhoto(pointId: String, pointRowId: Long, onDone: (Long?) -> Unit) { val id = ph.size + 1L; ph.add(PhotoItem(id, "x.jpg")); onDone(id) }
+        override fun pickPhotos(pointId: String, pointRowId: Long, onDone: (Int) -> Unit) = onDone(0)
         override suspend fun deletePhoto(id: Long) { ph.removeAll { it.id == id } }
         override fun thumb(rel: String): androidx.compose.ui.graphics.ImageBitmap? = null
         override fun hasMicPermission() = true; override fun requestMicPermission(onResult: (Boolean) -> Unit) = onResult(true)
@@ -223,12 +223,12 @@ class Ui0114MockupTest {
         rule.onNodeWithTag("point_confirm").assertExists()
         rule.onNodeWithTag("measure_label", useUnmergedTree = true).assertTextEquals("측량")
         shot("mockup_17_survey_result")
-        // 18 사진 확인(찍은 뒤 확인 화면은 그대로)
+        // 18 0.1.59: 찍으면 바로 저장 + 되돌리기 알림(전체 화면 확인 없음)
         rule.onNodeWithTag("result_photo").performClick(); rule.waitForIdle()
-        ui { c.photoReviewOpen = true }
-        rule.onNodeWithTag("photo_review").assertExists(); shot("mockup_18_photo_capture")
-        rule.onNodeWithTag("photo_review_ok").performClick(); rule.waitForIdle()
         rule.onNodeWithTag("photo_review").assertDoesNotExist()
+        if (media.ph.isEmpty()) ui { c.addPhotoCamera() } // 점 확인 창이 단추를 덮는 경우(이전 시험도 직접 열었다)
+        rule.waitForIdle()
+        assertEquals(1, media.ph.size); assertEquals("되돌리기", c.ui.toastActionLabel); shot("mockup_18_photo_capture")
         // 19 점 목록
         reset(); ui { c.hub.open(ToolScreen.POINTS) }
         rule.onNodeWithTag("points_tab_0").assertExists(); shot("mockup_19_point_manager")

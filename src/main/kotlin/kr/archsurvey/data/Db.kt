@@ -213,7 +213,20 @@ abstract class SurveyDao {
     @Query("SELECT COUNT(*) FROM photos WHERE relPath = :rel")
     abstract suspend fun countPhotoPath(rel: String): Int
 
+    @Query("SELECT id FROM photos WHERE relPath = :rel LIMIT 1")
+    abstract suspend fun photoIdOfPath(rel: String): Long?
+
     @Delete abstract suspend fun deletePhoto(p: PhotoEntity)
+
+    /** 0.1.59 사진 옮기기: 경로만 바꾼다 */
+    @Query("UPDATE photos SET relPath = :rel, thumbRelPath = :rel WHERE id = :id")
+    abstract suspend fun updatePhotoRel(id: Long, rel: String)
+
+    @Query("SELECT ph.id AS id, pt.pointId AS pointName, ph.relPath AS rel FROM photos ph JOIN points pt ON pt.rowId = ph.pointRowId WHERE pt.project = :project ORDER BY ph.id")
+    abstract suspend fun photoRowsOf(project: String): List<kr.archsurvey.photo.PhotoRow>
+
+    @Query("SELECT DISTINCT project FROM points")
+    abstract suspend fun allProjects(): List<String>
 
     @Query("SELECT * FROM photos WHERE id = :id")
     abstract suspend fun photoById(id: Long): PhotoEntity?
@@ -237,15 +250,8 @@ abstract class SurveyDao {
         return insertVoice(v)
     }
 
-    /** 점당 사진 최대 장수. 5번째는 거부한다(동시 호출에도 4장을 넘지 않도록 한 트랜잭션에서 확인) */
-    @androidx.room.Transaction
-    open suspend fun insertPhotoLimited(p: PhotoEntity, max: Int = PhotoLimit.MAX): Long {
-        if (photoCount(p.pointRowId) >= max) return -1L
-        return insertPhoto(p)
-    }
 }
 
-object PhotoLimit { const val MAX = 4 }
 object VoiceLimit { const val MAX = 3 }
 
 @Database(

@@ -107,7 +107,6 @@ fun SurveyMapScreen(
         if (c.backupQuickOpen) BackupQuickDialog(c)
         c.pointMenuFor?.let { PointMenuSheet(c, it) }
         if (c.markerStyleOpen) MarkerStyleDialog(c)
-        if (c.photoReviewOpen) PhotoReviewScreen(c)
         // 0.1.35 X4: 재는 중 진행은 측량하기 단추 안(지도를 가리지 않음)
         BusyQueueBar(c) // 0.1.14 대기열·진행 게이지
         if (!c.homeOpen) VoiceConfirmBanner(c) // 0.1.28 음성 확인 대기 띠
@@ -129,7 +128,6 @@ internal fun backTarget(c: SurveyController): (() -> Unit)? {
         c.dupPrompt != null -> { { c.ui.toast(DUP_BACK_HINT) } }
         // 0.1.29 T22-5: 측정(취득) 중 뒤로 = 기존 「중지」 경로(cancelAcquire — 저장 안 함). 예전엔 null 이라 앱이 나갔다
         c.phase == Phase.ACQUIRING -> { { c.cancelAcquire() } }
-        c.photoReviewOpen -> { { c.confirmPhoto() } }
         c.markerStyleOpen -> { { c.markerStyleOpen = false } }
         c.dig.renameFor != null -> { { c.dig.renameFor = null } }
         c.dig.pickerOpen -> { { c.dig.pickerOpen = false } }
@@ -412,10 +410,10 @@ private fun ResultPanel(c: SurveyController) {
                     Text(PointCaution.chip(p), style = Ty.label.copy(fontSize = 16.sp), color = fg, maxLines = 1)
                 }
                 Text(p.type, style = Ty.small, color = t.inkSub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                MBtn(Modifier.height(40.dp).testTag("photo_count_btn"), MKind.PLAIN, 14.dp, onClick = { if (c.photos.size < MediaLimits.PHOTOS) c.addPhotoCamera() else c.toggleExpand() }) {
+                MBtn(Modifier.height(40.dp).testTag("photo_count_btn"), MKind.PLAIN, 14.dp, onClick = { c.addPhotoCamera() }) {
                     Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         GlyphIcon(Glyph.CAMERA, t.accent, 18.dp)
-                        Text("${c.photos.size}/${MediaLimits.PHOTOS}", style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.testTag("photo_count"))
+                        Text("${c.photos.size}", style = Ty.coord.copy(fontSize = 16.sp), color = t.ink, modifier = Modifier.testTag("photo_count"))
                     }
                 }
                 MBtn(Modifier.size(40.dp).testTag("voice_btn"), MKind.PRIMARY, 20.dp, onClick = { c.toggleVoice() }) { GlyphIcon(Glyph.MIC, t.onPrimary, 18.dp) }
@@ -455,19 +453,22 @@ private fun ExpandedExtra(c: SurveyController) {
         )
         var confirmPhoto by remember { mutableStateOf<PhotoItem?>(null) }
         var confirmVoice by remember { mutableStateOf<VoiceItem?>(null) }
+        // 0.1.59: 장수 제한 없음 — 가로로 밀어 보기. 찍기·앨범은 오른쪽(오른손 엄지)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            repeat(MediaLimits.PHOTOS) { i ->
-                val ph = c.photos.getOrNull(i)
-                Box(
-                    Modifier.size(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(12.dp)).background(t.bg)
-                        .hClickable { if (ph != null) confirmPhoto = ph else c.addPhotoCamera() }.testTag("photo_slot_$i"),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (ph != null) PhotoThumb(c, ph) else GlyphIcon(Glyph.CAMERA, t.inkSub, 20.dp)
+            androidx.compose.foundation.lazy.LazyRow(Modifier.weight(1f).testTag("photo_strip"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(c.photos.size) { i ->
+                    val ph = c.photos[i]
+                    Box(
+                        Modifier.size(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(12.dp)).background(t.bg)
+                            .hClickable { confirmPhoto = ph }.testTag("photo_slot_$i"),
+                        contentAlignment = Alignment.Center,
+                    ) { PhotoThumb(c, ph) }
                 }
             }
-            Text("사진 ${c.photos.size}/${MediaLimits.PHOTOS}", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("photo_count"))
+            Text("사진 ${c.photos.size}", style = Ty.small, color = t.inkSub, modifier = Modifier.testTag("photo_count"))
             SmallButton("앨범", "photo_pick") { c.addPhotoPicker() }
+            Box(Modifier.size(SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(12.dp)).background(t.bg).hClickable { c.addPhotoCamera() }.testTag("photo_add"),
+                contentAlignment = Alignment.Center) { GlyphIcon(Glyph.CAMERA, t.accent, 20.dp) }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(
@@ -530,7 +531,7 @@ private fun RecordStrip(c: SurveyController) {
 }
 
 @Composable
-private fun SmallButton(label: String, tag: String, onClick: () -> Unit) {
+internal fun SmallButton(label: String, tag: String, onClick: () -> Unit) {
     val t = T
     Box(
         Modifier.padding(end = 8.dp).height(SurveyDims.MIN_TOUCH_DP.dp).widthIn(min = SurveyDims.MIN_TOUCH_DP.dp).clip(RoundedCornerShape(14.dp))

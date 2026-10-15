@@ -58,12 +58,12 @@ class ExportServiceTest {
         val r = ExportService(ctx, db.dao(), photos, voices).export("작업1", includePhotos = true, includeVoices = true)
         assertEquals(1, r.pointCount); assertEquals(1, r.photoCount); assertEquals(1, r.voiceCount)
         val names = ZipFile(r.zip).use { z -> z.entries().toList().map { it.name } }
-        for (n in listOf("points.csv", "points.dxf", "points.geojson", "photos.csv", "voice.csv", "README.txt", "photos/P-0001_1.jpg", "voices/P-0001_v.m4a"))
+        for (n in listOf("points.csv", "points.dxf", "points.geojson", "photos.csv", "voice.csv", "README.txt", "photos/P-0001/P-0001_1.jpg", "voices/P-0001_v.m4a"))
             assertTrue("$n in $names", n in names)
         ZipFile(r.zip).use { z ->
             val csv = z.getInputStream(z.getEntry("voice.csv")).readBytes().toString(Charsets.UTF_8)
             assertTrue(csv.contains("P-0001") && csv.contains("voices/P-0001_v.m4a") && csv.contains("4.2"))
-            assertEquals(100, z.getEntry("photos/P-0001_1.jpg").size.toInt())
+            assertEquals(100, z.getEntry("photos/P-0001/P-0001_1.jpg").size.toInt())
         }
     }
 

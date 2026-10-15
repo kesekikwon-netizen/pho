@@ -374,27 +374,4 @@ fun PointMenuSheet(c: SurveyController, p: SavedPoint) {
     }
 }
 
-// ---------------- 18 사진 확인 ----------------
-
-@Composable
-fun PhotoReviewScreen(c: SurveyController) {
-    val t = T
-    val p = c.lastPoint
-    val ph = c.photos.lastOrNull()
-    Column(Modifier.fillMaxSize().background(t.ink).testTag("photo_review")) {
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            Text("${p?.name ?: "—"} · 사진 ${c.photos.size} / ${MediaLimits.PHOTOS}", style = Ty.label, color = t.ink,
-                modifier = Modifier.padding(16.dp).clip(RoundedCornerShape(16.dp)).background(t.raised).padding(horizontal = 12.dp, vertical = 6.dp).testTag("photo_review_count"))
-            var bm by remember(ph?.rel) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
-            LaunchedEffect(ph?.rel) { bm = ph?.let { x -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { c.media?.thumb(x.rel) }.getOrNull() } } }
-            val b = bm
-            if (b != null) androidx.compose.foundation.Image(b, "방금 찍은 사진", Modifier.fillMaxSize().padding(top = 64.dp, bottom = 16.dp), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
-            else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.CAMERA, t.bg, 64.dp) }
-        }
-        Row(Modifier.fillMaxWidth().background(t.bg).padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MBtn(Modifier.weight(1f).height(56.dp).testTag("photo_review_cancel"), MKind.PLAIN, 28.dp, onClick = { c.discardPhoto() }) { Text("취소", style = Ty.label, color = t.ink) }
-            MBtn(Modifier.weight(1f).height(56.dp).testTag("photo_review_retake"), MKind.PLAIN, 28.dp, onClick = { c.retakePhoto() }) { Text("다시 촬영", style = Ty.label, color = t.ink) }
-            MBtn(Modifier.weight(1f).height(56.dp).testTag("photo_review_ok"), MKind.PRIMARY, 28.dp, onClick = { c.confirmPhoto() }) { Text("확정", style = Ty.label, color = t.onPrimary) }
-        }
-    }
-}
+// 0.1.59: 18 사진 확인 화면 없앰 — 찍으면 바로 저장 + 「되돌리기」 알림

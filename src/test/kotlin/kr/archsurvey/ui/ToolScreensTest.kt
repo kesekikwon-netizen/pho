@@ -39,8 +39,8 @@ class ToolScreensTest {
     private class Media : MediaPlatform {
         val ph = ArrayList<PhotoItem>(); val vo = ArrayList<VoiceItem>()
         override suspend fun photos(pointRowId: Long) = ph.toList(); override suspend fun voices(pointRowId: Long) = vo.toList()
-        override fun takePhoto(pointId: String, pointRowId: Long, onDone: (Boolean) -> Unit) { ph.add(PhotoItem(ph.size + 1L, "x.jpg")); onDone(true) }
-        override fun pickPhotos(pointId: String, pointRowId: Long, remaining: Int, onDone: (Int) -> Unit) = onDone(0)
+        override fun takePhoto(pointId: String, pointRowId: Long, onDone: (Long?) -> Unit) { val id = ph.size + 1L; ph.add(PhotoItem(id, "x.jpg")); onDone(id) }
+        override fun pickPhotos(pointId: String, pointRowId: Long, onDone: (Int) -> Unit) = onDone(0)
         override suspend fun deletePhoto(id: Long) { ph.removeAll { it.id == id } }
         override fun thumb(rel: String): androidx.compose.ui.graphics.ImageBitmap? = null
         override fun hasMicPermission() = true; override fun requestMicPermission(onResult: (Boolean) -> Unit) = onResult(true)

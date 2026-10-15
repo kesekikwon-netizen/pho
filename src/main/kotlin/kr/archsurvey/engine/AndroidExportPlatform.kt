@@ -43,6 +43,7 @@ class AndroidExportPlatform(
     override suspend fun exportBundle(formats: Set<kr.archsurvey.export.ExportFormat>, includePhotos: Boolean, includeVoices: Boolean, itwinKeepNames: Boolean, scale: Int, todayKey: String?): ExportOutput {
         val job = project()
         val r: ExportResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            kr.archsurvey.data.AutoBackup.run(ctx, beforeExport = true) // 0.1.59 B16
             svc.export(job, includePhotos, includeVoices, formats, itwinKeepNames, scale, todayKey, publishHgis = jobFolder == null)
         }
         lastZip = r.zip

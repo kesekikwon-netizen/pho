@@ -42,7 +42,7 @@ fun MoreMenu(c: SurveyController) {
             MoreHead("자주")
             MoreGrid(listOfNotNull(
                 MoreItem(Glyph.LIST, "점 목록", "more_points") { go { c.homeOpen = false; c.hub.open(ToolScreen.POINTS) } },
-                MoreItem(Glyph.CAMERA, "사진", "more_photo") { go { if (c.lastPoint != null) c.addPhotoCamera() else c.ui.toast("점을 잰 뒤 사진을 붙일 수 있어요") } },
+                MoreItem(Glyph.CAMERA, "사진", "more_photo") { go { if (c.mediaPoint != null) c.addPhotoCamera() else c.ui.toast("점을 잰 뒤 사진을 붙일 수 있어요") } },
                 MoreItem(Glyph.MIC, if (c.voiceSeconds > 0) "녹음 끝" else "메모", "more_memo") { go { c.toggleVoice() } },
                 if (c.dig.kind == DigKind.FEATURE) MoreItem(Glyph.FACE, if (c.dig.closeArmed) "닫기 취소" else "경계 닫기(면)", "more_close_area") { go { c.dig.armClose() } } else null,
                 MoreItem(Glyph.LAYERS, "레이어", "more_layers") { go { c.homeOpen = false; c.dig.layersOpen = true } },
@@ -56,6 +56,7 @@ fun MoreMenu(c: SurveyController) {
                 MoreItem(Glyph.LOCATE, "점 찾아가기", "more_goto") { go { c.hub.open(ToolScreen.GOTO) } },
                 MoreItem(Glyph.FACE, "유구별", "more_features") { go { c.homeOpen = false; c.hub.open(ToolScreen.FEATURES) } },
                 MoreItem(Glyph.EXPORT, "PC로 보내기 (예전 내보내기)", "more_export") { go { c.exporter?.openScreen() } },
+                MoreItem(Glyph.FOLDER, "SmartTopo 가져오기", "more_smarttopo") { go { c.importSmartTopo() } },
             ))
             MoreHead("설정")
             MoreGrid(listOf(

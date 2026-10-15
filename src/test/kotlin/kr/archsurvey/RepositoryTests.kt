@@ -63,11 +63,10 @@ class RepositoryTests {
         assertNull(b.samplesCsv)
     }
 
-    @Test fun fifthPhotoIsRejected() = runBlocking {
+    @Test fun noPhotoLimit() = runBlocking {
         val id = repo.savePoint(pt("P-0001"))
-        repeat(4) { assertTrue(repo.addPhoto(photo(id, it)) is PhotoAddResult.Added) }
-        assertEquals(PhotoAddResult.LimitReached, repo.addPhoto(photo(id, 4)))
-        assertEquals(4, db.dao().photoCount(id))
+        repeat(25) { assertTrue(repo.addPhoto(photo(id, it)) is PhotoAddResult.Added) }
+        assertEquals(25, db.dao().photoCount(id))
         // 다른 점은 영향 없음
         val id2 = repo.savePoint(pt("P-0002"))
         assertTrue(repo.addPhoto(photo(id2, 0)) is PhotoAddResult.Added)

@@ -144,3 +144,21 @@ class BackupService(private val ctx: Context) {
 
     fun delete(f: File) { if (f.parentFile?.canonicalPath == dir.canonicalPath) f.delete() }
 }
+
+/** 0.1.59 B16 자동 백업(점 저장 때 하루 1회 · 내보내기 직전). 실패해도 측량·내보내기는 막지 않는다 */
+object AutoBackup {
+    private val busy = java.util.concurrent.atomic.AtomicBoolean(false)
+    fun run(ctx: Context, beforeExport: Boolean, versionName: String = ""): Boolean {
+        if (!busy.compareAndSet(false, true)) return false
+        try {
+            val svc = BackupService(ctx)
+            val items = svc.list().map { AutoBackupPolicy.Item(it.file.name, it.createdAtMs) }
+            if (!beforeExport && !AutoBackupPolicy.dueOnSave(items, System.currentTimeMillis())) return false
+            val made = svc.create(AutoBackupPolicy.PREFIX, versionName)
+            val all = items + AutoBackupPolicy.Item(made.file.name, made.createdAtMs)
+            for (n in AutoBackupPolicy.toPrune(all)) svc.delete(java.io.File(svc.dir, n))
+            return true
+        } catch (e: Exception) { kr.archsurvey.diag.CrashLog.record("자동 백업", e); return false }
+        finally { busy.set(false) }
+    }
+}

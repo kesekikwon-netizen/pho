@@ -2,7 +2,7 @@ package kr.archsurvey.data
 
 import androidx.room.withTransaction
 
-/** 사진 추가 결과. 5번째 사진은 LimitReached. */
+/** 사진 추가 결과. 0.1.59: 장수 제한 없음(LimitReached 는 옛 호환용으로만 남김). */
 sealed interface PhotoAddResult {
     data class Added(val id: Long) : PhotoAddResult
     data object LimitReached : PhotoAddResult
@@ -29,8 +29,7 @@ class SurveyRepository(private val db: SurveyDb, private val clock: () -> Long =
     }
 
     suspend fun addPhoto(photo: PhotoEntity): PhotoAddResult {
-        val id = dao.insertPhotoLimited(photo, PhotoLimit.MAX)
-        return if (id < 0) PhotoAddResult.LimitReached else PhotoAddResult.Added(id)
+        return PhotoAddResult.Added(dao.insertPhoto(photo))
     }
 
     /** 가장 최근 살아 있는 점을 숨기고 돌려준다. 없으면 null */

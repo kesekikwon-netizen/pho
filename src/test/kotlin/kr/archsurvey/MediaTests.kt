@@ -23,17 +23,17 @@ class MediaTests {
     private class FakeMedia : MediaPlatform {
         val photoList = ArrayList<PhotoItem>(); val voiceList = ArrayList<VoiceItem>()
         var mic = true; var micGrant = true; var startError: String? = null; var recording = false; var cancelled = 0
-        var cameraOk = true; var pickCount = 2; var cameraCalls = 0; var pickCalls = 0; var lastRemaining = -1
+        var cameraOk = true; var pickCount = 2; var cameraCalls = 0; var pickCalls = 0; val cameraRows = ArrayList<Long>()
         var finishResult: VoiceItem? = VoiceItem(9, "a.m4a", 4000)
         override suspend fun photos(pointRowId: Long) = photoList.toList()
         override suspend fun voices(pointRowId: Long) = voiceList.toList()
-        override fun takePhoto(pointId: String, pointRowId: Long, onDone: (Boolean) -> Unit) {
-            cameraCalls++
-            if (cameraOk) photoList.add(PhotoItem(photoList.size + 1L, "p$cameraCalls.jpg")); onDone(cameraOk)
+        override fun takePhoto(pointId: String, pointRowId: Long, onDone: (Long?) -> Unit) {
+            cameraCalls++; cameraRows.add(pointRowId)
+            if (cameraOk) { val id = photoList.size + 1L; photoList.add(PhotoItem(id, "p$cameraCalls.jpg", System.currentTimeMillis())); onDone(id) } else onDone(null)
         }
-        override fun pickPhotos(pointId: String, pointRowId: Long, remaining: Int, onDone: (Int) -> Unit) {
-            pickCalls++; lastRemaining = remaining
-            val n = minOf(pickCount, remaining); repeat(n) { photoList.add(PhotoItem(photoList.size + 1L, "g$it.jpg")) }; onDone(n)
+        override fun pickPhotos(pointId: String, pointRowId: Long, onDone: (Int) -> Unit) {
+            pickCalls++
+            val n = pickCount; repeat(n) { photoList.add(PhotoItem(photoList.size + 1L, "g$it.jpg")) }; onDone(n)
         }
         override suspend fun deletePhoto(id: Long) { photoList.removeAll { it.id == id } }
         override fun thumb(rel: String): ImageBitmap? = null
@@ -57,12 +57,21 @@ class MediaTests {
         return Triple(c, m, f)
     }
 
-    @Test fun cameraAddsUpToFourThenRefuses() {
+    @Test fun cameraHasNoLimitAndNoConfirmScreen() {
         val (c, m, _) = setup()
-        repeat(4) { c.addPhotoCamera() }
-        assertEquals(4, c.photos.size)
-        c.addPhotoCamera()
-        assertEquals(4, m.cameraCalls); assertTrue(c.message!!.contains("4장"))
+        repeat(12) { c.addPhotoCamera() }
+        assertEquals(12, c.photos.size); assertEquals(12, m.cameraCalls)
+        // 저장 즉시 + 되돌리기 알림(전체 화면 확인 없음)
+        assertEquals("되돌리기", c.ui.toastActionLabel)
+        assertTrue(c.ui.toast!!, c.ui.toast!!.contains("사진 12장째") && c.ui.toast!!.contains("측정 후"))
+    }
+
+    @Test fun undoToastDeletesJustTakenPhoto() {
+        val (c, _, _) = setup()
+        c.addPhotoCamera(); c.addPhotoCamera()
+        c.ui.runToastAction()
+        assertEquals(1, c.photos.size); assertEquals(1L, c.photos.single().id)
+        assertNull(c.ui.toastActionLabel)
     }
 
     @Test fun cameraCancelShowsMessage() {
@@ -71,12 +80,46 @@ class MediaTests {
         assertEquals(0, c.photos.size); assertTrue(c.message!!.contains("저장되지 않았어요"))
     }
 
-    @Test fun pickerOnlyOffersRemainingSlots() {
-        val (c, m, _) = setup()
-        c.addPhotoCamera(); c.addPhotoCamera(); c.addPhotoCamera()
+    @Test fun pickerHasNoLimit() {
+        val (c, m, _) = setup(); m.pickCount = 9
+        repeat(5) { c.addPhotoCamera() }
         c.addPhotoPicker()
-        assertEquals(1, m.lastRemaining); assertEquals(4, c.photos.size)
-        c.addPhotoPicker(); assertEquals(1, m.pickCalls) // 가득 차면 선택기를 열지 않는다
+        assertEquals(1, m.pickCalls); assertEquals(14, c.photos.size)
+    }
+
+    @Test fun photoGoesToSelectedPointNotLast() {
+        val (c, m, f) = setup()
+        c.nextPoint(); repeat(6) { f.emitNext() }
+        assertEquals(2, c.points.size)
+        val first = c.points.first(); val last = c.points.last()
+        assertNotEquals(first.rowId, last.rowId)
+        c.addPhotoFor(first)
+        assertEquals(first.rowId, m.cameraRows.last())
+        c.mediaFocus = null
+        c.addPhotoCamera()
+        assertEquals(last.rowId, m.cameraRows.last())
+    }
+
+    @Test fun recoveryNoticeIsShown() {
+        val (c, _, _) = setup()
+        c.notifyPhotoRecovered("P-0001", 1)
+        assertTrue(c.ui.toast!!.contains("P-0001") && c.ui.toast!!.contains("복구"))
+    }
+
+    @Test fun memoCarryOverB5() {
+        val (c, _, f) = setup()
+        c.pendingMemo = "5-3구역 9호 토층"
+        c.nextPoint(); repeat(6) { f.emitNext() }
+        assertEquals("5-3구역 9호 토층", c.points.last().memo)
+        assertEquals("5-3구역 9호 토층", c.memoSuggestion)
+        // 이어가기 켬 → 다음 점도 같은 메모
+        c.toggleMemoCarry(); assertTrue(c.memoCarry)
+        c.nextPoint(); repeat(6) { f.emitNext() }
+        assertEquals("5-3구역 9호 토층", c.points.last().memo)
+        // 끄면 비움
+        c.toggleMemoCarry()
+        c.nextPoint(); repeat(6) { f.emitNext() }
+        assertEquals("", c.points.last().memo)
     }
 
     @Test fun deletePhotoRefreshes() {

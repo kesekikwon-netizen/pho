@@ -86,11 +86,13 @@ class ExportService(
         var photoCount = 0
         for (p in pts) {
             val list = dao.photosOf(p.rowId)
-            byPoint[p.rowId] = list.map { "photos/" + it.relPath.substringAfterLast('/') }
+            // 0.1.59: 점별 하위 폴더 photos/<점>/<파일> (photos.csv 유지)
+            byPoint[p.rowId] = list.map { kr.archsurvey.photo.PhotoLayout.exportPath(p.pointId, it.relPath) }
             for (ph in list) {
-                photoRows.add(Triple(p.pointId, "photos/" + ph.relPath.substringAfterLast('/'), ph.addedAtUtcMs))
+                val path = kr.archsurvey.photo.PhotoLayout.exportPath(p.pointId, ph.relPath)
+                photoRows.add(Triple(p.pointId, path, ph.addedAtUtcMs))
                 if (includePhotos) {
-                    val dst = File(dir, "photos/" + ph.relPath.substringAfterLast('/')); dst.parentFile?.mkdirs()
+                    val dst = File(dir, path); dst.parentFile?.mkdirs()
                     runCatching { photos.file(ph.relPath).copyTo(dst, overwrite = true); photoCount++ }
                 }
             }
@@ -178,7 +180,7 @@ class ExportService(
         points_<EPSG>.shp/.shx/.dbf/.prj/.cpg  점 Shapefile(작업 좌표계, X=동 Y=북, Z=지면 표고, 속성 UTF-8)
         hgis_control_points_<EPSG>.csv  hgis 「CSV 기준점」 양식(point_id,x,y,z,datum,ellipsoid,projection,origin,accuracy_m,pdop,fix_type)
         (고른 양식만 들어 있어요)
-        photos.csv, photos/  점별 사진(최대 4장)
+        photos.csv, photos/<점>/  점별 사진(제한 없음, EXIF 에 점 이름·좌표·σ·FIX)
         voice.csv, voices/   점별 음성 메모(m4a, AAC 16kHz 모노). 내보낼 때 '음성 포함'을 켠 경우만
         좌표계는 CSV의 crs_epsg 열 참고. 실제 CAD 프로그램 열람은 현장에서 확인 필요.
     """.trimIndent() + "\n" + (if (shpEpsgs.isEmpty()) "" else hgisReadme(shpEpsgs))

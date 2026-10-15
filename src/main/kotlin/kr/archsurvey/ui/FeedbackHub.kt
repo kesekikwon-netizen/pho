@@ -38,14 +38,24 @@ class FeedbackHub {
     /** 0.1.14 알림 종류: 일반 / 완료(✓·완료 햅틱) / 오류(✕·빨간 테두리·오류 햅틱·조금 더 오래) */
     var toastKind by mutableStateOf(ToastKind.INFO); private set
 
-    fun toast(text: String) { toastKind = ToastKind.INFO; toast = text; toastSeq++ }
+    /** 0.1.59 알림 오른쪽 단추(예: 「되돌리기」). 다른 알림이 오면 사라진다 */
+    var toastActionLabel by mutableStateOf<String?>(null); private set
+    private var toastAction: (() -> Unit)? = null
+
+    fun toast(text: String) { clearAction(); toastKind = ToastKind.INFO; toast = text; toastSeq++ }
     /** 완료 멘트(업로드·다운로드·저장·적용 끝) */
-    fun ok(text: String) { toastKind = ToastKind.OK; toast = text; toastSeq++ }
+    fun ok(text: String) { clearAction(); toastKind = ToastKind.OK; toast = text; toastSeq++ }
     /** 오류 멘트 */
-    fun fail(text: String) { toastKind = ToastKind.ERROR; toast = text; toastSeq++ }
+    fun fail(text: String) { clearAction(); toastKind = ToastKind.ERROR; toast = text; toastSeq++ }
+    /** 0.1.59 완료 멘트 + 단추 하나(되돌리기). 조금 더 오래 보인다 */
+    fun okWithAction(text: String, label: String, action: () -> Unit) {
+        toastKind = ToastKind.OK; toast = text; toastActionLabel = label; toastAction = action; toastSeq++
+    }
+    fun runToastAction() { val a = toastAction; clearAction(); toast = null; a?.invoke() }
+    private fun clearAction() { toastActionLabel = null; toastAction = null }
     /** 결과 하나로: 성공이면 [ok], 아니면 [fail] */
     fun result(success: Boolean, text: String) = if (success) ok(text) else fail(text)
-    fun hideToast() { toast = null }
+    fun hideToast() { toast = null; clearAction() }
 
     fun ask(r: ConfirmRequest) { confirm = r }
     fun answer(ok: Boolean) { val r = confirm; confirm = null; if (ok) r?.onOk?.invoke() }

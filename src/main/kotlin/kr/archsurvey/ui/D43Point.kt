@@ -93,7 +93,7 @@ fun PointConfirmScreen(c: SurveyController) {
             }
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DSecondary("사진 ${c.photos.size}/${MediaLimits.PHOTOS}", "result_photo", Modifier.weight(1f).height(50.dp)) { c.addPhotoCamera() }
+                DSecondary("사진 ${c.photos.size}", "result_photo", Modifier.weight(1f).height(50.dp)) { c.addPhotoCamera() }
                 DSecondary(if (c.voiceSeconds > 0) "녹음 끝 ${c.voiceSeconds}초" else "음성 메모", "result_voice", Modifier.weight(1f).height(50.dp)) { c.toggleVoice() }
                 DSecondary(if (p.memo.isBlank()) "글 메모" else "메모 ✓", "result_memo", Modifier.weight(1f).height(50.dp)) { memoOpen = !memoOpen }
             }

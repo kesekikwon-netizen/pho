@@ -220,17 +220,31 @@ private fun MeasureTable(c: SurveyController, p: SavedPoint) {
     }
 }
 
-/** 0.1.14 목업 21 현장 사진(이 점에 붙은 사진, 최대 4장) */
+/** 0.1.59 현장 사진: 이 점(고른 점)에 붙은 사진 전부(제한 없음) + 이 점에 사진 찍기/앨범. 측정↔촬영 시각 차이 */
 @Composable
 private fun DetailPhotos(c: SurveyController, p: SavedPoint) {
     val t = T
-    var photos by androidx.compose.runtime.remember(p.rowId) { androidx.compose.runtime.mutableStateOf<List<PhotoItem>>(emptyList()) }
-    androidx.compose.runtime.LaunchedEffect(p.rowId) { photos = runCatching { c.media?.photos(p.rowId) }.getOrNull().orEmpty() }
+    // 이 화면이 열려 있는 동안 사진·음성은 이 점에 붙는다
+    androidx.compose.runtime.DisposableEffect(p.rowId) { c.mediaFocus = p; c.refreshMedia(); onDispose { if (c.mediaFocus?.rowId == p.rowId) { c.mediaFocus = null; c.refreshMedia() } } }
+    val photos = c.photos
     Card {
-        Text("현장 사진 ${photos.size}/${MediaLimits.PHOTOS}", style = Ty.label, color = t.ink, modifier = Modifier.testTag("detail_photos_title"))
-        if (photos.isEmpty()) Text("이 점에 붙은 사진이 없어요. 잰 직후 장부 카드의 「사진」으로 찍어요.", style = Ty.small, color = t.inkSub)
-        else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (ph in photos.take(MediaLimits.PHOTOS)) Box(Modifier.size(72.dp).clip(RoundedCornerShape(12.dp)).background(t.bg).testTag("detail_photo_${ph.id}"), contentAlignment = Alignment.Center) { PhotoThumb(c, ph) }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("현장 사진 ${photos.size}", style = Ty.label, color = t.ink, modifier = Modifier.weight(1f).testTag("detail_photos_title"))
+            SmallButton("앨범", "detail_photo_pick") { c.addPhotoPicker() }
+            Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(t.bg).hClickable { c.addPhotoFor(p) }.testTag("detail_photo_add"),
+                contentAlignment = Alignment.Center) { GlyphIcon(Glyph.CAMERA, t.accent, 20.dp) }
+        }
+        if (photos.isEmpty()) Text("이 점에 붙은 사진이 없어요. 오른쪽 카메라로 이 점에 찍어요.", style = Ty.small, color = t.inkSub)
+        else androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.testTag("detail_photo_strip")) {
+            items(photos.size) { i ->
+                val ph = photos[i]
+                val gap = kr.archsurvey.photo.PhotoGap.label(p.measuredAtMs, ph.addedAtMs)
+                val warn = kr.archsurvey.photo.PhotoGap.suspicious(p.measuredAtMs, ph.addedAtMs)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.size(72.dp).clip(RoundedCornerShape(12.dp)).background(t.bg).testTag("detail_photo_${ph.id}"), contentAlignment = Alignment.Center) { PhotoThumb(c, ph) }
+                    Text(gap, style = Ty.small, color = if (warn) t.bad else t.inkSub, maxLines = 1, modifier = Modifier.testTag("detail_photo_gap_${ph.id}"))
+                }
+            }
         }
     }
 }

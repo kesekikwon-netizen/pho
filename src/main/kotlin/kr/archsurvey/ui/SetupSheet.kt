@@ -51,6 +51,17 @@ fun SetupSheet(c: SurveyController) {
                 c.ui.choose(ChoiceRequest("코드 / 심볼 (위치 종류)", c.types, typeIdx, "setup_type") { typeIdx = it })
             }
             QuickNoteChips(memo, "setup_note") { if (it.length <= 60) memo = it } // 0.1.39 한 손가락 비고
+            // 0.1.59 B5: 직전 메모 이어가기(한 번 탭으로 켬/끔)
+            if (c.memoSuggestion.isNotBlank()) Row(
+                Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(16.dp))
+                    .background(if (c.memoCarry) t.primary.copy(alpha = 0.18f) else t.raised).hClickable { c.toggleMemoCarry() }
+                    .padding(horizontal = 14.dp).testTag("setup_memo_carry"),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text((if (c.memoCarry) "이어가는 중 · " else "직전 메모 이어가기 · ") + "「${c.memoSuggestion}」", style = Ty.body, color = t.ink, maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(if (c.memoCarry) "끄기" else "켜기", style = Ty.label, color = t.accent)
+            }
             // 0.1.46: 비고는 칩으로, 키보드는 「직접 입력」에서만
             var memoTyping by remember { mutableStateOf(false) }
             TypeFallbackRow(memoTyping, "setup_memo_manual") { memoTyping = !memoTyping }

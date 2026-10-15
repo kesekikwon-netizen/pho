@@ -69,8 +69,8 @@ private class FakeMedia : MediaPlatform {
     var recording = false
     override suspend fun photos(pointRowId: Long) = emptyList<PhotoItem>()
     override suspend fun voices(pointRowId: Long) = emptyList<VoiceItem>()
-    override fun takePhoto(pointId: String, pointRowId: Long, onDone: (Boolean) -> Unit) {}
-    override fun pickPhotos(pointId: String, pointRowId: Long, remaining: Int, onDone: (Int) -> Unit) {}
+    override fun takePhoto(pointId: String, pointRowId: Long, onDone: (Long?) -> Unit) {}
+    override fun pickPhotos(pointId: String, pointRowId: Long, onDone: (Int) -> Unit) {}
     override suspend fun deletePhoto(id: Long) {}
     override fun thumb(rel: String) = null
     override fun hasMicPermission() = true

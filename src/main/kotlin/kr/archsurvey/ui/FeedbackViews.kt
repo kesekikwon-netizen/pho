@@ -46,7 +46,7 @@ private fun ToastView(ui: FeedbackHub) {
     // 0.1.14: 완료/오류 멘트에 햅틱 한 번(같은 알림이 다시 그려져도 한 번만). 오류는 조금 더 오래 보인다
     LaunchedEffect(ui.toastSeq) {
         if (hap) when (kind) { ToastKind.OK -> TapHaptics.ok(view); ToastKind.ERROR -> TapHaptics.error(view); else -> {} }
-        delay(if (kind == ToastKind.ERROR) ui.toastMs + 2000L else ui.toastMs); ui.hideToast()
+        delay(if (kind == ToastKind.ERROR || ui.toastActionLabel != null) ui.toastMs + 2000L else ui.toastMs); ui.hideToast()
     }
     val bgc = if (kind == ToastKind.ERROR) t.bad else t.ink
     val fg = if (kind == ToastKind.ERROR) t.onBad else t.bg
@@ -58,7 +58,12 @@ private fun ToastView(ui: FeedbackHub) {
         ) {
             if (kind == ToastKind.ERROR) Text("✕", style = Ty.label, color = fg, modifier = Modifier.testTag("toast_error_mark"))
             else GlyphIcon(Glyph.CHECK, fg, 20.dp)
-            Text(msg, style = Ty.body, color = fg, maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("toast_text"))
+            Text(msg, style = Ty.body, color = fg, maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).testTag("toast_text"))
+            // 0.1.59 오른쪽 단추(오른손 엄지): 되돌리기 등
+            ui.toastActionLabel?.let { label ->
+                Box(Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp)).hClickable { ui.runToastAction() }.padding(horizontal = 12.dp).testTag("toast_action"),
+                    contentAlignment = Alignment.Center) { Text(label, style = Ty.label, color = fg) }
+            }
         }
     }
 }

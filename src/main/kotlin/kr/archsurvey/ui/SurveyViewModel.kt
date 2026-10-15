@@ -37,7 +37,7 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
     val phoneGps = kr.archsurvey.device.PhoneGpsSource(application)
     /** 측점 공급원은 수신기 엔진뿐(폰으로 자동 전환 없음) */
     val controller: SurveyController = SurveyController(application.engine, db, safeScope, epochsPerPoint = application.settings.epochsPerPoint, store = store, anchorOnFirstFix = true)
-    val media = AndroidMediaPlatform(application, viewModelScope) { application.settings.project }
+    val media = AndroidMediaPlatform(application, viewModelScope, { application.settings.project }) { job -> jobFolder.relOf(job) }
     val docs = kr.archsurvey.engine.DocBridge()
     /** 0.1.38 새 작업 = 새 폴더(Documents/ExcavationSurvey/[상위/]작업) */
     val jobFolder = kr.archsurvey.engine.AndroidJobFolder(application, application.settings)
@@ -147,7 +147,12 @@ class SurveyViewModel(app: Application) : AndroidViewModel(app) {
         controller.voice = vc
         controller.voiceHeard = { application.feedback.play(FeedbackEvent.VOICE_HEARD) }
         viewModelScope.launch { while (true) { kotlinx.coroutines.delay(200); if (vc.enabled) runCatching { vc.tick() }.onFailure { kr.archsurvey.diag.CrashLog.record("음성 저장", it) } } }
-        media.recoverPending()
+        val stImport = kr.archsurvey.engine.AndroidSmartTopoImport(application, docs) { application.settings.project }
+        controller.smartTopoImporter = { z -> stImport.pickAndImport(z) }
+        controller.onPointSaved = { viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { kr.archsurvey.data.AutoBackup.run(application, beforeExport = false) } }
+        media.recoverPending { point, n -> controller.notifyPhotoRecovered(point, n) }
+        // 0.1.59: 옛 위치 사진 → Documents/발굴조사/발굴 측량/…/사진 (복사·확인 뒤 옛 파일 삭제)
+        media.migratePhotos { r -> if (r.moved > 0) controller.ui.ok("사진 ${r.moved}장을 발굴조사 폴더로 옮겼어요"); if (r.failed > 0) controller.ui.fail("사진 ${r.failed}장은 옮기지 못해 원래 자리에 그대로 두었어요"); controller.refreshMedia() }
         // 0.1.30 T23: SP60 GST/GSA 자동 요청 결과 → 연결당 한 번 안내
         viewModelScope.launch { application.engine.precision.collect { controller.onPrecisionResult(it) } }
         controller.precisionRetry = { application.engine.retryPrecision() }

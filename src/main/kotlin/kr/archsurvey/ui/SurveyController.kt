@@ -291,6 +291,17 @@ class SurveyController(
     /** 0.1.15 Google Drive 자동 백업·측점 업로드 */
     var drive: DriveSyncController? = null
         set(v) { field = v; v?.onResult = { ok, m -> ui.result(ok, m) } }
+    /** 0.1.59 B4: SmartTopo 가져오기(Android). 결과 문구, 취소 null */
+    var smartTopoImporter: (suspend (kr.archsurvey.core.KoreanTmZone) -> String?)? = null
+    fun importSmartTopo() {
+        val imp = smartTopoImporter ?: run { ui.toast("가져오기를 쓸 수 없어요"); return }
+        scope.launch {
+            val msg = runCatching { imp(zone) }.getOrElse { "가져오지 못했어요: ${it.message ?: "파일 오류"}" } ?: return@launch
+            reloadFromStore(); ui.ok(msg)
+        }
+    }
+    /** 0.1.59 B16: 점을 저장한 뒤(자동 백업) */
+    var onPointSaved: (() -> Unit)? = null
     /** 배경(도면) 레이어. 앱에서는 SurveyViewModel 이 연결한다 */
     var bg: kr.archsurvey.ui.bg.BackgroundController? = null
     /** 점 목록·찾아가기·계산기·설정·작업 관리 화면 */
@@ -480,8 +491,10 @@ class SurveyController(
     fun applyMarkerStyle(s: kr.archsurvey.map.MarkerStyle) { markerStyle = s; onMarkerStyleChanged?.invoke(s); markerStyleOpen = false; ui.ok("위치 모양을 적용했어요") }
     /** 0.1.14 목업 20 점 길게 누르기 메뉴 */
     var pointMenuFor by mutableStateOf<SavedPoint?>(null)
-    /** 0.1.14 목업 18 사진 확인(촬영 직후 1/4 · 취소/다시 촬영/확정) */
-    var photoReviewOpen by mutableStateOf(false)
+    /** 0.1.59: 사진·음성을 붙일 점(점 상세에서 고른 점). null = 마지막 점 */
+    var mediaFocus by mutableStateOf<SavedPoint?>(null)
+    /** 0.1.59 B5: 직전 메모를 다음 점에도 이어 붙이기 */
+    var memoCarry by mutableStateOf(false)
     /** 0.1.14 목업 14 데이터 백업/복구 창 */
     var backupQuickOpen by mutableStateOf(false)
     /** 0.1.11 GNSS 정보 창(목업 05) — 상단 상태 알약을 누르면 열린다 */
@@ -493,6 +506,13 @@ class SurveyController(
     var setupOpen by mutableStateOf(false)
     /** 다음 측점에 붙일 비고(한 번 쓰면 비움) */
     var pendingMemo by mutableStateOf("")
+    /** 0.1.59 B5: 제안할 직전 메모(마지막 점의 메모) */
+    val memoSuggestion: String get() = points.lastOrNull()?.memo.orEmpty()
+    fun toggleMemoCarry() {
+        memoCarry = !memoCarry
+        if (memoCarry && memoSuggestion.isBlank()) { memoCarry = false; ui.toast("이어 갈 메모가 없어요") }
+        else ui.toast(if (memoCarry) "메모 이어가기: 「$memoSuggestion」" else "메모 이어가기 끔")
+    }
     var quickSheetOpen by mutableStateOf(false)
     var voiceSeconds by mutableIntStateOf(0)
     var dpPerM by mutableStateOf(12.0)
@@ -755,9 +775,10 @@ class SurveyController(
 
     /** 새 점으로 저장 (디스크 + 화면). 외곽 모드면 꼭짓점으로 이어 붙인다 */
     private suspend fun commitNew(sp: SavedPoint, worst: SurveyStatus) {
-        resultName = null; resurveyUndo = null
+        resultName = null; resurveyUndo = null; mediaFocus = null
         val legacyOutline = arch.outlineMode && sp.type == ArchTypes.OUTLINE_POINT
-        val named = (if (sp.name == nextName) sp else sp.copy(name = nextName)).let { if (pendingMemo.isNotBlank()) it.copy(memo = pendingMemo.trim()) else it }
+        val named = (if (sp.name == nextName) sp else sp.copy(name = nextName)).let { val carried = if (memoCarry) memoSuggestion else ""
+                if (pendingMemo.isNotBlank()) it.copy(memo = pendingMemo.trim()) else if (carried.isNotBlank()) it.copy(memo = carried) else it }
             .let { if (legacyOutline) it.copy(digKind = kr.archsurvey.dig.DigKind.FEATURE.id) else dig.decorate(it) }
         pendingMemo = ""
         points.add(named); seq++
@@ -785,6 +806,7 @@ class SurveyController(
             lastSavedSpeech = "${points.last().name} 저장됨" + if (noSigmaSaved) ", 시그마 없음" else if (worst == SurveyStatus.CAUTION) ", 주의 표시" else ""
             ui.toast(savedText(points.last()))
             drive?.notifyPointSaved()
+            onPointSaved?.invoke()
         }
     }
 
@@ -842,7 +864,6 @@ class SurveyController(
 
     /** 지금 맨 위에 보이는 화면 이름(시험·진단용). 측량 지도가 그대로 보이면 "survey" */
     fun visibleRoute(): String = when {
-        photoReviewOpen -> "photo_review"
         markerStyleOpen -> "marker_style"
         backupQuickOpen -> "backup_quick"
         pointMenuFor != null -> "point_menu"
@@ -955,10 +976,13 @@ class SurveyController(
 
     // ---------------- 사진 · 음성 메모 (마지막 점에 붙는다) ----------------
 
-    /** 마지막 점의 사진·음성 목록을 디스크에서 다시 읽는다 */
+    /** 사진·음성을 붙일 점(점 상세에서 고른 점, 없으면 마지막 점) */
+    val mediaPoint: SavedPoint? get() = mediaFocus?.let { f -> points.firstOrNull { it.rowId == f.rowId && f.rowId != 0L } ?: f } ?: lastPoint
+
+    /** 대상 점의 사진·음성 목록을 디스크에서 다시 읽는다 */
     fun refreshMedia() {
         val m = media ?: return
-        val rid = lastPoint?.rowId ?: 0L
+        val rid = mediaPoint?.rowId ?: 0L
         if (rid == 0L) { photos.clear(); voices.clear(); return }
         scope.launch {
             val ph = runCatching { m.photos(rid) }.getOrDefault(emptyList())
@@ -968,38 +992,52 @@ class SurveyController(
     }
 
     private fun mediaTarget(): SavedPoint? {
-        val p = lastPoint
+        val p = mediaPoint
         if (p == null) { message = "먼저 측점을 하세요"; return null }
         if (p.rowId == 0L) { message = "이 점이 디스크에 저장되지 않아 사진·음성을 붙일 수 없어요"; return null }
         return p
     }
 
+    /** 0.1.59: 아무 점에나 사진(점 상세의 「사진 찍기」) */
+    fun addPhotoFor(p: SavedPoint) { mediaFocus = p; refreshMedia(); addPhotoCamera() }
+
+    /** 사진 찍기: 장수 제한 없음. 찍으면 바로 저장하고 「되돌리기」 알림(전체 화면 확인 없음) */
     fun addPhotoCamera() {
         val m = media ?: run { message = "사진 기능을 쓸 수 없어요"; return }
         val p = mediaTarget() ?: return
-        if (photos.size >= MediaLimits.PHOTOS) { message = "사진은 점당 ${MediaLimits.PHOTOS}장까지예요"; return }
-        m.takePhoto(p.name, p.rowId) { ok ->
-            refreshMedia()
-            // 0.1.14 목업 18: 찍은 뒤 확인 화면(취소 = 지우기 · 다시 촬영 · 확정)
-            if (ok) photoReviewOpen = true else { message = "사진이 저장되지 않았어요 (촬영 취소 또는 실패)"; ui.fail("사진이 저장되지 않았어요 (촬영 취소 또는 실패)") }
+        m.takePhoto(p.name, p.rowId) { id ->
+            if (id == null) { message = "사진이 저장되지 않았어요 (촬영 취소 또는 실패)"; ui.fail("사진이 저장되지 않았어요 (촬영 취소 또는 실패)"); return@takePhoto }
+            scope.launch {
+                val list = runCatching { m.photos(p.rowId) }.getOrDefault(emptyList())
+                if (mediaPoint?.rowId == p.rowId) { photos.clear(); photos.addAll(list) }
+                val shot = list.firstOrNull { it.id == id }
+                val gap = kr.archsurvey.photo.PhotoGap.label(p.measuredAtMs, shot?.addedAtMs?.takeIf { it > 0 } ?: System.currentTimeMillis())
+                ui.okWithAction("${p.name} 사진 ${list.size}장째 저장 · $gap", "되돌리기") { undoPhoto(p, id) }
+            }
         }
     }
-    /** 사진 확인: 확정 */
-    fun confirmPhoto() { photoReviewOpen = false; ui.ok("사진 ${photos.size}/${MediaLimits.PHOTOS} 저장됨") }
-    /** 사진 확인: 취소(방금 사진 지우기) */
-    fun discardPhoto() { photoReviewOpen = false; photos.lastOrNull()?.let { deletePhoto(it) }; ui.toast("방금 찍은 사진을 지웠어요") }
-    /** 사진 확인: 다시 촬영 */
-    fun retakePhoto() { photoReviewOpen = false; val last = photos.lastOrNull(); val m = media; val p = mediaTarget()
-        if (last != null && m != null && p != null) scope.launch { runCatching { m.deletePhoto(last.id) }; refreshMedia(); addPhotoCamera() } else addPhotoCamera() }
+
+    /** 방금 찍은 사진 되돌리기(지우기) */
+    fun undoPhoto(p: SavedPoint, id: Long) {
+        val m = media ?: return
+        scope.launch {
+            runCatching { m.deletePhoto(id) }.onFailure { message = "사진을 지우지 못했어요" }
+            refreshMedia(); ui.toast("${p.name} 방금 사진을 지웠어요")
+        }
+    }
+
+    /** 0.1.59: 카메라 도중 앱이 꺼졌다가 다시 켜져 사진을 복구했을 때 */
+    fun notifyPhotoRecovered(pointName: String, count: Int) {
+        ui.ok("앱이 꺼지기 전에 찍은 사진 ${count}장을 $pointName 에 복구했어요")
+        refreshMedia()
+    }
 
     fun addPhotoPicker() {
         val m = media ?: run { message = "사진 기능을 쓸 수 없어요"; return }
         val p = mediaTarget() ?: return
-        val remaining = MediaLimits.PHOTOS - photos.size
-        if (remaining <= 0) { message = "사진은 점당 ${MediaLimits.PHOTOS}장까지예요"; return }
-        m.pickPhotos(p.name, p.rowId, remaining) { n ->
+        m.pickPhotos(p.name, p.rowId) { n ->
             refreshMedia()
-            if (n > 0) message = "사진 ${n}장을 앱 폴더에 복사했어요 (원본은 그대로)"
+            if (n > 0) message = "${p.name}에 사진 ${n}장을 복사했어요 (원본은 그대로)"
         }
     }
 

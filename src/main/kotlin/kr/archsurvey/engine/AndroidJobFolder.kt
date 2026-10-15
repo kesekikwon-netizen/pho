@@ -49,8 +49,7 @@ class AndroidJobFolder(private val ctx: Context, private val settings: SettingsS
         val pts = dao.pointsOf(job)
         val csv = kr.archsurvey.export.Formats.pointsCsv(pts, emptyMap()).toByteArray(Charsets.UTF_8)
         writer.writeIfChanged(rel, null, "측점_${JobFolders.split(rel).second}.csv", csv)?.let { changed.add(null to it) }
-        val pics = File(ctx.getExternalFilesDir("Pictures") ?: File(ctx.filesDir, "Pictures"), safe(job))
-        writer.copyTree(rel, JobFolders.PHOTOS, pics).forEach { changed.add(JobFolders.PHOTOS to it) }
+        // 0.1.59: 사진은 찍을 때 바로 Documents/발굴조사/발굴 측량/…/사진 으로 공용 사본을 둔다(여기서 다시 복사하지 않음)
         val rec = File(ctx.getExternalFilesDir("Recordings") ?: File(ctx.filesDir, "Recordings"), safe(job))
         writer.copyTree(rel, JobFolders.VOICES, rec).forEach { changed.add(JobFolders.VOICES to it) }
         for ((sub, f) in changed) publish(rel, sub, f)
