@@ -55,9 +55,15 @@ object CrashLog {
     fun count(): Int = Regex("^=== ", RegexOption.MULTILINE).findAll(read()).count()
     fun clear() { runCatching { file?.delete() } }
 
+    /** 0.1.58 B7: 지금 쓰는 NTRIP 아이디·비밀번호 원문(기록에 그대로 나오면 가린다). 메모리에만 */
+    private val secrets = java.util.concurrent.CopyOnWriteArraySet<String>()
+    fun registerSecret(v: String?) { val t = v?.trim().orEmpty(); if (t.length >= 3) secrets += t }
+
     /** 혹시 메시지에 비밀번호 같은 값이 섞이지 않도록 'password=…', 'Authorization: …' 꼴을 가린다 */
-    fun redact(s: String): String = s
+    fun redact(s: String): String = secrets.fold(s) { acc, v -> acc.replace(v, "***") }
         .replace(Regex("(?i)(authorization:\\s*(?:basic|digest)\\s+)[^\\r\\n]+"), "$1***")
         // 0.1.18: password=x · password: x · "password":"x" · 비밀번호=x 꼴(공백·쉼표·괄호·따옴표 전까지)
         .replace(Regex("(?i)(\"?(?:password|passwd|pwd|pw|ntrip_pw|비밀번호)\"?\\s*[=:]\\s*\"?)[^\\s,)\"]+"), "$1***")
+        // 0.1.58 B7: 아이디도 가린다(user=x · username: x · ntrip_user=x · 아이디=x)
+        .replace(Regex("(?i)(\"?(?:username|user|ntrip_user|hp_user|아이디)\"?\\s*[=:]\\s*\"?)[^\\s,)\"]+"), "$1***")
 }

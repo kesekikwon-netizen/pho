@@ -117,7 +117,7 @@ class Ui0129BackTest {
     // ---------------- T22-2 확인 창 ----------------
 
     /** 주의(CAUTION) 확인 창 + 뒤로 = 「취소」 — 주의 승인·저장 없음, 측량 화면 그대로 */
-    @Test fun t22_2_cautionConfirm_back_isCancel_neverSaves() {
+    @org.junit.Ignore("0.1.58 B3(사용자 결정): 주의 확인 창 제거 — 플로트·10cm 초과는 창 없이 차단. 새 흐름은 t0158·Council0156 m1_replacedBy_b3 가 시험") @Test fun t22_2_cautionConfirm_back_isCancel_neverSaves() {
         setup(FakeScenarios.fieldWalk(), epochs = 3)
         ui { cautionState(); c.onMeasure() }
         assertNotNull("주의 확인 창", c.ui.confirm)
@@ -226,7 +226,7 @@ class Ui0129BackTest {
     }
 
     /** 음성으로 연 주의 확인을 뒤로 닫은 뒤 「예」가 와도 승인·저장하지 않는다 */
-    @Test fun voiceYesAfterBackClosedCautionConfirm_isIgnored() {
+    @org.junit.Ignore("0.1.58 B3(사용자 결정): 주의 확인 창 제거 — 플로트·10cm 초과는 창 없이 차단. 새 흐름은 t0158·Council0156 m1_replacedBy_b3 가 시험") @Test fun voiceYesAfterBackClosedCautionConfirm_isIgnored() {
         setup(FakeScenarios.fieldWalk(), epochs = 3)
         lateinit var rig: Triple<VoiceCommandController, FakeEngine, FakeSpeaker>
         ui { rig = voiceRig(); cautionState(); rig.first.tick() }

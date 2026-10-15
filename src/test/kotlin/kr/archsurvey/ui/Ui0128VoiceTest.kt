@@ -65,7 +65,7 @@ class Ui0128VoiceTest {
         rule.onNodeWithTag("voice_mode").assertTextContains("온라인 인식", substring = true)
     }
 
-    @Test fun confirmBannerShowsWhileWaitingForYes() {
+    @org.junit.Ignore("0.1.58 B3(사용자 결정): 주의 확인 창 제거 — 플로트·10cm 초과는 창 없이 차단. 새 흐름은 t0158·Council0156 m1_replacedBy_b3 가 시험") @Test fun confirmBannerShowsWhileWaitingForYes() {
         val (c, v, f) = setup(RecognizerMode.ON_DEVICE, FakeScenarios.fieldWalk())
         f.skipToNextSegment(); f.emitNext(); v.tick()
         assertSame(v, c.voice)

@@ -86,6 +86,12 @@ fun SetupSheet(c: SurveyController) {
                 Text("자동 결선", style = Ty.body, color = t.ink, modifier = Modifier.weight(1f))
                 androidx.compose.material3.Switch(link != Link.POINT, { on -> link = if (on) (if (link == Link.POINT) Link.LINE else link) else Link.POINT }, colors = blackSwitch())
             }
+            // 0.1.58 B8: 볼륨 아래 키 측정 켜기·끄기를 측량 설정에서 바로(기본 꺼짐 · 화면 켜짐 + 측량 지도일 때만)
+            Row(Modifier.fillMaxWidth().height(48.dp).hClickable { c.dig.changeVolumeKey(!c.dig.volumeKey) }.padding(horizontal = 4.dp).testTag("setup_volume_key"),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text("볼륨 아래 키로 측정", style = Ty.body, color = t.ink, modifier = Modifier.weight(1f))
+                androidx.compose.material3.Switch(c.dig.volumeKey, { on -> c.dig.changeVolumeKey(on) }, colors = blackSwitch())
+            }
             @Composable fun LinkBtn(label: String, tag: String, on: Boolean, modifier: Modifier, onClick: () -> Unit) {
                 MBtn(modifier.fillMaxHeight().testTag(tag), if (on) MKind.SELECTED else MKind.PLAIN, 16.dp, onClick = onClick) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {

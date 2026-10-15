@@ -207,7 +207,11 @@ class Ui0114MockupTest {
         // 16 측량 설정
         ui { c.setupOpen = true }
         rule.onNodeWithTag("setup_memo_manual").performScrollTo().performClick(); rule.waitForIdle()
-        for (tag in listOf("setup_code", "setup_memo", "setup_antenna", "setup_ref", "setup_autolink", "setup_link_line", "setup_link_area", "setup_link_point", "setup_new_link", "setup_tilt", "setup_apply", "setup_cancel")) rule.onNodeWithTag(tag).assertExists()
+        for (tag in listOf("setup_code", "setup_memo", "setup_antenna", "setup_ref", "setup_autolink", "setup_volume_key", "setup_link_line", "setup_link_area", "setup_link_point", "setup_new_link", "setup_tilt", "setup_apply", "setup_cancel")) rule.onNodeWithTag(tag).assertExists()
+        // 0.1.58 B8: 측량 설정에서 볼륨 키 측정 켜고 끄기(기본 꺼짐)
+        assertFalse(c.dig.volumeKey)
+        rule.onNodeWithTag("setup_volume_key").performScrollTo().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.waitForIdle(); assertTrue(c.dig.volumeKey)
+        rule.onNodeWithTag("setup_volume_key").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick); rule.waitForIdle(); assertFalse(c.dig.volumeKey)
         shot("mockup_16_survey_settings")
         ui { c.setupOpen = false }
         // 17 측량 결과

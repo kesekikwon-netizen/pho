@@ -29,7 +29,9 @@ data class CurrentMarker(val at: LocalXY, val accuracyM: Double, val status: Sur
 data class PhoneMarker(val at: LocalXY, val accuracyM: Double, val label: String)
 
 /** 지도에 얹는 업로드 배경(도면) 한 장의 윤곽. 정합이 끝난 것만 넘긴다. [preview] 는 수동 정렬 중 미리보기. */
-data class MapBgLayer(val id: String, val label: String, val polygon: List<LocalXY>, val opacity: Double, val preview: Boolean = false)
+data class MapBgLayer(val id: String, val label: String, val polygon: List<LocalXY>, val opacity: Double, val preview: Boolean = false,
+    /** 0.1.58 B2: GeoTIFF 사본 경로와 그림 네 모서리(좌상·우상·우하·좌하, 지도 좌표). 없으면 윤곽만 */
+    val imagePath: String? = null, val imageCorners: List<LocalXY> = emptyList())
 
 /** 고고학 외곽(선·면). 꼭짓점은 취득 순서대로 1,2,3… 번호를 붙여 그린다. [active]=아직 이어서 취득 중 */
 data class MapOutline(val label: String, val pts: List<LocalXY>, val closed: Boolean, val active: Boolean, val colorIdx: Int,

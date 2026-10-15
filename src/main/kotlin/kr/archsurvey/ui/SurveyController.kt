@@ -625,10 +625,10 @@ class SurveyController(
     /** 0.1.56 M1: 이 작업에서 주의(플로트) 측점을 한 번 승인함 — 저장 상태 1비트(작업 이름). 화면 설정 없음 */
     var floatOkJob by mutableStateOf<String?>(null)
     /** 0.1.56 M1: 측점 단추 위 주황 한 줄(승인한 작업 + 지금 주의 상태일 때만) */
+    /** 0.1.58 B3: 측점 단추 바로 위 한 줄(주황). 차단 이유 또는 주의 경고. 창 없음 */
     fun floatBanner(): String? {
-        if (floatOkJob != projectName || gv.noReceiver || gv.status.status != SurveyStatus.CAUTION) return null
-        val cm = gv.status.sigmaHM?.let { String.format(java.util.Locale.US, "%.0f", it * 100) } ?: "—"
-        return "◐ 플로트 ±${cm}cm로 저장 중"
+        if (gv.noReceiver || gv.status.status != SurveyStatus.CAUTION) return null
+        return QualityGate.decide(gv.status).line
     }
 
     fun onMeasure() {
@@ -650,24 +650,10 @@ class SurveyController(
                 feedback?.invoke(false)
                 return
             }
-            // 0.1.56 M1: 주의(플로트 등) 확인은 작업당 1번(아래쪽 시트). 승인한 작업에선 다시 묻지 않고 측점 단추 위 한 줄만
-            SavePolicy.ALLOW_WITH_WARNING -> if (!qualityBypass && floatOkJob != projectName) {
-                val hint = if (st.reason == StatusReason.NO_SIGMA) PrecisionGuide.noSigmaHint(deviceIdProvider())?.let { " ($it)" } ?: "" else ""
-                val noSigma = st.reason == StatusReason.NO_SIGMA
-                val req = ConfirmRequest(
-                    if (noSigma) SigmaText.CONFIRM_TITLE else "주의 상태에서 측점할까요?",
-                    if (noSigma) SigmaText.CONFIRM_BODY + (hint.takeIf { it.isNotEmpty() } ?: "") else "${st.reason.textKo}$hint · 저장은 되지만 주의 표시가 기록돼요.",
-                    if (noSigma) SigmaText.CONFIRM_OK else "그래도 측점",
-                    sheet = true,
-                ) {
-                    qualityConfirm = null
-                    floatOkJob = projectName
-                    qualityBypass = true
-                    try { onMeasure() } finally { qualityBypass = false }
-                }
-                qualityConfirm = req
-                ui.ask(req)
-                return
+            // 0.1.58 B3: 확인 창 없음. 플로트·오차 10cm 초과는 차단, 그 밖의 주의는 한 줄 경고 후 저장
+            SavePolicy.ALLOW_WITH_WARNING -> {
+                val d = QualityGate.decide(st)
+                if (d.kind == QualityGate.Kind.BLOCK) { message = d.line; feedback?.invoke(false); return }
             }
             SavePolicy.ALLOW -> {}
         }
@@ -694,6 +680,7 @@ class SurveyController(
             measureCount = 0; measureStartedAtMs = clock()
             var worst = st.status
             var aborted: StatusReason? = null
+            var gateAbort: String? = null
             var avgStart: Long? = null; var avgEnd: Long? = null
             val tilts = ArrayList<Double>()
             combine(source.gnss, source.link) { g, l -> g to l }.first { (g, l) ->
@@ -701,6 +688,8 @@ class SurveyController(
                 if (r.status == SurveyStatus.UNAVAILABLE || (strictAcquire && r.status == SurveyStatus.CAUTION)) {
                     aborted = r.reason; return@first true
                 }
+                // 0.1.58 B3: 취득 중 플로트·오차 10cm 초과가 되면 멈추고 저장하지 않음
+                if (QualityGate.decide(r).kind == QualityGate.Kind.BLOCK) { gateAbort = QualityGate.decide(r).line; aborted = r.reason; return@first true }
                 if (r.status == SurveyStatus.CAUTION) worst = SurveyStatus.CAUTION
                 g.gga?.let { if (avg.add(it, g.freshGst(source.clockMs()))) { measureCount = avg.count; val now = clock(); if (avgStart == null) avgStart = now; avgEnd = now; tilt?.currentAngle()?.let { a -> tilts.add(a) } } }
                 progress = avg.progress
@@ -717,7 +706,8 @@ class SurveyController(
                     feedback?.invoke(false)
                     return@launch
                 }
-                message = if (strictAcquire)
+                message = if (gateAbort != null) "$gateAbort. 저장하지 않았어요."
+                else if (strictAcquire)
                     "엄격 모드에서는 FIX만 허용돼요 — ${ar.textKo}. 저장하지 않았어요."
                 else
                     "신호가 ‘불가’가 되어 취득을 멈췄어요 (${ar.textKo}). 저장하지 않았어요."

@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 object UserError {
     /** 기술 정보는 로그로, 화면에는 [what] 한 문장 + [next] 한 문장 */
     fun of(where: String, e: Throwable?, what: String, next: String? = null): String {
-        if (e != null) runCatching { android.util.Log.w("ArchSurvey", "handled:$where", e) } // 크래시 기록(CrashLog)과 섞지 않음
+        if (e != null) runCatching { android.util.Log.w("ArchSurvey", "handled:$where " + kr.archsurvey.diag.CrashLog.redact(android.util.Log.getStackTraceString(e))) } // 크래시 기록(CrashLog)과 섞지 않음
         return if (next.isNullOrBlank()) what else "$what · $next"
     }
 

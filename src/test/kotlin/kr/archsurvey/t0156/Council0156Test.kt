@@ -61,33 +61,24 @@ internal class FakeSend(var points: Int, private val whereText: String = "내 �
 /** 0.1.56 위원회 사양(14-council-survey.md) 합격 기준 — 순수 JVM 부분 */
 class Council0156PureTest {
     // ---- M1 플로트 확인은 작업당 1번(아래쪽 시트), 연속 10점 = 탭 11, 단독은 막힘 ----
-    @Test fun m1_float10_taps11_sheetOnce_singleBlocked() {
+    /** 0.1.58 B3 가 0.1.56 M1 을 대신: 플로트 = 창 없이 차단(한 줄 이유) · 오차 2–10cm FIX = 주황 한 줄 + 저장 · 10cm 초과 = 차단 */
+    @Test fun m1_replacedBy_b3_floatBlocked_lowPrecisionWarnSaved_over10Blocked() {
         val store = Mem(); val (s, c) = rig(strict = false, store = store)
         c.projectName = "작업1"
-        s.push(FixQuality.RTK_FLOAT, 0.12)
-        assertEquals(SurveyStatus.CAUTION, c.gv.status.status)
-        var taps = 0; var sheets = 0; var centered = 0
-        repeat(10) {
-            c.onMeasure(); taps++
-            c.ui.confirm?.let { r -> if (r.sheet) sheets++ else centered++; c.ui.answer(true); taps++ }
-            s.now += 1000; s.push(FixQuality.RTK_FLOAT, 0.12, lat = 37.0 + (it + 1) * 0.0005)
-        }
-        assertEquals(10, store.saved.size)
-        assertEquals("탭 11회(첫 확인 1 + 10)", 11, taps)
-        assertEquals(1, sheets); assertEquals("지도 중앙 창 0", 0, centered)
-        assertEquals("◐ 플로트 ±12cm로 저장 중", c.floatBanner())
-        // 단독(○) = 계속 막힘
-        s.now += 1000; s.push(FixQuality.SINGLE, null)
-        assertEquals(SurveyStatus.UNAVAILABLE, c.gv.status.status)
-        c.onMeasure(); s.now += 1000; s.push(FixQuality.SINGLE, null, lat = 37.02)
-        assertEquals(10, store.saved.size); assertNull(c.ui.confirm)
-        // FIX 로 갔다 다시 플로트 = 묻지 않음
-        s.now += 1000; s.push(FixQuality.RTK_FIXED, 0.01, lat = 37.03); s.now += 1000; s.push(FixQuality.RTK_FLOAT, 0.12, lat = 37.03)
-        c.onMeasure(); assertNull(c.ui.confirm); s.now += 1000; s.push(FixQuality.RTK_FLOAT, 0.12, lat = 37.03)
-        assertEquals(11, store.saved.size)
-        // 다른 작업 = 다시 1번 묻기
-        s.now += 1000; s.push(FixQuality.RTK_FLOAT, 0.12, lat = 37.04)
-        c.projectName = "작업2"; c.onMeasure(); assertTrue(c.ui.confirm!!.sheet)
+        s.push(FixQuality.RTK_FLOAT, 0.03)
+        repeat(3) { c.onMeasure(); assertNull(c.ui.confirm); s.now += 1000; s.push(FixQuality.RTK_FLOAT, 0.03, lat = 37.0 + (it + 1) * 0.0005) }
+        assertEquals(0, store.saved.size)
+        assertEquals("플로트예요 — 고정(FIX)될 때까지 저장하지 않아요", c.floatBanner())
+        assertTrue(c.message!!.contains("플로트"))
+        // FIX 인데 오차 5cm = 경고 한 줄 + 저장(창 없음)
+        s.now += 1000; s.push(FixQuality.RTK_FIXED, 0.05, lat = 37.01)
+        assertTrue(c.floatBanner()!!.contains("±5cm"))
+        c.onMeasure(); assertNull(c.ui.confirm); s.now += 1000; s.push(FixQuality.RTK_FIXED, 0.05, lat = 37.01)
+        assertEquals(1, store.saved.size)
+        // FIX 인데 오차 12cm = 차단
+        s.now += 1000; s.push(FixQuality.RTK_FIXED, 0.12, lat = 37.02)
+        c.onMeasure(); assertNull(c.ui.confirm); s.now += 1000; s.push(FixQuality.RTK_FIXED, 0.12, lat = 37.02)
+        assertEquals(1, store.saved.size); assertTrue(c.message!!.contains("±12cm"))
     }
 
     // ---- M2 VRS 꺼짐은 ✓ 아님 ----

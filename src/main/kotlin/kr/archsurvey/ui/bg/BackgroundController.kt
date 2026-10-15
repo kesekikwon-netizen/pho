@@ -176,13 +176,20 @@ class BackgroundController(
     fun mapLayers(): List<MapBgLayer> {
         val pr = projection()
         return layers.filter { it.bg.shouldDraw && it.cornersLonLat.size >= 3 }
-            .map { r -> MapBgLayer(r.id, r.name, r.cornersLonLat.map { pr.toLocal(it.lat, it.lon) }, r.opacity, preview = false) }
+            .map { r ->
+                // 0.1.58 B2: GeoTIFF 는 화소 모서리(좌상·우상·우하·좌하)를 함께 넘겨 실제 그림을 그린다
+                val img = if (r.bg.kind == kr.archsurvey.georef.BgKind.GEOTIFF) r.bg.cornersLonLat()?.takeIf { it.size == 4 } else null
+                MapBgLayer(r.id, r.name, r.cornersLonLat.map { pr.toLocal(it.lat, it.lon) }, r.opacity, preview = false,
+                    imagePath = img?.let { r.bg.filePath }, imageCorners = img?.map { pr.toLocal(it.lat, it.lon) }.orEmpty())
+            }
     }
 
     /** 지도 아래쪽 작은 안내 문구 (예: "업로드1 50% + 업로드2 100%") */
     fun mapCaption(): String? {
         val on = layers.filter { it.bg.shouldDraw }
         if (on.isEmpty()) return null
+        // 0.1.58 B2: 그림을 못 읽은 GeoTIFF 는 윤곽만 — 이유 한 줄
+        on.firstNotNullOfOrNull { r -> if (r.bg.kind == kr.archsurvey.georef.BgKind.GEOTIFF) kr.archsurvey.ui.BgImages.failure(r.bg.filePath) else null }?.let { return "${it} · 윤곽만 표시" }
         return on.mapIndexed { i, r -> (if (on.size > 1) "업로드${i + 1}" else "업로드") + " ${Math.round(r.opacity * 100).toInt()}%" }.joinToString(" + ")
     }
 }

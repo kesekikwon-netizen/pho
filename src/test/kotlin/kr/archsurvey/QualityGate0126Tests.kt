@@ -139,15 +139,12 @@ class QualityGate0126Tests {
         repeat(2) { f.emitNext() }; f.skipToNextSegment(); f.emitNext()
         assertEquals(SurveyStatus.CAUTION, c.gv.status.status)
         c.onMeasure()
+        // 0.1.58 B3: 확인 창 없음 · 플로트는 한 줄 이유로 차단
         assertEquals(Phase.IDLE, c.phase)
-        assertNotNull(c.ui.confirm)
-        assertTrue(c.ui.confirm!!.title.contains("주의"))
-        assertTrue(c.points.isEmpty())
-        c.ui.answer(true)
-        assertEquals(Phase.ACQUIRING, c.phase)
+        assertNull(c.ui.confirm)
+        assertTrue(c.message!!, c.message!!.contains("플로트"))
         repeat(6) { f.emitNext() }
-        assertEquals(1, c.points.size)
-        assertTrue(c.points.single().cautionFlag)
+        assertTrue(c.points.isEmpty())
     }
 
     @Test fun statusBandSub_strictCautionMatchesMeasureButtonCopy() {

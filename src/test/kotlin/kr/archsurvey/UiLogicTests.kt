@@ -155,10 +155,9 @@ class SurveyControllerTest {
         repeat(2) { f.emitNext() }; f.skipToNextSegment(); f.emitNext()
         assertEquals(SurveyStatus.CAUTION, c.gv.status.status)
         c.onMeasure()
-        assertNotNull(c.ui.confirm) // 0.1.26: 주의는 확인 후 저장
-        c.ui.answer(true)
+        assertNull(c.ui.confirm) // 0.1.58 B3: 확인 창 없음 · 플로트 차단
         repeat(6) { f.emitNext() }
-        assertTrue(c.points.single().cautionFlag); assertEquals(SurveyStatus.CAUTION, c.points.single().status)
+        assertTrue(c.points.isEmpty()); assertTrue(c.message!!.contains("플로트"))
     }
     @Test fun acquisitionAbortsWhenSignalBecomesUnavailable() {
         val sc = FakeScenario("abort", listOf(FakeSegment("고정", 3), FakeSegment("단독", 10, FixQuality.SINGLE, 1.5)))

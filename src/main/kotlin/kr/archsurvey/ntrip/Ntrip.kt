@@ -35,7 +35,7 @@ data class NtripConfig(
     val isUsable: Boolean get() = host.isNotBlank() && port in 1..65535 && mountPoint.isNotBlank() && username.isNotBlank()
 
     /** 0.1.18 보안: 기본 data class toString 은 비밀번호를 그대로 찍는다 → 가린다(로그·예외·진단 공유 대비) */
-    override fun toString(): String = "NtripConfig(host=$host, port=$port, mountPoint=$mountPoint, username=$username, password=${if (password.isEmpty()) "" else "***"}, useV2=$useV2)"
+    override fun toString(): String = "NtripConfig(host=$host, port=$port, mountPoint=$mountPoint, username=${if (username.isEmpty()) "" else "***"}, password=${if (password.isEmpty()) "" else "***"}, useV2=$useV2)"
 }
 
 /** NGII 공개 안내(2022-05) 기준 프리셋. 서버·포트·마운트는 사용자가 수정 가능 [확인 필요: 현행 정책] */
@@ -63,6 +63,8 @@ class NtripAuthException(val httpCode: Int, msg: String) : NtripException(msg)
 class NtripMountException(msg: String) : NtripException(msg)
 class NtripProtocolException(msg: String) : NtripException(msg)
 class NtripNoDataException(msg: String) : NtripException(msg)
+/** 0.1.58 B6: 수신기 GGA 의 기준국 번호가 바뀐 뒤 보정이 멈춤(SmartTopo 로그 「New base」 → 끊김) */
+class NtripBaseChangeException(msg: String) : NtripException(msg)
 /** DNS 실패·네트워크 없음·경로 없음·연결 거부 */
 class NtripNetworkException(msg: String, cause: Throwable? = null) : NtripException(msg) { init { initCause(cause) } }
 /** 접속(connect) 또는 응답 헤더 대기(handshake) 시간 초과 */
@@ -204,6 +206,7 @@ class NtripClient(
                 sb.append("GET $path HTTP/1.0\r\nHost: ${cfg.host}\r\n")
             }
             sb.append("User-Agent: NTRIP ExcavationSurvey/0.1\r\n")
+            kr.archsurvey.diag.CrashLog.registerSecret(Cred.clean(cfg.username)); kr.archsurvey.diag.CrashLog.registerSecret(Cred.clean(cfg.password))
             if (Cred.clean(cfg.username).isNotEmpty()) sb.append("Authorization: ${basicAuth(Cred.clean(cfg.username), Cred.clean(cfg.password))}\r\n")
             sb.append("Connection: close\r\n\r\n")
             return sb.toString()

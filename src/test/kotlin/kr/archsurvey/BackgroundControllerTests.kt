@@ -49,6 +49,11 @@ class BackgroundControllerTests {
         assertTrue("중심이 원점 근처 ($cx, $cy)", Math.hypot(cx, cy) < 1.0)
         assertEquals(100.0, Math.hypot(poly[1].x - poly[0].x, poly[1].y - poly[0].y), 0.5)
         assertEquals("업로드 50%", b.mapCaption())
+        // 0.1.58 B2: GeoTIFF 는 실제 그림 경로 + 화소 모서리(좌상·우상·우하·좌하)
+        val ml = b.mapLayers().single()
+        assertEquals(up.bg.filePath, ml.imagePath); assertEquals(4, ml.imageCorners.size)
+        assertTrue("좌상이 좌하보다 북쪽", ml.imageCorners[0].y > ml.imageCorners[3].y)
+        assertTrue("좌상이 우상보다 서쪽", ml.imageCorners[0].x < ml.imageCorners[1].x)
     }
 
     @Test fun opacityToggleDeleteAreSavedAndReloaded() {

@@ -157,10 +157,7 @@ class SigmaDisplay0130Tests {
         val store = Mem(); val (s, c) = rig(strict = false, store = store)
         s.push(FixQuality.RTK_FIXED, null)
         c.onMeasure()
-        val conf = c.ui.confirm!!
-        assertEquals(SigmaText.CONFIRM_TITLE, conf.title); assertEquals("측점", conf.okLabel)
-        assertTrue(store.saved.isEmpty())
-        c.ui.answer(true)
+        assertNull("0.1.58 B3: 확인 창 없음", c.ui.confirm)
         s.now += 1000; s.push(FixQuality.RTK_FIXED, null)
         assertEquals(1, store.saved.size)
         val p = store.saved[0]

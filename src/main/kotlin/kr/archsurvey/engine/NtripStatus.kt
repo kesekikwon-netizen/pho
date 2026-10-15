@@ -55,6 +55,8 @@ enum class NtripFailureKind(val tag: String, val autoRetry: Boolean, val baseDel
     SERVER_ERROR("NtripServerException", true, 5_000, 60_000),
     SERVER_CLOSED("NtripProtocolException", true, 1_000, 15_000),
     NO_DATA("NtripNoDataException", true, 1_000, 15_000),
+    /** 0.1.58 B6: 기준국 변경 뒤 끊김 → 곧바로 다시 접속 */
+    BASE_CHANGED("NtripBaseChangeException", true, 300, 3_000),
     NOT_RTCM("NtripNotRtcmException", true, 30_000, 60_000),
     UNKNOWN("Exception", true, 1_000, 15_000);
 
@@ -68,6 +70,7 @@ enum class NtripFailureKind(val tag: String, val autoRetry: Boolean, val baseDel
             is NtripMountException -> MOUNT
             is NtripTimeoutException -> TIMEOUT
             is NtripNoDataException -> NO_DATA
+            is kr.archsurvey.ntrip.NtripBaseChangeException -> BASE_CHANGED
             is NtripNotRtcmException -> NOT_RTCM
             is NtripServerException -> SERVER_ERROR
             // 코루틴 스택 복구가 예외를 복사하면서 원인을 한 단계 감쌀 수 있으므로 원인 사슬 전체를 본다

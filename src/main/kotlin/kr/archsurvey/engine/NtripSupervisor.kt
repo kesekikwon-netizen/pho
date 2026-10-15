@@ -52,6 +52,9 @@ class NtripSupervisor(
     private val noDataTimeoutMs: Long = 10_000,
     private val notRtcmAfterBytes: Int = 3_000,
     private val watchdogPeriodMs: Long = 1_000,
+    /** 0.1.58 B6: 수신기 GGA 기준국 번호(필드 14). 바뀐 뒤 [baseChangeGapMs] 동안 보정이 안 오면 곧바로 다시 접속 */
+    private val baseIdProvider: () -> String? = { null },
+    private val baseChangeGapMs: Long = 3_000,
 ) {
     private var job: Job? = null
     private val kick = Channel<Unit>(Channel.CONFLATED)
@@ -106,6 +109,8 @@ class NtripSupervisor(
             attempt++
             while (net.tryReceive().isSuccess) { } // 접속 전에 쌓인 낡은 신호 버림
             val framer = Rtcm3Framer()
+            var lastBase: String? = null
+            var baseChangedAt = 0L
             var bytesThisConn = 0L // onRtcm 만 쓴다(단일 IO 스레드)
             val connectedAtA = AtomicLong(0)
             val firstFrameAtA = AtomicLong(0)
@@ -125,6 +130,18 @@ class NtripSupervisor(
                             if (connectedAt == 0L) continue
                             val ref = lastFrameAtA.get().let { if (it != 0L) it else connectedAt }
                             if (clock() - ref > noDataTimeoutMs) throw NtripNoDataException("보정 데이터가 ${noDataTimeoutMs / 1000}초 동안 오지 않아요")
+                            val b = baseIdProvider()?.trim()?.takeIf { it.isNotEmpty() }
+                            if (b != null) {
+                                val prev = lastBase
+                                if (prev != null && prev != b) baseChangedAt = clock()
+                                lastBase = b
+                            }
+                            val bc = baseChangedAt
+                            if (bc != 0L && lastFrameAtA.get() < bc && clock() - bc > baseChangeGapMs) {
+                                baseChangedAt = 0L
+                                throw kr.archsurvey.ntrip.NtripBaseChangeException("기준국이 바뀐 뒤 보정이 멈췄어요 — 다시 접속해요")
+                            }
+                            if (bc != 0L && lastFrameAtA.get() >= bc) baseChangedAt = 0L
                         }
                     }
                     runner.run(cfg, ggaMs, noDataTimeoutMs + 5_000, { freshGga() },

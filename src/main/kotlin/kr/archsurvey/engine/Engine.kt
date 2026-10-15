@@ -186,6 +186,7 @@ class SurveyEngine(
             ggaProvider = { freshGgaForCaster() },
             rtcmSink = { rtcmQueue.trySend(it) },
             emit = { events.tryEmit(it) },
+            baseIdProvider = { gnss.value.gga?.baseStationId }, // 0.1.58 B6
         )
     }
 

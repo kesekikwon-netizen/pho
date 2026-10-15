@@ -327,7 +327,7 @@ class R10AutoConfigStateMachine0133Tests {
         assertEquals(
             listOf(
                 listOf(Triple("GGA", 17, 3)), listOf(Triple("GGA", 17, 0)), listOf(Triple("GGA", 18, 3)),
-                listOf(Triple("GGA", 18, 3), Triple("GST", 18, 3), Triple("GSA", 18, 3), Triple("GSV", 18, 3)),
+                listOf(Triple("GST", 18, 3)), listOf(Triple("GSA", 18, 3)), listOf(Triple("GSV", 18, 3)), // 0.1.58 B1: 한 개씩
             ),
             r.fake.appFiles.map { it.records },
         )
@@ -355,7 +355,7 @@ class R10AutoConfigStateMachine0133Tests {
         val r = Rig(FakeR10(btPort = 19), Store(18))
         r.waitFor(what = "result") { r.results.isNotEmpty() }
         assertEquals(R10AutoOutcome.PORT_FOUND, r.results[0].outcome); assertEquals(19, r.results[0].port)
-        assertEquals(listOf(18, 17, 19), r.fake.appFiles.filter { it.records.size == 1 && it.records[0].third == 3 }.map { it.records[0].second })
+        assertEquals(listOf(18, 17, 19), r.fake.appFiles.filter { it.records.size == 1 && it.records[0].first == "GGA" && it.records[0].third == 3 }.map { it.records[0].second })
         assertEquals(19, r.store.p)
         r.stopAll()
     }
@@ -364,7 +364,7 @@ class R10AutoConfigStateMachine0133Tests {
         val r = Rig(FakeR10(mode = FakeR10.Mode.NAK_ALL), dead = 2_500)
         r.waitFor(what = "result") { r.results.isNotEmpty() }
         assertEquals(R10AutoOutcome.ALL_NAK, r.results[0].outcome)
-        assertEquals(3, r.fake.appFiles.size)
+        assertEquals(9, r.fake.appFiles.size) // 0.1.58 B1: 포트 3개 × (1 + NAK 재시도 2)
         assertTrue("NAK 이면 켜진 게 없으니 끄지 않는다", r.fake.appFiles.flatMap { it.records }.all { it.third == 3 })
         assertTrue(r.results[0].tried.all { it.endsWith(":NAK") })
         assertTrue(r.store.saves.isEmpty())
@@ -412,7 +412,7 @@ class R10AutoConfigStateMachine0133Tests {
         assertTrue("GGA 레코드는 하나도 보내지 않음", r.fake.appFiles.flatMap { it.records }.none { it.first == "GGA" })
         assertEquals(
             listOf(listOf(Triple("GST", 17, 3)), listOf(Triple("GST", 17, 0)), listOf(Triple("GST", 18, 3)),
-                listOf(Triple("GST", 18, 3), Triple("GSA", 18, 3), Triple("GSV", 18, 3))),
+                listOf(Triple("GST", 18, 3)), listOf(Triple("GSA", 18, 3)), listOf(Triple("GSV", 18, 3))),
             r.fake.appFiles.map { it.records },
         )
         val g0 = r.fake.ggaSent.get()

@@ -1,5 +1,8 @@
 package kr.archsurvey.ui
 
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -49,6 +52,20 @@ class CanvasMapSurface(private val showBackdrop: Boolean = true) : MapSurface {
                 bgl.polygon.forEachIndexed { i, q -> if (i == 0) path.moveTo(sx(q.x), sy(q.y)) else path.lineTo(sx(q.x), sy(q.y)) }
                 path.close()
                 val a = bgl.opacity.toFloat().coerceIn(0f, 1f)
+                // 0.1.58 B2: GeoTIFF 실제 그림(네 모서리에 맞춰 사상). 아직 없거나 못 읽으면 기존 윤곽+빗금
+                BgImages.version
+                val bmp = bgl.imagePath?.takeIf { bgl.imageCorners.size == 4 }?.let { BgImages.get(it) }
+                if (bmp != null) {
+                    val src = floatArrayOf(0f, 0f, bmp.width.toFloat(), 0f, bmp.width.toFloat(), bmp.height.toFloat(), 0f, bmp.height.toFloat())
+                    val dst = FloatArray(8); bgl.imageCorners.forEachIndexed { i, q -> dst[i * 2] = sx(q.x); dst[i * 2 + 1] = sy(q.y) }
+                    val m = android.graphics.Matrix()
+                    if (m.setPolyToPoly(src, 0, dst, 0, 4)) {
+                        val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply { alpha = (255 * a).toInt().coerceIn(0, 255) }
+                        drawIntoCanvas { it.nativeCanvas.drawBitmap(bmp, m, paint) }
+                        drawPath(path, t.accent.copy(alpha = (0.35f + 0.65f * a).coerceAtMost(1f)), style = Stroke(1.5f * density))
+                        continue
+                    }
+                }
                 drawPath(path, t.accent.copy(alpha = 0.35f * a))
                 clipPath(path) {
                     val xs = bgl.polygon.map { sx(it.x) }; val ys = bgl.polygon.map { sy(it.y) }

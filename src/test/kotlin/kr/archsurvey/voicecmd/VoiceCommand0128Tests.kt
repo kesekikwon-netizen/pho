@@ -239,7 +239,7 @@ class VoiceGatePath0128Tests {
         assertTrue(voice.spk.said.last().startsWith("저장 안 됨"))
     }
 
-    @Test fun defaultCautionAsksByVoiceSaveIsNotApprovalYesIs() {
+    @org.junit.Ignore("0.1.58 B3(사용자 결정): 주의 확인 창 제거 — 플로트·10cm 초과는 창 없이 차단. 새 흐름은 t0158·Council0156 m1_replacedBy_b3 가 시험") @Test fun defaultCautionAsksByVoiceSaveIsNotApprovalYesIs() {
         val r = Rig(FakeScenarios.fieldWalk(), strict = false, epochs = 5).on()
         r.emit(2); r.f.skipToNextSegment(); r.emit(1); r.v.tick()
         r.eng.emit("저장")
@@ -261,7 +261,7 @@ class VoiceGatePath0128Tests {
         r.advance(200); assertTrue(r.spk.said.last().contains("저장됨"))
     }
 
-    @Test fun confirmTimeoutTenSecondsCancels() {
+    @org.junit.Ignore("0.1.58 B3(사용자 결정): 주의 확인 창 제거 — 플로트·10cm 초과는 창 없이 차단. 새 흐름은 t0158·Council0156 m1_replacedBy_b3 가 시험") @Test fun confirmTimeoutTenSecondsCancels() {
         val r = Rig(FakeScenarios.fieldWalk(), strict = false).on()
         r.emit(2); r.f.skipToNextSegment(); r.emit(1); r.v.tick()
         r.eng.emit("저장"); r.speechDone()
@@ -273,7 +273,7 @@ class VoiceGatePath0128Tests {
         assertEquals("저장 안 함", r.spk.said.last())
     }
 
-    @Test fun cancelWordAndMediaKeyCancelNeverApprove() {
+    @org.junit.Ignore("0.1.58 B3(사용자 결정): 주의 확인 창 제거 — 플로트·10cm 초과는 창 없이 차단. 새 흐름은 t0158·Council0156 m1_replacedBy_b3 가 시험") @Test fun cancelWordAndMediaKeyCancelNeverApprove() {
         val r = Rig(FakeScenarios.fieldWalk()).on()
         r.emit(2); r.f.skipToNextSegment(); r.emit(1); r.v.tick()
         r.eng.emit("저장"); r.speechDone()
@@ -287,6 +287,16 @@ class VoiceGatePath0128Tests {
         assertNull(r.c.ui.confirm); assertEquals(Phase.IDLE, r.c.phase); assertTrue(r.c.points.isEmpty())
     }
 
+    /** 0.1.58 B3: 음성 「저장」도 버튼과 같은 길 — 플로트면 창 없이 막고 이유를 말한다 */
+    @Test fun floatVoiceSave_blockedNoConfirm_saysReason() {
+        val r = Rig(FakeScenarios.fieldWalk(), strict = false).on()
+        r.emit(2); r.f.skipToNextSegment(); r.emit(1); r.v.tick()
+        r.eng.emit("저장")
+        assertNull(r.c.ui.confirm); assertEquals(Phase.IDLE, r.c.phase)
+        r.emit(6); assertTrue(r.c.points.isEmpty())
+        assertTrue(r.spk.said.last(), r.spk.said.last().startsWith("저장 안 됨"))
+    }
+
     @Test fun mediaKeyRequestsSaveViaSamePath() {
         val r = Rig(epochs = 2).on(); r.emit(2); r.v.tick()
         assertTrue(r.v.onMediaKey()); assertEquals(Phase.ACQUIRING, r.c.phase)
@@ -295,7 +305,7 @@ class VoiceGatePath0128Tests {
         assertFalse("음성 저장이 꺼져 있으면 키를 먹지 않음", off.v.onMediaKey())
     }
 
-    @Test fun tiltAndCautionAskedOneAtATime() {
+    @org.junit.Ignore("0.1.58 B3(사용자 결정): 주의 확인 창 제거 — 플로트·10cm 초과는 창 없이 차단. 새 흐름은 t0158·Council0156 m1_replacedBy_b3 가 시험") @Test fun tiltAndCautionAskedOneAtATime() {
         val r = Rig(FakeScenarios.fieldWalk(), strict = false, epochs = 3)
         val tc = TiltController(FakeTiltPlatform(), { 0L }); tc.changePolicy(TiltPolicy.CONFIRM)
         repeat(60) { tc.onSample(tiltReading(3.0)) }
@@ -313,7 +323,7 @@ class VoiceGatePath0128Tests {
         r.emit(4); assertEquals(1, r.c.points.size)
     }
 
-    @Test fun buttonPathCautionThenTiltNoEndlessLoop() {
+    @org.junit.Ignore("0.1.58 B3(사용자 결정): 주의 확인 창 제거 — 플로트·10cm 초과는 창 없이 차단. 새 흐름은 t0158·Council0156 m1_replacedBy_b3 가 시험") @Test fun buttonPathCautionThenTiltNoEndlessLoop() {
         val r = Rig(FakeScenarios.fieldWalk(), strict = false, epochs = 3)
         val tc = TiltController(FakeTiltPlatform(), { 0L }); tc.changePolicy(TiltPolicy.CONFIRM)
         repeat(60) { tc.onSample(tiltReading(3.0)) }
@@ -407,7 +417,7 @@ class VoiceGatePath0128Tests {
         assertTrue(r.eng.running)
     }
 
-    @Test fun linkDropDuringConfirmAbandonsVoiceConfirm() {
+    @org.junit.Ignore("0.1.58 B3(사용자 결정): 주의 확인 창 제거 — 플로트·10cm 초과는 창 없이 차단. 새 흐름은 t0158·Council0156 m1_replacedBy_b3 가 시험") @Test fun linkDropDuringConfirmAbandonsVoiceConfirm() {
         val r = Rig(FakeScenarios.fieldWalk()).on()
         r.emit(2); r.f.skipToNextSegment(); r.emit(1); r.v.tick()
         r.eng.emit("저장"); r.speechDone()
@@ -501,7 +511,7 @@ class VoiceGatePath0128Tests {
         r.advance(61_000L); assertTrue(r.eng.running)
     }
 
-    @Test fun noTtsStillWorksWithScreenAndTimeout() {
+    @org.junit.Ignore("0.1.58 B3(사용자 결정): 주의 확인 창 제거 — 플로트·10cm 초과는 창 없이 차단. 새 흐름은 t0158·Council0156 m1_replacedBy_b3 가 시험") @Test fun noTtsStillWorksWithScreenAndTimeout() {
         val r = Rig(FakeScenarios.fieldWalk()); r.spk.available = false; r.on()
         r.emit(2); r.f.skipToNextSegment(); r.emit(1); r.v.tick()
         r.eng.emit("저장")
