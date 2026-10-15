@@ -60,16 +60,19 @@ class ArRenderer(
     private var geomChanged = true
 
     private var camTex = 0
-    private var bgProg = 0; private var meshProg = 0
+    private var bgProg = 0; private var meshProg = 0; private var cloudProg = 0
     private val quad = floatArrayOf(-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f)
     private val quadBuf = fbuf(quad); private val uvBuf = fbuf(FloatArray(8))
     private val view = FloatArray(16); private val proj = FloatArray(16); private val vp = FloatArray(16)
 
     private var lastDepthAt = 0L; private var lastShotAt = 0L; private var lastOverlayAt = 0L
     private var lastShotPos: FloatArray? = null; private var lastShotQ: FloatArray? = null
-    private var prevPos: FloatArray? = null; private var prevQ: FloatArray? = null; private var prevT = 0L
-    private var slowUntil = 0L
+    private val speed = kr.archsurvey.pg.live.SpeedGate()
     private var lastSpeed = ""
+    private var lastFrameTs = 0L
+    // 진단(화면·로그): 깊이 성공/실패, 점 묶음
+    @Volatile var depthOk = 0; @Volatile var depthFail = 0; @Volatile var cloudFrames = 0
+    private var lastDepthErr = ""; private var glErrLogged = 0
 
     fun requestShot() { shotRequested = true; kr.archsurvey.pg.diag.PgLog.d("shutter pressed") }
     private var frames = 0; private var fpsAt = 0L; private var lastTracking: TrackingState? = null
@@ -89,6 +92,10 @@ class ArRenderer(
         meshProg = program(
             "uniform mat4 m; uniform float ps; attribute vec3 p; attribute vec4 c; varying vec4 vc; void main(){ gl_Position=m*vec4(p,1.0); gl_PointSize=ps; vc=c; }",
             "precision mediump float; varying vec4 vc; void main(){ gl_FragColor=vc; }")
+        cloudProg = program(
+            "uniform mat4 m; uniform float k; attribute vec3 p; attribute vec4 c; varying vec4 vc; void main(){ vec4 q=m*vec4(p,1.0); gl_Position=q; gl_PointSize=clamp(k/max(q.w,0.1),3.0,14.0); vc=c; }",
+            "precision mediump float; varying vec4 vc; void main(){ vec2 d=gl_PointCoord-vec2(0.5); if(dot(d,d)>0.25) discard; gl_FragColor=vc; }")
+        kr.archsurvey.pg.diag.PgLog.i("gl surface created ${GLES20.glGetString(GLES20.GL_RENDERER)}")
     }
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
@@ -99,7 +106,6 @@ class ArRenderer(
 
     override fun onDrawFrame(gl: GL10?) {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
-        if (paused) return
         val frame: Frame = try { session.update() } catch (t: Throwable) { kr.archsurvey.pg.diag.PgLog.w("session.update failed: ${t.javaClass.simpleName} ${t.message}"); return }
         if (frame.hasDisplayGeometryChanged() || geomChanged) {
             geomChanged = false
@@ -109,41 +115,42 @@ class ArRenderer(
         }
         if (frame.timestamp == 0L) return
         drawBackground()
+        val newFrame = frame.timestamp != lastFrameTs; lastFrameTs = frame.timestamp
         val camera = frame.camera
         val tracking = camera.trackingState == TrackingState.TRACKING
         lastFailure = if (tracking) null else camera.trackingFailureReason.name
         if (!tracking && shotRequested) { shotRequested = false; kr.archsurvey.pg.diag.PgLog.i("shot REJECT reason=not_tracking ${lastFailure}") }
         val now = SystemClock.uptimeMillis()
         frames++
-        if (now - fpsAt >= 5000) { if (fpsAt > 0) kr.archsurvey.pg.diag.PgLog.d("fps=%.1f tracking=${camera.trackingState} failure=${camera.trackingFailureReason}".format(frames * 1000.0 / (now - fpsAt))); fpsAt = now; frames = 0 }
+        if (now - fpsAt >= 5000) { if (fpsAt > 0) kr.archsurvey.pg.diag.PgLog.d("fps=%.1f tracking=${camera.trackingState} failure=${camera.trackingFailureReason} depthOk=$depthOk depthFail=$depthFail($lastDepthErr) cloud=${engine.cloudBuf?.count ?: 0} batches=${engine.batches} speed=${lastSpeed} paused=$paused auto=$auto".format(frames * 1000.0 / (now - fpsAt))); fpsAt = now; frames = 0 }
         if (camera.trackingState != lastTracking) { kr.archsurvey.pg.diag.PgLog.i("tracking ${lastTracking} -> ${camera.trackingState} reason=${camera.trackingFailureReason}"); lastTracking = camera.trackingState }
         if (tracking) {
             camera.getViewMatrix(view, 0); camera.getProjectionMatrix(proj, 0, 0.05f, 30f)
             Matrix.multiplyMM(vp, 0, proj, 0, view, 0)
             val pose = camera.pose
             val pos = pose.translation; val q = pose.rotationQuaternion // x,y,z,w
-            // 움직임 속도(흔들림 판단): 회전 60°/s, 이동 0.8 m/s 넘으면 「천천히」
-            prevPos?.let { pp ->
-                val dt = (now - prevT).coerceAtLeast(1) / 1000.0
-                val dv = dist(pp, pos) / dt; val dw = angDeg(prevQ!!, q) / dt
-                if (dv > 0.8 || dw > 60) { if (now >= slowUntil) kr.archsurvey.pg.diag.PgLog.d("too fast move=%.2f m/s rot=%.0f deg/s".format(dv, dw)); slowUntil = now + 600; lastSpeed = "move=%.2fm/s rot=%.0fdeg/s".format(dv, dw) }
-            }
-            prevPos = pos; prevQ = q; prevT = now
+            // 움직임 속도: 카메라 프레임 시각으로 0.25초 창 평균(같은 프레임 반복·손떨림 무시), 1 m/s · 90°/s 두 번 연속
+            if (newFrame && speed.feed(frame.timestamp, pos, q)) kr.archsurvey.pg.diag.PgLog.d("too fast move=%.2f m/s rot=%.0f deg/s".format(speed.move, speed.rot))
+            lastSpeed = "move=%.2fm/s rot=%.0fdeg/s".format(speed.move, speed.rot)
+            val slow = speed.slow(frame.timestamp)
 
-            if (depthIntervalMs > 0 && now - lastDepthAt > depthIntervalMs) { lastDepthAt = now; collectPoints(frame) }
+            if (!paused && newFrame && depthIntervalMs > 0 && now - lastDepthAt > depthIntervalMs) { lastDepthAt = now; collectPoints(frame) }
             val moved = lastShotPos == null || dist(lastShotPos!!, pos) > 0.25 || angDeg(lastShotQ!!, q) > 10
-            val autoDue = auto && shotsAllowed && now - lastShotAt > 2000 && moved
+            val autoDue = !paused && auto && shotsAllowed && now - lastShotAt > 2000 && moved
             if (shotRequested && !shotsAllowed) { shotRequested = false; kr.archsurvey.pg.diag.PgLog.i("shot REJECT reason=policy(storage/thermal)") }
-            if ((shotRequested || autoDue) && now < slowUntil) {
+            if (paused && shotRequested) { shotRequested = false; kr.archsurvey.pg.diag.PgLog.i("shot REJECT reason=paused") }
+            if ((shotRequested || autoDue) && slow) {
                 kr.archsurvey.pg.diag.PgLog.i("shot REJECT reason=too_fast $lastSpeed manual=$shotRequested"); shotRequested = false
             } else if (shotRequested || autoDue) {
                 val manual = shotRequested; shotRequested = false
                 if (takeShot(frame)) { lastShotAt = now; lastShotPos = pos; lastShotQ = q; kr.archsurvey.pg.diag.PgLog.i("shot ACCEPT manual=$manual") }
                 else kr.archsurvey.pg.diag.PgLog.w("shot REJECT reason=camera_image_unavailable manual=$manual")
             }
-            drawMesh()
+            if (engine.view3d == kr.archsurvey.pg.live.LiveEngine.View3D.MESH) drawMesh() else drawCloud()
+            val e = GLES20.glGetError()
+            if (e != GLES20.GL_NO_ERROR && glErrLogged < 20) { glErrLogged++; kr.archsurvey.pg.diag.PgLog.e("GL error 0x${Integer.toHexString(e)} view=${engine.view3d}") }
         }
-        if (now - lastOverlayAt > 100) { lastOverlayAt = now; onOverlay(overlay(tracking, now < slowUntil)) }
+        if (now - lastOverlayAt > 100) { lastOverlayAt = now; onOverlay(overlay(tracking, tracking && speed.slow(frame.timestamp))) }
     }
 
     private fun drawBackground() {
@@ -159,6 +166,24 @@ class ArRenderer(
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
         GLES20.glDisableVertexAttribArray(p); GLES20.glDisableVertexAttribArray(uv)
         GLES20.glDepthMask(true)
+    }
+
+    /** 색 점구름: 가까울수록 크게(화면 px), 깊이 시험으로 앞 점이 가림 */
+    private fun drawCloud() {
+        val cb = engine.cloudBuf ?: return
+        if (cb.count == 0) return
+        GLES20.glEnable(GLES20.GL_DEPTH_TEST); GLES20.glDepthMask(true)
+        GLES20.glUseProgram(cloudProg)
+        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(cloudProg, "m"), 1, false, vp, 0)
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(cloudProg, "k"), viewH * 0.012f)
+        val p = GLES20.glGetAttribLocation(cloudProg, "p"); val c = GLES20.glGetAttribLocation(cloudProg, "c")
+        cb.buf.position(0); GLES20.glVertexAttribPointer(p, 3, GLES20.GL_FLOAT, false, 28, cb.buf)
+        cb.buf.position(3); GLES20.glVertexAttribPointer(c, 4, GLES20.GL_FLOAT, false, 28, cb.buf)
+        GLES20.glEnableVertexAttribArray(p); GLES20.glEnableVertexAttribArray(c)
+        GLES20.glDrawArrays(GLES20.GL_POINTS, 0, cb.count)
+        GLES20.glDisableVertexAttribArray(p); GLES20.glDisableVertexAttribArray(c)
+        cb.buf.position(0)
+        cloudFrames++
     }
 
     private fun drawMesh() {
@@ -184,16 +209,27 @@ class ArRenderer(
         GLES20.glDisable(GLES20.GL_BLEND)
     }
 
-    /** 깊이(Raw → 실패 시 일반 깊이) 또는 특징점 → 세계 점 */
+    /** 깊이(Raw → 일반 깊이) 또는 특징점 → 세계 점 + 카메라 색 */
     private fun collectPoints(frame: Frame) {
         val camera = frame.camera
-        if (depthOn) {
-            try {
-                val depth = frame.acquireRawDepthImage16Bits()
-                val conf = try { frame.acquireRawDepthConfidenceImage() } catch (_: Throwable) { null }
-                try { depthToWorld(depth, conf, camera); return } finally { depth.close(); conf?.close() }
-            } catch (_: Throwable) { /* 아직 깊이 없음 → 특징점 */ }
-        }
+        val img = try { frame.acquireCameraImage() } catch (t: Throwable) { null }
+        try {
+            if (depthOn) {
+                val depth = try { frame.acquireRawDepthImage16Bits() } catch (t: Throwable) {
+                    try { frame.acquireDepthImage16Bits() } catch (t2: Throwable) { lastDepthErr = t2.javaClass.simpleName; null } }
+                if (depth != null) {
+                    val conf = try { frame.acquireRawDepthConfidenceImage() } catch (_: Throwable) { null }
+                    try { if (depthToWorld(depth, conf, camera, img) > 0) { depthOk++; return } else lastDepthErr = "empty" }
+                    catch (t: Throwable) { lastDepthErr = t.javaClass.simpleName; kr.archsurvey.pg.diag.PgLog.w("depthToWorld failed ${t.javaClass.simpleName} ${t.message}") }
+                    finally { depth.close(); conf?.close() }
+                }
+                depthFail++
+            }
+            featurePoints(frame, camera, img)
+        } finally { img?.close() }
+    }
+
+    private fun featurePoints(frame: Frame, camera: com.google.ar.core.Camera, img: Image?) {
         try {
             frame.acquirePointCloud().use { pc ->
                 val b = pc.points; val n = b.remaining() / 4
@@ -201,44 +237,83 @@ class ArRenderer(
                 val out = FloatArray(n * 3); var k = 0
                 for (i in 0 until n) {
                     val x = b.get(); val y = b.get(); val z = b.get(); val c = b.get()
-                    if (c < 0.3f) continue
+                    if (c < 0.2f) continue
                     out[3 * k] = x; out[3 * k + 1] = y; out[3 * k + 2] = z; k++
                 }
-                if (k > 0) engine.addPoints(out, k)
+                if (k == 0) return
+                val rgb = img?.let { colorsForWorld(out, k, camera, it) }
+                engine.addColored(out, rgb, k)
             }
-        } catch (_: Throwable) { }
+        } catch (t: Throwable) { kr.archsurvey.pg.diag.PgLog.w("pointcloud failed ${t.javaClass.simpleName}") }
     }
 
-    private fun depthToWorld(depth: Image, conf: Image?, camera: com.google.ar.core.Camera) {
+    /** 세계 점 → 카메라 영상 화소 색(특징점용) */
+    private fun colorsForWorld(xyz: FloatArray, n: Int, camera: com.google.ar.core.Camera, img: Image): FloatArray {
+        val intr = camera.imageIntrinsics; val dims = intr.imageDimensions; val f = intr.focalLength; val pp = intr.principalPoint
+        val sx = img.width.toFloat() / dims[0]; val sy = img.height.toFloat() / dims[1]
+        val inv = FloatArray(16); camera.pose.inverse().toMatrix(inv, 0)
+        val sampler = YuvSampler(img); val out = FloatArray(n * 3)
+        for (i in 0 until n) {
+            val x = xyz[3 * i]; val y = xyz[3 * i + 1]; val z = xyz[3 * i + 2]
+            val cx = inv[0] * x + inv[4] * y + inv[8] * z + inv[12]; val cy = inv[1] * x + inv[5] * y + inv[9] * z + inv[13]; val cz = inv[2] * x + inv[6] * y + inv[10] * z + inv[14]
+            if (cz >= -0.05f) { out[3 * i] = 0.85f; out[3 * i + 1] = 0.92f; out[3 * i + 2] = 1f; continue }
+            val u = (f[0] * (cx / -cz) + pp[0]) * sx; val v = (f[1] * (-cy / -cz) + pp[1]) * sy
+            sampler.rgb(u.toInt(), v.toInt(), out, 3 * i)
+        }
+        return out
+    }
+
+    /** 깊이 화소 → 세계 점. 내부표정은 CPU 영상(imageIntrinsics)을 깊이 크기로 줄여 씀(깊이는 CPU 영상과 같은 화각). 반환: 점 수 */
+    private fun depthToWorld(depth: Image, conf: Image?, camera: com.google.ar.core.Camera, img: Image?): Int {
         val w = depth.width; val h = depth.height
         val plane = depth.planes[0]
-        val buf = plane.buffer.order(ByteOrder.nativeOrder()); val rs = plane.rowStride; val ps = plane.pixelStride
+        val buf = plane.buffer.order(ByteOrder.LITTLE_ENDIAN); val rs = plane.rowStride; val ps = plane.pixelStride
         val cbuf = conf?.planes?.get(0)?.buffer; val crs = conf?.planes?.get(0)?.rowStride ?: 0; val cps = conf?.planes?.get(0)?.pixelStride ?: 1
-        val intr = camera.textureIntrinsics
+        val intr = camera.imageIntrinsics
         val dims = intr.imageDimensions; val f = intr.focalLength; val pp = intr.principalPoint
         val sx = w.toFloat() / dims[0]; val sy = h.toFloat() / dims[1]
         val fx = f[0] * sx; val fy = f[1] * sy; val cx = pp[0] * sx; val cy = pp[1] * sy
         val m = FloatArray(16); camera.pose.toMatrix(m, 0)
-        val out = FloatArray((w / 2 + 1) * (h / 2 + 1) * 3); var k = 0
+        val sampler = img?.let { YuvSampler(it) }
+        val ix = if (img != null) img.width.toFloat() / w else 0f; val iy = if (img != null) img.height.toFloat() / h else 0f
+        val out = FloatArray((w / 2 + 1) * (h / 2 + 1) * 3); val rgb = FloatArray(out.size); var k = 0
         var y = 0
         while (y < h) {
             var x = 0
             while (x < w) {
                 val mm = buf.getShort(y * rs + x * ps).toInt() and 0xffff
                 val c = if (cbuf != null) (cbuf.get(y * crs + x * cps).toInt() and 0xff) else 255
-                if (mm in 200..5000 && c >= 128) {
+                if (mm in 150..6000 && c >= 100) {
                     val d = mm / 1000f
                     val px = (x - cx) / fx * d; val py = -(y - cy) / fy * d; val pz = -d
                     out[3 * k] = m[0] * px + m[4] * py + m[8] * pz + m[12]
                     out[3 * k + 1] = m[1] * px + m[5] * py + m[9] * pz + m[13]
                     out[3 * k + 2] = m[2] * px + m[6] * py + m[10] * pz + m[14]
+                    if (sampler != null) sampler.rgb((x * ix).toInt(), (y * iy).toInt(), rgb, 3 * k) else { rgb[3 * k] = 0.85f; rgb[3 * k + 1] = 0.92f; rgb[3 * k + 2] = 1f }
                     k++
                 }
                 x += 2
             }
             y += 2
         }
-        if (k > 0) engine.addPoints(out, k)
+        if (k > 0) engine.addColored(out, rgb, k)
+        return k
+    }
+
+    /** YUV_420_888 한 화소 → RGB(0..1) */
+    class YuvSampler(img: Image) {
+        private val w = img.width; private val h = img.height
+        private val yb = img.planes[0].buffer; private val yrs = img.planes[0].rowStride; private val yps = img.planes[0].pixelStride
+        private val ub = img.planes[1].buffer; private val vb = img.planes[2].buffer; private val crs = img.planes[1].rowStride; private val cps = img.planes[1].pixelStride
+        fun rgb(u0: Int, v0: Int, out: FloatArray, o: Int) {
+            val u = u0.coerceIn(0, w - 1); val v = v0.coerceIn(0, h - 1)
+            val Y = (yb.get(v * yrs + u * yps).toInt() and 255).toFloat()
+            val ci = (v / 2) * crs + (u / 2) * cps
+            val U = (ub.get(ci).toInt() and 255) - 128f; val V = (vb.get(ci).toInt() and 255) - 128f
+            out[o] = ((Y + 1.402f * V) / 255f).coerceIn(0f, 1f)
+            out[o + 1] = ((Y - 0.344f * U - 0.714f * V) / 255f).coerceIn(0f, 1f)
+            out[o + 2] = ((Y + 1.772f * U) / 255f).coerceIn(0f, 1f)
+        }
     }
 
     private fun takeShot(frame: Frame): Boolean {
@@ -274,7 +349,7 @@ class ArRenderer(
             if (x < 0 || y < 0 || x > viewW || y > viewH) off = true
             target = floatArrayOf(x.coerceIn(0f, viewW.toFloat()), y.coerceIn(0f, viewH.toFloat()))
         } }
-        return Overlay(tracking, slow, tp, target, off, if (depthOn) "깊이" else "특징점", lastFailure)
+        return Overlay(tracking, slow, tp, target, off, (if (depthOn) "깊이" else "특징점") + " · 점 " + (engine.cloudBuf?.count ?: 0), lastFailure)
     }
 
     /** 세계 → 화면 px (z = w 부호) */

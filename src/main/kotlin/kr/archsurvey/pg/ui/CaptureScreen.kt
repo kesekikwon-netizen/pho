@@ -3,6 +3,7 @@ package kr.archsurvey.pg.ui
 import android.opengl.GLSurfaceView
 import android.view.View
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -75,6 +76,7 @@ import kotlin.math.sin
 @Composable
 fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -> Unit, onFallback: () -> Unit = onBack) {
     val ctx = LocalContext.current
+    var leaving by remember { mutableStateOf(false) }
     val view = LocalView.current
     val loaded = remember { runCatching { store.loadChecked(name) }.getOrNull() }
     if (loaded == null) { LaunchedEffect(Unit) { kr.archsurvey.pg.diag.PgLog.e("capture: session unreadable $name"); onBack() }; return }
@@ -89,16 +91,32 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
         else -> null }) }
     var policyMsg by remember { mutableStateOf<String?>(null) }
     var autoShot by remember { mutableStateOf(true) }
+    var view3d by remember { mutableStateOf(LiveEngine.View3D.POINTS) }
     var keepShooting by remember { mutableStateOf(false) }
     val opened = remember { ArSupport.open(ctx) }
     val save: (kr.archsurvey.pg.data.Session) -> Unit = { store.save(it) }
     var lastDone by remember { mutableStateOf(false) }
 
+    var paused by remember { mutableStateOf(false) }
+    // 나가기: GL 스레드를 먼저 멈추고(onPause 는 GL 스레드가 끝날 때까지 기다림) 저장 → 세션 닫기는 다른 스레드에서(메인 스레드 멈춤 방지)
+    fun leave(reason: String, then: () -> Unit) {
+        if (leaving) return
+        leaving = true
+        kr.archsurvey.pg.diag.PgLog.i("capture leave reason=$reason photos=${engine.session.stills.size}")
+        runCatching { store.save(engine.session) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("save on leave failed", it) }
+        then()
+    }
     DisposableEffect(Unit) {
         engine.onChange = { view.post { tick++ } }
-        onDispose { engine.onChange = null; engine.close(); opened?.session?.close() }
+        onDispose {
+            engine.onChange = null
+            runCatching { glView?.onPause() }
+            val s = opened?.session
+            engine.close()
+            Thread({ runCatching { s?.pause(); s?.close() }.onFailure { kr.archsurvey.pg.diag.PgLog.e("session close failed", it) }; kr.archsurvey.pg.diag.PgLog.i("arcore session closed") }, "pg-close").start()
+        }
     }
-    BackHandler { onBack() }
+    BackHandler(enabled = true) { leave("system_back", onBack) }
     val pickGcp = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             val r = runCatching { ctx.contentResolver.openInputStream(uri)!!.use { s -> GcpTxt.report(s.readBytes().take(2_000_000).toByteArray().toString(Charsets.UTF_8)) } }
@@ -165,6 +183,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
         if (life.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) runCatching { opened?.session?.resume() }
         onDispose { life.lifecycle.removeObserver(obs) }
     }
+    LaunchedEffect(paused) { renderer?.paused = paused; kr.archsurvey.pg.diag.PgLog.i("capture paused=$paused") }
     LaunchedEffect(autoShot) { renderer?.auto = autoShot; kr.archsurvey.pg.diag.PgLog.i("auto shot=$autoShot") }
     DisposableEffect(Unit) {
         val cb = object : android.content.ComponentCallbacks2 {
@@ -208,7 +227,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
     Column(Modifier.fillMaxSize().background(P.bg).safeDrawingPadding()) {
         // 맨 위: 뒤로 · 제목 · 좌표 상태 · ⋯
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp).heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(48.dp).releaseTap("뒤로") { onBack() }, contentAlignment = Alignment.Center) { Txt("‹", size = 28.sp, bold = true) }
+            Box(Modifier.size(56.dp).clickable { leave("top_back", onBack) }, contentAlignment = Alignment.Center) { Txt("‹", size = 28.sp, bold = true) }
             Txt("$name · 3D 촬영", bold = true, modifier = Modifier.weight(1f), maxLines = 1)
             val (chipText, chipColor) = when {
                 fit != null -> {
@@ -270,6 +289,9 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                     Txt(if (o.slow) "천천히" else kr.archsurvey.pg.diag.Msg.tracking(o.failure), size = 20.sp, bold = true, color = Color.White)
                 }
             }
+            if (paused || !autoShot) Box(Modifier.align(Alignment.TopCenter).padding(top = if (o != null && (o.slow || !o.tracking)) 110.dp else 56.dp).clip(RoundedCornerShape(16.dp)).background(FieldIvory.ink).padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Txt(if (paused) "⏸ 일시정지 · 저장·쌓기 멈춤" else "자동 촬영 꺼짐 · 셔터로만 찍어요", bold = true, color = Color.White)
+            }
             policyMsg?.let { m -> Box(Modifier.align(Alignment.TopCenter).padding(top = 110.dp).clip(RoundedCornerShape(16.dp)).background(FieldIvory.float).padding(horizontal = 16.dp, vertical = 8.dp)) { Txt(m, bold = true, color = Color.White) } }
             msg?.let { m ->
                 Box(Modifier.align(Alignment.Center).clip(RoundedCornerShape(14.dp)).background(Color.White).releaseTap("닫기") { msg = null }.padding(16.dp)) { Txt(m, color = FieldIvory.ink) }
@@ -290,10 +312,17 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 OutlineBtn("되돌리기", enabled = pr.photos > 0) { engine.undo(save) }
                 Spacer(Modifier.width(10.dp))
-                if (!Minimal.on && !done) Choice(if (autoShot) "자동 2초" else "자동 끔", autoShot) { autoShot = !autoShot }
+                if (!Minimal.on && !done) Choice(if (autoShot) "자동 2초 켬" else "자동 꺼짐", autoShot) { autoShot = !autoShot }
                 Spacer(Modifier.weight(1f))
-                if (done) PrimaryBtn("3D 저장 · iTwin 내보내기", Modifier.width(230.dp), color = P.fix) { onResult() }
-                else Shutter("촬영") { renderer?.requestShot() }
+                // 오른손 엄지: 위 = 일시정지/계속 · 촬영 끝, 아래 = 셔터
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Choice(if (paused) "▶ 계속" else "⏸ 일시정지", paused) { paused = !paused }
+                        OutlineBtn("■ 촬영 끝") { leave("finish", onResult) }
+                    }
+                    if (done) PrimaryBtn("3D 저장 · iTwin 내보내기", Modifier.width(230.dp), color = P.fix) { leave("done", onResult) }
+                    else Shutter(if (paused) "멈춤" else "촬영") { if (!paused) renderer?.requestShot() }
+                }
             }
         }
     }
@@ -321,6 +350,11 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
         engine.scale?.let { Txt("축척 ${"%.4f".format(it.s)} · ${it.source}" + (it.scatterPct?.let { p -> " · ±%.1f%%".format(p) } ?: ""), size = 14.sp, color = P.sub) }
             ?: Txt("축척 추정(검증 안 됨) · ARCore 값 그대로", size = 14.sp, color = P.sub)
         Spacer(Modifier.height(12.dp))
+        Txt("실시간 3D 보기", bold = true)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (v in LiveEngine.View3D.values()) Choice(v.label, view3d == v) { view3d = v; engine.view3d = v; engine.refreshCloud(); kr.archsurvey.pg.diag.PgLog.i("view3d -> $v") }
+        }
+        Spacer(Modifier.height(12.dp))
         NameStyleRow()
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -334,7 +368,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
         Spacer(Modifier.height(12.dp))
         OutlineBtn("로그 공유") { Minimal.moreOpen = false; runCatching { kr.archsurvey.pg.diag.PgLog.share(ctx) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("log share failed", it) } }
         Spacer(Modifier.height(12.dp))
-        OutlineBtn("결과 · iTwin 내보내기") { Minimal.moreOpen = false; onResult() }
+        OutlineBtn("결과 · iTwin 내보내기") { Minimal.moreOpen = false; leave("menu_result", onResult) }
     }
 }
 

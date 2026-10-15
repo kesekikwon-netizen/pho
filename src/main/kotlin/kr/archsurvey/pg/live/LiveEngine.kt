@@ -33,6 +33,38 @@ class LiveEngine(initial: Session) {
     private var lastMeshAt = 0L
     private var dirty = false
 
+    /** 실시간 3D 보기: 색 점(기본) · 충분 색 점 · 면 */
+    enum class View3D(val label: String) { POINTS("색 점"), POINTS_COV("충분 색 점"), MESH("면") }
+    @Volatile var view3d = View3D.POINTS
+    val cloud = PointCloud()
+    class Cloud(val buf: FloatBuffer, val count: Int)
+    @Volatile var cloudBuf: Cloud? = null; private set
+    @Volatile var batches = 0L; private set
+    private var lastCloudAt = 0L
+    @Volatile var cloudIntervalMs = 250L
+
+    /** 깊이(또는 특징점) 묶음 + 색. rgb == null 이면 회색 */
+    fun addColored(xyz: FloatArray, rgb: FloatArray?, n: Int) = post {
+        for (i in 0 until n) {
+            val x = xyz[3 * i]; val y = xyz[3 * i + 1]; val z = xyz[3 * i + 2]
+            if (rgb != null) cloud.add(x, y, z, rgb[3 * i], rgb[3 * i + 1], rgb[3 * i + 2]) else cloud.add(x, y, z, 0.85f, 0.92f, 1f)
+            hf.add(x.toDouble(), y.toDouble(), z.toDouble())
+        }
+        hf.bump(); dirty = true; batches++
+        val now = System.currentTimeMillis()
+        if (now - lastCloudAt > cloudIntervalMs) rebuildCloud(now)
+        if (now - lastMeshAt > meshIntervalMs) recompute(false)
+    }
+
+    private fun rebuildCloud(now: Long) {
+        lastCloudAt = now
+        val tint: ((Float, Float, Float) -> FloatArray?)? = if (view3d == View3D.POINTS_COV) { x, _, z ->
+            val ck = cov.covKey(Math.floorDiv(hf.ix(x.toDouble()), 2), Math.floorDiv(hf.ix(z.toDouble()), 2)); color(ck) } else null
+        val (b, c) = cloud.snapshot(tint)
+        cloudBuf = Cloud(b, c)
+    }
+    fun refreshCloud() = post { rebuildCloud(System.currentTimeMillis()) }
+
     class Mesh(val tri: FloatBuffer, val triCount: Int, val pts: FloatBuffer, val ptCount: Int)
 
     init { exec.execute { initial.stills.forEach { addStillModel(it) }; recompute(true) } }
@@ -100,7 +132,7 @@ class LiveEngine(initial: Session) {
         mesh = buildMesh()
         val ms = (System.nanoTime() - t0) / 1e6
         val m = mesh
-        kr.archsurvey.pg.diag.PgLog.d("mesh update %.1f ms cells=${hf.cells.size} tris=${m?.triCount} pts=${m?.ptCount} | coverage pct=${progress.pct} green=${progress.greenPct} overlap=${progress.overlapPct} holes=${progress.holesPct} tags=${progress.tagsOk}/${progress.tagsTotal} photos=${progress.photos} done=${progress.done}".format(ms))
+        kr.archsurvey.pg.diag.PgLog.d("mesh update %.1f ms cloud=${cloud.size} batches=$batches cells=${hf.cells.size} tris=${m?.triCount} pts=${m?.ptCount} | coverage pct=${progress.pct} green=${progress.greenPct} overlap=${progress.overlapPct} holes=${progress.holesPct} tags=${progress.tagsOk}/${progress.tagsTotal} photos=${progress.photos} done=${progress.done}".format(ms))
         onChange?.invoke()
     }
 
