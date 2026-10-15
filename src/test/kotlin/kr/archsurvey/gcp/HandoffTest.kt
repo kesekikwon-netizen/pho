@@ -38,13 +38,13 @@ class HandoffTest {
         val p = Handoff.plan(book, HandoffScope.ALL, now, z)
         assertEquals("강릉유적_전체_20261012.zip", p.zipName)
         assertEquals("강릉유적_전달_20261012.zip", Handoff.zipName(site, HandoffScope.PENDING, now, z))
-        assertEquals(listOf("강릉유적_목록.csv",
+        assertEquals(listOf("강릉유적_목록.csv", ItwinGuide.FILE,
             "001호_주거지/001호_주거지_1차_EPSG5187.xml", "001호_주거지/001호_주거지_1차_EPSG5187.txt",
             "003호_수혈/003호_수혈_1차_EPSG5187.xml", "003호_수혈/003호_수혈_1차_EPSG5187.txt",
             "A_토층/A_토층_1차_EPSG5187.xml", "A_토층/A_토층_1차_EPSG5187.txt"), p.entries.map { it.first })
         assertEquals(listOf(11L, 31L), p.markDelivered)               // 사진 안 끝난 21 은 전달로 안 바꿈
         assertEquals(listOf("A_토층_1차"), p.noPhoto)
-        assertTrue(p.entries[1].second.contains("<Name>Target #3</Name>"))
+        assertTrue(p.entries[2].second.contains("<Name>Target #3</Name>"))
     }
 
     @Test fun listCsv_bomCrlfHeaderAndRows() {

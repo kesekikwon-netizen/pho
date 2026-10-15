@@ -41,7 +41,7 @@ class Shots0113Test {
         var taps = 0
         rule.onNodeWithTag("obj_new").performClick(); taps++; rule.waitForIdle()
         shot("gcp_2_new_obj")
-        rule.onAllNodes(hasSetTextAction()).assertCountEquals(0)
+        rule.onNodeWithTag("newobj_title").assertIsFocused().performTextInput("2호 주거지") // 0.1.17 이름은 직접 입력
         rule.onNodeWithTag("newobj_ok").performClick(); taps++; rule.waitForIdle()
         if (c.screen == Screen.OBJ) { rule.onNodeWithTag("obj_measure").performClick(); taps++; rule.waitForIdle() }
         assertEquals(Screen.TARGETS, c.screen)

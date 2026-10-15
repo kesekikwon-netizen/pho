@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -157,7 +158,7 @@ fun ObjectsScreen(c: GcpController) {
             // 0.1.15 미니멀: PC로 보내기는 ⋯ (자동 저장은 이미 됨) · 「새 대상」은 같은 오른쪽 자리
             if (Minimal.on) Spacer(Modifier.weight(1f)) else
             Row(Modifier.weight(1f).height(72.dp).clip(RoundedCornerShape(20.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(20.dp))
-                .hClickable(onClickLabel = "PC로 보내기") { c.handoffOpen = true }.semantics { contentDescription = "PC로 보내기 · 보낼 폴더 $n" }.testTag("to_handoff"),
+                .hClickable(onClickLabel = "PC로 보내기") { c.oneTapHandoff() }.semantics { contentDescription = "PC로 보내기 · 보낼 폴더 $n" }.testTag("to_handoff"),
                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                 GlyphIcon(Glyph.SHARE, G.ink, 22.dp); Spacer(Modifier.width(10.dp))
                 Text("PC로 보내기", style = Ty.label.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold), color = G.ink, maxLines = 1)
@@ -201,7 +202,7 @@ fun ObjScreen(c: GcpController) {
                 done[0], nowStep == 0, "step_targets") { c.openTargets() }
             StepCard(2, "ID 카드", "QR · 대상 이름 · 날짜", done[1], nowStep == 1, "step_idcard") { c.openIdCard() }
             StepCard(3, "사진 찍기", if (photoDone) "다 찍었어요" else "iTwin Capture용 · ID 카드부터", done[2], false, "step_photo", null)
-            StepCard(4, "PC로 보내기", if (sent) "보냈어요" else "zip · 좌표 XML·TXT · 목록 CSV", done[3], nowStep == 3, "step_send") { c.handoffOpen = true }
+            StepCard(4, "PC로 보내기", if (sent) "보냈어요" else "zip · 좌표 XML·TXT · 목록 CSV", done[3], nowStep == 3, "step_send") { c.oneTapHandoff() }
             FolderChip(Names.photoFolder(o, s), "obj_folder")
             Text("XML: ${Names.objFolder(o)}/${Names.xmlName(o, s, b.site.epsg)}", style = Ty.coord.copy(fontSize = 16.sp), color = G.sub, modifier = Modifier.padding(start = 4.dp).testTag("obj_xml"))
             Spacer(Modifier.height(4.dp))
@@ -225,7 +226,7 @@ fun ObjScreen(c: GcpController) {
                     locked -> BigPrimary("차수 고르기", "앞 차수는 보기만 해요", "obj_session") { c.sessionSheetOpen = true }
                     st == Stage.MEASURE -> BigPrimary("다음: 표적 재기", "1 / 4 단계 · ${n}/${s.slots.size} · FIX 때만 저장", "obj_measure") { c.openTargets() }
                     st == Stage.PHOTO -> BigPrimary("다음: ID 카드 띄우기", "2 / 4 단계 · 그다음 사진 찍기", "obj_idcard") { c.openIdCard() }
-                    st == Stage.HANDOFF -> BigPrimary("다음: PC로 보내기", "4 / 4 단계", "obj_send") { c.handoffOpen = true }
+                    st == Stage.HANDOFF -> BigPrimary("다음: PC로 보내기", "4 / 4 단계", "obj_send") { c.oneTapHandoff() }
                     else -> BigPrimary("다음 차수 만들기", "4단계 모두 끝 · 앞 차수 파일은 그대로", "obj_newsession") { c.openNewSession() }
                 }
                 }
@@ -442,59 +443,37 @@ fun MeasureBig(c: GcpController) {
 // =============================== g02 새 대상(한 화면 · 고르기만) ===============================
 @Composable
 fun NewObjScreen(c: GcpController, f: NewObjForm) {
+    // 0.1.17 사용자 정책: 종류·호수·면 고르기 없음 — 이름 칸 하나 + 만들기. 이름 칸에 바로 커서·자판
     val epsg = c.book?.site?.epsg
-    val taken = f.no in f.used
-    val name = ObjNames.label(f.kind, f.no)
+    val prob = ObjNames.problem(f.title, c.book?.objs?.map { it.name } ?: emptyList())
+    val ok = prob == null
+    val focus = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+    val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    androidx.compose.runtime.LaunchedEffect(Unit) { runCatching { focus.requestFocus(); kb?.show() } }
     Column(Modifier.fillMaxSize().background(G.bg).hClickable {}.testTag("newobj")) {
-        GTopBar("새 대상", { c.newObj = null }, c, sub = "고르기만 하면 돼요", onMenu = { c.menuOpen = true })
+        GTopBar("새 폴더", { c.newObj = null }, c, sub = "이름을 쓰고 만들기", onMenu = { c.menuOpen = true })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
-            GroupLabel("종류")
-            TileGrid(ObjKind.entries, 3, 10.dp) { k -> Tile(k.ko, k == f.kind, "kind_${k.id}", Modifier.weight(1f), height = 60.dp) { c.pickKind(k) } }
-            GroupLabel("번호")
-            if (f.kind.lettered) {
-                TileGrid((1..26).toList(), 6, 8.dp) { n -> Tile(ObjNames.letter(n), n == f.no, "letter_$n", Modifier.weight(1f), enabled = n !in f.used, height = 56.dp, big = true) { c.pickObjNo(n) } }
-            } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Tile("−", false, "objno_minus", Modifier.width(76.dp), height = 76.dp, big = true, enabled = f.no > 1) { c.pickObjNo(f.no - 1) }
-                    Column(Modifier.weight(1f).height(76.dp).clip(RoundedCornerShape(16.dp)).background(G.white).border(1.dp, if (taken) G.bad else G.line, RoundedCornerShape(16.dp))
-                        .hClickable(onClickLabel = "번호 고르기") { c.openObjNoPad() }.testTag("objno_display"), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Text("${f.no}호", style = Ty.ledger.copy(fontSize = 34.sp, fontWeight = FontWeight.Bold), color = if (taken) G.bad else G.ink, maxLines = 1)
-                    }
-                    Tile("+", false, "objno_plus", Modifier.width(76.dp), height = 76.dp, big = true, enabled = f.no < ObjNames.MAX_NO) { c.pickObjNo(f.no + 1) }
-                }
-                Spacer(Modifier.height(10.dp))
-                val nx = ObjNames.next(f.used)
-                val quick = (listOf(1, nx, nx + 1, 10, 20)).filter { it <= ObjNames.MAX_NO && it !in f.used }.distinct().take(5)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (n in quick) Tile("$n", f.no == n, "objno_q_$n", Modifier.weight(1f), height = 56.dp) { c.pickObjNo(n) }
-                }
-            }
-            if (taken) Text("이미 있는 번호예요 · 다음 번호 ${ObjNames.next(f.used)}", style = Ty.label, color = G.bad, modifier = Modifier.padding(top = 6.dp).testTag("objno_taken"))
+            GroupLabel("폴더 이름")
+            androidx.compose.material3.OutlinedTextField(f.title, { c.newObj = f.copy(title = it.take(40)) }, singleLine = true,
+                textStyle = Ty.ledger.copy(fontSize = 24.sp),
+                placeholder = { Text("예) 2호 주거지", style = Ty.label, color = G.sub) },
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { if (ok) c.submitNewObj() }),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 68.dp).focusRequester(focus).testTag("newobj_title"))
+            if (f.title.isNotBlank() && prob != null) Text(prob, style = Ty.label, color = G.bad, modifier = Modifier.padding(top = 6.dp).testTag("objno_taken"))
             f.nearNote?.let { Text(it, style = Ty.label, color = G.warn, modifier = Modifier.padding(top = 4.dp).testTag("near_note")) }
-            GroupLabel("차수 · 면")
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Tile("1차", true, "newobj_session_1", Modifier.weight(1f), height = 60.dp) {}
-                Column(Modifier.weight(2f).heightIn(min = 60.dp).padding(horizontal = 4.dp), verticalArrangement = Arrangement.Center) {
-                    Text("새 대상은 1차로 시작해요 · 2차부터는 폴더 안 차수에서", style = Ty.small, color = G.sub, modifier = Modifier.testTag("newobj_session_note"))
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-            TileGrid(SessionLabels.ALL, 3, 10.dp) { l -> Tile(l, l == f.label, "label_$l", Modifier.weight(1f), height = 60.dp) { c.pickLabel(l) } }
             Spacer(Modifier.height(12.dp))
-            Text("폴더 ${ObjNames.folder(f.kind, f.no)}_1차 · 표적 칸 #" + QrPayload.ranges(f.slots) + (epsg?.let { " · EPSG:$it" } ?: ""), style = Ty.small, color = G.sub, modifier = Modifier.padding(start = 4.dp).testTag("newobj_folder"))
+            Text("저장 위치 · Documents/iTwinGCP/${c.book?.site?.name ?: ""}/${if (f.title.isBlank()) "…" else ObjNames.safe(f.title)}_1차 · 표적 #" + QrPayload.ranges(f.slots) + (epsg?.let { " · EPSG:$it" } ?: ""),
+                style = Ty.small, color = G.sub, modifier = Modifier.padding(start = 4.dp).testTag("newobj_folder"))
             Spacer(Modifier.height(12.dp))
         }
         Column(Modifier.fillMaxWidth().background(G.bg)) {
             Box(Modifier.fillMaxWidth().height(1.dp).background(G.line))
             Box(Modifier.padding(16.dp)) {
-                Column(Modifier.fillMaxWidth().heightIn(min = 80.dp).clip(RoundedCornerShape(20.dp)).background(if (!taken) G.dark else FieldIvory.disabled)
-                    .hClickable(enabled = !taken, onClickLabel = "$name 만들고 표적 재기") { c.submitNewObj() }.padding(10.dp).testTag("newobj_ok"),
+                Column(Modifier.fillMaxWidth().heightIn(min = 80.dp).clip(RoundedCornerShape(20.dp)).background(if (ok) G.dark else FieldIvory.disabled)
+                    .hClickable(enabled = ok, onClickLabel = "만들고 표적 재기") { c.submitNewObj() }.padding(10.dp).testTag("newobj_ok"),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(name, style = Ty.label.copy(fontSize = 24.sp, fontWeight = FontWeight.Bold), color = if (!taken) G.onDark else FieldIvory.onDisabled, maxLines = 1, modifier = Modifier.testTag("newobj_name"))
-                        Text(" 만들고 시작", style = Ty.label.copy(fontSize = 24.sp, fontWeight = FontWeight.Bold), color = if (!taken) G.onDark else FieldIvory.onDisabled, maxLines = 1)
-                    }
-                    Text("1차 · ${f.label}", style = Ty.small, color = if (!taken) G.onDark else FieldIvory.onDisabled)
+                    Text("만들기", style = Ty.label.copy(fontSize = 24.sp, fontWeight = FontWeight.Bold), color = if (ok) G.onDark else FieldIvory.onDisabled, maxLines = 1, modifier = Modifier.testTag("newobj_name"))
                 }
             }
         }

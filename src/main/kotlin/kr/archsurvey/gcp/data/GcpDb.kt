@@ -16,6 +16,8 @@ data class SiteRow(
 data class ObjRow(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val siteId: Long, val kind: String, val no: Int, val createdAt: Long, val deleted: Boolean = false,
+    /** 0.1.17(v3): 사용자가 직접 쓴 폴더 이름. 옛 행은 빈칸 */
+    @ColumnInfo(defaultValue = "") val title: String = "",
 )
 
 @Entity(tableName = "session", indices = [Index(value = ["objId"])])
@@ -60,7 +62,7 @@ interface GcpDao {
     suspend fun replaceShot(r: ShotRow): Long { deactivate(r.sessionId, r.tag); return insertShot(r) }
 }
 
-@Database(entities = [SiteRow::class, ObjRow::class, SessionRow::class, ShotRow::class], version = 2, exportSchema = true)
+@Database(entities = [SiteRow::class, ObjRow::class, SessionRow::class, ShotRow::class], version = 3, exportSchema = true)
 abstract class GcpDb : RoomDatabase() {
     abstract fun dao(): GcpDao
 
@@ -89,13 +91,19 @@ abstract class GcpDb : RoomDatabase() {
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_obj_siteId_kind_no` ON `obj` (`siteId`, `kind`, `no`)")
             }
         }
-        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2)
+        /** 2 → 3(0.1.17): 대상에 사용자 이름 칸만 더한다. 기록은 그대로 */
+        val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `obj` ADD COLUMN `title` TEXT NOT NULL DEFAULT ''")
+            }
+        }
+        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
     }
 }
 
 // ---- 장부 행 ↔ 모델 ----
 fun SiteRow.model() = Site(id, name, epsg, createdAt)
-fun ObjRow.model() = Obj(id, siteId, ObjKind.of(kind), no, createdAt)
+fun ObjRow.model() = Obj(id, siteId, ObjKind.of(kind), no, createdAt, title)
 fun SessionRow.model() = Session(id, objId, no, label, slots.split(',').mapNotNull { it.trim().toIntOrNull() }, createdAt, photoDoneAt, deliveredAt, changedAt, xmlSavedAt)
 fun ShotRow.model() = Shot(id, sessionId, tag, e, n, h, lat, lon, sigmaH, sigmaU, epochs, measuredAt, active, poleM, apcM, device, note)
 fun Session.row() = SessionRow(id, objId, no, label, slots.joinToString(","), createdAt, photoDoneAt, deliveredAt, changedAt, xmlSavedAt)

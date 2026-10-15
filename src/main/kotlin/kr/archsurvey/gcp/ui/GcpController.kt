@@ -55,6 +55,8 @@ interface GcpFilesPort {
     fun saveSession(book: SiteBook, o: Obj, s: Session): SaveOutcome
     fun shareSession(book: SiteBook, o: Obj, s: Session): Boolean
     fun shareZip(plan: HandoffPlan): Boolean
+    /** 0.1.17: 마지막 zip 을 둔 공용 폴더(화면 안내용). 모르면 null */
+    val lastZipWhere: String? get() = null
     /** 사람이 볼 저장 위치(예: 내 파일 › Documents › iTwinGCP › 강릉유적) */
     fun whereLabel(site: Site): String
 }
@@ -73,13 +75,16 @@ data class NewSiteForm(
     val suggestions: List<String> = emptyList(), val base: String? = null, val district: Int? = null,
     val epsg: Int = 5186, val locating: Boolean = false, val addressNote: String? = null, val typed: String? = null,
 ) {
-    fun name(): String? = (typed?.trim()?.takeIf { it.isNotEmpty() } ?: base)?.let { SiteNames.withDistrict(it, district) }
+    /** 0.1.17: 이름은 사용자가 쓴 것만(고르기·지구 번호 없음) */
+    fun name(): String? = typed?.trim()?.takeIf { it.isNotEmpty() }
 }
 
 enum class NewObjStep { KIND, NUMBER }
 data class NewObjForm(
     val step: NewObjStep = NewObjStep.KIND, val kind: ObjKind = ObjKind.DWELLING, val no: Int = 1, val used: Set<Int> = emptySet(),
     val label: String = SessionLabels.ALL.first(), val slots: List<Int> = listOf(1, 2, 3, 4), val nearNote: String? = null,
+    /** 0.1.17: 사용자가 쓰는 폴더 이름(종류·호수 고르기 대신) */
+    val title: String = "",
 )
 data class NewSessionForm(val label: String, val slots: List<Int>)
 
@@ -220,24 +225,15 @@ class GcpController(
 
     /** 새 유적 창: 최근 이름·날짜로 바로 채우고, 위치가 있으면 주소를 물어 위에 더한다. 좌표계도 위치(경도)로 고른다 */
     fun openNewSite() {
-        val today = java.time.Instant.ofEpochMilli(clock()).atZone(zone).toLocalDate()
-        val recent = sites.sortedByDescending { it.lastAt ?: it.site.createdAt }.map { it.site.name }
         val ll = latLon()
         val epsg = ll?.let { epsgForLon(it.second) } ?: (prefs.lastEpsg.takeIf { it in 5185..5188 } ?: 5186)
-        val base0 = SiteNames.suggest(null, recent, today)
-        newSite = NewSiteForm(base0, base0.first(), null, epsg, locating = ll != null, addressNote = if (ll == null) "수신기 위치가 없어 최근 이름·날짜만 보여요" else "지금 위치의 동 이름을 찾는 중…")
-        if (ll != null) scope.launch {
-            val a = runCatching { addressLookup(ll.first, ll.second) }.getOrNull()
-            val f = newSite ?: return@launch
-            if (a == null) { newSite = f.copy(locating = false, addressNote = "주소를 못 찾았어요(인터넷?) · 최근 이름·날짜에서 고르세요"); return@launch }
-            val list = SiteNames.suggest(a, recent, today)
-            newSite = f.copy(suggestions = list, base = if (f.base == base0.first()) list.first() else f.base, locating = false, addressNote = "지금 위치: ${a.sigungu} ${a.beopjeong.ifEmpty { a.haengjeong }}")
-        }
+        // 0.1.17 사용자 정책: 이름은 사용자가 직접 씀(추천 목록·지구 고르기 없음). 좌표계만 위치로 미리
+        newSite = NewSiteForm(emptyList(), null, null, epsg, locating = false, addressNote = null, typed = "")
     }
 
     fun submitNewSite() {
         val f = newSite ?: return
-        val name = f.name() ?: run { ui.fail("이름을 고르세요"); return }
+        val name = f.name() ?: run { ui.fail("유적 이름을 입력하세요"); return }
         scope.launch {
             val r = runCatching { withContext(io) { repo.createSite(name, f.epsg) } }
             r.onSuccess { s -> prefs.lastEpsg = s.epsg; newSite = null; ui.ok("${s.name} 만들었어요"); reloadSites(); openSite(s.id) }
@@ -301,8 +297,8 @@ class GcpController(
         objListOpen = false
         // 0.1.13: 차수 면은 지난 대상 것 그대로(없으면 첫 값)
         val lastLabel = book?.let { b -> b.objs.maxByOrNull { it.createdAt }?.let { o -> b.sessionsOf(o).firstOrNull()?.label } } ?: SessionLabels.ALL.first()
-        newObj = NewObjForm(slots = slots, nearNote = note, label = lastLabel)
-        pickKind(lastKind())   // 0.1.5: 한 화면 — 종류·번호가 처음부터 골라져 있음
+        // 0.1.17: 종류·호수 고르기 없음 — 이름 칸 하나(사용자가 씀)
+        newObj = NewObjForm(step = NewObjStep.NUMBER, kind = ObjKind.OTHER, slots = slots, nearNote = note, label = lastLabel)
     }
     /** 마지막에 만든 대상 종류(없으면 주거지) */
     private fun lastKind(): ObjKind = book?.objs?.maxByOrNull { it.createdAt }?.kind ?: ObjKind.DWELLING
@@ -316,9 +312,12 @@ class GcpController(
     fun submitNewObj() {
         val f = newObj ?: return
         val b = book ?: return
-        if (f.no in f.used) { ui.fail("${ObjNames.label(f.kind, f.no)} 은(는) 이미 있어요 · 다음 번호 ${ObjNames.next(f.used)}"); return }
+        // 화면은 이름 칸만 씀(빈칸이면 「만들기」가 꺼짐). 이름 없이 부르는 것은 옛 코드 경로(종류+호수) — 시험 호환용
+        val named = f.title.isNotBlank()
+        if (named) ObjNames.problem(f.title, b.objs.map { it.name })?.let { ui.fail(it); return }
+        else if (f.no in f.used) { ui.fail("${ObjNames.label(f.kind, f.no)} 은(는) 이미 있어요 · 다음 번호 ${ObjNames.next(f.used)}"); return }
         scope.launch {
-            val r = runCatching { withContext(io) { repo.createObj(b.site.id, f.kind, f.no, f.label, f.slots) } }
+            val r = runCatching { withContext(io) { if (named) repo.createNamedObj(b.site.id, f.title, f.label, f.slots) else repo.createObj(b.site.id, f.kind, f.no, f.label, f.slots) } }
             r.onFailure { ui.fail(it.message ?: "만들지 못했어요"); return@launch }
             val o = r.getOrThrow()
             newObj = null
@@ -537,6 +536,14 @@ class GcpController(
     fun handoffCount(scope: HandoffScope): Int = book?.let { Handoff.count(it, scope, clock(), zone) } ?: 0
     fun handoffPlan(): HandoffPlan? = book?.let { Handoff.plan(it, handoffScope, clock(), zone) }
 
+    /** 0.1.17: 마지막 zip 저장 위치(화면 한 줄) */
+    var lastHandoffWhere by mutableStateOf<String?>(null)
+    /** 0.1.17 한 번 누르기: 보낼 것(전달 필요)이 있으면 그것, 없으면 전체를 바로 zip → 공유 창. 고르기 창 없음 */
+    fun oneTapHandoff() {
+        menuOpen = false
+        sendHandoff(if (handoffCount(HandoffScope.PENDING) > 0) HandoffScope.PENDING else HandoffScope.ALL)
+    }
+
     fun sendHandoff(sc: HandoffScope = handoffScope) {
         handoffScope = sc
         val p = handoffPlan() ?: return
@@ -546,7 +553,8 @@ class GcpController(
             if (!ok) { ui.fail("zip 을 만들지 못했어요"); return@launch }
             withContext(io) { repo.markDelivered(p.markDelivered) }
             handoffOpen = false; reloadBook()
-            ui.ok("${p.zipName} · 대상 ${p.sessionIds.size}개 · 공유 창에서 보낼 곳을 고르세요")
+            lastHandoffWhere = files.lastZipWhere
+            ui.ok("저장됨 · " + (files.lastZipWhere ?: p.zipName) + " · 대상 ${p.sessionIds.size}개 · 공유 창에서 보낼 곳을 고르세요")
         }
     }
 

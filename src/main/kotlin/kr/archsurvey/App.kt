@@ -18,6 +18,7 @@ class App : Application() {
         super.onCreate()
         val ver = runCatching { packageManager.getPackageInfo(packageName, 0).versionName ?: "" }.getOrDefault("")
         kr.archsurvey.diag.CrashLog.install(filesDir, ver)
+        kr.archsurvey.diag.CrashLog.mirror = runCatching { getExternalFilesDir(null)?.let { java.io.File(it, "logs/crash-log.txt") } }.getOrNull()
         runCatching { settings.ensureBuiltinMapKey() }
     }
 }

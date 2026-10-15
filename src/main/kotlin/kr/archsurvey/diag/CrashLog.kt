@@ -29,6 +29,8 @@ object CrashLog {
 
     /** 시험·백그라운드 작업용: 파일 위치만 정한다 */
     fun useFile(f: File) { file = f }
+    /** 0.1.55: PC(adb pull)에서 앱을 켜지 않고도 볼 수 있게 Android/data/<패키지>/files/logs/crash-log.txt 에도 같이 쓴다 */
+    @Volatile var mirror: File? = null
 
     @Synchronized
     fun record(where: String, e: Throwable) {
@@ -41,6 +43,11 @@ object CrashLog {
             f.appendText(entry)
             if (f.length() > MAX_BYTES) { val txt = f.readText(); f.writeText(txt.takeLast(MAX_BYTES / 2)) }
         }
+        mirror?.let { m -> runCatching {
+            m.parentFile?.mkdirs(); m.appendText(entry)
+            if (m.length() > MAX_BYTES) { val txt = m.readText(); m.writeText(txt.takeLast(MAX_BYTES / 2)) }
+        } }
+        runCatching { android.util.Log.e("ArchSurvey", "$where: ${e.javaClass.simpleName}: ${redact(e.message.orEmpty())}") }
     }
 
     /** 보기·공유용 읽기. 0.1.18: 예전 버전이 남긴 기록에도 비밀번호가 섞여 있을 수 있어 읽을 때 한 번 더 가린다 */

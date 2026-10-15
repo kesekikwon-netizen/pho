@@ -19,13 +19,15 @@ data class Site(val id: Long, val name: String, val epsg: Int, val createdAt: Lo
  * 대상 = 종류 + 호수(1–999, 토층은 1=A, 2=B …). 한 유적에서 (종류, 호수)는 하나뿐 — 바꾸지 않는다.
  * 폴더·파일 이름은 이 둘로만 만든다(012호_주거지, A_토층). 안쪽 고유 번호는 [id](DB).
  */
-data class Obj(val id: Long, val siteId: Long, val kind: ObjKind, val no: Int, val createdAt: Long = 0L) {
-    /** 화면 이름: 12호 주거지 / A—A′ 토층 */
-    val name: String get() = ObjNames.label(kind, no)
-    /** 짧은 이름(지도·목록): 12호 / A—A′ */
-    val short: String get() = ObjNames.short(kind, no)
-    /** 폴더·파일 머리: 012호_주거지 / A_토층 */
-    val code: String get() = ObjNames.folder(kind, no)
+data class Obj(val id: Long, val siteId: Long, val kind: ObjKind, val no: Int, val createdAt: Long = 0L,
+    /** 0.1.17: 사용자가 직접 쓴 폴더 이름(있으면 이것만 씀). 옛 대상은 빈칸 → 종류+호수 이름 */
+    val title: String = "") {
+    /** 화면 이름: 사용자 이름 / 12호 주거지 / A—A′ 토층 */
+    val name: String get() = title.ifBlank { ObjNames.label(kind, no) }
+    /** 짧은 이름(지도·목록) */
+    val short: String get() = title.ifBlank { ObjNames.short(kind, no) }
+    /** 폴더·파일 머리: 사용자 이름(폴더에 못 쓰는 글자는 _) / 012호_주거지 / A_토층 */
+    val code: String get() = if (title.isNotBlank()) ObjNames.safe(title) else ObjNames.folder(kind, no)
 }
 
 object ObjNames {
@@ -41,6 +43,18 @@ object ObjNames {
         return (1..MAX_NO).firstOrNull { it !in used } ?: MAX_NO
     }
     fun valid(no: Int) = no in 1..MAX_NO
+    /** 0.1.17: 직접 쓴 이름 → 폴더·파일 이름(\ / : * ? " < > | 와 제어문자 → _, 앞뒤 공백·점 제거, 40자) */
+    fun safe(raw: String): String = raw.trim().map { if (it.code < 0x20 || it in "\\/:*?\"<>|") '_' else it }.joinToString("").trim('.', ' ').take(40).ifEmpty { "폴더" }
+    /** 0.1.17: 새 폴더 이름 문제(없으면 null) */
+    fun problem(raw: String, existing: Collection<String>): String? {
+        val n = raw.trim()
+        return when {
+            n.isEmpty() -> "폴더 이름을 입력하세요"
+            n.length > 40 -> "이름은 40자까지예요"
+            existing.any { it.equals(n, ignoreCase = true) || safe(it).equals(safe(n), ignoreCase = true) } -> "같은 이름의 폴더가 이미 있어요"
+            else -> null
+        }
+    }
 }
 
 /** 차수. [slots] = 화면에 놓은 표적 번호(실제 태그 번호) 순서. 잰 번호는 [Shot] 에 */

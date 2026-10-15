@@ -53,6 +53,8 @@ data class HandoffPlan(
     val markDelivered: List<Long>,
     /** 사진 아직 — zip 에는 넣지만 ⚠ */
     val noPhoto: List<String>,
+    /** 0.1.17: 공용 Documents 밑 유적 폴더(zip 사본을 둘 곳) */
+    val siteRel: String = "",
 )
 
 object Handoff {
@@ -81,6 +83,7 @@ object Handoff {
         val entries = ArrayList<Pair<String, String>>()
         entries += Names.listCsvName(book.site) to ListCsv.write(book, zone, min)
         val epsg = book.site.epsg
+        entries += ItwinGuide.FILE to ItwinGuide.text(epsg)
         for ((o, s) in sel) {
             val shots = book.active(s)
             entries += "${Names.objFolder(o)}/${Names.xmlName(o, s, epsg)}" to ItwinXml.write(shots, epsg)
@@ -88,9 +91,32 @@ object Handoff {
         }
         val mark = sel.filter { (_, s) -> book.stage(s, min).let { it == Stage.HANDOFF || it == Stage.DONE } }.map { it.second.id }
         val noPhoto = sel.filter { (_, s) -> s.photoDoneAt == null }.map { (o, s) -> Names.photoFolder(o, s) }
-        return HandoffPlan(zipName(book.site, scope, now, zone), entries, sel.map { it.second.id }, mark, noPhoto)
+        return HandoffPlan(zipName(book.site, scope, now, zone), entries, sel.map { it.second.id }, mark, noPhoto, Names.siteRel(book.site))
     }
 }
 
 /** 목록 순서: 호수 대상(종류 순, 번호 순) 다음 토층(글자 순) — 폴더 이름 정렬과 같다 */
 val ObjOrder: Comparator<Obj> = compareBy<Obj>({ it.kind.lettered }, { if (it.kind.lettered) 0 else it.no }, { it.kind.ordinal }, { it.no })
+
+/**
+ * 0.1.17: zip 안 「iTwin_불러오기.txt」. Bentley 문서(ContextCapture/iTwin Capture Modeler 「Importing control points」, KB0044805) 근거.
+ * 가장 확실한 길 = Surveys XML(좌표계가 파일 안에 있어 마법사 없음). TXT 는 쉼표 구분이라 「Custom Text Format (Wizard)」 로만 읽힌다
+ * (기본 TXT 읽기는 공백 구분 → 이름 「Target #1」 의 공백·쉼표 때문에 못 읽음).
+ */
+object ItwinGuide {
+    const val FILE = "iTwin_불러오기.txt"
+    fun text(epsg: Int): String = listOf(
+        "iTwin Capture Modeler 에 표적 좌표 넣기",
+        "",
+        "1) 블록에 사진을 넣은 뒤 Surveys(측량) 탭 > Import surveys from file(파일에서 측량 가져오기).",
+        "2) 파일 형식은 \"ContextCapture Surveys (XML)\" 을 고르고 각 폴더의 *_EPSG$epsg.xml 을 엽니다.",
+        "   - 좌표계(EPSG:$epsg)가 파일 안에 있어 따로 고를 것이 없습니다.",
+        "3) TXT 를 쓰려면 반드시 \"Custom Text Format (Wizard)\" 를 고르고: 구분자 = 쉼표, 머리줄 없음,",
+        "   열 = 이름 · X(동) · Y(북) · Z, 좌표계 = EPSG:$epsg. (기본 TXT 읽기는 공백 구분이라 이 파일을 못 읽습니다)",
+        "4) 공중삼각측량(Aerotriangulation): Positioning = Control points, \"Use targets (QR Codes, AprilTags or ChiliTags)\" 켬,",
+        "   Targets extraction = AprilTags. 사진에서 찾은 표적과 같은 이름(Target #N)의 좌표가 저절로 합쳐집니다.",
+        "5) iTwin 이 표적 이름을 \"AprilTag #N\" 으로 붙이는 버전이면, TXT 의 이름을 그에 맞게 바꾸거나 표적 이름을 바꿔 맞춥니다.",
+        "",
+        "x = 동(E), y = 북(N), z = 수신기 높이, 정밀도 0.01 m.",
+    ).joinToString("\r\n", postfix = "\r\n")
+}

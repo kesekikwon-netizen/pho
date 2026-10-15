@@ -118,13 +118,12 @@ class SnapshotTest {
         rule.runOnIdle { c.back() }
         show(c)
         rule.onNodeWithTag("obj_new").performClick(); rule.onNodeWithTag("newobj").assertIsDisplayed()
-        rule.onNodeWithTag("newobj_name", useUnmergedTree = true).assertTextEquals("2호 주거지")   // 마지막 종류 · 다음 번호
+        rule.onNodeWithTag("newobj_title").assertIsFocused()
+        rule.onNodeWithTag("kind_section").assertDoesNotExist(); rule.onNodeWithTag("objno_display").assertDoesNotExist()
+        rule.onNodeWithTag("newobj_title").performTextInput("127호 주거지")
         shot("m03-new-object")
-        rule.onNodeWithTag("objno_display").performClick()
-        rule.onNodeWithTag("col0_1").performClick(); rule.onNodeWithTag("col1_2").performClick(); rule.onNodeWithTag("col2_7").performClick()
-        rule.onNodeWithTag("numpad_value", useUnmergedTree = true).assertTextEquals("127"); shot("m04-number-127")
-        rule.onNodeWithTag("numpad_ok").performClick(); rule.onNodeWithTag("newobj_name", useUnmergedTree = true).assertTextEquals("127호 주거지")
-        rule.onNodeWithTag("kind_section").performScrollTo().performClick(); shot("m03b-new-object-section-letters")
+        rule.onNodeWithTag("newobj_ok").performClick()
+        rule.runOnIdle { assertEquals("127호 주거지", c.obj!!.name) }
     }
 
     @Test fun s05_folder_inside_stages() {
@@ -175,10 +174,9 @@ class SnapshotTest {
         val r = busy(); val c = r.c
         rule.runOnIdle { c.back() }
         show(c)
-        rule.onNodeWithTag("to_handoff").performClick(); rule.onNodeWithTag("handoff_zip", useUnmergedTree = true).assertExists(); shot("m09-handoff")
-        rule.onNodeWithTag("handoff_all").performClick(); shot("m09b-handoff-all")
-        rule.onNodeWithTag("handoff_send").performClick()
-        assertEquals(1, r.files.zips.size); assertEquals(HandoffScope.ALL, c.handoffScope)
+        // 0.1.17: 한 번 누르면 바로 zip + 공유(고르기 창 없음). 보낼 것이 없으면 전체
+        rule.onNodeWithTag("to_handoff").performClick(); rule.waitForIdle(); shot("m09-handoff")
+        assertEquals(1, r.files.zips.size); assertTrue(r.files.zips[0].entries.any { it.first == kr.archsurvey.gcp.model.ItwinGuide.FILE })
     }
 
     @Test fun s10_sites_and_new_site_picker() {
@@ -188,7 +186,8 @@ class SnapshotTest {
         rule.runOnIdle { r.gnss.emit(lat = 37.7519, lon = 128.8961) }
         rule.onNodeWithTag("site_new").performClick()
         shot("m10b-new-site")
-        rule.onNodeWithTag("site_sug_0").assertExists(); rule.onNodeWithTag("district_2").performScrollTo().performClick()
+        rule.onNodeWithTag("site_typed").assertIsFocused(); rule.onNodeWithTag("site_sug_0").assertDoesNotExist()
+        rule.onNodeWithTag("site_typed").performTextInput("강릉 성남동 유적 2지구")
         rule.onNodeWithTag("newsite_ok").performClick(); rule.onNodeWithTag("objects").assertIsDisplayed()
         rule.onNodeWithTag("site_name", useUnmergedTree = true).assertTextEquals("강릉 성남동 유적 2지구")
         rule.runOnIdle { r.c.openSitePicker() }; shot("m10-sites")

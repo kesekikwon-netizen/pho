@@ -42,7 +42,7 @@ class ControllerTest {
 
         /** 유적(고르기만) + 대상(종류 타일 → 다음 번호) 만들어 지도 화면까지 */
         fun Rig.siteWithObj(kind: ObjKind = ObjKind.PIT): Rig {
-            c.openNewSite(); c.newSite = c.newSite!!.copy(base = "강릉 유적", epsg = 5187); c.submitNewSite()
+            c.openNewSite(); c.newSite = c.newSite!!.copy(typed = "강릉 유적", epsg = 5187); c.submitNewSite()
             c.openNewObj(); c.pickKind(kind); c.submitNewObj()
             return this
         }
@@ -69,26 +69,34 @@ class ControllerTest {
         c.back(); assertEquals(Screen.OBJ, c.screen); c.back(); assertEquals(Screen.OBJECTS, c.screen); c.back(); assertEquals(Screen.SITES, c.screen)
         assertEquals(1, c.sites.size); assertEquals(4, c.sites[0].objCount)
         // 같은 이름 유적은 (2)
-        c.openNewSite(); c.newSite = c.newSite!!.copy(base = "강릉 유적"); c.submitNewSite()
+        c.openNewSite(); c.newSite = c.newSite!!.copy(typed = "강릉 유적"); c.submitNewSite()
         assertEquals("강릉 유적 (2)", c.book!!.site.name)
     }
 
-    @Test fun newSite_namesFromAddress_district_epsgFromLongitude_noTyping() {
+    /** 0.1.17: 새 유적 이름은 사용자가 씀(추천·지구 없음), 좌표계만 경도로 미리 */
+    @Test fun newSite_typedName_epsgFromLongitude() {
         val r = rig(AddressParts("강원특별자치도", "강릉시", "성남동", "중앙동")); val c = r.c
         c.openNewSite()
-        assertEquals("유적 2026-10-12", c.newSite!!.base)     // 위치 없음 → 날짜
+        assertNull(c.newSite!!.name()); assertTrue(c.newSite!!.suggestions.isEmpty())
+        c.submitNewSite(); assertTrue(c.sites.isEmpty())
         c.newSite = null
         r.gnss.emit(lat = 37.7519, lon = 128.8961)
         c.openNewSite()
-        val f = c.newSite!!
-        assertEquals(5187, f.epsg)                            // 경도 128.9 → 동부
-        assertEquals("강릉 성남동 유적", f.base); assertEquals(listOf("강릉 성남동 유적", "성남동 유적", "강릉 중앙동 유적", "유적 2026-10-12"), f.suggestions)
-        c.newSite = f.copy(district = 3); assertEquals("강릉 성남동 유적 3지구", c.newSite!!.name())
-        c.numPick = NumPick(PickFor.District, "몇 지구?", 5, emptySet(), max = 99); c.numDigit(1); c.numDigit(2); c.submitNum()
-        assertEquals("강릉 성남동 유적 12지구", c.newSite!!.name())
-        c.submitNewSite(); assertEquals("강릉 성남동 유적 12지구", c.book!!.site.name); assertEquals(5187, c.book!!.site.epsg)
-        // 다음 새 유적: 최근 이름이 제안에 나옴(지구 뗀 것)
-        c.back(); c.openNewSite(); assertTrue(c.newSite!!.suggestions.contains("강릉 성남동 유적"))
+        assertEquals(5187, c.newSite!!.epsg)
+        c.newSite = c.newSite!!.copy(typed = "  강릉 교동 유적 ")
+        c.submitNewSite(); assertEquals("강릉 교동 유적", c.book!!.site.name); assertEquals(5187, c.book!!.site.epsg)
+    }
+
+    /** 0.1.17: 새 폴더(대상) = 이름 칸 하나. 같은 이름 거절, 폴더·파일 이름은 쓴 이름 그대로(못 쓰는 글자만 _) */
+    @Test fun newObj_typedTitle() {
+        val r = rig(); val c = r.c
+        c.openNewSite(); c.newSite = c.newSite!!.copy(typed = "시험 유적"); c.submitNewSite()
+        c.openNewObj(); c.newObj = c.newObj!!.copy(title = "2호 주거지 북벽"); c.submitNewObj()
+        assertEquals("2호 주거지 북벽", c.obj!!.name); assertEquals("2호 주거지 북벽", c.obj!!.code)
+        c.back(); c.openNewObj(); c.newObj = c.newObj!!.copy(title = "2호 주거지 북벽"); c.submitNewObj()
+        assertEquals(1, c.book!!.objs.size)
+        c.newObj = c.newObj!!.copy(title = "a/b"); c.submitNewObj()
+        assertEquals("a_b", c.book!!.objs.first { it.title == "a/b" }.code)
     }
 
     @Test fun numPad_digitsBackspaceCapAndTaken() {
@@ -216,7 +224,7 @@ class ControllerTest {
 
     @Test fun measureButton_noObjOpensNewObj_noReceiverOpensConnection() {
         val r = rig(); val c = r.c
-        c.openNewSite(); c.newSite = c.newSite!!.copy(base = "가"); c.submitNewSite()
+        c.openNewSite(); c.newSite = c.newSite!!.copy(typed = "가"); c.submitNewSite()
         c.onMeasureButton(); assertNotNull(c.newObj)
     }
 
@@ -234,7 +242,7 @@ class ControllerTest {
         c.openTargets(); assertEquals(Screen.TARGETS, c.screen)
         c.go(Screen.MAP); assertEquals(Screen.MAP, c.screen); c.back(); assertEquals(Screen.TARGETS, c.screen)
         c.back(); c.back(); assertEquals(Screen.OBJECTS, c.screen)
-        c.openNewObj(); assertEquals(ObjKind.PIT, c.newObj!!.kind); assertEquals(2, c.newObj!!.no)   // 마지막 종류 · 다음 번호가 처음부터
+        c.openNewObj(); assertEquals("", c.newObj!!.title)   // 0.1.17: 미리 정한 이름 없음 — 사용자가 씀
         c.back(); assertNull(c.newObj)
         c.openSitePicker(); assertEquals(Screen.SITES, c.screen)
         // 앱을 다시 켠 것처럼: 같은 장부 · 같은 설정 → 마지막 유적 폴더 목록

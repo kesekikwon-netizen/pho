@@ -8,6 +8,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -175,29 +176,23 @@ fun NumPickSheet(c: GcpController, p: NumPick) {
 // ---------------- 새 유적: 이름 고르기(위치·최근·날짜) + 지구 + 좌표계 ----------------
 @Composable
 fun NewSiteSheet(c: GcpController, f: NewSiteForm) {
+    // 0.1.17 사용자 정책: 유적 이름은 사용자가 직접 씀(추천·지구 고르기 없음). 이름 칸에 바로 커서·자판
     val t = T
+    val focus = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+    val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    androidx.compose.runtime.LaunchedEffect(Unit) { runCatching { focus.requestFocus(); kb?.show() } }
     BottomSheet("새 유적", "newsite_sheet", onClose = { c.newSite = null }, bottom = {
-        Btn("만들기", "newsite_ok", Modifier.weight(1f), enabled = f.name() != null, sub = (f.name() ?: "이름을 고르세요") + " · EPSG:${f.epsg}") { c.submitNewSite() }
+        Btn("만들기", "newsite_ok", Modifier.weight(1f), enabled = f.name() != null, sub = (f.name() ?: "이름을 쓰세요") + " · EPSG:${f.epsg}") { c.submitNewSite() }
     }) {
-        Text("이름", style = Ty.label.copy(fontSize = 16.sp), color = t.ink)
-        f.addressNote?.let { Caption(it, if (f.locating) t.inkSub else t.accentText, "newsite_addr") }
-        for ((i, s) in f.suggestions.withIndex()) Tile(s, f.typed == null && f.base == s, "site_sug_$i", Modifier.fillMaxWidth(), height = 56.dp) { c.newSite = f.copy(base = s, typed = null) }
-        if (f.typed != null) {
-            // 직접 입력(맨 마지막 방법) — 이 칸에서만 자판이 뜬다
-            androidx.compose.material3.OutlinedTextField(f.typed, { c.newSite = f.copy(typed = it.take(40)) }, Modifier.fillMaxWidth().testTag("site_typed"), singleLine = true,
-                label = { Text("유적 이름 직접 입력") })
-        } else Tile("직접 입력…", false, "site_type", Modifier.fillMaxWidth(), sub = "목록에 없을 때만 · 자판", height = 52.dp) { c.newSite = f.copy(typed = f.base ?: "") }
-        Text("지구", style = Ty.label.copy(fontSize = 16.sp), color = t.ink)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Tile("없음", f.district == null, "district_none", Modifier.weight(1f), height = 52.dp) { c.newSite = f.copy(district = null) }
-            for (n in 1..4) Tile("$n", f.district == n, "district_$n", Modifier.weight(1f), height = 52.dp, big = true) { c.newSite = f.copy(district = n) }
-            Tile(if ((f.district ?: 0) > 4) "${f.district}" else "…", (f.district ?: 0) > 4, "district_more", Modifier.weight(1f), height = 52.dp, big = true) {
-                c.numPick = NumPick(PickFor.District, "몇 지구?", f.district ?: 5, emptySet(), max = 99)
-            }
-        }
-        Text("좌표계 (수신기와 같게)", style = Ty.label.copy(fontSize = 16.sp), color = t.ink)
+        Text("유적 이름", style = Ty.label.copy(fontSize = 16.sp), color = t.ink)
+        androidx.compose.material3.OutlinedTextField(f.typed.orEmpty(), { c.newSite = f.copy(typed = it.take(40)) },
+            Modifier.fillMaxWidth().focusRequester(focus).testTag("site_typed"), singleLine = true,
+            placeholder = { Text("예) 강릉 교동 유적") },
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { if (f.name() != null) c.submitNewSite() }))
+        Text("좌표계 (수신기와 같게 · 위치로 미리 골라 둠)", style = Ty.label.copy(fontSize = 16.sp), color = t.ink)
         TileGrid(GcpController.EPSGS, 2) { e -> Tile("${GcpController.epsgLabel(e)}원점", e == f.epsg, "epsg_$e", Modifier.weight(1f), sub = "EPSG:$e", height = 64.dp) { c.newSite = f.copy(epsg = e) } }
-        Caption("위치가 있으면 경도로 원점을 미리 골라요. 높이는 수신기 값 그대로(지오이드 설정 없음).")
+        Caption("저장 위치 · 내 파일 › Documents › iTwinGCP › ${f.name() ?: "…"}")
     }
 }
 
@@ -219,7 +214,7 @@ fun MenuSheet(c: GcpController) {
             Tile(if (Minimal.zoomButtons) "확대 단추 숨기기" else "확대 단추 보이기", Minimal.zoomButtons, "menu_zoom_buttons", Modifier.fillMaxWidth()) { Minimal.setZoomButtons(ctx, !Minimal.zoomButtons) }
         }
         Tile("유적 지도", false, "menu_map", Modifier.fillMaxWidth(), sub = "위성 + 지적 · 모든 폴더의 표적 자리") { c.menuOpen = false; c.go(Screen.MAP); c.fitAll() }
-        Tile("PC로 보내기", false, "menu_handoff", Modifier.fillMaxWidth(), sub = "보낼 폴더 ${c.handoffCount(HandoffScope.PENDING)} · zip 하나로 공유") { c.menuOpen = false; c.handoffOpen = true }
+        Tile("PC로 보내기", false, "menu_handoff", Modifier.fillMaxWidth(), sub = "보낼 폴더 ${c.handoffCount(HandoffScope.PENDING)} · zip 하나로 공유") { c.oneTapHandoff() }
         Tile("유적 바꾸기", false, "menu_sites", Modifier.fillMaxWidth()) { c.menuOpen = false; c.openSitePicker() }
         Tile("설정", false, "menu_settings", Modifier.fillMaxWidth(), sub = "수신기 · VRS · 폴 · 평균") { c.menuOpen = false; c.go(Screen.SETTINGS) }
     }

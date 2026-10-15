@@ -54,7 +54,7 @@ class AndroidGcpFiles(private val ctx: Context, private val zone: ZoneId = ZoneI
         val cr = ctx.contentResolver
         val coll = android.provider.MediaStore.Files.getContentUri("external")
         for (f in files) {
-            val mime = when (f.extension.lowercase()) { "xml" -> "text/xml"; "csv" -> "text/csv"; else -> "text/plain" }
+            val mime = when (f.extension.lowercase()) { "xml" -> "text/xml"; "csv" -> "text/csv"; "zip" -> "application/zip"; else -> "text/plain" }
             val existing = cr.query(coll, arrayOf(android.provider.MediaStore.MediaColumns._ID),
                 "${android.provider.MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${android.provider.MediaStore.MediaColumns.DISPLAY_NAME}=?", arrayOf("$rel/", f.name), null)
                 ?.use { c -> if (c.moveToFirst()) android.content.ContentUris.withAppendedId(coll, c.getLong(0)) else null }
@@ -79,10 +79,16 @@ class AndroidGcpFiles(private val ctx: Context, private val zone: ZoneId = ZoneI
         return runCatching { ctx.startActivity(Intent.createChooser(send, "${o.name} XML 보내기").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
     }
 
+    override var lastZipWhere: String? = null; private set
     override fun shareZip(plan: HandoffPlan): Boolean {
         val dir = File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "handoff").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
         val zip = File(dir, plan.zipName)
         kr.archsurvey.gcp.data.SafeFile.writeWith(zip) { out -> val bo = out.buffered(); val z = ZipOutputStream(bo); writeZip(z, plan); z.finish(); bo.flush() }
+        // 0.1.17: PC 에서 바로 찾게 공용 Documents/iTwinGCP/<유적>/ 에도 zip 사본(실패해도 공유는 계속)
+        lastZipWhere = null
+        if (Build.VERSION.SDK_INT >= 29 && plan.siteRel.isNotEmpty()) runCatching { publish(listOf(zip), "Documents/${plan.siteRel}") }
+            .onSuccess { lastZipWhere = "내 파일 › Documents › ${plan.siteRel.replace("/", " › ")} › ${zip.name}" }
+            .onFailure { kr.archsurvey.diag.CrashLog.record("zip 공용 폴더 저장", it) }
         val send = Intent(Intent.ACTION_SEND).setType("application/zip").putExtra(Intent.EXTRA_STREAM, uri(zip))
             .putExtra(Intent.EXTRA_SUBJECT, plan.zipName.removeSuffix(".zip")).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         return runCatching { ctx.startActivity(Intent.createChooser(send, "PC로 넘기기").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess

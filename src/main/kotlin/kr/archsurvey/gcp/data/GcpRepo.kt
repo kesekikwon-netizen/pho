@@ -35,6 +35,18 @@ class GcpRepo(private val dao: GcpDao, private val clock: () -> Long = System::c
         return dao.obj(id)!!.model()
     }
 
+    /** 0.1.17: 사용자가 이름을 쓴 새 대상(폴더) + 1차. 안쪽 번호는 「기타」 다음 번호(화면에 안 보임) */
+    suspend fun createNamedObj(siteId: Long, title: String, sessionLabel: String, slots: List<Int>): Obj {
+        dao.site(siteId) ?: throw IllegalStateException("유적이 없어요")
+        val names = dao.objs(siteId).map { it.model().name }
+        ObjNames.problem(title, names)?.let { throw IllegalArgumentException(it) }
+        val now = clock()
+        val no = (dao.usedNos(siteId, ObjKind.OTHER.id).maxOrNull() ?: 0) + 1
+        val id = dao.insertObj(ObjRow(siteId = siteId, kind = ObjKind.OTHER.id, no = no, createdAt = now, title = title.trim()))
+        dao.insertSession(SessionRow(objId = id, no = 1, label = sessionLabel, slots = slots.joinToString(","), createdAt = now, changedAt = now))
+        return dao.obj(id)!!.model()
+    }
+
     suspend fun createSession(objId: Long, label: String, slots: List<Int>): Session {
         val prev = dao.sessions(dao.obj(objId)!!.siteId).filter { it.objId == objId }
         val now = clock()
