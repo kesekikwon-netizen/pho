@@ -85,7 +85,8 @@ object BlocksExchange {
         fun measurements(ind: Int, l: List<Triple<Int, Double, Double>>) = l.distinctBy { it.first }.forEach { (pid, x, y) ->
             line(ind, "<Measurement>"); tag(ind + 1, "PhotoId", "$pid"); tag(ind + 1, "x", num(x, 3)); tag(ind + 1, "y", num(y, 3)); line(ind, "</Measurement>")
         }
-        val cpUnknown = o.style == MarkStyle.CONTROL_NO_POSITION
+        // 좌표가 하나라도 있으면 좌표 없는 표적은 이름 붙은 TiePoint 로(위치 없는 ControlPoint 는 iTwin 이 좌표 0 으로 볼 위험) — 0.0.7
+        val cpUnknown = o.style == MarkStyle.CONTROL_NO_POSITION && known.isEmpty()
         if (known.isNotEmpty() || (cpUnknown && unknown.isNotEmpty())) {
             line(2, "<ControlPoints>")
             for (no in known) {
@@ -167,19 +168,32 @@ object BlocksExchange {
     }
     private fun style() = TargetNaming.style.label
 
-    fun readme(hasCoords: Boolean, style: MarkStyle): String = buildString {
+    fun readme(hasCoords: Boolean, style: MarkStyle, epsg: Int = 5187): String = buildString {
         val nl = "\r\n"
-        append("사진측량 앱 → iTwin Capture Modeler 넘기기 (PC)").append(nl).append(nl)
-        append("폴더: photos\\ (원본 사진, 손대지 않음) · block.xmlz · block.xml(같은 내용, 압축 안 함) · gcp_template.txt").append(nl).append(nl)
-        append("1. iTwin Capture Modeler → 새 프로젝트 → Import blocks → block.xmlz 선택 (안 되면 block.xml).").append(nl)
-        append("   사진과 표적 위치(${TargetNaming.name(0).replace("1", "N").replace("0", "N")}, 사진마다 표시)가 함께 들어옵니다. 표적을 사진에서 다시 찍을 필요가 없습니다.").append(nl)
-        if (hasCoords) append("2. 좌표가 이미 들어 있습니다(EPSG). Surveys 탭에서 확인만 하세요.").append(nl)
-        else {
-            append("2. 좌표 넣기: gcp_template.txt 의 0.000 자리를 R10·토탈스테이션 값(동 E, 북 N, 높이)으로 채우거나,").append(nl)
-            append("   사진 기준점 앱에서 내보낸 TXT(같은 이름 형식)를 그대로 씁니다.").append(nl)
-            append("   Surveys → Import → TXT, 좌표계 EPSG:5187(현장에 맞게) 선택.").append(nl)
-            if (style == MarkStyle.TIE_POINTS) append("   (이 블록은 표적을 이름 붙은 Tie point 로 넣었습니다. 좌표를 넣은 뒤 같은 이름의 Control point 에 표시가 옮겨졌는지 확인하세요.)").append(nl)
+        fun l(t: String) { append(t).append(nl) }
+        l("사진측량 앱 → iTwin Capture Modeler (Flex) 넣는 순서")
+        l("")
+        l("들어 있는 것: photos\\ (원본 사진) · block.xmlz (사진+표적 표시${if (hasCoords) "+좌표" else ""}) · block.xml (같은 내용) · gcp_template.txt")
+        l("")
+        l("1. zip 을 PC 에 풀기 (폴더째 그대로. photos 폴더 위치를 바꾸지 마세요).")
+        l("2. iTwin Capture Modeler → New project → 이름 → OK.")
+        l("3. 프로젝트 화면 → Import blocks → block.xmlz 선택 → 열기.")
+        l("   (Flex 화면에 Import blocks 가 안 보이면: 프로젝트 탭 오른쪽 위 ⋯/More → Import blocks)")
+        if (hasCoords) {
+            l("4. 새 블록 → Surveys 탭 → Control points 목록 확인:")
+            l("   · 좌표계 ${srsName(epsg)} · 이름 옆 좌표(동E=X, 북N=Y, 높이=Z)와 사진 표시 수(2장 이상)가 보이면 정상.")
+            l("   · TXT 를 따로 불러오지 마세요(같은 점이 두 번 생깁니다).")
+            l("5. Submit aerotriangulation → Positioning mode = Use control points for adjustment (기준점으로 맞춤) → 실행.")
+            l("6. 끝나면 AT 보고서에서 기준점 오차(RMS) 확인 → New reconstruction.")
+        } else {
+            l("4. 좌표가 아직 없습니다. 둘 중 하나:")
+            l("   (권장) 앱 → 작업 → 「좌표 입력」 에서 표적마다 동E·북N·높이를 쓰고 다시 「iTwin으로 보내기」.")
+            l("   (PC) gcp_template.txt 의 0.000 을 채운 뒤 Surveys → Import → 파일 선택 → 구분자 쉼표, 열 = 이름, X(동E), Y(북N), Z(높이), 좌표계 EPSG:$epsg.")
+            l("        이름은 block 안 표적 이름(${TargetNaming.name(0).replace("0", "N").replace("1", "N")})과 글자까지 같아야 사진 표시가 붙습니다.")
+            if (style == MarkStyle.TIE_POINTS) l("        (이 블록은 표적을 이름 붙은 Tie point 로 넣었습니다.)")
+            l("5. Submit aerotriangulation → Use control points for adjustment → 실행.")
         }
-        append("3. Aerotriangulation → Reconstruction. 표적 3개 이상, 표적마다 사진 2장 이상 표시가 있어야 좌표가 맞춰집니다.").append(nl)
+        l("")
+        l("표적 3개 이상, 표적마다 사진 2장 이상 표시가 있어야 좌표가 맞춰집니다.")
     }
 }

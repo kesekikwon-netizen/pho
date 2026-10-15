@@ -385,7 +385,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
         }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            ModeChip(P.ink, P.bg, P.ink); Choice("☀ 햇빛", Sunlight.on) { Sunlight.set(ctx, !Sunlight.on) }
+            Choice("☀ 햇빛", Sunlight.on) { Sunlight.set(ctx, !Sunlight.on) }
         }
         Spacer(Modifier.height(12.dp))
         OutlineBtn("로그 공유") { Minimal.moreOpen = false; runCatching { kr.archsurvey.pg.diag.PgLog.share(ctx) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("log share failed", it) } }

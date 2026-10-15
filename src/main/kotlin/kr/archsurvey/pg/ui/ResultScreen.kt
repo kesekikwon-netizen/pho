@@ -48,7 +48,7 @@ import java.io.File
 
 /** 결과: 표적별 사진 수 · (좌표 있으면) 잔차 · iTwin 내보내기 */
 @Composable
-fun ResultScreen(store: Store, name: String, onBack: () -> Unit, onShootMore: () -> Unit) {
+fun ResultScreen(store: Store, name: String, onBack: () -> Unit, onShootMore: () -> Unit, onGcp: () -> Unit = {}) {
     val ctx = LocalContext.current; val view = LocalView.current
     val loadedR = remember { runCatching { store.load(name) }.getOrNull() }
     if (loadedR == null) { LaunchedEffect(Unit) { onBack() }; return }
@@ -106,7 +106,7 @@ fun ResultScreen(store: Store, name: String, onBack: () -> Unit, onShootMore: ()
         msg?.let { Txt(it, bold = true, color = P.fix) }
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlineBtn("좌표 TXT 불러오기") { pickGcp.launch(arrayOf("text/*", "application/octet-stream")) }
+            PrimaryBtn("좌표 입력 (${s.gcps.size}점)") { store.save(engine.session); onGcp() }
             OutlineBtn("더 찍기") { onShootMore() }
             OutlineBtn("로그 공유") { runCatching { kr.archsurvey.pg.diag.PgLog.share(ctx) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("log share failed", it) } }
         }

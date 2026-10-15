@@ -38,7 +38,7 @@ import kr.archsurvey.ui.Sunlight
 import kr.archsurvey.ui.releaseTap
 
 @Composable
-fun HomeScreen(store: Store, onNew: (Session) -> Unit, onOpen: (Session) -> Unit) {
+fun HomeScreen(store: Store, onNew: (arcore: Boolean) -> Unit, onOpen: (Session) -> Unit) {
     val ctx = LocalContext.current
     var ar by remember { mutableStateOf(ArSupport.state(ctx)) }
     val sessions = remember { store.list() }
@@ -49,7 +49,7 @@ fun HomeScreen(store: Store, onNew: (Session) -> Unit, onOpen: (Session) -> Unit
             Txt("사진측량", size = FieldIvory.title, bold = true, modifier = Modifier.weight(1f))
             Choice("☀ 햇빛", Sunlight.on) { Sunlight.set(ctx, !Sunlight.on) }
             Spacer(Modifier.width(8.dp))
-            ModeChip(P.ink, P.bg, P.ink)
+            // 0.0.7: 미니멀/일반 고르기 없앰(항상 일반)
             androidx.compose.foundation.layout.Box(Modifier.padding(start = 4.dp).releaseTap("더 보기") { Minimal.moreOpen = !Minimal.moreOpen }.padding(10.dp)) { Txt("⋯", size = 24.sp, bold = true) }
         }
         Spacer(Modifier.height(8.dp))
@@ -83,7 +83,7 @@ fun HomeScreen(store: Store, onNew: (Session) -> Unit, onOpen: (Session) -> Unit
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             Box(Modifier.width(220.dp)) {
-                PrimaryBtn("새 3D 촬영", Modifier.fillMaxWidth()) { onNew(store.newSession(ar == ArSupport.State.OK)) }
+                PrimaryBtn("＋ 새 작업", Modifier.fillMaxWidth()) { onNew(ar == ArSupport.State.OK) }
             }
         }
     }

@@ -21,7 +21,16 @@ class Store(private val ctx: Context) {
     fun loadChecked(name: String): SessionFiles.Loaded = files.load(name)
     fun save(s: Session) { runCatching { files.save(s) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("session save failed ${s.name}", it) } }
 
-    /** 이름은 날짜·시각으로 자동(타자 없음) */
+    /** 사용자가 쓴 이름으로 새 작업(= 폴더). 문제 있으면 IllegalArgumentException(한국어 한 줄) */
+    fun newSession(name: String, arcore: Boolean): Session {
+        JobName.problem(name) { dir(it).exists() }?.let { throw IllegalArgumentException(it) }
+        val s = Session(JobName.clean(name), System.currentTimeMillis(), arcore = arcore)
+        files.save(s)
+        kr.archsurvey.pg.diag.PgLog.i("job created name=${s.name}")
+        return s
+    }
+
+    /** (예전) 이름 자동 */
     fun newSession(arcore: Boolean): Session {
         val base = "3D_" + SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
         var n = base; var i = 2

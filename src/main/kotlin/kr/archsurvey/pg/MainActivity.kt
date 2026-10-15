@@ -25,6 +25,8 @@ import kr.archsurvey.pg.data.Store
 import kr.archsurvey.pg.ui.CaptureScreen
 import kr.archsurvey.pg.ui.FallbackScreen
 import kr.archsurvey.pg.ui.HomeScreen
+import kr.archsurvey.pg.ui.NewJobScreen
+import kr.archsurvey.pg.ui.GcpScreen
 import kr.archsurvey.pg.ui.P
 import kr.archsurvey.pg.ui.ResultScreen
 import kr.archsurvey.ui.Minimal
@@ -45,7 +47,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         kr.archsurvey.pg.diag.PgLog.init(this)
-        Sunlight.load(this); Minimal.load(this)
+        Sunlight.load(this); Minimal.load(this); Minimal.on = false // 0.0.7: 미니멀 모드 없앰
         runCatching { kr.archsurvey.pg.export.OneTap.mode = kr.archsurvey.pg.export.OneTap.Mode.valueOf(getSharedPreferences("pg_prefs", MODE_PRIVATE).getString("mark_mode", "AUTO")!!) }
         runCatching { kr.archsurvey.pg.tag.TargetNaming.style = kr.archsurvey.pg.tag.TargetNaming.Style.valueOf(getSharedPreferences("pg_prefs", MODE_PRIVATE).getString("name_style", "TARGET")!!) }
         camOk = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
@@ -56,10 +58,12 @@ class MainActivity : ComponentActivity() {
                 var route by rememberSaveable { mutableStateOf("home") }
                 val name = route.substringAfter(':', "")
                 when {
-                    route == "home" -> HomeScreen(store, onNew = { s ->
+                    route == "home" -> HomeScreen(store, onNew = { ar -> route = if (ar) "new:ar" else "new:" }, onOpen = { s -> route = "res:${s.name}" })
+                    route.startsWith("new:") -> NewJobScreen(store, arcore = route == "new:ar", onCreated = { s ->
                         if (!camOk) askCam.launch(Manifest.permission.CAMERA)
                         route = "cap:${s.name}"
-                    }, onOpen = { s -> route = "res:${s.name}" })
+                    }, onCancel = { route = "home" })
+                    route.startsWith("gcp:") -> GcpScreen(store, name, onBack = { route = "res:$name" })
                     route.startsWith("cap:") -> {
                         if (!camOk) androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxSize().background(P.bg).safeDrawingPadding().padding(24.dp)) {
                             kr.archsurvey.pg.ui.Txt("촬영하려면 카메라 허용이 필요해요", bold = true)
@@ -73,7 +77,7 @@ class MainActivity : ComponentActivity() {
                                 onFallback = { runCatching { store.save(store.load(name).copy(arcore = false)) }; route = "home"; route = "cap:$name" })
                         else FallbackScreen(store, name, onBack = { route = "home" }, onResult = { route = "res:$name" })
                     }
-                    route.startsWith("res:") -> ResultScreen(store, name, onBack = { route = "home" }, onShootMore = { route = "cap:$name" })
+                    route.startsWith("res:") -> ResultScreen(store, name, onBack = { route = "home" }, onShootMore = { route = "cap:$name" }, onGcp = { route = "gcp:$name" })
                 }
             }
         }

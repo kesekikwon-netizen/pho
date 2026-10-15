@@ -31,8 +31,9 @@ class OneTapTest {
         val b = OneTap.build(noTags, synth, work, m = OneTap.Mode.AUTO)
         val nb = ZipFile(b.zip).use { z -> z.entries().toList().map { it.name } }
         assertEquals("B_itwin_auto.zip", b.zip.name)
-        assertTrue(nb.containsAll(listOf("B_itwin_auto/gcp.txt", "B_itwin_auto/README_ko.txt", "B_itwin_auto/photos/IMG_0001.jpg")))
+        assertTrue(nb.containsAll(listOf("B_itwin_auto/README_ko.txt", "B_itwin_auto/photos/IMG_0001.jpg")))
         assertTrue(nb.none { it.endsWith(".xmlz") })
+        assertTrue("표적 없으면 빈 gcp.txt 없음", "B_itwin_auto/gcp.txt" !in nb)
         // 사진은 바이트 그대로
         ZipFile(b.zip).use { z -> assertTrue(z.getInputStream(z.getEntry("B_itwin_auto/photos/IMG_0001.jpg")).readBytes().contentEquals(File(synth, "IMG_0001.jpg").readBytes())) }
         assertTrue("작업 폴더 정리", work.listFiles()!!.isEmpty())

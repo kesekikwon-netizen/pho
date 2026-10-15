@@ -13,7 +13,8 @@ object ExportFolder {
         val photos = File(out, "photos"); if (!photos.isDirectory && !photos.mkdirs()) throw java.io.IOException("폴더를 만들 수 없음: ${photos.path}")
         for (s in session.stills) File(photoSrcDir, s.file).takeIf { it.exists() }?.copyTo(File(photos, s.file), overwrite = true)
         val targets = (session.stills.flatMap { s -> s.tags.map { TargetNaming.targetNo(it.id) } } + session.gcps.map { it.target }).distinct().sorted()
-        File(out, "gcp.txt").writeText(BlocksExchange.gcpTemplate(targets, session.gcps), Charsets.UTF_8)
+        // 0.0.7: 표적·좌표가 하나도 없으면 빈 gcp.txt 를 만들지 않음(0바이트 파일은 iTwin 불러오기 실패)
+        if (targets.isNotEmpty()) File(out, "gcp.txt").writeText(BlocksExchange.gcpTemplate(targets, session.gcps), Charsets.UTF_8)
         File(out, "README_ko.txt").writeText(BlocksExchange.readmeAuto(), Charsets.UTF_8)
         return Result(out, session.stills.size, targets, session.gcps.isNotEmpty())
     }
@@ -27,9 +28,9 @@ object ExportFolder {
         val xml = BlocksExchange.write(session.stills, session.gcps, opts)
         File(out, "block.xml").writeText(xml, Charsets.UTF_8)
         File(out, "block.xmlz").writeBytes(BlocksExchange.xmlz(xml))
-        val targets = session.stills.flatMap { s -> s.tags.map { TargetNaming.targetNo(it.id) } }.distinct().sorted()
+        val targets = (session.stills.flatMap { s -> s.tags.map { TargetNaming.targetNo(it.id) } } + session.gcps.map { it.target }).distinct().sorted()
         File(out, "gcp_template.txt").writeText(BlocksExchange.gcpTemplate(targets, session.gcps), Charsets.UTF_8)
-        File(out, "README_ko.txt").writeText(BlocksExchange.readme(withCoords, style), Charsets.UTF_8)
+        File(out, "README_ko.txt").writeText(BlocksExchange.readme(withCoords, style, session.epsg), Charsets.UTF_8)
         localTagsTxt?.let { File(out, "local_tags.txt").writeText(it, Charsets.UTF_8) }
         scaleTxt?.let { File(out, "scale.txt").writeText(it, Charsets.UTF_8) }
         return Result(out, session.stills.size, targets, withCoords)
