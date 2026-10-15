@@ -21,12 +21,11 @@ class PerfTest {
         // 10 × 10 m 발굴면 5 cm = 4만 칸
         val n = 200 * 200; val pts = FloatArray(n * 3)
         for (i in 0 until n) { pts[3 * i] = (i % 200) * 0.05f + 0.01f; pts[3 * i + 1] = 0.02f * (i % 7); pts[3 * i + 2] = (i / 200) * 0.05f + 0.01f }
-        repeat(2) { e.addPoints(pts, n) }; settle(e)
-        repeat(3) { e.benchMesh() }
-        val ms = (1..5).map { e.benchMesh() }.average()
-        val m = e.mesh!!
-        val bytes = (m.triCount * 3 + m.ptCount) * 28L
-        println("PERF mesh 40k 칸: %.1f ms · 삼각형 ${m.triCount} · GPU 버퍼 ${bytes / 1024} KB".format(ms))
+        val cf = FloatArray(n) { 0.8f }
+        val t0 = System.nanoTime(); repeat(2) { e.addDepth(pts, null, cf, n, false) }; settle(e)
+        val ms = (System.nanoTime() - t0) / 1e6 / 2
+        val t1 = System.nanoTime(); val d = e.voxels.gpu.takeDirty()!!; val ums = (System.nanoTime() - t1) / 1e6
+        println("PERF depth 40k 점 → 복셀: %.1f ms/묶음 · voxels=${e.voxelCount} · 첫 업로드 복사 ${d.count} 점 %.1f ms".format(ms, ums))
         val cam = Coverage.Cam(V3(5.0, 1.6, 5.0), quatToM3(Math.cos(Math.PI / 4), -Math.sin(Math.PI / 4), 0.0, 0.0), 1500.0, 1500.0, 960.0, 720.0, 1920, 1440)
         val t = System.nanoTime(); repeat(10) { e.cov.addStill(100 + it, cam) }
         val cms = (System.nanoTime() - t) / 1e6 / 10

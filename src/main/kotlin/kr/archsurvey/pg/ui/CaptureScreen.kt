@@ -205,7 +205,9 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                 if (st != last) kr.archsurvey.pg.diag.PgLog.i("thermal status=$st headroom10s=$head") else kr.archsurvey.pg.diag.PgLog.d("thermal status=$st headroom10s=$head")
                 last = st
                 val tp = kr.archsurvey.pg.diag.ThermalPolicy.of(kr.archsurvey.pg.diag.ThermalPolicy.combine(st, head))
-                renderer?.depthIntervalMs = tp.depthMs; engine.meshIntervalMs = tp.meshMs
+                val liveDepth = if (tp.depthMs == 0L) 0L else maxOf(500L, tp.depthMs)
+                if (renderer != null && renderer.depthIntervalMs != liveDepth) kr.archsurvey.pg.diag.PgLog.i("S5 throttle thermal=$st headroom=$head liveDepthMs=$liveDepth coverageMs=${maxOf(1000L, tp.meshMs)} autoShot=${tp.autoShot}")
+                renderer?.depthIntervalMs = liveDepth; engine.meshIntervalMs = maxOf(1000L, tp.meshMs)
                 renderer?.auto = autoShot && tp.autoShot
                 policyMsg = tp.message
             }
@@ -245,7 +247,11 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
             if (renderer != null) {
                 AndroidView(factory = { c ->
                     GLSurfaceView(c).apply {
-                        preserveEGLContextOnPause = true; setEGLContextClientVersion(2); setEGLConfigChooser(8, 8, 8, 8, 16, 0)
+                        preserveEGLContextOnPause = true
+                        // GLES 3 되면 3, 아니면 2 (셰이더는 둘 다 되는 GLSL ES 1.00)
+                        val es = if (((c.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager).deviceConfigurationInfo.reqGlEsVersion) >= 0x30000) 3 else 2
+                        renderer.glVersion = es
+                        setEGLContextClientVersion(es); setEGLConfigChooser(8, 8, 8, 8, 16, 0)
                         setRenderer(renderer); renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
                         glView = this
                         @Suppress("DEPRECATION") renderer.rotation = (c.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager).defaultDisplay.rotation

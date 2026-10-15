@@ -42,7 +42,8 @@ object ArSupport {
         val c = Config(s)
         val raw = s.isDepthModeSupported(Config.DepthMode.RAW_DEPTH_ONLY)
         val auto = s.isDepthModeSupported(Config.DepthMode.AUTOMATIC)
-        c.depthMode = when { raw -> Config.DepthMode.RAW_DEPTH_ONLY; auto -> Config.DepthMode.AUTOMATIC; else -> Config.DepthMode.DISABLED }
+        // AUTOMATIC 이어도 raw 깊이·신뢰도를 함께 받을 수 있음(설계도 11). AUTOMATIC 안 되면 RAW 만
+        c.depthMode = when { auto -> Config.DepthMode.AUTOMATIC; raw -> Config.DepthMode.RAW_DEPTH_ONLY; else -> Config.DepthMode.DISABLED }
         c.focusMode = Config.FocusMode.FIXED // 초점 고정(사진측량 내부표정 일정하게)
         c.planeFindingMode = Config.PlaneFindingMode.HORIZONTAL
         c.updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE

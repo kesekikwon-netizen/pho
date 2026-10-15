@@ -8,6 +8,7 @@ import kr.archsurvey.pg.live.SpeedGate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.cos
@@ -75,19 +76,16 @@ class LiveViewTest {
         val pc2 = PointCloud(); pc2.add(-0.001f, 0f, 0f, 0f, 0f, 0f); pc2.add(0.001f, 0f, 0f, 0f, 0f, 0f); assertEquals(2, pc2.size)
     }
 
-    @Test fun engine_builds_visible_cloud_from_feature_points_without_rgb() {
+    @Test fun engine_features_dedup_by_id_and_depth_voxels_visible() {
         val e = LiveEngine(Session("t", 0, emptyList(), emptyList()))
-        e.cloudIntervalMs = 0
         val xyz = FloatArray(300) { if (it % 3 == 1) -1.4f else (it / 3) * 0.05f }
-        e.addColored(xyz, null, 100)
+        val ids = IntArray(100) { it }
+        repeat(5) { e.addFeatures(ids, xyz, null, 100) } // 같은 ID 5번 → 100점
+        e.addDepth(xyz, FloatArray(300) { 0.5f }, FloatArray(100) { 0.9f }, 100, true)
         val l = java.util.concurrent.CountDownLatch(1); e.post { l.countDown() }; l.await()
-        val cb = e.cloudBuf; assertNotNull(cb); assertEquals(100, cb!!.count)
-        assertEquals(0.85f, cb.buf.get(3), 1e-6f)
-        val t0 = System.nanoTime()
-        val big = FloatArray(3 * 20_000) { (it * 0.37f) % 5f }
-        e.addColored(big, FloatArray(big.size) { 0.5f }, 20_000)
-        val l2 = java.util.concurrent.CountDownLatch(1); e.post { l2.countDown() }; l2.await()
-        println("PERF cloud add+snapshot 20k pts: %.1f ms, cloud=${e.cloudBuf!!.count}".format((System.nanoTime() - t0) / 1e6))
+        assertEquals(100, e.featureCount); assertEquals(100, e.voxelCount)
+        val d = e.features.gpu.takeDirty()!!; assertEquals(100, d.total); assertEquals(0.85f, d.buf.get(3), 1e-6f)
+        assertNull("두 번째는 바뀐 것 없음", e.features.gpu.takeDirty())
         e.close()
     }
 }

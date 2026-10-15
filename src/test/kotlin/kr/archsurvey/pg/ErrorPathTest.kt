@@ -127,11 +127,11 @@ class ErrorPathTest {
         // 특징점만(드문드문) → 점 표시, 죽지 않음
         val e = LiveEngine(Session("f", 0L))
         val rnd = Random(2); val pts = FloatArray(300 * 3) { (rnd.nextFloat() * 3) }
-        e.addPoints(pts, 300); settle(e); settle(e)
-        assertNotNull(e.mesh)
+        e.addDepth(pts, null, FloatArray(300) { 1f }, 300, false); settle(e); settle(e)
+        assertTrue(e.voxelCount > 0)
         // ARCore 없는 사진(자세 없음) + NaN 점
         e.addStill(Still(1, "a.jpg", 100, 100, 80.0, 80.0, 50.0, 50.0, null, 0L, emptyList())) { }
-        e.addPoints(floatArrayOf(Float.NaN, 0f, 0f, 0f, Float.POSITIVE_INFINITY, 0f), 2); settle(e)
+        e.addDepth(floatArrayOf(Float.NaN, 0f, 0f, 0f, Float.POSITIVE_INFINITY, 0f), null, floatArrayOf(1f, 1f), 2, false); settle(e)
         assertNull(e.fit); assertEquals(1, e.progress.photos)
         e.close()
         // 칸 상한(메모리)
@@ -141,7 +141,7 @@ class ErrorPathTest {
         // 메모리 부족 → 절반
         val e2 = LiveEngine(Session("m", 0L)); val big = FloatArray(60_000 * 3)
         for (i in 0 until 60_000) { big[3 * i] = (i % 300) * 0.05f; big[3 * i + 2] = (i / 300) * 0.05f }
-        e2.addPoints(big, 60_000); e2.addPoints(big, 60_000); settle(e2)
+        val cf = FloatArray(60_000) { 1f }; e2.addDepth(big, null, cf, 60_000, false); e2.addDepth(big, null, cf, 60_000, false); settle(e2)
         val before = e2.hf.cells.size; e2.trim(); settle(e2)
         assertTrue("trim $before → ${e2.hf.cells.size}", e2.hf.cells.size <= before / 2 + 1)
         e2.close()

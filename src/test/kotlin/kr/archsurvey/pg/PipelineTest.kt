@@ -80,13 +80,13 @@ class PipelineTest {
                 val lz = s * (-Math.sin(th) * a[0] + Math.cos(th) * a[2]) + T.getDouble(2)
                 repeat(3) { pts += lx.toFloat(); pts += ly.toFloat(); pts += lz.toFloat() }
                 y += 0.025 }; x += 0.025 }
-            e.addPoints(pts.toFloatArray(), pts.size / 3); settle(e)
+            e.addDepth(pts.toFloatArray(), null, FloatArray(pts.size / 3) { 0.9f }, pts.size / 3, false); settle(e)
             val l = CountDownLatch(1)
             st.take(n).forEach { e.addStill(it) { } }
             e.post { l.countDown() }; l.await(60, TimeUnit.SECONDS); settle(e)
             val p = e.progress
-            println("사진 $n 장 → 충분 ${p.pct}% · 초록 ${p.greenPct}% · 겹침 ${p.overlapPct}% · 표적 ${p.tagsOk}/${p.tagsTotal} · 구멍 ${p.holesPct}% · 안내 ${p.hint} · 메시 삼각형 ${e.mesh?.triCount}")
-            assertTrue((e.mesh?.triCount ?: 0) > 1000)
+            println("사진 $n 장 → 충분 ${p.pct}% · 초록 ${p.greenPct}% · 겹침 ${p.overlapPct}% · 표적 ${p.tagsOk}/${p.tagsTotal} · 구멍 ${p.holesPct}% · 안내 ${p.hint} · 복셀 ${e.voxelCount}")
+            assertTrue(e.voxelCount > 1000)
             e.close(); return p.pct
         }
         val a = pctWith(4); val b = pctWith(16)

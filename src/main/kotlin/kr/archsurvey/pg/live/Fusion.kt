@@ -106,7 +106,7 @@ class Coverage(val hf: HeightField, val cell: Double = 0.10) {
     fun suff(k: Long): Suff {
         val c = cov[k] ?: return Suff.RED
         val n = c.dirs.size
-        if (n >= 3 && spreadDeg(c.dirs) >= 15.0 && c.gsdOk >= 3) return Suff.GREEN
+        if (n >= 3 && linked15(c.dirs) >= 3 && c.gsdOk >= 3) return Suff.GREEN // 설계도 11: 3시점 이상, 이웃 시점 15° 이내(겹침 사슬)
         if (n >= 2) return Suff.YELLOW
         return Suff.RED
     }
@@ -119,6 +119,8 @@ class Coverage(val hf: HeightField, val cell: Double = 0.10) {
 
     companion object {
         fun acosDeg(c: Double) = Math.toDegrees(acos(c.coerceIn(-1.0, 1.0)))
+        /** 15° 안에 다른 시점이 하나라도 있는 시점 수(사진측량 겹침: 이웃 사진 간 각도 15° 이내) */
+        fun linked15(d: List<V3>): Int = d.indices.count { i -> d.indices.any { j -> j != i && acosDeg(d[i].dot(d[j])) < 15.0 } }
         fun spreadDeg(d: List<V3>): Double {
             var best = 0.0
             for (i in d.indices) for (j in i + 1 until d.size) best = max(best, acosDeg(d[i].dot(d[j])))

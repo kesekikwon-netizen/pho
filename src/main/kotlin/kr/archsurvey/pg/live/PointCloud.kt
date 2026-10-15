@@ -70,8 +70,19 @@ class SpeedGate(val maxMove: Double = 1.0, val maxRotDeg: Double = 90.0, val win
     var move = 0.0; private set
     var rot = 0.0; private set
     /** true = 방금 새로 「천천히」 가 됨 */
+    /** 포즈 튐(재위치 잡기·맵 합치기) 횟수 — 한 프레임에 3 m/s·400°/s 넘는 건 손으로 불가능 */
+    var jumps = 0; private set
+    var gaps = 0; private set
     fun feed(tNs: Long, p: FloatArray, q: FloatArray): Boolean {
         if (tNs <= lastT) return false
+        val prev = buf.lastOrNull()
+        if (prev != null) {
+            val dt = (tNs - prev.t) / 1e9
+            if (dt > 0.2) { gaps++; buf.clear(); over = 0 }                       // 프레임 끊김·추적 재개: 새로 시작
+            else if (ArRendererMath.dist(prev.p, p) / dt > 3.0 || ArRendererMath.angDeg(prev.q, q) / dt > 400.0) {
+                jumps++; buf.clear(); over = 0; lastT = tNs; buf.addLast(S(tNs, p.copyOf(), q.copyOf())); return false
+            }
+        }
         lastT = tNs
         buf.addLast(S(tNs, p.copyOf(), q.copyOf()))
         while (buf.size > 2 && buf.first().t < tNs - windowNs) buf.removeFirst()
