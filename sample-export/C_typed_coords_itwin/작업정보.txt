@@ -1,0 +1,5 @@
+작업: C_typed_coords
+사진: 3장
+사진 속 표적: Target #1, Target #2, Target #3
+좌표계: Korea 2000 / East Belt 2010 (EPSG:5187)
+좌표 있는 기준점: 3점 (block.xmlz 안에 들어 있음)

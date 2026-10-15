@@ -60,14 +60,6 @@ fun ResultScreen(store: Store, name: String, onBack: () -> Unit, onShootMore: ()
     val save: (kr.archsurvey.pg.data.Session) -> Unit = { store.save(it) }
     DisposableEffect(Unit) { engine.onChange = { view.post { tick++ } }; onDispose { engine.onChange = null; engine.close() } }
     BackHandler { onBack() }
-    val pickGcp = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            val r = runCatching { ctx.contentResolver.openInputStream(uri)!!.use { s -> GcpTxt.report(s.readBytes().take(2_000_000).toByteArray().toString(Charsets.UTF_8)) } }
-                .getOrElse { GcpTxt.Report(emptyList(), 0, 0, "파일을 열지 못했어요") }
-            msg = r.message
-            if (r.gcps.isNotEmpty()) engine.setGcps(r.gcps, save)
-        }
-    }
     @Suppress("UNUSED_EXPRESSION") tick
     val s = engine.session
     val fit = engine.fit
@@ -104,26 +96,32 @@ fun ResultScreen(store: Store, name: String, onBack: () -> Unit, onShootMore: ()
             }
         }
         msg?.let { Txt(it, bold = true, color = P.fix) }
+        if (s.gcps.isEmpty()) Txt("축척: 표적 ${"%.0f".format((s.tagSizeM ?: LiveEngine.DEFAULT_TAG_M) * 100)}cm" + if (engine.scale == null) " (표적이 잡히면 적용)" else "", size = 15.sp, color = P.sub) // S1
         Spacer(Modifier.height(8.dp))
+        // 보조: 좌표 입력 · 더 찍기
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PrimaryBtn("좌표 입력 (${s.gcps.size}점)") { store.save(engine.session); onGcp() }
+            OutlineBtn("좌표 입력 (${s.gcps.size}점)") { store.save(engine.session); onGcp() }
             OutlineBtn("더 찍기") { onShootMore() }
-            OutlineBtn("로그 공유") { runCatching { kr.archsurvey.pg.diag.PgLog.share(ctx) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("log share failed", it) } }
         }
-        Spacer(Modifier.height(8.dp))
         val one = rememberOneTap(store)
-        var adv by remember { mutableStateOf(false) }
-        OutlineBtn(if (adv) "⋯ 고급 닫기" else "⋯ 고급") { adv = !adv }
-        if (adv) {
-            NameStyleRow()
+        one.msg?.let { Spacer(Modifier.height(8.dp)); Txt(it, bold = true, color = if (one.path != null) P.fix else P.error) }
+        // M8: PC 경로 크게
+        one.path?.let { p ->
             Spacer(Modifier.height(6.dp))
-            MarkModeRow()
+            Txt(p, size = 20.sp, bold = true)
+            Txt("PC 에 USB 로 연결하면 이 폴더에 있어요", size = 14.sp, color = P.sub)
+            Spacer(Modifier.height(6.dp))
+            OutlineBtn("다른 앱으로 공유") { one.share() }
         }
-        one.msg?.let { Spacer(Modifier.height(8.dp)); Txt(it, bold = true, color = P.fix) }
+        val prefs = remember { ctx.getSharedPreferences("pg_prefs", android.content.Context.MODE_PRIVATE) }
+        var legacy by remember { mutableStateOf(!prefs.getBoolean("legacy_note_seen", false)) }
+        if (legacy) { Txt("새 저장 위치: Documents › 발굴조사 › <작업 이름> › 사진측량 (예전 Download/사진측량 파일은 그대로 있어요)", size = 14.sp, color = P.sub); LaunchedEffect(Unit) { prefs.edit().putBoolean("legacy_note_seen", true).apply() } }
         Spacer(Modifier.weight(1f))
-        // 오른손 엄지: 큰 버튼 하나
+        // M15: 주 버튼 하나(오른쪽 아래, 주황)
+        val why = ExportFolder.blockReason(s)
+        why?.let { Txt(it, color = P.error, modifier = Modifier.align(Alignment.End)) } // M5
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            PrimaryBtn(if (one.busy != null) "보내는 중…" else "iTwin으로 보내기", Modifier.width(280.dp).heightIn(min = 72.dp), color = P.fix) {
+            PrimaryBtn(if (one.busy != null) "보내는 중…" else "iTwin으로 보내기", Modifier.width(280.dp).heightIn(min = 72.dp), enabled = why == null && one.busy == null) {
                 store.save(engine.session); one.run(name)
             }
         }

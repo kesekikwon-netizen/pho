@@ -34,6 +34,7 @@ import kr.archsurvey.ui.Sunlight
 
 class MainActivity : ComponentActivity() {
     private var camOk by mutableStateOf(false)
+    private val askStorage = registerForActivityResult(ActivityResultContracts.RequestPermission()) { kr.archsurvey.pg.diag.PgLog.i("storage permission result=$it") }
     private val askCam = registerForActivityResult(ActivityResultContracts.RequestPermission()) { camOk = it; kr.archsurvey.pg.diag.PgLog.i("camera permission result=$it") }
 
     override fun onResume() {
@@ -48,9 +49,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         kr.archsurvey.pg.diag.PgLog.init(this)
         Sunlight.load(this); Minimal.load(this); Minimal.on = false // 0.0.7: 미니멀 모드 없앰
-        runCatching { kr.archsurvey.pg.export.OneTap.mode = kr.archsurvey.pg.export.OneTap.Mode.valueOf(getSharedPreferences("pg_prefs", MODE_PRIVATE).getString("mark_mode", "AUTO")!!) }
-        runCatching { kr.archsurvey.pg.tag.TargetNaming.style = kr.archsurvey.pg.tag.TargetNaming.Style.valueOf(getSharedPreferences("pg_prefs", MODE_PRIVATE).getString("name_style", "TARGET")!!) }
         camOk = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        // Android 9 이하: Documents/발굴조사 에 쓰려면 저장 권한(10+ 는 필요 없음)
+        if (android.os.Build.VERSION.SDK_INT < 29 && ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED)
+            runCatching { askStorage.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) }
         val store = Store(this)
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(primary = P.primary, background = P.bg, surface = P.bg, onSurface = P.ink)) {
@@ -59,17 +61,20 @@ class MainActivity : ComponentActivity() {
                 var gcpBack by rememberSaveable { mutableStateOf("home") }
                 val name = route.substringAfter(':', "")
                 when {
-                    route == "home" -> HomeScreen(store, onNew = { ar -> route = if (ar) "new:ar" else "new:" }, onOpen = { s -> route = "res:${s.name}" }, onGcp = { s -> gcpBack = "home"; route = "gcp:${s.name}" })
+                    route == "home" -> HomeScreen(store, onNew = { ar -> route = if (ar) "new:ar" else "new:" }, onOpen = { s -> route = "res:${s.name}" }, onGcp = { s -> gcpBack = "home"; route = "gcp:${s.name}" }, onResume = { s -> if (!camOk) askCam.launch(Manifest.permission.CAMERA); route = "cap:${s.name}" })
                     route.startsWith("new:") -> NewJobScreen(store, arcore = route == "new:ar", onCreated = { s ->
                         if (!camOk) askCam.launch(Manifest.permission.CAMERA)
                         route = "cap:${s.name}"
-                    }, onCancel = { route = "home" })
+                    }, onCancel = { route = "home" }, onResume = { n -> if (!camOk) askCam.launch(Manifest.permission.CAMERA); route = "cap:$n" })
                     route.startsWith("gcp:") -> GcpScreen(store, name, onBack = { route = gcpBack })
                     route.startsWith("cap:") -> {
                         if (!camOk) androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxSize().background(P.bg).safeDrawingPadding().padding(24.dp)) {
                             kr.archsurvey.pg.ui.Txt("촬영하려면 카메라 허용이 필요해요", bold = true)
                             androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(16.dp))
                             kr.archsurvey.pg.ui.PrimaryBtn("카메라 허용") { askCam.launch(Manifest.permission.CAMERA) }
+                            androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(12.dp))
+                            // S7: 「다시 묻지 않음」이면 허용 창이 안 뜸 → 앱 설정 열기
+                            kr.archsurvey.pg.ui.OutlineBtn("앱 설정 열기 (권한 › 카메라)") { runCatching { startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", packageName, null))) } }
                             androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(12.dp))
                             kr.archsurvey.pg.ui.OutlineBtn("처음으로") { route = "home" }
                         }

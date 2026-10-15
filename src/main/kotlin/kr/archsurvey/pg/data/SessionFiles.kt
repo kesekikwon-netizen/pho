@@ -49,6 +49,16 @@ class SessionFiles(val root: File) {
         } catch (e: Exception) { tmp.delete(); f.delete(); false }
     }
 
+    /** S5: 이름 바꾸기(폴더+session.json). 문제 있으면 한국어 한 줄 */
+    fun rename(old: String, new: String): String? {
+        JobName.problem(new) { dir(it).exists() }?.let { return it }
+        val n = JobName.clean(new)
+        val s = load(old).session
+        if (!dir(old).renameTo(dir(n))) return "이름을 바꾸지 못했어요"
+        save(s.copy(name = n)); return null
+    }
+    fun delete(name: String): Boolean = dir(name).takeIf { it.isDirectory && it.parentFile == root }?.deleteRecursively() ?: false
+
     fun free(): Long = runCatching { root.usableSpace }.getOrDefault(0L)
     fun photoBytes(s: Session): Long = s.stills.sumOf { File(photos(s.name), it.file).length() }
 }

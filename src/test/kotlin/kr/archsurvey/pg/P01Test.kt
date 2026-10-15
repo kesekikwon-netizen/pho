@@ -20,7 +20,6 @@ import java.io.File
 import java.nio.file.Files
 
 class P01Test {
-    @After fun reset() { TargetNaming.style = TargetNaming.Style.TARGET }
     private val synth = File(TestData.root, "testdata/synth")
 
     @Test fun quality_sharp_ok_blur_dark_bright_rejected() {
@@ -54,14 +53,11 @@ class P01Test {
         assertEquals(2, ThermalPolicy.combine(0, 0.9f)); assertEquals(3, ThermalPolicy.combine(1, 0.97f)); assertEquals(4, ThermalPolicy.combine(4, 0.5f))
     }
 
-    @Test fun name_styles_selectable_and_parse() {
+    @Test fun name_fixed_target_and_parse() {
         assertEquals("Target #4", TargetNaming.name(3))
-        TargetNaming.style = TargetNaming.Style.APRILTAG_N; assertEquals("AprilTag #4", TargetNaming.name(3)); assertEquals(4, TargetNaming.parseTargetNo("AprilTag #4"))
-        TargetNaming.style = TargetNaming.Style.APRILTAG_ID; assertEquals("AprilTag #3", TargetNaming.name(3)); assertEquals(4, TargetNaming.parseTargetNo("AprilTag #3"))
-        assertEquals(4, TargetNaming.parseTargetNo("Target #4"))
-        assertEquals(listOf(4), GcpTxt.parse("AprilTag #3,245100.1,512300.2,57.0\r\n").map { it.target })
+        assertEquals(4, TargetNaming.parseTargetNo("Target #4")); assertEquals(4, TargetNaming.parseTargetNo("AprilTag #4")); assertEquals(8, TargetNaming.parseTargetNo("TAG_36h11_07"))
         val xml = BlocksExchange.write(listOf(Still(1, "a.jpg", 100, 80, 90.0, 90.0, 50.25, 40.5, null, 0, listOf(TagDetection(3, 0, 10.5, 20.5, DoubleArray(8))))), emptyList(), BlocksExchange.Options("x", null))
-        assertTrue(xml.contains("<Name>AprilTag #3</Name>"))
+        assertTrue(xml.contains("<Name>Target #4</Name>")); assertFalse(xml.contains("AprilTag #"))
     }
 
     @Test fun photogroup_intrinsics_and_auto_target_export() {
@@ -73,11 +69,5 @@ class P01Test {
         assertEquals("해상도별 photogroup", 2, Regex("<Photogroup>").findAll(xml).count())
         assertTrue(xml.contains("<FocalLengthPixels>1501.0</FocalLengthPixels>"))
         assertTrue(xml.contains("<PrincipalPoint>\r\n\t\t\t\t\t<x>960.5</x>\r\n\t\t\t\t\t<y>718.5</y>"))
-        val out = Files.createTempDirectory("auto").toFile()
-        val r = ExportFolder.writeAutoTargets(Session("s", 0, emptyList(), listOf(Gcp(2, 245100.0, 512300.0, 57.0))), synth, File(out, "s_itwin_auto"))
-        val d = r.dir
-        assertFalse("앱 표시 없음", File(d, "block.xmlz").exists())
-        assertEquals("Target #2,245100.000,512300.000,57.000\r\n", File(d, "gcp.txt").readText())
-        assertTrue(File(d, "README_ko.txt").readText().contains("Target extraction = April Tags"))
     }
 }

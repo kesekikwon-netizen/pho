@@ -20,7 +20,6 @@ import java.nio.file.Files
 import javax.xml.parsers.DocumentBuilderFactory
 
 class ItwinCoordsTest {
-    @After fun reset() { TargetNaming.style = TargetNaming.Style.TARGET }
     private fun tag(id: Int) = TagDetection(id, 0, 500.5, 400.5, DoubleArray(8))
     private fun st(i: Int, ids: List<Int>) = Still(i, "IMG_%04d.jpg".format(i), 1920, 1080, 1270.0, 1270.0, 960.0, 540.0, doubleArrayOf(0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0), 0, ids.map { tag(it) })
 
@@ -42,18 +41,11 @@ class ItwinCoordsTest {
         assertEquals("551200.456", pos.getElementsByTagName("y").item(0).textContent) // y = 북N
         assertEquals("57.89", pos.getElementsByTagName("z").item(0).textContent)
         assertEquals(3, first.getElementsByTagName("Measurement").length)
-        // 좌표 없는 Target #4 → 위치 없는 ControlPoint 가 아니라 TiePoint
-        val tps = doc.getElementsByTagName("TiePoint")
-        assertTrue((0 until tps.length).any { (tps.item(it) as org.w3c.dom.Element).getElementsByTagName("Name").item(0)?.textContent == "Target #4" })
+        // 0.0.9 M3: 좌표 없는 Target #4 는 파일에 없음
+        assertFalse(xml.contains("Target #4"))
         val posN = doc.getElementsByTagName("Position")
         for (i in 0 until posN.length) assertFalse(posN.item(i).textContent.contains(","))
         println(xml.take(1500))
-    }
-
-    @Test fun no_targets_no_empty_gcp_txt() {
-        val out = Files.createTempDirectory("e").toFile()
-        ExportFolder.writeAutoTargets(Session("x", 0, listOf(st(1, emptyList())), emptyList()), File(TestData.root, "testdata/synth"), out)
-        assertFalse(File(out, "gcp.txt").exists())
     }
 
     @Test fun job_name_rules() {
@@ -81,7 +73,7 @@ class ItwinCoordsTest {
         val ids = listOf(0, 1, 2)
         val stills = (1..3).map { st(it, ids) }
         val s = Session("C_typed_coords", 0, stills, listOf(Gcp(1, 245100.123, 551200.456, 57.89), Gcp(2, 245110.5, 551205.25, 58.0), Gcp(3, 245104.0, 551215.0, 57.5)), 5187)
-        val out = File(TestData.root, "build/sample/C_typed_coords_itwin").apply { deleteRecursively(); mkdirs() }
+        val out = File(TestData.root, "build/sample/C_typed_coords_itwin").apply { parentFile.mkdirs(); deleteRecursively() }
         ExportFolder.write(s, synth, out)
         assertTrue(File(out, "block.xmlz").exists())
     }

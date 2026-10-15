@@ -133,7 +133,7 @@ class LiveEngine(initial: Session) {
         tagPos = local
         tagCounts = tags.obs.mapValues { it.value.size }
         fit = if (s.gcps.size >= 3) Helmert.fit(local, s.gcps.associate { it.target to V3(it.e, it.n, it.h) }) else null
-        scale = s.barM?.let { ScaleSolver.fromBar(tags, it)?.first } ?: s.tagSizeM?.let { ScaleSolver.fromTagSize(tags, it) }
+        scale = s.barM?.let { ScaleSolver.fromBar(tags, it)?.first } ?: ScaleSolver.fromTagSize(tags, s.tagSizeM ?: DEFAULT_TAG_M) // S1: 기본 표적 20cm
         kr.archsurvey.pg.diag.PgLog.d("S4 coverage pct=${progress.pct} green=${progress.greenPct} overlap=${progress.overlapPct} holes=${progress.holesPct} tags=${progress.tagsOk}/${progress.tagsTotal} photos=${progress.photos} done=${progress.done} | voxels=${voxels.size} features=${features.size} cells=${hf.cells.size}")
         if (view3d == View3D.POINTS_COV && force) recolorAll()
         if (hf.cells.size >= 20) { val ys = hf.cells.values.filter { it.n >= 2 }.map { it.mean }.sorted(); if (ys.isNotEmpty()) floorY = ys[ys.size / 10].toFloat() }
@@ -167,4 +167,5 @@ class LiveEngine(initial: Session) {
 
     // 0.0.6: init 은 모든 필드(voxels·features 등) 초기화 뒤에 — 0.0.5 에서 작업 스레드가 먼저 돌아 voxels 가 null 이던 경쟁(crash_20261015_151711) 수정
     init { exec.execute { runCatching { initial.stills.forEach { addStillModel(it) }; recompute(true) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("live init failed", it) } } }
+    companion object { const val DEFAULT_TAG_M = 0.20 }
 }

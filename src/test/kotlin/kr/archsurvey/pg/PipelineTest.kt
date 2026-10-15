@@ -15,6 +15,7 @@ import kr.archsurvey.pg.tag.TagDetector
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.w3c.dom.Element
@@ -109,27 +110,18 @@ class PipelineTest {
     @Test fun blocksExchange_schema_and_sample_export() {
         val st = stills(); val g = gcps()
         val out = File(TestData.root, "sample-export"); out.deleteRecursively(); out.mkdirs()
+        fun xmlOf(d: File) = ZipFile(File(d, "block.xmlz")).use { z -> val en = z.entries().toList(); assertEquals(listOf("block.xml"), en.map { it.name }); z.getInputStream(en[0]).readBytes().toString(Charsets.UTF_8) }
+            .also { File(d, "_check_block.xml").writeText(it) }
         // A: 좌표 있음
         val a = ExportFolder.write(Session("synth_A_with_coords", 0L, st, g), dir, File(out, "A_with_coords_itwin"))
-        checkXml(File(a.dir, "block.xml"), st, withPositions = true)
-        // B: 좌표 없음 — Position 없는 ControlPoint(기본) + TiePoint 판(대비책)
+        xmlOf(a.dir); checkXml(File(a.dir, "_check_block.xml"), st, withPositions = true); File(a.dir, "_check_block.xml").delete()
+        // B: 좌표 없음 — 0.0.9: 표적은 이름 붙은 TiePoint(좌표 없음), 기준점 TXT 없음
         val sb = Session("synth_B_no_coords", 0L, st)
         val b = ExportFolder.write(sb, dir, File(out, "B_no_coords_itwin"))
-        checkXml(File(b.dir, "block.xml"), st, withPositions = false)
-        val tieXml = BlocksExchange.write(st, emptyList(), BlocksExchange.Options(sb.name, null, BlocksExchange.MarkStyle.TIE_POINTS))
-        File(b.dir, "block_tiepoints.xml").writeText(tieXml); File(b.dir, "block_tiepoints.xmlz").writeBytes(BlocksExchange.xmlz(tieXml))
-        assertTrue(tieXml.contains("<TiePoints>") && !tieXml.contains("<ControlPoints>"))
-        // B 를 PC 에서 시험할 때 넣을 좌표(참값) — 사진 기준점 앱 TXT 형식
-        File(b.dir, "gcp_filled_for_test.txt").writeText(BlocksExchange.gcpTemplate(g.map { it.target }, g))
-        // gcp_template: 「Target #N,E,N,Z」 CRLF, 머리줄 없음
-        val tpl = File(b.dir, "gcp_template.txt").readText()
-        assertEquals("Target #1,0.000,0.000,0.000\r\nTarget #2,0.000,0.000,0.000\r\nTarget #3,0.000,0.000,0.000\r\nTarget #4,0.000,0.000,0.000\r\n", tpl)
-        assertTrue(File(a.dir, "gcp_template.txt").readText().startsWith("Target #1,%.3f,%.3f,".format(java.util.Locale.US, g[0].e, g[0].n)))
-        // xmlz = zip 안 block.xml 하나, 내용 같음
-        ZipFile(File(a.dir, "block.xmlz")).use { z ->
-            val en = z.entries().toList(); assertEquals(listOf("block.xml"), en.map { it.name })
-            assertEquals(File(a.dir, "block.xml").readText(), z.getInputStream(en[0]).readBytes().toString(Charsets.UTF_8))
-        }
+        xmlOf(b.dir); checkXml(File(b.dir, "_check_block.xml"), st, withPositions = false); File(b.dir, "_check_block.xml").delete()
+        assertFalse(b.dir.list()!!.any { it.endsWith(".txt") && it.startsWith("기준점") })
+        File(b.dir, "gcp_filled_for_test.txt").writeText(BlocksExchange.gcpTxt(g))
+        assertTrue(File(a.dir, "기준점_EPSG5187.txt").readText().startsWith("Target #1,%.3f,%.3f,".format(java.util.Locale.US, g[0].e, g[0].n)))
         assertEquals(16, File(a.dir, "photos").listFiles()!!.size)
         assertTrue("원본 사진 바이트 그대로", File(a.dir, "photos/IMG_0001.jpg").readBytes().contentEquals(File(dir, "IMG_0001.jpg").readBytes()))
         File(out, "truth.json").writeText(truth.toString(1))
@@ -151,10 +143,12 @@ class PipelineTest {
         photos.forEach { assertTrue(File(f.parentFile, txt(it, "ImagePath")).exists()) }
         val pg = els(block, "Photogroup").single()
         assertEquals("2000", txt(pg, "Width")); assertEquals("1500", txt(pg, "Height")); assertEquals("1650.0", txt(pg, "FocalLengthPixels"))
-        val cps = els(block, "ControlPoint")
+        val cps = els(block, if (withPositions) "ControlPoint" else "TiePoint")
+        if (!withPositions) assertTrue(els(block, "ControlPoint").isEmpty())
         assertEquals(listOf("Target #1", "Target #2", "Target #3", "Target #4"), cps.map { txt(it, "Name") })
         for (cp in cps) {
             assertEquals(withPositions, els(cp, "Position").isNotEmpty())
+            if (withPositions) assertFalse(txt(cp, "x") == "0.0")
             val ms = els(cp, "Measurement")
             assertTrue("표적마다 사진 2장 이상", ms.size >= 2)
             val pids = ms.map { txt(it, "PhotoId").toInt() }

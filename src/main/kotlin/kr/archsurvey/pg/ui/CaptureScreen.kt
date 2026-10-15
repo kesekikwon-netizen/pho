@@ -56,7 +56,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kr.archsurvey.pg.ar.ArRenderer
 import kr.archsurvey.pg.ar.ArSupport
 import kr.archsurvey.pg.ar.Overlay
-import kr.archsurvey.pg.data.GcpTxt
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import kr.archsurvey.pg.data.Still
 import kr.archsurvey.pg.data.Store
 import kr.archsurvey.pg.live.Gates
@@ -98,6 +99,8 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
     var lastDone by remember { mutableStateOf(false) }
 
     var paused by remember { mutableStateOf(false) }
+    var hotNow by remember { mutableStateOf(false) }
+    var bandSmall by remember { mutableStateOf(false) }
     val prefs = remember { ctx.getSharedPreferences("pg_prefs", android.content.Context.MODE_PRIVATE) }
     var showVideo by remember { mutableStateOf(prefs.getBoolean("show_video", false)) }
     var showThumb by remember { mutableStateOf(prefs.getBoolean("show_thumb", true)) }
@@ -119,17 +122,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
             Thread({ runCatching { s?.pause(); s?.close() }.onFailure { kr.archsurvey.pg.diag.PgLog.e("session close failed", it) }; kr.archsurvey.pg.diag.PgLog.i("arcore session closed") }, "pg-close").start()
         }
     }
-    BackHandler(enabled = true) { leave("system_back", onBack) }
-    val pickGcp = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            val r = runCatching { ctx.contentResolver.openInputStream(uri)!!.use { s -> GcpTxt.report(s.readBytes().take(2_000_000).toByteArray().toString(Charsets.UTF_8)) } }
-                .getOrElse { kr.archsurvey.pg.diag.PgLog.e("gcp read failed", it); GcpTxt.Report(emptyList(), 0, 0, "파일을 열지 못했어요") }
-            kr.archsurvey.pg.diag.PgLog.i("gcp import n=${r.gcps.size} skipped=${r.skipped} dup=${r.duplicates}")
-            msg = r.message
-            if (r.gcps.isNotEmpty()) engine.setGcps(r.gcps, save)
-        }
-    }
-
+    BackHandler(enabled = true) { if (engine.session.stills.isNotEmpty()) leave("system_back", onResult) else leave("system_back", onBack) } // S4
     val renderer = remember(opened) {
         opened?.let { op ->
             ArRenderer(op.session, engine, op.depth, onOverlay = { o -> view.post { overlay = o } }, onShot = { shot ->
@@ -216,6 +209,11 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                 renderer?.depthIntervalMs = liveDepth; engine.meshIntervalMs = maxOf(1000L, tp.meshMs)
                 renderer?.auto = autoShot && tp.autoShot
                 policyMsg = tp.message
+                // S9: 단계 3↑ 미리보기 끔 + 경고 띠(단계 2↑ 갱신 간격 2배는 ThermalPolicy)
+                val hot = st >= 3
+                if (hot != hotNow) { kr.archsurvey.pg.diag.PgLog.i("S9 thermal stage=$st thumbOff=$hot"); hotNow = hot }
+                renderer?.showThumb = showThumb && !hot
+                if (hot) policyMsg = "폰이 뜨거워요 · 잠깐 쉬었다 찍어요"
             }
             val free = store.files.free()
             val okSpace = kr.archsurvey.pg.diag.StoragePolicy.canShoot(free)
@@ -232,29 +230,33 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
     val done = pr.done && !keepShooting
     LaunchedEffect(pr.done) { if (pr.done && !lastDone) TapHaptics.ok(view); lastDone = pr.done }
 
+    val firstTip = remember { !prefs.getBoolean("tip_double_tap", false) }
+    var tip by remember { mutableStateOf(firstTip) }
+    LaunchedEffect(tip) { if (tip) { kotlinx.coroutines.delay(6000); tip = false; prefs.edit().putBoolean("tip_double_tap", true).apply() } }
+    val topBand = msg ?: policyMsg
+    LaunchedEffect(topBand) { bandSmall = false; if (topBand != null) { kotlinx.coroutines.delay(4000); bandSmall = true } } // S2
+
     Column(Modifier.fillMaxSize().background(P.bg).safeDrawingPadding()) {
         // 맨 위: 뒤로 · 제목 · 좌표 상태 · ⋯
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp).heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(56.dp).clickable { leave("top_back", onBack) }, contentAlignment = Alignment.Center) { Txt("‹", size = 28.sp, bold = true) }
-            Txt("$name · 3D 촬영", bold = true, modifier = Modifier.weight(1f), maxLines = 1)
+            Box(Modifier.size(56.dp).clickable { if (engine.session.stills.isNotEmpty()) leave("top_back", onResult) else leave("top_back", onBack) }, contentAlignment = Alignment.Center) { Txt("‹", size = 28.sp, bold = true) }
+            Txt(name, bold = true, modifier = Modifier.weight(1f), maxLines = 1)
             val (chipText, chipColor) = when {
                 fit != null -> {
                     val cm = (fit.looRmse ?: fit.rmse) * 100
                     "● 오차 ${"%.1f".format(cm)}cm" to (if (cm < 5) P.fix else if (cm < 15) P.float else P.error)
                 }
-                engine.scale != null -> "○ 로컬 · 축척 ${engine.scale!!.scatterPct?.let { "±%.0f%%".format(it) } ?: "있음"}" to P.sub
-                else -> "○ 로컬 좌표" to P.sub
+                else -> "사진 ${pr.photos}" to P.sub
             }
             Box(Modifier.clip(RoundedCornerShape(20.dp)).background(chipColor).padding(horizontal = 12.dp, vertical = 6.dp)) { Txt(chipText, size = 15.sp, bold = true, color = Color.White, maxLines = 1) }
             Box(Modifier.size(48.dp).releaseTap("더 보기") { Minimal.moreOpen = !Minimal.moreOpen }, contentAlignment = Alignment.Center) { Txt("⋯", size = 24.sp, bold = true) }
         }
-        // 가운데: 카메라 + 쌓이는 3D
+        // 가운데: 점군(기본) — 두 번 탭 = 영상/점군 바꾸기(S10)
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().background(P.stage)) {
             if (renderer != null) {
                 AndroidView(factory = { c ->
                     GLSurfaceView(c).apply {
                         preserveEGLContextOnPause = true
-                        // GLES 3 되면 3, 아니면 2 (셰이더는 둘 다 되는 GLSL ES 1.00)
                         val es = if (((c.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager).deviceConfigurationInfo.reqGlEsVersion) >= 0x30000) 3 else 2
                         renderer.glVersion = es
                         setEGLContextClientVersion(es); setEGLConfigChooser(8, 8, 8, 8, 16, 0)
@@ -263,21 +265,17 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                         @Suppress("DEPRECATION") renderer.rotation = (c.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager).defaultDisplay.rotation
                     }
                 }, modifier = Modifier.fillMaxSize())
+                Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures(onDoubleTap = { showVideo = !showVideo; tip = false; prefs.edit().putBoolean("tip_double_tap", true).apply() }) })
             } else Txt("실시간 3D 를 열 수 없어요", color = Color.White, modifier = Modifier.align(Alignment.Center))
 
-            if (!Minimal.on) Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                LegendChip(FieldIvory.fix, "충분"); LegendChip(FieldIvory.float, "조금 더"); LegendChip(FieldIvory.error, "부족")
-            }
             val o = overlay
             val dens = LocalDensity.current
-            // 표적 칩 「#N n/3」
             o?.tags?.forEach { (no, x, y) ->
                 val n = engine.tagCounts[no] ?: 0
                 Box(Modifier.offset { IntOffset(x.toInt() - with(dens) { 28.dp.roundToPx() }, y.toInt() - with(dens) { 14.dp.roundToPx() }) }
                     .clip(RoundedCornerShape(8.dp)).background(Color.White).border(2.dp, if (n >= 3) FieldIvory.fix else FieldIvory.ink, RoundedCornerShape(8.dp))
                     .padding(horizontal = 6.dp, vertical = 2.dp)) { Txt("#$no ${minOf(n, 3)}/3", size = 14.sp, bold = true, color = FieldIvory.ink) }
             }
-            // 다음 촬영 화살표 + 한 줄 안내
             val tg = o?.target
             if (!done && tg != null && pr.hint != null) {
                 val cx = with(dens) { maxWidth.toPx() } / 2; val cy = with(dens) { maxHeight.toPx() } / 2
@@ -290,109 +288,65 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                         for (s in listOf(2.6f, -2.6f)) drawLine(Color.White, end, Offset(end.x - 48f * cos(a + s / 3), end.y - 48f * sin(a + s / 3)), strokeWidth = 14f, cap = StrokeCap.Round)
                     }
                 }
-                val dir = Gates.arrowText((tg[0] - cx).toDouble(), (tg[1] - cy).toDouble(), lower = true)
-                Column(Modifier.align(Alignment.BottomEnd).padding(12.dp).widthIn(max = 260.dp).clip(RoundedCornerShape(14.dp)).background(Color.White).padding(horizontal = 14.dp, vertical = 10.dp)) {
-                    Txt(if (o.targetOff) "$dir (화면 밖)" else dir, bold = true, color = FieldIvory.ink)
-                    Txt(pr.hint, size = 15.sp, color = FieldIvory.inkSub)
-                }
             }
-            if (o != null && (o.slow || !o.tracking)) {
-                Box(Modifier.align(Alignment.TopCenter).padding(top = 56.dp).clip(RoundedCornerShape(16.dp)).background(FieldIvory.error).padding(horizontal = 18.dp, vertical = 10.dp)) {
-                    Txt(if (o.slow) "천천히" else kr.archsurvey.pg.diag.Msg.tracking(o.failure), size = 20.sp, bold = true, color = Color.White)
-                }
-            }
-            if (paused || !autoShot) Box(Modifier.align(Alignment.TopCenter).padding(top = if (o != null && (o.slow || !o.tracking)) 110.dp else 56.dp).clip(RoundedCornerShape(16.dp)).background(FieldIvory.ink).padding(horizontal = 16.dp, vertical = 8.dp)) {
-                Txt(if (paused) "⏸ 일시정지 · 저장·쌓기 멈춤" else "자동 촬영 꺼짐 · 셔터로만 찍어요", bold = true, color = Color.White)
-            }
-            policyMsg?.let { m -> Box(Modifier.align(Alignment.TopCenter).padding(top = 110.dp).clip(RoundedCornerShape(16.dp)).background(FieldIvory.float).padding(horizontal = 16.dp, vertical = 8.dp)) { Txt(m, bold = true, color = Color.White) } }
-            msg?.let { m ->
-                Box(Modifier.align(Alignment.Center).clip(RoundedCornerShape(14.dp)).background(Color.White).releaseTap("닫기") { msg = null }.padding(16.dp)) { Txt(m, color = FieldIvory.ink) }
+            // 위 띠들(가운데 상자 없음, S2)
+            Column(Modifier.align(Alignment.TopCenter).padding(top = 8.dp, start = 8.dp, end = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (o != null && (o.slow || !o.tracking)) Band(if (o.slow) "천천히" else kr.archsurvey.pg.diag.Msg.tracking(o.failure), FieldIvory.error, big = true)
+                if (paused) Band("⏸ 일시정지", FieldIvory.ink)
+                if (!autoShot && !paused) Band("자동 촬영 꺼짐 · 셔터 길게 눌러 켜기", FieldIvory.ink)
+                if (CaptureRules.noTargetWarn(pr.photos, engine.tagCounts.size)) Band(CaptureRules.NO_TARGET, Color(0xFFF2C200), ink = FieldIvory.ink) // M14
+                topBand?.let { m -> Band(if (bandSmall) m.take(14) + if (m.length > 14) "…" else "" else m, FieldIvory.float, small = bandSmall) { msg = null } }
+                if (tip) Band("화면 두 번 탭 = 영상 ↔ 점군", FieldIvory.ink)
             }
         }
-        // 아래: 충분 % · 막대 · 한 줄 · [되돌리기] [자동] [셔터/내보내기]
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            if (done) Txt("✓ 충분 · 촬영 끝", size = 26.sp, bold = true, color = P.fix) else Txt("충분 ${pr.pct}%", size = 26.sp, bold = true)
-            Spacer(Modifier.height(8.dp))
-            Box(Modifier.fillMaxWidth().height(14.dp).clip(RoundedCornerShape(7.dp)).background(P.line)) {
-                Box(Modifier.fillMaxWidth(pr.pct / 100f).height(14.dp).clip(RoundedCornerShape(7.dp)).background(if (pr.done) P.fix else P.primary))
-            }
-            if (!Minimal.on) {
+        // 아래: 충분 % + 화살표 한 줄(S3) · 오른쪽 아래 [⏸][끝][셔터](M13)
+        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                if (done) Txt("✓ 충분", size = 26.sp, bold = true, color = P.fix) else Txt("충분 ${pr.pct}%", size = 26.sp, bold = true)
                 Spacer(Modifier.height(6.dp))
-                Txt("사진 ${pr.photos}장 · 겹침 ${pr.overlapPct}% · 표적 ${pr.tagsOk}/${pr.tagsTotal} · 구멍 ${pr.holesPct}%" + (overlay?.depthMode?.let { " · $it" } ?: ""), size = 15.sp, color = P.sub)
-            }
-            Spacer(Modifier.height(12.dp))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                OutlineBtn("되돌리기", enabled = pr.photos > 0) { engine.undo(save) }
-                Spacer(Modifier.width(10.dp))
-                if (!Minimal.on && !done) Choice(if (autoShot) "자동 2초 켬" else "자동 꺼짐", autoShot) { autoShot = !autoShot }
-                Spacer(Modifier.weight(1f))
-                // 오른손 엄지: 위 = 일시정지/계속 · 촬영 끝, 아래 = 셔터
-                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Choice("점군", !showVideo) { showVideo = false }
-                        Choice("영상+점", showVideo) { showVideo = true }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Choice(if (paused) "▶ 계속" else "⏸ 일시정지", paused) { paused = !paused }
-                        OutlineBtn("■ 촬영 끝") { leave("finish", onResult) }
-                    }
-                    if (done) PrimaryBtn("3D 저장 · iTwin 내보내기", Modifier.width(230.dp), color = P.fix) { leave("done", onResult) }
-                    else Shutter(if (paused) "멈춤" else "촬영") { if (!paused) renderer?.requestShot() }
+                Box(Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(6.dp)).background(P.line)) {
+                    Box(Modifier.fillMaxWidth(pr.pct / 100f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(if (pr.done) P.fix else P.primary))
+                }
+                val tg = overlay?.target
+                if (!done && tg != null && pr.hint != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Txt(Gates.arrowText(tg[0].toDouble(), tg[1].toDouble(), lower = true).let { if (overlay?.targetOff == true) "$it (화면 밖)" else it }, size = 16.sp, bold = true, color = P.sub, maxLines = 1)
                 }
             }
+            Spacer(Modifier.width(10.dp))
+            Choice(if (paused) "▶" else "⏸", paused) { paused = !paused }
+            Spacer(Modifier.width(8.dp))
+            if (done) PrimaryBtn("끝", Modifier.width(76.dp), color = P.fix) { leave("finish", onResult) } else OutlineBtn("끝", Modifier.width(76.dp)) { leave("finish", onResult) }
+            Spacer(Modifier.width(8.dp))
+            Shutter(if (paused) "멈춤" else if (autoShot) "자동" else "촬영", onLong = { autoShot = !autoShot; TapHaptics.ok(view) }) { if (!paused) renderer?.requestShot() }
         }
     }
 
+    // ⋯ 메뉴 3개(M13): 좌표 입력 · 결과 · 로그
     if (Minimal.moreOpen) MoreSheet(onClose = { Minimal.moreOpen = false }) {
-        Txt("좌표", bold = true)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlineBtn("좌표 TXT 불러오기") { Minimal.moreOpen = false; pickGcp.launch(arrayOf("text/*", "application/octet-stream")) }
-            if (engine.session.gcps.isNotEmpty()) OutlineBtn("좌표 빼기") { engine.setGcps(emptyList(), save) }
-        }
-        Txt("사진 기준점 앱의 「Target #N,E,N,H」 TXT 를 고르세요", size = 14.sp, color = P.sub)
-        Spacer(Modifier.height(12.dp))
-        Txt("축척 (좌표 없을 때) · 표적 검은 네모 한 변", bold = true)
-        val s = engine.session
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            for ((l, v) in listOf("없음" to null, "10cm" to 0.10, "15cm" to 0.15, "20cm" to 0.20, "30cm" to 0.30))
-                Choice(l, s.tagSizeM == v) { engine.setScale(v, s.barM, save) }
-        }
-        Spacer(Modifier.height(6.dp))
-        Txt("축척 막대(양 끝 표적 사이)", bold = true)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            for ((l, v) in listOf("없음" to null, "0.5m" to 0.5, "1m" to 1.0, "2m" to 2.0))
-                Choice(l, s.barM == v) { engine.setScale(s.tagSizeM, v, save) }
-        }
-        engine.scale?.let { Txt("축척 ${"%.4f".format(it.s)} · ${it.source}" + (it.scatterPct?.let { p -> " · ±%.1f%%".format(p) } ?: ""), size = 14.sp, color = P.sub) }
-            ?: Txt("축척 추정(검증 안 됨) · ARCore 값 그대로", size = 14.sp, color = P.sub)
-        OutlineBtn("좌표 입력") { Minimal.moreOpen = false; onGcp() }
-        Spacer(Modifier.height(12.dp))
-        Txt("화면", bold = true)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Choice("점군", !showVideo) { showVideo = false }; Choice("영상+점", showVideo) { showVideo = true }
-            Choice(if (showThumb) "작은 영상 켬" else "작은 영상 끔", showThumb) { showThumb = !showThumb }
-        }
-        Spacer(Modifier.height(12.dp))
-        Txt("실시간 3D 보기", bold = true)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (v in LiveEngine.View3D.values()) Choice(v.label, view3d == v) { view3d = v; engine.view3d = v; engine.refreshCloud(); kr.archsurvey.pg.diag.PgLog.i("view3d -> $v") }
-        }
-        Spacer(Modifier.height(12.dp))
-        NameStyleRow()
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Choice(if (autoShot) "자동 촬영 켬" else "자동 촬영 끔", autoShot) { autoShot = !autoShot }
-            if (pr.done) Choice("계속 촬영", keepShooting) { keepShooting = !keepShooting }
-        }
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Choice("☀ 햇빛", Sunlight.on) { Sunlight.set(ctx, !Sunlight.on) }
-        }
-        Spacer(Modifier.height(12.dp))
-        OutlineBtn("로그 공유") { Minimal.moreOpen = false; runCatching { kr.archsurvey.pg.diag.PgLog.share(ctx) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("log share failed", it) } }
-        Spacer(Modifier.height(12.dp))
-        OutlineBtn("결과 · iTwin 내보내기") { Minimal.moreOpen = false; leave("menu_result", onResult) }
+        OutlineBtn("좌표 입력", Modifier.fillMaxWidth()) { Minimal.moreOpen = false; leave("menu_gcp", onGcp) }
+        OutlineBtn("결과", Modifier.fillMaxWidth()) { Minimal.moreOpen = false; leave("menu_result", onResult) }
+        OutlineBtn("로그 공유", Modifier.fillMaxWidth()) { Minimal.moreOpen = false; runCatching { kr.archsurvey.pg.diag.PgLog.share(ctx) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("log share failed", it) } }
     }
+}
+
+/** 위 띠 하나 */
+@Composable
+private fun Band(text: String, bg: Color, ink: Color = Color.White, big: Boolean = false, small: Boolean = false, onTap: (() -> Unit)? = null) {
+    val m = Modifier.clip(RoundedCornerShape(16.dp)).background(bg)
+    Box((if (onTap != null) m.releaseTap("닫기") { onTap() } else m).padding(horizontal = if (small) 10.dp else 16.dp, vertical = if (small) 4.dp else 8.dp)) {
+        Txt(text, size = if (big) 20.sp else if (small) 13.sp else 16.sp, bold = true, color = ink, maxLines = 2)
+    }
+}
+
+/** 촬영 화면 규칙(시험용) */
+object CaptureRules {
+    const val NO_TARGET = "표적이 안 보여요 · 표적이 사진에 들어오게 찍어 주세요"
+    /** M14: 사진 10장 넘고(11장째부터) 표적 0개 */
+    fun noTargetWarn(photos: Int, targets: Int) = photos > 10 && targets == 0
+    /** M13: 아래 버튼·⋯ 항목 */
+    val BOTTOM = listOf("⏸", "끝", "셔터")
+    val MENU = listOf("좌표 입력", "결과", "로그 공유")
 }
 
 /** 아래에서 올라오는 ⋯ 메뉴(선택만) */
@@ -404,22 +358,6 @@ fun MoreSheet(onClose: () -> Unit, content: @Composable () -> Unit) {
             content()
         }
     }
-}
-
-/** 기준점 이름 형식(선택만, 폰에 저장) */
-@Composable
-fun NameStyleRow() {
-    val ctx = LocalContext.current
-    var cur by remember { mutableStateOf(kr.archsurvey.pg.tag.TargetNaming.style) }
-    Txt("기준점 이름 형식", bold = true)
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        for (st in kr.archsurvey.pg.tag.TargetNaming.Style.values()) Choice(st.label, cur == st) {
-            kr.archsurvey.pg.tag.TargetNaming.style = st; cur = st
-            ctx.getSharedPreferences("pg_prefs", android.content.Context.MODE_PRIVATE).edit().putString("name_style", st.name).apply()
-            kr.archsurvey.pg.diag.PgLog.i("name style -> ${st.name}")
-        }
-    }
-    Txt("iTwin 이 붙이는 이름과 같아야 해요 · 기본 Target #N (Flex 확인 전)", size = 14.sp, color = P.sub)
 }
 
 @Suppress("unused") private fun View.noop() = Unit

@@ -14,6 +14,8 @@ object Msg {
     const val STORAGE_LOW = "저장 공간이 부족해요 · 사진을 더 찍을 수 없어요"
     const val SHOT_SAVE_FAIL = "사진을 저장하지 못했어요 · 저장 공간을 확인하세요"
     const val EXPORT_SPACE = "내보낼 공간이 부족해요 · 사진 크기만큼 비워 주세요"
+    /** S8: 「1.2 GB 더 필요해요」 */
+    fun spaceNeed(bytes: Long): String { val gb = maxOf(bytes, 0L) / 1e9; return if (gb >= 0.1) "저장 공간이 %.1f GB 더 필요해요".format(java.util.Locale.US, gb) else "저장 공간이 %d MB 더 필요해요".format(java.util.Locale.US, maxOf(1L, bytes / 1_000_000)) }
     const val EXPORT_FAIL = "내보내기에 실패했어요 · 다시 눌러 주세요"
     const val NATIVE_MISSING = "표적 인식 부품을 못 불러왔어요 · 사진은 계속 저장돼요"
     const val SESSION_RESTORED = "앞서 저장된 작업을 다시 열었어요"

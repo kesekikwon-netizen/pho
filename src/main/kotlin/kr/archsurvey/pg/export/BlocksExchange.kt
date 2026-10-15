@@ -80,13 +80,14 @@ object BlocksExchange {
         val marks = sortedMapOf<Int, MutableList<Triple<Int, Double, Double>>>()
         for (s in stills) for (t in s.tags) marks.getOrPut(TargetNaming.targetNo(t.id)) { mutableListOf() } += Triple(s.id, t.cx + PIXEL_SHIFT, t.cy + PIXEL_SHIFT)
         val known = marks.keys.filter { withCoords && it in gmap }
-        val unknown = marks.keys.filter { it !in known }
+        // 0.0.9 M3: 좌표 없는 표적은 쓰지 않음. 좌표가 하나도 없을 때만 표적을 이름 붙은 TiePoint(좌표 없음)로 넣어 AT 를 도움
+        val unknown = if (known.isEmpty()) marks.keys.toList() else emptyList()
 
         fun measurements(ind: Int, l: List<Triple<Int, Double, Double>>) = l.distinctBy { it.first }.forEach { (pid, x, y) ->
             line(ind, "<Measurement>"); tag(ind + 1, "PhotoId", "$pid"); tag(ind + 1, "x", num(x, 3)); tag(ind + 1, "y", num(y, 3)); line(ind, "</Measurement>")
         }
         // 좌표가 하나라도 있으면 좌표 없는 표적은 이름 붙은 TiePoint 로(위치 없는 ControlPoint 는 iTwin 이 좌표 0 으로 볼 위험) — 0.0.7
-        val cpUnknown = o.style == MarkStyle.CONTROL_NO_POSITION && known.isEmpty()
+        val cpUnknown = false
         if (known.isNotEmpty() || (cpUnknown && unknown.isNotEmpty())) {
             line(2, "<ControlPoints>")
             for (no in known) {
@@ -132,13 +133,9 @@ object BlocksExchange {
         return bo.toByteArray()
     }
 
-    /** iTwin Surveys → Import(TXT) 용. 사진 기준점 앱과 같은 「Target #N,E,N,Z」 쉼표·CRLF·머리줄 없음. 좌표 모르면 0.000 (PC 에서 채움) */
-    fun gcpTemplate(targets: Collection<Int>, gcps: List<Gcp>): String {
-        val g = gcps.associateBy { it.target }
-        return targets.sorted().joinToString("") { no ->
-            val p = g[no]
-            "${TargetNaming.name(TargetNaming.tagId(no))},${f3(p?.e ?: 0.0)},${f3(p?.n ?: 0.0)},${f3(p?.h ?: 0.0)}\r\n"
-        }
+    /** 백업 TXT 「Target #N,E,N,H」(CRLF·머리줄 없음). 0.0.9 M3: 좌표 있는 점만 */
+    fun gcpTxt(gcps: List<Gcp>): String = gcps.sortedBy { it.target }.joinToString("") { p ->
+        "${TargetNaming.name(TargetNaming.tagId(p.target))},${f3(p.e)},${f3(p.n)},${f3(p.h)}\r\n"
     }
 
     fun srsName(epsg: Int): String = when (epsg) {
@@ -156,44 +153,4 @@ object BlocksExchange {
     }
     private fun esc(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
 
-    /** P0.1 #2 「iTwin이 표적 잡기」: 앱 표시 없이 사진 + 좌표 TXT. iTwin AT 의 Target extraction = April Tags 가 표적을 찾아 같은 이름 기준점에 붙인다 */
-    fun readmeAuto(): String {
-        val nl = "\r\n"
-        return "사진측량 앱 → iTwin Capture Modeler (iTwin이 표적 잡기)" + nl + nl +
-            "폴더: photos\\ (원본 사진) · gcp.txt (이름,동 E,북 N,높이 — 이름 형식: ${style()})" + nl + nl +
-            "1. 새 프로젝트 → 블록에 photos 폴더 사진 추가." + nl +
-            "2. Surveys → Import → gcp.txt (좌표계 EPSG:5187 등 현장 값)." + nl +
-            "3. Aerotriangulation 설정 → Target extraction = April Tags → 실행. iTwin 이 붙인 표적 이름과 gcp.txt 이름이 같아야 자동으로 붙습니다." + nl +
-            "   이름이 안 맞으면 앱 설정에서 이름 형식(Target #N / AprilTag #N / AprilTag #ID)을 바꿔 다시 내보내세요. [Flex 실기 확인 필요]" + nl
-    }
-    private fun style() = TargetNaming.style.label
-
-    fun readme(hasCoords: Boolean, style: MarkStyle, epsg: Int = 5187): String = buildString {
-        val nl = "\r\n"
-        fun l(t: String) { append(t).append(nl) }
-        l("사진측량 앱 → iTwin Capture Modeler (Flex) 넣는 순서")
-        l("")
-        l("들어 있는 것: photos\\ (원본 사진) · block.xmlz (사진+표적 표시${if (hasCoords) "+좌표" else ""}) · block.xml (같은 내용) · gcp_template.txt")
-        l("")
-        l("1. zip 을 PC 에 풀기 (폴더째 그대로. photos 폴더 위치를 바꾸지 마세요).")
-        l("2. iTwin Capture Modeler → New project → 이름 → OK.")
-        l("3. 프로젝트 화면 → Import blocks → block.xmlz 선택 → 열기.")
-        l("   (Flex 화면에 Import blocks 가 안 보이면: 프로젝트 탭 오른쪽 위 ⋯/More → Import blocks)")
-        if (hasCoords) {
-            l("4. 새 블록 → Surveys 탭 → Control points 목록 확인:")
-            l("   · 좌표계 ${srsName(epsg)} · 이름 옆 좌표(동E=X, 북N=Y, 높이=Z)와 사진 표시 수(2장 이상)가 보이면 정상.")
-            l("   · TXT 를 따로 불러오지 마세요(같은 점이 두 번 생깁니다).")
-            l("5. Submit aerotriangulation → Positioning mode = Use control points for adjustment (기준점으로 맞춤) → 실행.")
-            l("6. 끝나면 AT 보고서에서 기준점 오차(RMS) 확인 → New reconstruction.")
-        } else {
-            l("4. 좌표가 아직 없습니다. 둘 중 하나:")
-            l("   (권장) 앱 → 작업 → 「좌표 입력」 에서 표적마다 동E·북N·높이를 쓰고 다시 「iTwin으로 보내기」.")
-            l("   (PC) gcp_template.txt 의 0.000 을 채운 뒤 Surveys → Import → 파일 선택 → 구분자 쉼표, 열 = 이름, X(동E), Y(북N), Z(높이), 좌표계 EPSG:$epsg.")
-            l("        이름은 block 안 표적 이름(${TargetNaming.name(0).replace("0", "N").replace("1", "N")})과 글자까지 같아야 사진 표시가 붙습니다.")
-            if (style == MarkStyle.TIE_POINTS) l("        (이 블록은 표적을 이름 붙은 Tie point 로 넣었습니다.)")
-            l("5. Submit aerotriangulation → Use control points for adjustment → 실행.")
-        }
-        l("")
-        l("표적 3개 이상, 표적마다 사진 2장 이상 표시가 있어야 좌표가 맞춰집니다.")
-    }
 }

@@ -1,5 +1,10 @@
 package kr.archsurvey.pg.ui
 
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -63,16 +68,19 @@ fun OutlineBtn(label: String, modifier: Modifier = Modifier, enabled: Boolean = 
 
 /** 주 행동(오른손 엄지 자리) */
 @Composable
-fun PrimaryBtn(label: String, modifier: Modifier = Modifier, color: Color = P.primary, onClick: () -> Unit) {
-    Box(modifier.heightIn(min = FieldIvory.measureButton).pressSpring(24.dp, 36.dp).background(color).releaseTap(label) { onClick() }.padding(horizontal = 20.dp),
+fun PrimaryBtn(label: String, modifier: Modifier = Modifier, color: Color = P.primary, enabled: Boolean = true, onClick: () -> Unit) {
+    Box(modifier.heightIn(min = FieldIvory.measureButton).pressSpring(24.dp, 36.dp).background(if (enabled) color else P.line).releaseTap(label, enabled) { onClick() }.padding(horizontal = 20.dp),
         contentAlignment = Alignment.Center) { Txt(label, size = 20.sp, bold = true, color = FieldIvory.onPrimary, maxLines = 2) }
 }
 
 /** 둥근 셔터 */
 @Composable
-fun Shutter(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(modifier.size(FieldIvory.measureButton).pressSpring(48.dp, 40.dp).background(P.primary).border(4.dp, Color.White, CircleShape)
-        .releaseTap(label, guardMs = 300) { onClick() }, contentAlignment = Alignment.Center) { Txt(label, size = 20.sp, bold = true, color = FieldIvory.onPrimary) }
+fun Shutter(label: String, modifier: Modifier = Modifier, onLong: (() -> Unit)? = null, onClick: () -> Unit) {
+    val base = modifier.size(72.dp).pressSpring(48.dp, 40.dp).background(P.primary).border(4.dp, Color.White, CircleShape)
+    // S10: 길게 누르기 = 자동 촬영 켜기/끄기
+    val m = if (onLong == null) base.releaseTap(label, guardMs = 300) { onClick() }
+        else base.semantics { contentDescription = label }.pointerInput(Unit) { detectTapGestures(onTap = { onClick() }, onLongPress = { onLong() }) }
+    Box(m, contentAlignment = Alignment.Center) { Txt(label, size = 20.sp, bold = true, color = FieldIvory.onPrimary) }
 }
 
 /** 선택 칩(타자 없음) */
