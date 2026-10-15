@@ -157,7 +157,7 @@ class ArRenderer(
             val lp = lastShotPos; val lq = lastShotQ
             val motion = if (lp != null && lq != null) kr.archsurvey.pg.live.ShotPolicy.Motion(kr.archsurvey.pg.live.ArRendererMath.dist(lp, pos), kr.archsurvey.pg.live.ArRendererMath.angDeg(lq, q))
                 else kr.archsurvey.pg.live.ShotPolicy.Motion(1e9, 0.0)
-            val reason = kr.archsurvey.pg.live.ShotPolicy.decide(shotRequested, paused, auto, shotsAllowed, now, lastShotAt, motion, spacing)
+            val reason = kr.archsurvey.pg.live.ShotPolicy.decide(shotRequested, paused, auto, shotsAllowed, now, lastShotAt, motion, spacing, backlog = engine.pendingShots.get())
             val wantShot = reason != null
             if (reason != null) shotReason = reason
 
@@ -173,7 +173,7 @@ class ArRenderer(
         }
         else if (newFrame) {
             // 0.0.11: 추적이 끊겨도 사진은 찍는다(자세 없음 → 3D 칸에는 안 들어가고 내보내기에는 들어감)
-            val reason = kr.archsurvey.pg.live.ShotPolicy.decide(shotRequested, paused, auto, shotsAllowed, now, lastShotAt, null, 0.0)
+            val reason = kr.archsurvey.pg.live.ShotPolicy.decide(shotRequested, paused, auto, shotsAllowed, now, lastShotAt, null, 0.0, backlog = engine.pendingShots.get())
             val wantShot = reason != null
             if (reason != null) shotReason = reason
             if (wantShot) {

@@ -16,6 +16,8 @@ object ShotPolicy {
     const val MIN_DEPTH_M = 0.25
     const val ANGLE_DEG = 20.0
     const val STILL_TURN_DEG = 2.0
+    /** 처리 대기 사진이 이만큼이면 자동만 다음 프레임으로 미룸(메모리 보호, 장수 제한 아님) */
+    const val AUTO_BACKLOG = 3
 
     enum class Reason(val code: String) { MANUAL("manual"), FIRST("first"), OVERLAP_DISTANCE("overlap_distance"), OVERLAP_ANGLE("overlap_angle"), TIMER("timer"), NO_POSE_TIMER("no_pose_timer") }
 
@@ -33,11 +35,12 @@ object ShotPolicy {
 
     fun decide(
         manual: Boolean, paused: Boolean, auto: Boolean, storageOk: Boolean, now: Long, lastShotAt: Long,
-        motion: Motion?, spacing: Double, angleDeg: Double = ANGLE_DEG,
+        motion: Motion?, spacing: Double, angleDeg: Double = ANGLE_DEG, backlog: Int = 0,
     ): Reason? {
         if (!storageOk) return null
         if (manual) return Reason.MANUAL
         if (paused || !auto) return null
+        if (backlog >= AUTO_BACKLOG) return null
         if (lastShotAt == 0L) return Reason.FIRST
         val due = now - lastShotAt >= AUTO_INTERVAL_MS
         if (motion == null) return if (due) Reason.NO_POSE_TIMER else null

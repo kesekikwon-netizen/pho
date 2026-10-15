@@ -22,8 +22,8 @@ android {
         // 어느 폰에나 설치(안드로이드 5+). ARCore 는 7.0+ 에서만 켜고, 없으면 사진·표적·내보내기만.
         minSdk = 21
         targetSdk = 35
-        versionCode = 12
-        versionName = "0.0.12-p0"
+        versionCode = 13
+        versionName = "0.0.13-p0"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         externalNativeBuild { cmake { arguments += listOf("-DANDROID_STL=none") } }
     }

@@ -121,6 +121,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
             runCatching { glView?.onPause() }
             val s = opened?.session
             engine.saveCloud(store.dir(name))
+            engine.post { store.save(engine.session) } // 0.0.13: 2초 묶음 저장의 마지막 몫
             engine.closeAfterPending()
             Thread({ runCatching { s?.pause(); s?.close() }.onFailure { kr.archsurvey.pg.diag.PgLog.e("session close failed", it) }; kr.archsurvey.pg.diag.PgLog.i("arcore session closed") }, "pg-close").start()
         }
@@ -129,7 +130,8 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
     val renderer = remember(opened) {
         opened?.let { op ->
             ArRenderer(op.session, engine, op.depth, onOverlay = { o -> view.post { overlay = o } }, onShot = { shot ->
-                engine.post {
+                engine.pendingShots.incrementAndGet()
+                engine.post { try {
                     val id = (engine.session.stills.maxOfOrNull { it.id } ?: 0) + 1
                     val file = String.format(java.util.Locale.US, "IMG_%04d.jpg", id)
                     val q = kr.archsurvey.pg.diag.Quality.check(shot.gray, shot.w, shot.h)
@@ -175,7 +177,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                     tags.forEach { t -> kr.archsurvey.pg.diag.PgLog.d("  tag photo=$file Target#${t.target} id=${t.id} ham=${t.hamming} c=(%.1f,%.1f) corners=${t.corners.joinToString(",") { "%.1f".format(it) }}".format(t.cx, t.cy)) }
                     engine.addStill(Still(id, file, shot.w, shot.h, shot.fx, shot.fy, shot.cx, shot.cy, shot.pose, System.currentTimeMillis(), tags, shot.reason), save)
                     view.post { TapHaptics.tap(view) }
-                }
+                } finally { engine.pendingShots.decrementAndGet() } }
             })
         }
     }
@@ -184,7 +186,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
         val obs = LifecycleEventObserver { _, e ->
             when (e) {
                 Lifecycle.Event.ON_RESUME -> runCatching { opened?.session?.resume(); glView?.onResume(); kr.archsurvey.pg.diag.PgLog.i("session resumed") }.onFailure { msg = if (it is com.google.ar.core.exceptions.CameraNotAvailableException) kr.archsurvey.pg.diag.Msg.CAM_BUSY else kr.archsurvey.pg.diag.Msg.AR_OPEN_FAIL; kr.archsurvey.pg.diag.PgLog.e("session resume failed", it) }
-                Lifecycle.Event.ON_PAUSE -> runCatching { engine.saveCloud(store.dir(name)); glView?.onPause(); opened?.session?.pause(); kr.archsurvey.pg.diag.PgLog.i("session paused") }
+                Lifecycle.Event.ON_PAUSE -> runCatching { engine.saveCloud(store.dir(name)); engine.post { store.save(engine.session) }; glView?.onPause(); opened?.session?.pause(); kr.archsurvey.pg.diag.PgLog.i("session paused") }
                 else -> {}
             }
         }
@@ -331,7 +333,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
             Spacer(Modifier.width(8.dp))
             if (done) PrimaryBtn("끝", Modifier.width(76.dp), color = P.fix) { leave("finish", onResult) } else OutlineBtn("끝", Modifier.width(76.dp)) { leave("finish", onResult) }
             Spacer(Modifier.width(8.dp))
-            Shutter(if (paused) "멈춤" else if (autoShot) "자동" else "촬영", onLong = { autoShot = !autoShot; TapHaptics.ok(view) }) { if (!paused) renderer?.requestShot() }
+            Shutter(if (paused) "멈춤" else if (autoShot) "자동" else "촬영", onLong = { autoShot = !autoShot; TapHaptics.ok(view) }) { renderer?.requestShot() } // 0.0.13: 일시정지 중에도 수동은 찍힘
         }
     }
 

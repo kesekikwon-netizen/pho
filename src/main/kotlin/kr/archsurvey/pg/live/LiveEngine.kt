@@ -31,6 +31,11 @@ class LiveEngine(initial: Session) {
     var onChange: (() -> Unit)? = null
     private var lastMeshAt = 0L
     private var dirty = false
+    /** 0.0.13: 처리 기다리는 사진 수(자동 촬영은 밀리면 잠깐 미룸 — 버리지 않음, 수동은 항상) */
+    val pendingShots = java.util.concurrent.atomic.AtomicInteger(0)
+    /** 0.0.13: session.json 저장은 2초에 한 번(사진 수만큼 느려지지 않게). 나갈 때는 Capture 가 바로 저장 */
+    private var lastSaveAt = 0L
+    var saveEveryMs = 2000L
 
 
     fun post(r: () -> Unit) { if (!exec.isShutdown) exec.execute { runCatching(r).onFailure { kr.archsurvey.pg.diag.PgLog.e("live task failed", it) } } }
@@ -115,7 +120,8 @@ class LiveEngine(initial: Session) {
     fun addStill(s: Still, save: (Session) -> Unit) = post {
         session = session.copy(stills = session.stills + s)
         addStillModel(s)
-        save(session)
+        val now = System.currentTimeMillis()
+        if (now - lastSaveAt >= saveEveryMs) { lastSaveAt = now; save(session) }
         recompute(true)
     }
 
