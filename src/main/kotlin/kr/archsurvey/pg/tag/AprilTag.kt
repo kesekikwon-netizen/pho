@@ -30,15 +30,30 @@ data class TagDetection(
  * (targets/AprilTags_1..4.png → id 0..3, hamming 0, AprilTag 3 로 디코딩). 사진 기준점 앱 TXT 도 「Target #N」.
  */
 object TargetNaming {
+    /**
+     * 기준점 이름 형식(설정, 선택만). 기본 TARGET(사진 기준점 앱·iTwin 표적 그림과 같음).
+     * Bentley KB0044805 는 「AprilTag #X」 — Flex 에서 X 가 tag id(0부터)인지 표적 번호(1부터)인지 [미검증] → 둘 다 고를 수 있게.
+     */
+    enum class Style(val label: String) { TARGET("Target #N"), APRILTAG_N("AprilTag #N"), APRILTAG_ID("AprilTag #ID(N−1)") }
+    @Volatile var style: Style = Style.TARGET
     fun targetNo(tagId: Int) = tagId + 1
     fun tagId(targetNo: Int) = targetNo - 1
-    fun name(tagId: Int) = "Target #${targetNo(tagId)}"
-    private val re = Regex("""^\s*(?:Target\s*#|AprilTag\s*#|TAG_36h11_)\s*(\d+)\s*$""", RegexOption.IGNORE_CASE)
-    /** 「Target #N」 → 표적 번호 N (없으면 null). 「TAG_36h11_07」 은 tag id 이므로 +1 */
-    fun parseTargetNo(name: String): Int? {
+    fun name(tagId: Int, s: Style = style) = when (s) {
+        Style.TARGET -> "Target #${targetNo(tagId)}"
+        Style.APRILTAG_N -> "AprilTag #${targetNo(tagId)}"
+        Style.APRILTAG_ID -> "AprilTag #$tagId"
+    }
+    private val re = Regex("""^\s*(Target\s*#|AprilTag\s*#|TAG_36h11_)\s*(\d+)\s*$""", RegexOption.IGNORE_CASE)
+    /** 이름 → 표적 번호 N. 「TAG_36h11_07」 은 tag id(+1). 「AprilTag #k」 는 지금 형식이 ID 면 +1 */
+    fun parseTargetNo(name: String, s: Style = style): Int? {
         val m = re.find(name) ?: return null
-        val n = m.groupValues[1].toInt()
-        return if (name.trim().startsWith("TAG_", true)) n + 1 else n
+        val n = m.groupValues[2].toInt()
+        val pre = m.groupValues[1].lowercase()
+        return when {
+            pre.startsWith("tag_") -> n + 1
+            pre.startsWith("apriltag") && s == Style.APRILTAG_ID -> n + 1
+            else -> n
+        }
     }
 }
 

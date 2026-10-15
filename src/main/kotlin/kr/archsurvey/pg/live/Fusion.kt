@@ -15,17 +15,20 @@ import kotlin.math.sqrt
  * 발굴면은 대부분 2.5D(땅·벽 아래쪽)라서 P0 은 5 cm 높이칸(sparse, 칸 해시)에 깊이 점을 누적 평균해 면을 만든다.
  * (TSDF 전체 부피 대신 — 폰 CPU 에서 키프레임마다 수 ms. 세운 벽·처마 같은 겹친 면은 P2 의 TSDF 로)
  */
-class HeightField(val cell: Double = 0.05) {
+class HeightField(val cell: Double = 0.05, var maxCells: Int = 250_000) {
     class C { var sumY = 0.0; var n = 0; val mean get() = sumY / n }
     val cells = HashMap<Long, C>()
+    /** 칸 수 상한에 걸려 버린 점 수(메모리 보호: 5 cm 칸 25만 개 ≈ 625 m²) */
+    var dropped = 0L; private set
     @Volatile var version = 0; private set
 
     fun key(ix: Int, iz: Int): Long = (ix.toLong() shl 32) xor (iz.toLong() and 0xffffffffL)
     fun ix(x: Double) = floor(x / cell).toInt()
 
     fun add(x: Double, y: Double, z: Double) {
+        if (!x.isFinite() || !y.isFinite() || !z.isFinite()) return
         val k = key(ix(x), ix(z))
-        val c = cells.getOrPut(k) { C() }
+        val c = cells[k] ?: run { if (cells.size >= maxCells) { dropped++; return }; C().also { cells[k] = it } }
         if (c.n >= 6 && abs(y - c.mean) > 0.15) return // 튀는 깊이값 버림
         if (c.n >= 60) { c.sumY -= c.mean; c.n-- }     // 오래된 값이 서서히 빠지게
         c.sumY += y; c.n++
@@ -91,7 +94,8 @@ class Coverage(val hf: HeightField, val cell: Double = 0.10) {
             val c = cov.getOrPut(k) { Cov() }
             if (c.lastStill == stillIndex) continue
             c.lastStill = stillIndex
-            c.dirs += toCam
+            // 같은 칸 방향은 12개까지(각도 폭 계산 O(n²) 막기) — 넘치면 가장 비슷한 방향을 바꿔 넣지 않고 버림
+            if (c.dirs.size < 12) c.dirs += toCam
             if (d / cam.fx <= gsdMax) c.gsdOk++
             seen += k
         }

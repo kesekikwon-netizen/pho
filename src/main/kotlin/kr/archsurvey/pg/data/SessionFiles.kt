@@ -1,0 +1,54 @@
+package kr.archsurvey.pg.data
+
+import org.json.JSONObject
+import java.io.File
+import java.io.IOException
+
+/**
+ * 작업 폴더 파일 처리(Android 없이 시험 가능). 앱이 죽어도(프로세스 종료·배터리) 사진 한 장마다 저장돼 다시 열 수 있다.
+ * session.json 은 임시파일에 쓰고 바꿔 끼우며 직전 판은 session.json.bak 로 남긴다 → 쓰다 끊겨도 백업으로 연다.
+ */
+class SessionFiles(val root: File) {
+    data class Loaded(val session: Session, val fromBackup: Boolean, val missingPhotos: Int)
+
+    fun dir(name: String) = File(root, name)
+    fun photos(name: String) = File(dir(name), "photos").also { it.mkdirs() }
+
+    @Throws(IOException::class)
+    fun save(s: Session) {
+        val d = dir(s.name); if (!d.isDirectory && !d.mkdirs()) throw IOException("폴더를 만들 수 없음")
+        val cur = File(d, "session.json"); val tmp = File(d, "session.json.tmp"); val bak = File(d, "session.json.bak")
+        tmp.writeText(s.toJson().toString())
+        if (cur.exists()) { bak.delete(); cur.renameTo(bak) }
+        if (!tmp.renameTo(cur)) { tmp.copyTo(cur, overwrite = true); tmp.delete() }
+    }
+
+    /** 손상되면 백업, 사진 파일이 없는 장은 목록에서 뺀다 */
+    fun load(name: String): Loaded {
+        val d = dir(name)
+        fun read(f: File) = runCatching { Session.fromJson(JSONObject(f.readText())) }.getOrNull()
+        var fromBak = false
+        val s = read(File(d, "session.json")) ?: read(File(d, "session.json.bak"))?.also { fromBak = true }
+            ?: throw IOException("작업 파일을 읽을 수 없음: $name")
+        val ph = File(d, "photos")
+        val ok = s.stills.filter { File(ph, it.file).let { f -> f.exists() && f.length() > 0 } }
+        return Loaded(s.copy(stills = ok), fromBak, s.stills.size - ok.size)
+    }
+
+    fun list(): List<Session> = root.listFiles().orEmpty()
+        .filter { File(it, "session.json").exists() || File(it, "session.json.bak").exists() }
+        .mapNotNull { runCatching { load(it.name).session }.getOrNull() }.sortedByDescending { it.created }
+
+    /** 사진 쓰기: 실패하면 반쯤 쓴 파일을 지우고 false */
+    fun writePhoto(name: String, file: String, bytes: ByteArray): Boolean {
+        val f = File(photos(name), file); val tmp = File(f.path + ".part")
+        return try {
+            tmp.writeBytes(bytes)
+            if (!tmp.renameTo(f)) throw IOException("rename")
+            true
+        } catch (e: Exception) { tmp.delete(); f.delete(); false }
+    }
+
+    fun free(): Long = runCatching { root.usableSpace }.getOrDefault(0L)
+    fun photoBytes(s: Session): Long = s.stills.sumOf { File(photos(s.name), it.file).length() }
+}

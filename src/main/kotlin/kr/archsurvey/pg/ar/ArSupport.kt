@@ -13,7 +13,8 @@ import com.google.ar.core.Session
 object ArSupport {
     enum class State { OK, NEED_INSTALL, UNSUPPORTED }
 
-    fun state(ctx: Context): State {
+    fun state(ctx: Context): State = stateRaw(ctx).also { kr.archsurvey.pg.diag.PgLog.i("arcore availability=$it sdk=${Build.VERSION.SDK_INT}") }
+    private fun stateRaw(ctx: Context): State {
         if (Build.VERSION.SDK_INT < 24) return State.UNSUPPORTED
         return try {
             val a = ArCoreApk.getInstance().checkAvailability(ctx)
@@ -29,7 +30,7 @@ object ArSupport {
     /** Play 스토어 설치 화면으로(사용자가 누름). true = 지금 설치됨 */
     fun requestInstall(act: Activity): Boolean = try {
         ArCoreApk.getInstance().requestInstall(act, true) == ArCoreApk.InstallStatus.INSTALLED
-    } catch (_: Throwable) { false }
+    } catch (t: Throwable) { kr.archsurvey.pg.diag.PgLog.w("arcore install not completed: ${t.javaClass.simpleName}"); false }
 
     class Opened(val session: Session, val depth: Boolean, val rawDepth: Boolean, val imageW: Int, val imageH: Int)
 
@@ -48,6 +49,7 @@ object ArSupport {
         c.lightEstimationMode = Config.LightEstimationMode.DISABLED
         s.configure(c)
         val sz = s.cameraConfig.imageSize
+        kr.archsurvey.pg.diag.PgLog.i("arcore session open depthMode=${c.depthMode} raw=$raw auto=$auto image=${sz.width}x${sz.height} configs=${cfgs.size}")
         Opened(s, raw || auto, raw, sz.width, sz.height)
-    } catch (_: Throwable) { null }
+    } catch (t: Throwable) { kr.archsurvey.pg.diag.PgLog.e("arcore session open failed", t); null }
 }

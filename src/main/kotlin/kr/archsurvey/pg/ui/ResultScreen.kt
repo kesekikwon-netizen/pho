@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -49,7 +50,9 @@ import java.io.File
 @Composable
 fun ResultScreen(store: Store, name: String, onBack: () -> Unit, onShootMore: () -> Unit) {
     val ctx = LocalContext.current; val view = LocalView.current
-    val engine = remember { LiveEngine(store.load(name)) }
+    val loadedR = remember { runCatching { store.load(name) }.getOrNull() }
+    if (loadedR == null) { LaunchedEffect(Unit) { onBack() }; return }
+    val engine = remember { LiveEngine(loadedR) }
     var tick by remember { mutableIntStateOf(0) }
     var msg by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -59,9 +62,10 @@ fun ResultScreen(store: Store, name: String, onBack: () -> Unit, onShootMore: ()
     BackHandler { onBack() }
     val pickGcp = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            val g = runCatching { ctx.contentResolver.openInputStream(uri)!!.use { GcpTxt.parse(it.readBytes().toString(Charsets.UTF_8)) } }.getOrDefault(emptyList())
-            msg = if (g.isEmpty()) "좌표를 읽지 못했어요" else "좌표 ${g.size}점 불러왔어요 · 바로 맞췄어요"
-            if (g.isNotEmpty()) engine.setGcps(g, save)
+            val r = runCatching { ctx.contentResolver.openInputStream(uri)!!.use { s -> GcpTxt.report(s.readBytes().take(2_000_000).toByteArray().toString(Charsets.UTF_8)) } }
+                .getOrElse { GcpTxt.Report(emptyList(), 0, 0, "파일을 열지 못했어요") }
+            msg = r.message
+            if (r.gcps.isNotEmpty()) engine.setGcps(r.gcps, save)
         }
     }
     @Suppress("UNUSED_EXPRESSION") tick
@@ -80,7 +84,8 @@ fun ResultScreen(store: Store, name: String, onBack: () -> Unit, onShootMore: ()
                 color = if ((f.looRmse ?: f.rmse) < 0.05) P.fix else if ((f.looRmse ?: f.rmse) < 0.15) P.float else P.error)
             Txt("휴대폰 미리보기 값이에요. 최종 값은 iTwin 에서 나와요.", size = 14.sp, color = P.sub)
         }
-        if (fit == null && s.gcps.isNotEmpty()) Txt("좌표 있는 표적이 3개 이상 사진 2장 이상에 보여야 맞출 수 있어요", color = P.float)
+        if (fit == null && s.gcps.isNotEmpty()) kr.archsurvey.pg.diag.FitCheck.check(s.gcps, engine.tagPos).second?.let { Txt(it, color = P.float) }
+        if (counts.isEmpty() && s.stills.isNotEmpty()) Txt("사진에서 표적을 못 찾았어요 · 표적이 사진 안에 다 들어오게 찍어 주세요", color = P.float)
         Spacer(Modifier.height(8.dp))
         LazyColumn(Modifier.weight(1f)) {
             items(counts.keys.sorted()) { no ->
@@ -103,25 +108,54 @@ fun ResultScreen(store: Store, name: String, onBack: () -> Unit, onShootMore: ()
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlineBtn("좌표 TXT 불러오기") { pickGcp.launch(arrayOf("text/*", "application/octet-stream")) }
             OutlineBtn("더 찍기") { onShootMore() }
+            OutlineBtn("로그 공유") { runCatching { kr.archsurvey.pg.diag.PgLog.share(ctx) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("log share failed", it) } }
+        }
+        Spacer(Modifier.height(8.dp))
+        NameStyleRow()
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            OutlineBtn("iTwin이 표적 잡기") {
+                if (busy) return@OutlineBtn
+                busy = true
+                scope.launch {
+                    msg = withContext(Dispatchers.IO) {
+                        runCatching {
+                            val ses = engine.session; val sf = store.files
+                            if (!kr.archsurvey.pg.diag.StoragePolicy.canExport(minOf(sf.free(), ctx.cacheDir.usableSpace), sf.photoBytes(ses) * 2)) throw java.io.IOException(kr.archsurvey.pg.diag.Msg.EXPORT_SPACE)
+                            val out = File(ctx.cacheDir, "export/${name}_itwin_auto"); out.deleteRecursively()
+                            val res = ExportFolder.writeAutoTargets(ses, sf.photos(name), out)
+                            val path = store.publish(out); out.deleteRecursively()
+                            kr.archsurvey.pg.diag.PgLog.i("export(auto targets) ok published=$path photos=${res.photos} targets=${res.targets} style=${kr.archsurvey.pg.tag.TargetNaming.style}")
+                            "$path 에 저장 · 사진 ${res.photos}장 · 좌표 TXT"
+                        }.getOrElse { kr.archsurvey.pg.diag.PgLog.e("export(auto) failed", it); if (it.message == kr.archsurvey.pg.diag.Msg.EXPORT_SPACE) it.message!! else kr.archsurvey.pg.diag.Msg.EXPORT_FAIL }
+                    }
+                    busy = false
+                }
+            }
         }
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            PrimaryBtn(if (busy) "내보내는 중…" else "iTwin 내보내기", Modifier.width(240.dp), color = P.fix) {
+            PrimaryBtn(if (busy) "내보내는 중…" else "iTwin 내보내기(앱 표시)", Modifier.width(240.dp), color = P.fix) {
                 if (busy) return@PrimaryBtn
                 busy = true
                 scope.launch {
                     val r = withContext(Dispatchers.IO) {
                         runCatching {
-                            val out = File(ctx.cacheDir, "export/${name}_itwin"); out.deleteRecursively()
                             val ses = engine.session
+                            val sf = store.files
+                            val need = sf.photoBytes(ses)
+                            if (!kr.archsurvey.pg.diag.StoragePolicy.canExport(minOf(sf.free(), ctx.cacheDir.usableSpace), need * 2)) throw java.io.IOException(kr.archsurvey.pg.diag.Msg.EXPORT_SPACE)
+                            val out = File(ctx.cacheDir, "export/${name}_itwin"); out.deleteRecursively()
                             val res = ExportFolder.write(ses, store.photos(name), out,
                                 localTagsTxt = if (ses.gcps.isEmpty()) engine.localTagsTxt() else null,
                                 scaleTxt = engine.scale?.let { "축척 ${it.s}  (${it.source})\r\n" })
                             if (ses.gcps.isEmpty()) File(out, "block_tiepoints.xmlz").writeBytes(BlocksExchange.xmlz(
                                 BlocksExchange.write(ses.stills, ses.gcps, BlocksExchange.Options(ses.name, null, BlocksExchange.MarkStyle.TIE_POINTS))))
                             val path = store.publish(out)
+                            kr.archsurvey.pg.diag.PgLog.i("export ok session=$name dir=${out.path} published=$path photos=${res.photos} targets=${res.targets} coords=${res.withCoords}")
+                            out.deleteRecursively()
                             "$path 에 저장 · 사진 ${res.photos}장 · 표적 ${res.targets.size}개"
-                        }.getOrElse { "내보내기 실패: ${it.message}" }
+                        }.getOrElse { kr.archsurvey.pg.diag.PgLog.e("export failed session=$name", it); if (it.message == kr.archsurvey.pg.diag.Msg.EXPORT_SPACE) it.message!! else kr.archsurvey.pg.diag.Msg.EXPORT_FAIL }
                     }
                     msg = r; busy = false
                 }

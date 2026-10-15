@@ -1,2 +1,2 @@
 <?xml version="1.0" encoding="utf-8"?>
-<paths><external-files-path name="pg" path="pg/" /><files-path name="pgi" path="pg/" /></paths>
+<paths><external-files-path name="pg" path="pg/" /><external-files-path name="logs" path="logs/" /><files-path name="pgi" path="pg/" /><files-path name="logsi" path="logs/" /></paths>

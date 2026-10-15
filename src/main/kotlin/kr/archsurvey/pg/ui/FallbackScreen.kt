@@ -87,9 +87,27 @@ fun FallbackScreen(store: Store, name: String, onBack: () -> Unit, onResult: () 
     }
 }
 
-/** 원본 JPG 그대로 둠. 화소는 저장된 방향 그대로(EXIF 회전 적용 안 함 — iTwin 이 읽는 화소와 같게) */
+/**
+ * P0.1 #4: 기본 카메라 사진은 EXIF 회전값이 있을 수 있다 → 화소를 실제로 돌려 다시 저장(품질 95, EXIF 방향 = 1).
+ * iTwin 이 회전을 적용하든 안 하든 표시 화소와 같아진다. 회전이 없으면 원본 그대로.
+ */
 private fun analyse(f: File, id: Int): Still? = runCatching {
-    val b = BitmapFactory.decodeFile(f.path) ?: return null
+    val ex0 = ExifInterface(f)
+    val orient = ex0.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+    val f35 = ex0.getAttributeInt(ExifInterface.TAG_FOCAL_LENGTH_IN_35MM_FILM, 0)
+    var b = BitmapFactory.decodeFile(f.path) ?: return null
+    val deg = when (orient) { ExifInterface.ORIENTATION_ROTATE_90 -> 90; ExifInterface.ORIENTATION_ROTATE_180 -> 180; ExifInterface.ORIENTATION_ROTATE_270 -> 270; else -> 0 }
+    if (deg != 0) {
+        val m = android.graphics.Matrix().apply { postRotate(deg.toFloat()) }
+        val r = android.graphics.Bitmap.createBitmap(b, 0, 0, b.width, b.height, m, true); b.recycle(); b = r
+        val keep = listOf(ExifInterface.TAG_MAKE, ExifInterface.TAG_MODEL, ExifInterface.TAG_FOCAL_LENGTH, ExifInterface.TAG_FOCAL_LENGTH_IN_35MM_FILM,
+            ExifInterface.TAG_DATETIME_ORIGINAL, ExifInterface.TAG_F_NUMBER, ExifInterface.TAG_EXPOSURE_TIME).associateWith { ex0.getAttribute(it) }
+        val tmp = File(f.path + ".rot")
+        tmp.outputStream().use { b.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, it) }
+        ExifInterface(tmp).apply { keep.forEach { (k, v) -> if (v != null) setAttribute(k, v) }; setAttribute(ExifInterface.TAG_ORIENTATION, "1"); saveAttributes() }
+        if (!tmp.renameTo(f)) { tmp.copyTo(f, true); tmp.delete() }
+        kr.archsurvey.pg.diag.PgLog.i("fallback photo ${f.name} rotated $deg° → orientation 1")
+    }
     val w = b.width; val h = b.height
     val gray = ByteArray(w * h); val row = IntArray(w)
     for (y in 0 until h) {
@@ -97,9 +115,11 @@ private fun analyse(f: File, id: Int): Still? = runCatching {
         for (x in 0 until w) { val c = row[x]; gray[y * w + x] = ((((c shr 16) and 255) * 77 + ((c shr 8) and 255) * 150 + (c and 255) * 29) shr 8).toByte() }
     }
     b.recycle()
-    val tags = TagDetector.detect(gray, w, h, decimate = 2f)
-    val ex = ExifInterface(f)
-    val f35 = ex.getAttributeInt(ExifInterface.TAG_FOCAL_LENGTH_IN_35MM_FILM, 0)
+    val q = kr.archsurvey.pg.diag.Quality.check(gray, w, h)
+    if (!q.ok) kr.archsurvey.pg.diag.PgLog.w("fallback photo ${f.name} quality=${q.reason} sharp=%.1f mean=${q.mean} (kept: user shot)".format(q.sharpness))
+    val (tags, small) = kr.archsurvey.pg.diag.Quality.filterTags(TagDetector.detect(gray, w, h, decimate = 2f, maxHamming = 0))
+    small.forEach { kr.archsurvey.pg.diag.PgLog.i("tag DROP photo=${f.name} Target#${it.target} size=%.0fpx < 35".format(kr.archsurvey.pg.diag.Quality.tagPx(it))) }
+    kr.archsurvey.pg.diag.PgLog.i("fallback photo ${f.name} ${w}x${h} tags=${tags.map { "Target#${it.target}@(%.1f,%.1f)".format(it.cx, it.cy) }}")
     val fpx = if (f35 > 0) f35 / 36.0 * maxOf(w, h) else 0.8 * maxOf(w, h)
     Still(id, f.name, w, h, fpx, fpx, w / 2.0, h / 2.0, null, System.currentTimeMillis(), tags)
-}.getOrNull()
+}.onFailure { kr.archsurvey.pg.diag.PgLog.e("fallback analyse failed ${f.name}", it) }.getOrNull()

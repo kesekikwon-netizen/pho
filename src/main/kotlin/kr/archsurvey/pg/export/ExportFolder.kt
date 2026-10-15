@@ -8,9 +8,19 @@ import java.io.File
 object ExportFolder {
     data class Result(val dir: File, val photos: Int, val targets: List<Int>, val withCoords: Boolean)
 
+    /** 「iTwin이 표적 잡기」: photos/ + gcp.txt(좌표 있는 것만, 없으면 표적 목록에 0.000) + README. block.xmlz 없음 */
+    fun writeAutoTargets(session: Session, photoSrcDir: File, out: File): Result {
+        val photos = File(out, "photos"); if (!photos.isDirectory && !photos.mkdirs()) throw java.io.IOException("폴더를 만들 수 없음: ${photos.path}")
+        for (s in session.stills) File(photoSrcDir, s.file).takeIf { it.exists() }?.copyTo(File(photos, s.file), overwrite = true)
+        val targets = (session.stills.flatMap { s -> s.tags.map { TargetNaming.targetNo(it.id) } } + session.gcps.map { it.target }).distinct().sorted()
+        File(out, "gcp.txt").writeText(BlocksExchange.gcpTemplate(targets, session.gcps), Charsets.UTF_8)
+        File(out, "README_ko.txt").writeText(BlocksExchange.readmeAuto(), Charsets.UTF_8)
+        return Result(out, session.stills.size, targets, session.gcps.isNotEmpty())
+    }
+
     fun write(session: Session, photoSrcDir: File, out: File, style: BlocksExchange.MarkStyle = BlocksExchange.MarkStyle.CONTROL_NO_POSITION,
               localTagsTxt: String? = null, scaleTxt: String? = null): Result {
-        val photos = File(out, "photos"); photos.mkdirs()
+        val photos = File(out, "photos"); if (!photos.isDirectory && !photos.mkdirs()) throw java.io.IOException("폴더를 만들 수 없음: ${photos.path}")
         for (s in session.stills) File(photoSrcDir, s.file).takeIf { it.exists() }?.copyTo(File(photos, s.file), overwrite = true)
         val withCoords = session.gcps.isNotEmpty()
         val opts = BlocksExchange.Options(blockName = session.name, epsg = if (withCoords) session.epsg else null, style = style)

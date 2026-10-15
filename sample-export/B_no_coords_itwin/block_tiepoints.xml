@@ -14,6 +14,10 @@
 				<CameraModelBand>Visible</CameraModelBand>
 				<FocalLengthPixels>1650.0</FocalLengthPixels>
 				<CameraOrientation>XRightYDown</CameraOrientation>
+				<PrincipalPoint>
+					<x>999.5</x>
+					<y>749.5</y>
+				</PrincipalPoint>
 				<Photo>
 					<Id>1</Id>
 					<ImagePath>photos/IMG_0001.jpg</ImagePath>

@@ -5,7 +5,6 @@ import android.content.Context
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -14,19 +13,13 @@ import java.util.Locale
 /** 작업 = 앱 폴더(Android/data/kr.archsurvey.pg/files/pg/<작업명>/) 안 session.json + photos/ */
 class Store(private val ctx: Context) {
     val root: File get() = File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "pg").also { it.mkdirs() }
-    fun dir(name: String) = File(root, name)
-    fun photos(name: String) = File(dir(name), "photos").also { it.mkdirs() }
-
-    fun list(): List<Session> = root.listFiles().orEmpty().filter { File(it, "session.json").exists() }
-        .mapNotNull { runCatching { load(it.name) }.getOrNull() }.sortedByDescending { it.created }
-
-    fun load(name: String): Session = Session.fromJson(JSONObject(File(dir(name), "session.json").readText()))
-
-    fun save(s: Session) {
-        val d = dir(s.name); d.mkdirs()
-        val tmp = File(d, "session.json.tmp"); tmp.writeText(s.toJson().toString())
-        tmp.renameTo(File(d, "session.json"))
-    }
+    val files get() = SessionFiles(root)
+    fun dir(name: String) = files.dir(name)
+    fun photos(name: String) = files.photos(name)
+    fun list(): List<Session> = files.list()
+    fun load(name: String): Session = files.load(name).session
+    fun loadChecked(name: String): SessionFiles.Loaded = files.load(name)
+    fun save(s: Session) { runCatching { files.save(s) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("session save failed ${s.name}", it) } }
 
     /** 이름은 날짜·시각으로 자동(타자 없음) */
     fun newSession(arcore: Boolean): Session {
@@ -52,8 +45,8 @@ class Store(private val ctx: Context) {
                     put(MediaStore.MediaColumns.MIME_TYPE, mime(f.name))
                     put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/$rel$sub")
                 }
-                val uri = cr.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: continue
-                cr.openOutputStream(uri)?.use { o -> f.inputStream().use { it.copyTo(o) } }
+                val uri = cr.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: throw java.io.IOException("다운로드 폴더에 만들 수 없음: ${f.name}")
+                (cr.openOutputStream(uri) ?: throw java.io.IOException("쓸 수 없음: ${f.name}")).use { o -> f.inputStream().use { it.copyTo(o) } }
             }
         } else {
             @Suppress("DEPRECATION")

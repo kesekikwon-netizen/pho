@@ -73,13 +73,21 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 @Composable
-fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -> Unit) {
+fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -> Unit, onFallback: () -> Unit = onBack) {
     val ctx = LocalContext.current
     val view = LocalView.current
-    val engine = remember { LiveEngine(store.load(name)) }
+    val loaded = remember { runCatching { store.loadChecked(name) }.getOrNull() }
+    if (loaded == null) { LaunchedEffect(Unit) { kr.archsurvey.pg.diag.PgLog.e("capture: session unreadable $name"); onBack() }; return }
+    val engine = remember { LiveEngine(loaded.session) }
+    var glView by remember { mutableStateOf<GLSurfaceView?>(null) }
     var tick by remember { mutableIntStateOf(0) }
     var overlay by remember { mutableStateOf<Overlay?>(null) }
-    var msg by remember { mutableStateOf<String?>(null) }
+    var msg by remember { mutableStateOf<String?>(when {
+        loaded.fromBackup -> kr.archsurvey.pg.diag.Msg.SESSION_BROKEN
+        loaded.session.stills.isNotEmpty() -> kr.archsurvey.pg.diag.Msg.SESSION_RESTORED
+        !kr.archsurvey.pg.tag.AprilTagNative.available() -> kr.archsurvey.pg.diag.Msg.NATIVE_MISSING
+        else -> null }) }
+    var policyMsg by remember { mutableStateOf<String?>(null) }
     var autoShot by remember { mutableStateOf(true) }
     var keepShooting by remember { mutableStateOf(false) }
     val opened = remember { ArSupport.open(ctx) }
@@ -93,9 +101,11 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
     BackHandler { onBack() }
     val pickGcp = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            val g = runCatching { ctx.contentResolver.openInputStream(uri)!!.use { GcpTxt.parse(it.readBytes().toString(Charsets.UTF_8)) } }.getOrDefault(emptyList())
-            msg = if (g.isEmpty()) "좌표를 읽지 못했어요 (Target #N,E,N,H 형식)" else "좌표 ${g.size}점 불러왔어요"
-            if (g.isNotEmpty()) engine.setGcps(g, save)
+            val r = runCatching { ctx.contentResolver.openInputStream(uri)!!.use { s -> GcpTxt.report(s.readBytes().take(2_000_000).toByteArray().toString(Charsets.UTF_8)) } }
+                .getOrElse { kr.archsurvey.pg.diag.PgLog.e("gcp read failed", it); GcpTxt.Report(emptyList(), 0, 0, "파일을 열지 못했어요") }
+            kr.archsurvey.pg.diag.PgLog.i("gcp import n=${r.gcps.size} skipped=${r.skipped} dup=${r.duplicates}")
+            msg = r.message
+            if (r.gcps.isNotEmpty()) engine.setGcps(r.gcps, save)
         }
     }
 
@@ -105,16 +115,37 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                 engine.post {
                     val id = (engine.session.stills.maxOfOrNull { it.id } ?: 0) + 1
                     val file = String.format(java.util.Locale.US, "IMG_%04d.jpg", id)
+                    val q = kr.archsurvey.pg.diag.Quality.check(shot.gray, shot.w, shot.h)
+                    if (!q.ok) {
+                        kr.archsurvey.pg.diag.PgLog.i("shot REJECT reason=${q.reason} sharp=%.1f mean=${q.mean} clipped=%.2f".format(q.sharpness, q.clipped))
+                        view.post { policyMsg = q.message }
+                        return@post
+                    }
+                    if (!store.files.writePhoto(name, file, shot.jpeg)) {
+                        kr.archsurvey.pg.diag.PgLog.e("photo write failed $file free=${store.files.free()}")
+                        view.post { msg = kr.archsurvey.pg.diag.Msg.SHOT_SAVE_FAIL }
+                        return@post
+                    }
                     val f = File(store.photos(name), file)
-                    f.writeBytes(shot.jpeg)
                     runCatching {
                         ExifInterface(f).apply {
                             setAttribute(ExifInterface.TAG_MAKE, android.os.Build.MANUFACTURER); setAttribute(ExifInterface.TAG_MODEL, android.os.Build.MODEL)
                             setAttribute(ExifInterface.TAG_DATETIME_ORIGINAL, java.text.SimpleDateFormat("yyyy:MM:dd HH:mm:ss", java.util.Locale.US).format(java.util.Date()))
-                            setAttribute(ExifInterface.TAG_SOFTWARE, "kr.archsurvey.pg"); saveAttributes()
+                            setAttribute(ExifInterface.TAG_SOFTWARE, "kr.archsurvey.pg")
+                            setAttribute(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL.toString()) // 화소 그대로가 바른 방향(센서 방향)
+                            setAttribute(ExifInterface.TAG_FOCAL_LENGTH_IN_35MM_FILM, Math.round((shot.fx + shot.fy) / 2 / maxOf(shot.w, shot.h) * 36).toString())
+                            setAttribute(ExifInterface.TAG_IMAGE_WIDTH, shot.w.toString()); setAttribute(ExifInterface.TAG_IMAGE_LENGTH, shot.h.toString())
+                            saveAttributes()
                         }
                     }
-                    val tags = TagDetector.detect(shot.gray, shot.w, shot.h, decimate = 1.5f)
+                    val td0 = System.nanoTime()
+                    // P0.1 #5: 저장 사진은 원 해상도 검출(4 MP 이하 decimate 1, 넘으면 2), 오류 비트 0, 35 px 미만 버림
+                    val all = TagDetector.detect(shot.gray, shot.w, shot.h, decimate = if (shot.w * shot.h > 4_000_000) 2f else 1f, maxHamming = 0)
+                    val (tags, small) = kr.archsurvey.pg.diag.Quality.filterTags(all)
+                    small.forEach { kr.archsurvey.pg.diag.PgLog.i("tag DROP photo=$file Target#${it.target} size=%.0fpx < 35".format(kr.archsurvey.pg.diag.Quality.tagPx(it))) }
+                    tags.filter { kr.archsurvey.pg.diag.Quality.tagPx(it) < kr.archsurvey.pg.diag.Quality.TAG_GOOD_PX }.forEach { kr.archsurvey.pg.diag.PgLog.d("tag SMALL photo=$file Target#${it.target} size=%.0fpx (goal 60)".format(kr.archsurvey.pg.diag.Quality.tagPx(it))) }
+                    kr.archsurvey.pg.diag.PgLog.i("photo $file ${shot.w}x${shot.h} jpeg=${shot.jpeg.size}B tags=${tags.size} detect=%.0fms".format((System.nanoTime() - td0) / 1e6))
+                    tags.forEach { t -> kr.archsurvey.pg.diag.PgLog.d("  tag photo=$file Target#${t.target} id=${t.id} ham=${t.hamming} c=(%.1f,%.1f) corners=${t.corners.joinToString(",") { "%.1f".format(it) }}".format(t.cx, t.cy)) }
                     engine.addStill(Still(id, file, shot.w, shot.h, shot.fx, shot.fy, shot.cx, shot.cy, shot.pose, System.currentTimeMillis(), tags), save)
                     view.post { TapHaptics.tap(view) }
                 }
@@ -125,8 +156,8 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
     DisposableEffect(life, opened) {
         val obs = LifecycleEventObserver { _, e ->
             when (e) {
-                Lifecycle.Event.ON_RESUME -> runCatching { opened?.session?.resume() }.onFailure { msg = "카메라를 열지 못했어요" }
-                Lifecycle.Event.ON_PAUSE -> runCatching { opened?.session?.pause() }
+                Lifecycle.Event.ON_RESUME -> runCatching { opened?.session?.resume(); glView?.onResume(); kr.archsurvey.pg.diag.PgLog.i("session resumed") }.onFailure { msg = if (it is com.google.ar.core.exceptions.CameraNotAvailableException) kr.archsurvey.pg.diag.Msg.CAM_BUSY else kr.archsurvey.pg.diag.Msg.AR_OPEN_FAIL; kr.archsurvey.pg.diag.PgLog.e("session resume failed", it) }
+                Lifecycle.Event.ON_PAUSE -> runCatching { glView?.onPause(); opened?.session?.pause(); kr.archsurvey.pg.diag.PgLog.i("session paused") }
                 else -> {}
             }
         }
@@ -134,7 +165,39 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
         if (life.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) runCatching { opened?.session?.resume() }
         onDispose { life.lifecycle.removeObserver(obs) }
     }
-    LaunchedEffect(autoShot) { renderer?.auto = autoShot }
+    LaunchedEffect(autoShot) { renderer?.auto = autoShot; kr.archsurvey.pg.diag.PgLog.i("auto shot=$autoShot") }
+    DisposableEffect(Unit) {
+        val cb = object : android.content.ComponentCallbacks2 {
+            override fun onTrimMemory(level: Int) { if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) { engine.trim(); msg = kr.archsurvey.pg.diag.Msg.MEMORY_LOW } }
+            override fun onConfigurationChanged(c: android.content.res.Configuration) { kr.archsurvey.pg.diag.PgLog.i("config changed w=${c.screenWidthDp} h=${c.screenHeightDp}") }
+            @Deprecated("") override fun onLowMemory() { engine.trim() }
+        }
+        ctx.registerComponentCallbacks(cb); onDispose { ctx.unregisterComponentCallbacks(cb) }
+    }
+    LaunchedEffect(opened) { if (opened == null) { kr.archsurvey.pg.diag.PgLog.w("capture: AR open failed → fallback"); msg = kr.archsurvey.pg.diag.Msg.AR_OPEN_FAIL; kotlinx.coroutines.delay(1500); onFallback() } else if (!opened.depth && !Minimal.on) msg = kr.archsurvey.pg.diag.Msg.NO_DEPTH }
+    LaunchedEffect(Unit) {
+        kr.archsurvey.pg.diag.PgLog.i("capture open session=$name arcore=${opened != null} depth=${opened?.depth} raw=${opened?.rawDepth}")
+        val pm = ctx.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
+        var last = -1
+        while (true) {
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                val st = pm.currentThermalStatus
+                val head = if (android.os.Build.VERSION.SDK_INT >= 30) runCatching { pm.getThermalHeadroom(10) }.getOrDefault(Float.NaN) else Float.NaN
+                if (st != last) kr.archsurvey.pg.diag.PgLog.i("thermal status=$st headroom10s=$head") else kr.archsurvey.pg.diag.PgLog.d("thermal status=$st headroom10s=$head")
+                last = st
+                val tp = kr.archsurvey.pg.diag.ThermalPolicy.of(kr.archsurvey.pg.diag.ThermalPolicy.combine(st, head))
+                renderer?.depthIntervalMs = tp.depthMs; engine.meshIntervalMs = tp.meshMs
+                renderer?.auto = autoShot && tp.autoShot
+                policyMsg = tp.message
+            }
+            val free = store.files.free()
+            val okSpace = kr.archsurvey.pg.diag.StoragePolicy.canShoot(free)
+            if (renderer?.shotsAllowed != okSpace) kr.archsurvey.pg.diag.PgLog.i("storage free=${free / 1048576}MB shotsAllowed=$okSpace")
+            renderer?.shotsAllowed = okSpace
+            if (!okSpace) policyMsg = kr.archsurvey.pg.diag.Msg.STORAGE_LOW
+            kotlinx.coroutines.delay(2_000)
+        }
+    }
 
     @Suppress("UNUSED_EXPRESSION") tick
     val pr = engine.progress
@@ -165,6 +228,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                     GLSurfaceView(c).apply {
                         preserveEGLContextOnPause = true; setEGLContextClientVersion(2); setEGLConfigChooser(8, 8, 8, 8, 16, 0)
                         setRenderer(renderer); renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
+                        glView = this
                         @Suppress("DEPRECATION") renderer.rotation = (c.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager).defaultDisplay.rotation
                     }
                 }, modifier = Modifier.fillMaxSize())
@@ -203,9 +267,10 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
             }
             if (o != null && (o.slow || !o.tracking)) {
                 Box(Modifier.align(Alignment.TopCenter).padding(top = 56.dp).clip(RoundedCornerShape(16.dp)).background(FieldIvory.error).padding(horizontal = 18.dp, vertical = 10.dp)) {
-                    Txt(if (o.slow) "천천히" else "폰을 천천히 움직여 주세요", size = 20.sp, bold = true, color = Color.White)
+                    Txt(if (o.slow) "천천히" else kr.archsurvey.pg.diag.Msg.tracking(o.failure), size = 20.sp, bold = true, color = Color.White)
                 }
             }
+            policyMsg?.let { m -> Box(Modifier.align(Alignment.TopCenter).padding(top = 110.dp).clip(RoundedCornerShape(16.dp)).background(FieldIvory.float).padding(horizontal = 16.dp, vertical = 8.dp)) { Txt(m, bold = true, color = Color.White) } }
             msg?.let { m ->
                 Box(Modifier.align(Alignment.Center).clip(RoundedCornerShape(14.dp)).background(Color.White).releaseTap("닫기") { msg = null }.padding(16.dp)) { Txt(m, color = FieldIvory.ink) }
             }
@@ -256,6 +321,8 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
         engine.scale?.let { Txt("축척 ${"%.4f".format(it.s)} · ${it.source}" + (it.scatterPct?.let { p -> " · ±%.1f%%".format(p) } ?: ""), size = 14.sp, color = P.sub) }
             ?: Txt("축척 추정(검증 안 됨) · ARCore 값 그대로", size = 14.sp, color = P.sub)
         Spacer(Modifier.height(12.dp))
+        NameStyleRow()
+        Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Choice(if (autoShot) "자동 촬영 켬" else "자동 촬영 끔", autoShot) { autoShot = !autoShot }
             if (pr.done) Choice("계속 촬영", keepShooting) { keepShooting = !keepShooting }
@@ -264,6 +331,8 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             ModeChip(P.ink, P.bg, P.ink); Choice("☀ 햇빛", Sunlight.on) { Sunlight.set(ctx, !Sunlight.on) }
         }
+        Spacer(Modifier.height(12.dp))
+        OutlineBtn("로그 공유") { Minimal.moreOpen = false; runCatching { kr.archsurvey.pg.diag.PgLog.share(ctx) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("log share failed", it) } }
         Spacer(Modifier.height(12.dp))
         OutlineBtn("결과 · iTwin 내보내기") { Minimal.moreOpen = false; onResult() }
     }
@@ -278,6 +347,22 @@ fun MoreSheet(onClose: () -> Unit, content: @Composable () -> Unit) {
             content()
         }
     }
+}
+
+/** 기준점 이름 형식(선택만, 폰에 저장) */
+@Composable
+fun NameStyleRow() {
+    val ctx = LocalContext.current
+    var cur by remember { mutableStateOf(kr.archsurvey.pg.tag.TargetNaming.style) }
+    Txt("기준점 이름 형식", bold = true)
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (st in kr.archsurvey.pg.tag.TargetNaming.Style.values()) Choice(st.label, cur == st) {
+            kr.archsurvey.pg.tag.TargetNaming.style = st; cur = st
+            ctx.getSharedPreferences("pg_prefs", android.content.Context.MODE_PRIVATE).edit().putString("name_style", st.name).apply()
+            kr.archsurvey.pg.diag.PgLog.i("name style -> ${st.name}")
+        }
+    }
+    Txt("iTwin 이 붙이는 이름과 같아야 해요 · 기본 Target #N (Flex 확인 전)", size = 14.sp, color = P.sub)
 }
 
 @Suppress("unused") private fun View.noop() = Unit

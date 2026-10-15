@@ -63,6 +63,9 @@ object BlocksExchange {
             val f = list.map { (it.fx + it.fy) / 2 }.average()
             if (f > 0) tag(4, "FocalLengthPixels", num(f, 2))
             tag(4, "CameraOrientation", "XRightYDown")
+            // 주점(ARCore CameraIntrinsics, 이 JPG 화소). 0.5 빼서 「왼쪽 위 화소 중심 = 0」
+            val ppx = list.map { it.cx }.average(); val ppy = list.map { it.cy }.average()
+            if (ppx > 0 && ppy > 0) { line(4, "<PrincipalPoint>"); tag(5, "x", num(ppx + PIXEL_SHIFT, 3)); tag(5, "y", num(ppy + PIXEL_SHIFT, 3)); line(4, "</PrincipalPoint>") }
             for (s in list) {
                 line(4, "<Photo>")
                 tag(5, "Id", "${s.id}")
@@ -152,16 +155,28 @@ object BlocksExchange {
     }
     private fun esc(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
 
+    /** P0.1 #2 「iTwin이 표적 잡기」: 앱 표시 없이 사진 + 좌표 TXT. iTwin AT 의 Target extraction = April Tags 가 표적을 찾아 같은 이름 기준점에 붙인다 */
+    fun readmeAuto(): String {
+        val nl = "\r\n"
+        return "사진측량 앱 → iTwin Capture Modeler (iTwin이 표적 잡기)" + nl + nl +
+            "폴더: photos\\ (원본 사진) · gcp.txt (이름,동 E,북 N,높이 — 이름 형식: ${style()})" + nl + nl +
+            "1. 새 프로젝트 → 블록에 photos 폴더 사진 추가." + nl +
+            "2. Surveys → Import → gcp.txt (좌표계 EPSG:5187 등 현장 값)." + nl +
+            "3. Aerotriangulation 설정 → Target extraction = April Tags → 실행. iTwin 이 붙인 표적 이름과 gcp.txt 이름이 같아야 자동으로 붙습니다." + nl +
+            "   이름이 안 맞으면 앱 설정에서 이름 형식(Target #N / AprilTag #N / AprilTag #ID)을 바꿔 다시 내보내세요. [Flex 실기 확인 필요]" + nl
+    }
+    private fun style() = TargetNaming.style.label
+
     fun readme(hasCoords: Boolean, style: MarkStyle): String = buildString {
         val nl = "\r\n"
         append("사진측량 앱 → iTwin Capture Modeler 넘기기 (PC)").append(nl).append(nl)
         append("폴더: photos\\ (원본 사진, 손대지 않음) · block.xmlz · block.xml(같은 내용, 압축 안 함) · gcp_template.txt").append(nl).append(nl)
         append("1. iTwin Capture Modeler → 새 프로젝트 → Import blocks → block.xmlz 선택 (안 되면 block.xml).").append(nl)
-        append("   사진과 표적 위치(Target #N, 사진마다 표시)가 함께 들어옵니다. 표적을 사진에서 다시 찍을 필요가 없습니다.").append(nl)
+        append("   사진과 표적 위치(${TargetNaming.name(0).replace("1", "N").replace("0", "N")}, 사진마다 표시)가 함께 들어옵니다. 표적을 사진에서 다시 찍을 필요가 없습니다.").append(nl)
         if (hasCoords) append("2. 좌표가 이미 들어 있습니다(EPSG). Surveys 탭에서 확인만 하세요.").append(nl)
         else {
             append("2. 좌표 넣기: gcp_template.txt 의 0.000 자리를 R10·토탈스테이션 값(동 E, 북 N, 높이)으로 채우거나,").append(nl)
-            append("   사진 기준점 앱에서 내보낸 TXT(같은 「Target #N」 이름)를 그대로 씁니다.").append(nl)
+            append("   사진 기준점 앱에서 내보낸 TXT(같은 이름 형식)를 그대로 씁니다.").append(nl)
             append("   Surveys → Import → TXT, 좌표계 EPSG:5187(현장에 맞게) 선택.").append(nl)
             if (style == MarkStyle.TIE_POINTS) append("   (이 블록은 표적을 이름 붙은 Tie point 로 넣었습니다. 좌표를 넣은 뒤 같은 이름의 Control point 에 표시가 옮겨졌는지 확인하세요.)").append(nl)
         }

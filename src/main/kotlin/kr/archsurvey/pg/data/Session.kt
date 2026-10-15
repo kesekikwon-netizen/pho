@@ -82,12 +82,38 @@ data class Session(
  * 빈칸·탭·세미콜론 구분, 「AprilTag #N」 「TAG_36h11_07」 「N」(숫자만) 이름도 받는다. 읽지 못한 줄은 건너뛴다.
  */
 object GcpTxt {
-    fun parse(text: String): List<Gcp> {
+    data class Report(val gcps: List<Gcp>, val skipped: Int, val duplicates: Int, val message: String)
+
+    /** 읽은 결과 + 한 줄 안내 */
+    fun report(text: String): Report {
+        if (text.isBlank()) return Report(emptyList(), 0, 0, "빈 파일이에요")
+        if (text.count { it == '\u0000' } > 0) return Report(emptyList(), 0, 0, "글자 파일(TXT)이 아니에요")
+        val lines = text.removePrefix("\uFEFF").lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") && !it.startsWith("//") }
+        val nos = ArrayList<Int>()
+        val g = parse(text, nos)
+        val dup = nos.size - nos.toSet().size
+        val skipped = lines.size - nos.size
+        val msg = when {
+            g.isEmpty() -> "좌표를 읽지 못했어요 · 「Target #N,E,N,H」 형식인지 보세요"
+            g.any { kotlin.math.abs(it.e) < 1000 && kotlin.math.abs(it.n) < 1000 } -> "경위도처럼 보여요 · 평면좌표(EPSG:5187) TXT 를 골라 주세요"
+            else -> "좌표 ${g.size}점 불러왔어요" + (if (skipped > 0) " · ${skipped}줄 건너뜀" else "") + (if (dup > 0) " · 같은 번호 ${dup}개는 마지막 값" else "")
+        }
+        val ok = if (msg.startsWith("경위도")) emptyList() else g
+        return Report(ok, skipped, dup, msg)
+    }
+
+    fun parse(text: String): List<Gcp> = parse(text, ArrayList())
+
+    private fun num(s: String): Double? = s.trim().toDoubleOrNull()?.takeIf { it.isFinite() && kotlin.math.abs(it) < 1e8 }
+
+    private fun parse(text: String, seen: MutableList<Int>): List<Gcp> {
         val out = LinkedHashMap<Int, Gcp>()
         for (raw in text.removePrefix("\uFEFF").lines()) {
             val line = raw.trim()
             if (line.isEmpty() || line.startsWith("#") || line.startsWith("//")) continue
-            val parts: List<String> = if (line.contains(',') || line.contains(';') || line.contains('\t')) line.split(',', ';', '\t').map { it.trim() }
+            // 세미콜론·탭 구분이면 쉼표는 소수점(유럽식 엑셀)
+            val parts: List<String> = if (line.contains(';') || line.contains('\t')) line.split(';', '\t').map { it.trim().replace(',', '.') }
+            else if (line.contains(',')) line.split(',').map { it.trim() }
             else {
                 // 「Target #3 123.4 567.8 9.0」: 이름 안 빈칸 보존
                 val m = Regex("""^(.*?)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s*$""").find(line) ?: continue
@@ -95,10 +121,12 @@ object GcpTxt {
             }
             if (parts.size < 4) continue
             val no = kr.archsurvey.pg.tag.TargetNaming.parseTargetNo(parts[0]) ?: parts[0].toIntOrNull() ?: continue
-            val e = parts[1].toDoubleOrNull() ?: continue
-            val n = parts[2].toDoubleOrNull() ?: continue
-            val h = parts[3].toDoubleOrNull() ?: continue
+            val e = num(parts[1]) ?: continue
+            val n = num(parts[2]) ?: continue
+            val h = num(parts[3]) ?: continue
+            if (no <= 0) continue
             if (e == 0.0 && n == 0.0) continue // 빈 틀(gcp_template 의 0 자리) 은 좌표 아님
+            seen += no
             out[no] = Gcp(no, e, n, h)
         }
         return out.values.sortedBy { it.target }

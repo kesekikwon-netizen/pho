@@ -29,6 +29,8 @@ data class Overlay(
     val tags: List<Triple<Int, Float, Float>>, // 번호, x, y
     val target: FloatArray?, /** 목표가 화면 밖/뒤 */ val targetOff: Boolean,
     val depthMode: String,
+    /** 추적 실패 이유(TrackingFailureReason 이름) */
+    val failure: String? = null,
 )
 
 /** 사진 한 장(원 JPG + 밝기 + 자세·내부표정) */
@@ -47,6 +49,10 @@ class ArRenderer(
     private val onShot: (Shot) -> Unit,
 ) : GLSurfaceView.Renderer {
     @Volatile var auto = true
+    /** 발열·저장공간 정책: 깊이 간격(0 = 끔), 사진 허용 */
+    @Volatile var depthIntervalMs = 350L
+    @Volatile var shotsAllowed = true
+    private var lastFailure: String? = null
     @Volatile var paused = false
     @Volatile private var shotRequested = false
     @Volatile var viewW = 1; @Volatile var viewH = 1
@@ -63,8 +69,10 @@ class ArRenderer(
     private var lastShotPos: FloatArray? = null; private var lastShotQ: FloatArray? = null
     private var prevPos: FloatArray? = null; private var prevQ: FloatArray? = null; private var prevT = 0L
     private var slowUntil = 0L
+    private var lastSpeed = ""
 
-    fun requestShot() { shotRequested = true }
+    fun requestShot() { shotRequested = true; kr.archsurvey.pg.diag.PgLog.d("shutter pressed") }
+    private var frames = 0; private var fpsAt = 0L; private var lastTracking: TrackingState? = null
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES20.glClearColor(0.28f, 0.25f, 0.22f, 1f)
@@ -92,7 +100,7 @@ class ArRenderer(
     override fun onDrawFrame(gl: GL10?) {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
         if (paused) return
-        val frame: Frame = try { session.update() } catch (_: Throwable) { return }
+        val frame: Frame = try { session.update() } catch (t: Throwable) { kr.archsurvey.pg.diag.PgLog.w("session.update failed: ${t.javaClass.simpleName} ${t.message}"); return }
         if (frame.hasDisplayGeometryChanged() || geomChanged) {
             geomChanged = false
             quadBuf.position(0); uvBuf.position(0)
@@ -103,7 +111,12 @@ class ArRenderer(
         drawBackground()
         val camera = frame.camera
         val tracking = camera.trackingState == TrackingState.TRACKING
+        lastFailure = if (tracking) null else camera.trackingFailureReason.name
+        if (!tracking && shotRequested) { shotRequested = false; kr.archsurvey.pg.diag.PgLog.i("shot REJECT reason=not_tracking ${lastFailure}") }
         val now = SystemClock.uptimeMillis()
+        frames++
+        if (now - fpsAt >= 5000) { if (fpsAt > 0) kr.archsurvey.pg.diag.PgLog.d("fps=%.1f tracking=${camera.trackingState} failure=${camera.trackingFailureReason}".format(frames * 1000.0 / (now - fpsAt))); fpsAt = now; frames = 0 }
+        if (camera.trackingState != lastTracking) { kr.archsurvey.pg.diag.PgLog.i("tracking ${lastTracking} -> ${camera.trackingState} reason=${camera.trackingFailureReason}"); lastTracking = camera.trackingState }
         if (tracking) {
             camera.getViewMatrix(view, 0); camera.getProjectionMatrix(proj, 0, 0.05f, 30f)
             Matrix.multiplyMM(vp, 0, proj, 0, view, 0)
@@ -113,16 +126,20 @@ class ArRenderer(
             prevPos?.let { pp ->
                 val dt = (now - prevT).coerceAtLeast(1) / 1000.0
                 val dv = dist(pp, pos) / dt; val dw = angDeg(prevQ!!, q) / dt
-                if (dv > 0.8 || dw > 60) slowUntil = now + 600
+                if (dv > 0.8 || dw > 60) { if (now >= slowUntil) kr.archsurvey.pg.diag.PgLog.d("too fast move=%.2f m/s rot=%.0f deg/s".format(dv, dw)); slowUntil = now + 600; lastSpeed = "move=%.2fm/s rot=%.0fdeg/s".format(dv, dw) }
             }
             prevPos = pos; prevQ = q; prevT = now
 
-            if (now - lastDepthAt > 350) { lastDepthAt = now; collectPoints(frame) }
+            if (depthIntervalMs > 0 && now - lastDepthAt > depthIntervalMs) { lastDepthAt = now; collectPoints(frame) }
             val moved = lastShotPos == null || dist(lastShotPos!!, pos) > 0.25 || angDeg(lastShotQ!!, q) > 10
-            val autoDue = auto && now - lastShotAt > 2000 && moved
-            if ((shotRequested || autoDue) && now >= slowUntil) {
-                shotRequested = false
-                if (takeShot(frame)) { lastShotAt = now; lastShotPos = pos; lastShotQ = q }
+            val autoDue = auto && shotsAllowed && now - lastShotAt > 2000 && moved
+            if (shotRequested && !shotsAllowed) { shotRequested = false; kr.archsurvey.pg.diag.PgLog.i("shot REJECT reason=policy(storage/thermal)") }
+            if ((shotRequested || autoDue) && now < slowUntil) {
+                kr.archsurvey.pg.diag.PgLog.i("shot REJECT reason=too_fast $lastSpeed manual=$shotRequested"); shotRequested = false
+            } else if (shotRequested || autoDue) {
+                val manual = shotRequested; shotRequested = false
+                if (takeShot(frame)) { lastShotAt = now; lastShotPos = pos; lastShotQ = q; kr.archsurvey.pg.diag.PgLog.i("shot ACCEPT manual=$manual") }
+                else kr.archsurvey.pg.diag.PgLog.w("shot REJECT reason=camera_image_unavailable manual=$manual")
             }
             drawMesh()
         }
@@ -257,7 +274,7 @@ class ArRenderer(
             if (x < 0 || y < 0 || x > viewW || y > viewH) off = true
             target = floatArrayOf(x.coerceIn(0f, viewW.toFloat()), y.coerceIn(0f, viewH.toFloat()))
         } }
-        return Overlay(tracking, slow, tp, target, off, if (depthOn) "깊이" else "특징점")
+        return Overlay(tracking, slow, tp, target, off, if (depthOn) "깊이" else "특징점", lastFailure)
     }
 
     /** 세계 → 화면 px (z = w 부호) */

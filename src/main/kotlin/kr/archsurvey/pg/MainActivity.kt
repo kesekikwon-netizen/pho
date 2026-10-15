@@ -32,12 +32,21 @@ import kr.archsurvey.ui.Sunlight
 
 class MainActivity : ComponentActivity() {
     private var camOk by mutableStateOf(false)
-    private val askCam = registerForActivityResult(ActivityResultContracts.RequestPermission()) { camOk = it }
+    private val askCam = registerForActivityResult(ActivityResultContracts.RequestPermission()) { camOk = it; kr.archsurvey.pg.diag.PgLog.i("camera permission result=$it") }
+
+    override fun onResume() {
+        super.onResume()
+        val now = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        if (now != camOk) kr.archsurvey.pg.diag.PgLog.i("camera permission changed -> $now")
+        camOk = now
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        kr.archsurvey.pg.diag.PgLog.init(this)
         Sunlight.load(this); Minimal.load(this)
+        runCatching { kr.archsurvey.pg.tag.TargetNaming.style = kr.archsurvey.pg.tag.TargetNaming.Style.valueOf(getSharedPreferences("pg_prefs", MODE_PRIVATE).getString("name_style", "TARGET")!!) }
         camOk = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
         val store = Store(this)
         setContent {
@@ -59,7 +68,8 @@ class MainActivity : ComponentActivity() {
                             kr.archsurvey.pg.ui.OutlineBtn("처음으로") { route = "home" }
                         }
                         else if (store.load(name).arcore && ArSupport.state(this) == ArSupport.State.OK)
-                            CaptureScreen(store, name, onBack = { route = "home" }, onResult = { route = "res:$name" })
+                            CaptureScreen(store, name, onBack = { route = "home" }, onResult = { route = "res:$name" },
+                                onFallback = { runCatching { store.save(store.load(name).copy(arcore = false)) }; route = "home"; route = "cap:$name" })
                         else FallbackScreen(store, name, onBack = { route = "home" }, onResult = { route = "res:$name" })
                     }
                     route.startsWith("res:") -> ResultScreen(store, name, onBack = { route = "home" }, onShootMore = { route = "cap:$name" })

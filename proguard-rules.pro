@@ -12,3 +12,5 @@
 -keepclassmembers enum kr.archsurvey.** { *; }
 -dontwarn com.google.errorprone.annotations.**
 -dontwarn javax.annotation.**
+# 0.0.2 진단 로그: android.util.Log 를 지우는 -assumenosideeffects 규칙을 두지 않는다(릴리스에도 태그 PG 남김)
+-keep class kr.archsurvey.pg.diag.PgLog { *; }

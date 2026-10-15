@@ -45,7 +45,7 @@ class LiveEngine(initial: Session) {
         for (i in 0 until n) hf.add(xyz[3 * i].toDouble(), xyz[3 * i + 1].toDouble(), xyz[3 * i + 2].toDouble())
         hf.bump(); dirty = true
         val now = System.currentTimeMillis()
-        if (now - lastMeshAt > 500) recompute(false)
+        if (now - lastMeshAt > meshIntervalMs) recompute(false)
     }
 
     fun cam(s: Still): Coverage.Cam? {
@@ -96,7 +96,11 @@ class LiveEngine(initial: Session) {
         tagCounts = tags.obs.mapValues { it.value.size }
         fit = if (s.gcps.size >= 3) Helmert.fit(local, s.gcps.associate { it.target to V3(it.e, it.n, it.h) }) else null
         scale = s.barM?.let { ScaleSolver.fromBar(tags, it)?.first } ?: s.tagSizeM?.let { ScaleSolver.fromTagSize(tags, it) }
+        val t0 = System.nanoTime()
         mesh = buildMesh()
+        val ms = (System.nanoTime() - t0) / 1e6
+        val m = mesh
+        kr.archsurvey.pg.diag.PgLog.d("mesh update %.1f ms cells=${hf.cells.size} tris=${m?.triCount} pts=${m?.ptCount} | coverage pct=${progress.pct} green=${progress.greenPct} overlap=${progress.overlapPct} holes=${progress.holesPct} tags=${progress.tagsOk}/${progress.tagsTotal} photos=${progress.photos} done=${progress.done}".format(ms))
         onChange?.invoke()
     }
 
@@ -106,34 +110,49 @@ class LiveEngine(initial: Session) {
         Suff.RED -> floatArrayOf(0.71f, 0.14f, 0.09f, 0.55f)
     }
 
+    /** 칸마다 색은 한 번만 계산(칸 4개가 같은 색 칸을 나눔), 박싱 없는 FloatArray 로 쌓는다 */
+    private class FA(cap: Int) { var a = FloatArray(maxOf(64, cap)); var n = 0
+        fun add(x: Float) { if (n == a.size) a = a.copyOf(a.size * 2); a[n++] = x } }
     private fun buildMesh(): Mesh {
-        val cellsKeys = hf.cells.keys.toList()
-        val ratio = 2
-        val tri = ArrayList<Float>(cellsKeys.size * 42)
-        val pts = ArrayList<Float>(cellsKeys.size * 7)
         val sz = hf.cell
+        val tri = FA(hf.cells.size * 30); val pts = FA(hf.cells.size * 7)
+        val colCache = HashMap<Long, FloatArray>()
         var nt = 0; var np = 0
-        for (k in cellsKeys) {
+        for ((k, cell) in hf.cells) {
+            if (cell.n < 2) continue
             val ix = (k shr 32).toInt(); val iz = k.toInt()
-            val h00 = hf.height(ix, iz) ?: continue
-            val col = color(cov.covKey(Math.floorDiv(ix, ratio), Math.floorDiv(iz, ratio)))
-            pts += listOf(((ix + 0.5) * sz).toFloat(), h00.toFloat(), ((iz + 0.5) * sz).toFloat(), col[0], col[1], col[2], 0.95f); np++
+            val h00 = cell.mean
+            val ck = cov.covKey(Math.floorDiv(ix, 2), Math.floorDiv(iz, 2))
+            val col = colCache.getOrPut(ck) { color(ck) }
+            pts.add(((ix + 0.5) * sz).toFloat()); pts.add(h00.toFloat()); pts.add(((iz + 0.5) * sz).toFloat()); pts.add(col[0]); pts.add(col[1]); pts.add(col[2]); pts.add(0.95f); np++
             val h10 = hf.height(ix + 1, iz) ?: continue
             val h01 = hf.height(ix, iz + 1) ?: continue
             val h11 = hf.height(ix + 1, iz + 1) ?: continue
-            val hs = doubleArrayOf(h00, h10, h01, h11)
-            if (hs.max() - hs.min() > 0.12) continue // 큰 단(벽 끝)은 잇지 않음
-            fun v(a: Int, b: Int, h: Double) { tri += ((ix + a + 0.5) * sz).toFloat(); tri += h.toFloat(); tri += ((iz + b + 0.5) * sz).toFloat(); tri += col.toList() }
+            val mx = maxOf(maxOf(h00, h10), maxOf(h01, h11)); val mn = minOf(minOf(h00, h10), minOf(h01, h11))
+            if (mx - mn > 0.12) continue // 큰 단(벽 끝)은 잇지 않음
+            fun v(a: Int, b: Int, h: Double) { tri.add(((ix + a + 0.5) * sz).toFloat()); tri.add(h.toFloat()); tri.add(((iz + b + 0.5) * sz).toFloat()); tri.add(col[0]); tri.add(col[1]); tri.add(col[2]); tri.add(col[3]) }
             v(0, 0, h00); v(0, 1, h01); v(1, 0, h10)
             v(1, 0, h10); v(0, 1, h01); v(1, 1, h11)
             nt += 2
         }
-        return Mesh(fb(tri), nt, fb(pts), np)
+        return Mesh(fb(tri.a, tri.n), nt, fb(pts.a, pts.n), np)
     }
-    private fun fb(l: List<Float>): FloatBuffer {
-        val b = ByteBuffer.allocateDirect(maxOf(4, l.size * 4)).order(ByteOrder.nativeOrder()).asFloatBuffer()
-        for (f in l) b.put(f); b.position(0); return b
+    private fun fb(a: FloatArray, n: Int): FloatBuffer {
+        val b = ByteBuffer.allocateDirect(maxOf(4, n * 4)).order(ByteOrder.nativeOrder()).asFloatBuffer()
+        b.put(a, 0, n); b.position(0); return b
     }
+    /** 시험·진단용: 면 다시 만들기 시간(ms) */
+    fun benchMesh(): Double { val t = System.nanoTime(); mesh = buildMesh(); return (System.nanoTime() - t) / 1e6 }
+    /** 메모리 부족: 오래된(점 적은) 칸부터 줄여 절반으로 */
+    fun trim() = post {
+        val before = hf.cells.size
+        if (before > 20_000) { val keep = hf.cells.entries.sortedByDescending { it.value.n }.take(before / 2).map { it.key }.toHashSet(); hf.cells.keys.retainAll(keep) }
+        hf.maxCells = maxOf(20_000, hf.cells.size + 50_000)
+        kr.archsurvey.pg.diag.PgLog.w("memory trim cells $before -> ${hf.cells.size}")
+        recompute(true)
+    }
+    /** 발열 단계에 맞춰 면 갱신 간격 */
+    @Volatile var meshIntervalMs = 500L
 
     /** 좌표 없음 모드: 표적 로컬 위치(Z 위, 미터, 축척 적용) — 참고용 TXT */
     fun localTagsTxt(): String {
