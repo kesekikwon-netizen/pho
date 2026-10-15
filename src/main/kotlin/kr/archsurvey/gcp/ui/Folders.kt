@@ -157,12 +157,12 @@ fun ObjectsScreen(c: GcpController) {
             val n = c.handoffCount(HandoffScope.PENDING)
             // 0.1.15 미니멀: iTwin으로 보내기는 ⋯ (자동 저장은 이미 됨) · 「새 대상」은 같은 오른쪽 자리
             if (Minimal.on) Spacer(Modifier.weight(1f)) else
-            Row(Modifier.weight(1f).height(72.dp).clip(RoundedCornerShape(20.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(20.dp))
-                .hClickable(onClickLabel = "iTwin으로 보내기") { c.oneTapHandoff() }.semantics { contentDescription = "iTwin으로 보내기 · 보낼 폴더 $n" }.testTag("to_handoff"),
-                horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                GlyphIcon(Glyph.SHARE, G.ink, 22.dp); Spacer(Modifier.width(10.dp))
-                Text("iTwin으로 보내기", style = Ty.label.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold), color = G.ink, maxLines = 1)
-            }
+                Row(Modifier.weight(1f).height(72.dp).clip(RoundedCornerShape(20.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(20.dp))
+                    .hClickable(onClickLabel = "iTwin으로 보내기") { c.oneTapHandoff() }.semantics { contentDescription = "iTwin으로 보내기 · 보낼 폴더 $n" }.testTag("to_handoff"),
+                    horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    GlyphIcon(Glyph.SHARE, G.ink, 22.dp); Spacer(Modifier.width(10.dp))
+                    Text("iTwin으로 보내기", style = Ty.label.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold), color = G.ink, maxLines = 1)
+                }
             Row(Modifier.weight(1f).height(72.dp).clip(RoundedCornerShape(20.dp)).background(G.dark)
                 .hClickable(onClickLabel = "새 폴더") { c.openNewObj() }.testTag("obj_new"),
                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {

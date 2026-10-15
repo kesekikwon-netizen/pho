@@ -11,13 +11,17 @@ data class R10AutoTiming(
     /** 연결 뒤 자연 NMEA 를 기다리는 시간 */
     val naturalWaitMs: Long = 2_000,
     /** ENQ·64h 단일 바이트 응답 대기(ICD: 보통 500 ms 안) */
-    val ackWaitMs: Long = 600,
+    val ackWaitMs: Long = 1_000,
     /** 포트에 켜고 문장이 오는지 보는 시간 */
     val probeWaitMs: Long = 2_500,
     /** 다 켠 뒤 어떤 문장이 오는지 보는 시간(진단용) */
     val settleMs: Long = 2_500,
     /** GGA 는 오는데 GST/GSA 가 이 시간 동안 안 오면 보충 */
     val precisionCheckMs: Long = 5_000,
+    /** 0.1.58 B1: 명령 사이 최소 간격(수신기 명령 큐 넘침 방지) */
+    val minGapMs: Long = 200,
+    /** 0.1.58 B1: NAK 면 같은 명령을 다시 보내는 횟수 */
+    val nakRetries: Int = 2,
 )
 
 /** 수신기 주소별로 확인된 R10 블루투스 포트(0-based 17–19) 저장소 */
@@ -137,14 +141,42 @@ class R10AutoConfig(
         return count(type) > base
     }
 
-    private suspend fun app(port: Int, sentences: List<String>, on: Boolean): String {
-        drain()
-        val pkt = TrimbleDcol.setOutputs(nextTx(), port, sentences, on)
-        val label = "64h ${sentences.joinToString("+")} ${if (on) "1Hz" else "끔"} 포트$port"
-        send(pkt, label)
-        val r = awaitReply(timing.ackWaitMs)
-        log += "TX $label [${TrimbleDcol.hex(pkt)}] → $r (${age()}ms)"
+    private var lastSendAt: Long? = null
+
+    /** 0.1.58 B1: 직전 명령 뒤 [R10AutoTiming.minGapMs] 가 지나도록 기다린다 */
+    private suspend fun gap() {
+        val last = lastSendAt ?: return
+        val wait = timing.minGapMs - (clock() - last)
+        if (wait > 0) delay(wait)
+    }
+
+    /**
+     * 0.1.58 B1: 명령 하나 = 간격 확보 → 보내기 → ACK/NAK 대기(≤ ackWaitMs). NAK 면 [R10AutoTiming.nakRetries] 번까지 다시.
+     * 여러 명령을 한꺼번에 보내지 않는다(SmartTopo 로그의 「Queue full」·NAK 다발과 같은 큐 넘침 방지).
+     */
+    private suspend fun cmd(label: String, build: () -> ByteArray): String {
+        var r = "-"
+        for (attempt in 0..timing.nakRetries) {
+            gap(); drain()
+            val pkt = build()
+            send(pkt, label)
+            lastSendAt = clock()
+            r = awaitReply(timing.ackWaitMs)
+            log += "TX $label [${TrimbleDcol.hex(pkt)}] → $r (${age()}ms)" + if (attempt > 0) " 재시도$attempt" else ""
+            if (r != "NAK") return r
+        }
         return r
+    }
+
+    /** 문장마다 따로 한 개씩 보낸다. 하나라도 ACK 면 ACK, 전부 NAK 면 NAK */
+    private suspend fun app(port: Int, sentences: List<String>, on: Boolean): String {
+        val rs = sentences.map { st -> cmd("64h $st ${if (on) "1Hz" else "끔"} 포트$port") { TrimbleDcol.setOutputs(nextTx(), port, listOf(st), on) } }
+        return when { rs.any { it == "ACK" } -> "ACK"; rs.all { it == "NAK" } -> "NAK"; else -> "-" }
+    }
+
+    private suspend fun appAll(ports: List<Int>, sentences: List<String>, on: Boolean): String {
+        val rs = sentences.map { st -> cmd("64h $st ${if (on) "1Hz" else "끔"} 포트17·18·19") { TrimbleDcol.setOutputsPorts(nextTx(), ports, listOf(st), on) } }
+        return when { rs.any { it == "ACK" } -> "ACK"; rs.all { it == "NAK" } -> "NAK"; else -> "-" }
     }
 
     private fun candidates(): List<Int> {
@@ -153,8 +185,9 @@ class R10AutoConfig(
     }
 
     private suspend fun enq(): String {
-        drain()
+        gap(); drain()
         send(TrimbleDcol.enq(), "ENQ")
+        lastSendAt = clock()
         val r = awaitReply(timing.ackWaitMs)
         log += "TX ENQ [05] → $r (${age()}ms)"
         return r
@@ -162,8 +195,9 @@ class R10AutoConfig(
 
     /** 0.1.41 GETSERIAL → RSERIAL 기다림(읽기 전용, 링크가 양방향인지·수신기가 이 세션 명령을 처리하는지) */
     private suspend fun serial(): String {
-        drain()
+        gap(); drain()
         send(TrimbleDcol.getSerial(), "GETSERIAL")
+        lastSendAt = clock()
         val end = clock() + timing.ackWaitMs * 2
         var r = "응답없음"
         while (true) {
@@ -181,24 +215,14 @@ class R10AutoConfig(
     private suspend fun allPortsOnce(tried: MutableList<String>): Boolean {
         val ports = TrimbleDcol.BT_PORTS
         val base = count("GGA")
-        drain()
-        val pkt = TrimbleDcol.setOutputsPorts(nextTx(), ports, listOf("GGA"), true)
-        send(pkt, "64h GGA 1Hz 포트17·18·19")
-        val r = awaitReply(timing.ackWaitMs)
-        log += "TX 64h GGA 1Hz 포트17·18·19 [${TrimbleDcol.hex(pkt)}] → $r (${age()}ms)"
+        val r = appAll(ports, listOf("GGA"), true)
         if (r == "NAK") { tried += "17-19:NAK"; return false }
         if (waitFor("GGA", base, timing.probeWaitMs * 2)) {
             tried += "17-19:$r→GGA ${age()}ms"
-            drain()
-            val full = TrimbleDcol.setOutputsPorts(nextTx(), ports, FULL_SET, true)
-            send(full, "64h 4종 1Hz 포트17·18·19")
-            log += "TX 64h 4종 포트17·18·19 → ${awaitReply(timing.ackWaitMs)}"
+            log += "포트17·18·19 보충 → ${appAll(ports, PRECISION_SET, true)}"
             return true
         }
-        drain()
-        val off = TrimbleDcol.setOutputsPorts(nextTx(), ports, listOf("GGA"), false)
-        send(off, "64h GGA 끔 포트17·18·19")
-        val ro = awaitReply(timing.ackWaitMs)
+        val ro = appAll(ports, listOf("GGA"), false)
         tried += "17-19:$r→무GGA→끔$ro"
         return false
     }
@@ -260,8 +284,8 @@ class R10AutoConfig(
             log += "결과 $out 양방향=$two (${age()}ms)"
             return R10AutoResult(out, null, enq, tried, emptySet(), age(), log, two)
         }
-        onStatus("R10 포트 $port 확인 · GGA·GST·GSA·GSV 켜는 중…")
-        app(port, FULL_SET, on = true)
+        onStatus("R10 포트 $port 확인 · GST·GSA·GSV 하나씩 켜는 중…")
+        app(port, PRECISION_SET, on = true) // GGA 는 이미 켜짐 — 나머지를 한 개씩(0.1.58 B1)
         var seen = observe()
         log += "확정 포트 $port · 이후 문장 ${seen.sorted()} (${age()}ms)"
         if ("GGA" !in seen) {

@@ -22,8 +22,8 @@ android {
         applicationId = "kr.archsurvey.gcp"
         minSdk = 21
         targetSdk = 35
-        versionCode = 20
-        versionName = "0.1.19"
+        versionCode = 21
+        versionName = "0.1.20"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 

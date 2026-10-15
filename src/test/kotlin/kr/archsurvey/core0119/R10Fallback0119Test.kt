@@ -19,15 +19,15 @@ class R10Fallback0119Test {
             sent += l; events.send(DcolEvent.Ack)
             when {
                 l == "64h GGA 1Hz 포트18" -> ggaOn = true
-                l.startsWith("64h GGA+GST") -> fullOn = true
-                l.startsWith("64h GST+GSA+GSV 끔") -> fullOn = false
+                l == "64h GST 1Hz 포트18" -> fullOn = true
+                l == "64h GST 끔 포트18" -> fullOn = false
             }
         }, events, { if (it == "GGA") gga.get() else 0L }, { System.nanoTime() / 1_000_000 },
             object : R10PortStore { override fun port(): Int? = 18; override fun save(port: Int) {} }, timing, { 0 }).enableOutput()
         ticker.cancel()
         assertEquals(sent.toString(), R10AutoOutcome.GGA_ONLY_FALLBACK, r.outcome)
         assertTrue(r.gotGga); assertEquals(18, r.port)
-        assertEquals(listOf("ENQ", "64h GGA 1Hz 포트18", "64h GGA+GST+GSA+GSV 1Hz 포트18", "64h GST+GSA+GSV 끔 포트18", "64h GGA 1Hz 포트18"), sent)
+        assertEquals(listOf("ENQ", "64h GGA 1Hz 포트18", "64h GST 1Hz 포트18", "64h GSA 1Hz 포트18", "64h GSV 1Hz 포트18", "64h GST 끔 포트18", "64h GSA 끔 포트18", "64h GSV 끔 포트18", "64h GGA 1Hz 포트18"), sent)
     }
 
     @Test fun r10_fullSetKeepsGga_noFallback() = kotlinx.coroutines.runBlocking {
@@ -38,7 +38,7 @@ class R10Fallback0119Test {
             object : R10PortStore { override fun port(): Int? = 18; override fun save(port: Int) {} },
             R10AutoTiming(naturalWaitMs = 200, ackWaitMs = 50, probeWaitMs = 400, settleMs = 300), { 0 }).enableOutput()
         ticker.cancel()
-        assertEquals(R10AutoOutcome.PORT_FOUND, r.outcome); assertEquals(3, sent.size)
+        assertEquals(R10AutoOutcome.PORT_FOUND, r.outcome); assertEquals(5, sent.size)
     }
 }
 

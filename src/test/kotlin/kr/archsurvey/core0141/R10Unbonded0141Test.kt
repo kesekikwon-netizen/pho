@@ -82,7 +82,7 @@ class R10Unbonded0141Test {
         val s = Script(ggaOnlyWhenAll = true)
         val r = runAuto(s, true)
         assertEquals(R10AutoOutcome.PORT_FOUND, r.outcome); assertNull(r.port); assertTrue(r.gotGga)
-        assertEquals("64h 4종 1Hz 포트17·18·19", s.sent.last())
+        assertEquals("64h GSV 1Hz 포트17·18·19", s.sent.last())
     }
 
     @Test fun notExtended_oldSequenceUnchanged() = kotlinx.coroutines.runBlocking {
