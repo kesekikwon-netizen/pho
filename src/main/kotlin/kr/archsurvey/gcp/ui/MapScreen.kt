@@ -107,13 +107,14 @@ fun MapArea(c: GcpController, env: GcpEnv, modifier: Modifier) {
         surface.Draw(ms, Modifier.fillMaxSize())
         // 0.1.12 오른손 #3: 내 위치 · 확대 · 축소는 지도 오른쪽 아래(엄지 영역). 드물게 쓰는 전체 보기는 위
         Row(Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 34.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MapBtn(Glyph.LOCATE, if (c.follow) "따라가기 끄기" else "내 위치 따라가기", "tool_locate", c.follow) { if (c.follow) c.follow = false else c.recenter() }
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // 0.1.15 미니멀: 내 위치는 지도를 옮겨 따라가기가 꺼졌을 때만 · 확대 +/− 는 ⋯ 「확대 단추 보이기」로
+            if (!Minimal.on || !c.follow) MapBtn(Glyph.LOCATE, if (c.follow) "따라가기 끄기" else "내 위치 따라가기", "tool_locate", c.follow) { if (c.follow) c.follow = false else c.recenter() }
+            if (!Minimal.on || Minimal.zoomButtons) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 MapBtn(Glyph.PLUS, "확대", "tool_zoom_in") { c.zoomIn() }
                 MapBtn(Glyph.MINUS, "축소", "tool_zoom_out") { c.zoomOut() }
             }
         }
-        Column(Modifier.align(Alignment.TopEnd).padding(end = 10.dp, top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (!Minimal.on) Column(Modifier.align(Alignment.TopEnd).padding(end = 10.dp, top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             MapBtn(Glyph.EXTENT, "유적 전체 보기", "tool_fit") { c.fitAll() }
         }
         if (c.latLon() == null && c.projection == null) {

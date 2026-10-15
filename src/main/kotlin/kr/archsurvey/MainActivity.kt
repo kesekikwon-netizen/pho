@@ -35,6 +35,7 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = androidx.activity.SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
         )
         kr.archsurvey.ui.Sunlight.load(this) // 0.1.52 #9
+        kr.archsurvey.ui.Minimal.load(this) // 0.1.15 미니멀 | 일반
         vm.platform.permissionRequester = { perms, cb ->
             if (perms.isEmpty()) cb(true) else { permCallback = cb; permLauncher.launch(perms) }
         }

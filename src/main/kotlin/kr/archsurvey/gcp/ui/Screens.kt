@@ -37,6 +37,7 @@ fun SitesScreen(c: GcpController) {
         GTopBar("사진 기준점", null, c, onMenu = { c.go(Screen.SETTINGS) }, brand = true)
         Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp).padding(top = 6.dp), verticalAlignment = Alignment.Bottom) {
             Text("유적", style = Ty.label.copy(fontSize = 26.sp, fontWeight = FontWeight.Black), color = G.ink, modifier = Modifier.weight(1f))
+            ModeChip(G.ink, G.white, G.lineStrong, Modifier.padding(end = 8.dp)) // 0.1.15 [미니멀 | 일반]
             SunToggle(Modifier.padding(end = 10.dp))
             Text("최근 순", style = Ty.small.copy(fontSize = 16.sp), color = G.sub, modifier = Modifier.padding(bottom = 4.dp))
         }

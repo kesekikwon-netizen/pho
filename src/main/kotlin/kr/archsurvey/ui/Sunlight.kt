@@ -6,6 +6,17 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -77,3 +88,41 @@ fun Modifier.pressSpring(rest: Dp = 16.dp, pressed: Dp = 32.dp): Modifier = comp
         }
     }.graphicsLayer { scaleX = scale; scaleY = scale }.clip(RoundedCornerShape(corner))
 }
+
+/**
+ * 0.1.53 / 0.1.15 (06-minimal) 보기 방식 [미니멀 | 일반]. 표시만 바꾼다 — 기능·데이터·연결 로직은 같다.
+ * 기본 = 일반(0.1.52 / 0.1.14 그대로). 숨긴 기능은 모두 ⋯ 메뉴([moreOpen]) 한 곳에서 닿는다. 폰에 저장(선택만).
+ */
+object Minimal {
+    private const val PREF = "ui_prefs"; private const val KEY = "minimal_mode"; private const val KEY_ZOOM = "minimal_zoom_buttons"
+    var on by mutableStateOf(false)
+    /** 미니멀에서도 확대 +/− 단추 보이기(장갑) */
+    var zoomButtons by mutableStateOf(false)
+    /** ⋯ 메뉴 열림(저장 안 함) */
+    var moreOpen by mutableStateOf(false)
+    fun load(ctx: Context) { val p = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE); on = p.getBoolean(KEY, false); zoomButtons = p.getBoolean(KEY_ZOOM, false) }
+    fun set(ctx: Context, v: Boolean) { on = v; ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putBoolean(KEY, v).apply() }
+    fun setZoomButtons(ctx: Context, v: Boolean) { zoomButtons = v; ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putBoolean(KEY_ZOOM, v).apply() }
+}
+
+/** 2칸 선택칩 [미니멀 | 일반] — 한 번 누르면 그 칸으로 바뀌고 저장. 색은 앱 팔레트에서 받는다 */
+@Composable
+fun ModeChip(ink: Color, bg: Color, line: Color, modifier: Modifier = Modifier) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val sh = RoundedCornerShape(24.dp)
+    androidx.compose.foundation.layout.Row(modifier.androidx_height48().clip(sh).border(1.5.dp, line, sh).testTagMode("mode_chip")) {
+        for ((label, min) in listOf("미니멀" to true, "일반" to false)) {
+            val sel = Minimal.on == min
+            androidx.compose.foundation.layout.Box(
+                Modifier.androidx_height48().widthIn(min = 56.dp).background(if (sel) ink else bg)
+                    .clickableSel(label, sel) { Minimal.set(ctx, min) }.padding(horizontal = 10.dp)
+                    .testTagMode(if (min) "mode_min" else "mode_normal"),
+                contentAlignment = androidx.compose.ui.Alignment.Center,
+            ) { androidx.compose.material3.Text(label, style = androidx.compose.ui.text.TextStyle(fontFamily = Fonts.sans, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 16.sp), color = if (sel) bg else ink, maxLines = 1) }
+        }
+    }
+}
+private fun Modifier.androidx_height48(): Modifier = this.then(Modifier.heightIn(min = 48.dp))
+private fun Modifier.testTagMode(t: String): Modifier = this.then(Modifier.testTag(t))
+private fun Modifier.clickableSel(label: String, sel: Boolean, onClick: () -> Unit): Modifier =
+    this.then(Modifier.semantics { selected = sel; role = androidx.compose.ui.semantics.Role.Tab }.clickable(onClickLabel = label, onClick = onClick))

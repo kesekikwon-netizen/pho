@@ -205,6 +205,19 @@ fun NewSiteSheet(c: GcpController, f: NewSiteForm) {
 @Composable
 fun MenuSheet(c: GcpController) {
     BottomSheet("메뉴", "menu_sheet", onClose = { c.menuOpen = false }) {
+        // 0.1.15 맨 위 [미니멀 | 일반] · 미니멀에서 숨긴 것은 모두 여기서(선택만)
+        ModeChip(G.ink, G.white, G.lineStrong, Modifier.testTag("menu_mode"))
+        if (Minimal.on) {
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            if (c.screen == Screen.OBJECTS) for ((st, label) in listOf(null to "전체", Stage.MEASURE to "측량 필요", Stage.PHOTO to "사진 필요", Stage.HANDOFF to "보내기"))
+                Tile("보기: $label", c.filter == st, "menu_stage_${st?.name?.lowercase() ?: "all"}", Modifier.fillMaxWidth()) { c.menuOpen = false; c.filter = st }
+            if (c.screen == Screen.TARGETS) {
+                Tile("대상(폴더)으로", false, "menu_obj", Modifier.fillMaxWidth()) { c.menuOpen = false; c.back() }
+                if (!c.locked()) Tile("표적 더하기", false, "menu_add_slot", Modifier.fillMaxWidth()) { c.menuOpen = false; c.openAddSlot() }
+            }
+            if (c.screen == Screen.TARGETS || c.screen == Screen.MAP) Tile("전체 보기(맞춤)", false, "menu_fit", Modifier.fillMaxWidth()) { c.menuOpen = false; c.fitAll() }
+            Tile(if (Minimal.zoomButtons) "확대 단추 숨기기" else "확대 단추 보이기", Minimal.zoomButtons, "menu_zoom_buttons", Modifier.fillMaxWidth()) { Minimal.setZoomButtons(ctx, !Minimal.zoomButtons) }
+        }
         Tile("유적 지도", false, "menu_map", Modifier.fillMaxWidth(), sub = "위성 + 지적 · 모든 폴더의 표적 자리") { c.menuOpen = false; c.go(Screen.MAP); c.fitAll() }
         Tile("PC로 보내기", false, "menu_handoff", Modifier.fillMaxWidth(), sub = "보낼 폴더 ${c.handoffCount(HandoffScope.PENDING)} · zip 하나로 공유") { c.menuOpen = false; c.handoffOpen = true }
         Tile("유적 바꾸기", false, "menu_sites", Modifier.fillMaxWidth()) { c.menuOpen = false; c.openSitePicker() }

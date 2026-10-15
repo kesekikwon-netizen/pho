@@ -47,7 +47,9 @@ fun GTopBar(title: String?, onBack: (() -> Unit)?, c: GcpController, onMenu: (()
                 if (sub != null) Text(sub, style = Ty.small, color = G.sub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag(subTag))
             }
             GcpPill(c.source, Modifier.padding(horizontal = 4.dp)) { c.openReceiver() }
-            if (onMenu != null) IconBtn(Glyph.MENU, "메뉴", "menu", onMenu) else Spacer(Modifier.width(8.dp))
+            // 0.1.15 미니멀: ≡ 대신 ⋯ (같은 메뉴 시트 + 숨긴 기능). 표적 화면처럼 메뉴가 없던 곳도 ⋯ 로 닿게
+            if (Minimal.on) MoreBtn { c.menuOpen = true }
+            else if (onMenu != null) IconBtn(Glyph.MENU, "메뉴", "menu", onMenu) else Spacer(Modifier.width(8.dp))
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(G.line))
     }
@@ -127,7 +129,9 @@ fun ObjectsScreen(c: GcpController) {
         GTopBar("사진 기준점", null, c, onMenu = { c.menuOpen = true }, sub = b.site.name, subTag = "site_name", onTitle = { c.openSitePicker() }, titleClickTag = "site_switch")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
             Spacer(Modifier.height(14.dp))
-            if (b.objs.isNotEmpty()) Segmented(listOf("전체" to "stage_all", "측량 필요" to "stage_measure", "사진 필요" to "stage_photo", "보내기" to "stage_handoff"),
+            // 0.1.15 미니멀: 단계 탭은 ⋯ (전체만 보임)
+            LaunchedEffect(Minimal.on) { if (Minimal.on) c.filter = null }
+            if (b.objs.isNotEmpty() && !Minimal.on) Segmented(listOf("전체" to "stage_all", "측량 필요" to "stage_measure", "사진 필요" to "stage_photo", "보내기" to "stage_handoff"),
                 tabs.indexOf(c.filter).coerceAtLeast(0), Modifier.testTag("stage_row")) { i -> c.filter = tabs[i] }
             Text("폴더 ${b.objs.size}개 · EPSG:${b.site.epsg}", style = Ty.small, color = G.sub, modifier = Modifier.padding(start = 4.dp, top = 8.dp).testTag("folder_count"))
             if (rows.isEmpty()) Text(if (c.filter != null) "「${c.filter?.ko}」 폴더가 없어요" else "아직 폴더가 없어요.\n아래 「새 대상」을 누르면 종류·번호를 골라 폴더를 만들어요.",
@@ -150,6 +154,8 @@ fun ObjectsScreen(c: GcpController) {
         }
         BottomBar {
             val n = c.handoffCount(HandoffScope.PENDING)
+            // 0.1.15 미니멀: PC로 보내기는 ⋯ (자동 저장은 이미 됨) · 「새 대상」은 같은 오른쪽 자리
+            if (Minimal.on) Spacer(Modifier.weight(1f)) else
             Row(Modifier.weight(1f).height(72.dp).clip(RoundedCornerShape(20.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(20.dp))
                 .hClickable(onClickLabel = "PC로 보내기") { c.handoffOpen = true }.semantics { contentDescription = "PC로 보내기 · 보낼 폴더 $n" }.testTag("to_handoff"),
                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
@@ -319,6 +325,21 @@ private fun TargetsPanel(c: GcpController, o: kr.archsurvey.gcp.model.Obj, s: kr
             }
         }
         // 표적 칸(세 상태): 완료 = 연테라코타 + 「완료」, 지금/다음 = 테라코타 채움, 대기 = 흰색
+        // 0.1.15 미니멀: 표적 칸은 지금 표적 하나 + 「n/전체」. 길게 누르면 전체 칸(다시 재기·번호 바꾸기). 표적 번호는 측량 단추 글자에 그대로
+        var allCells by androidx.compose.runtime.saveable.rememberSaveable(s.id) { mutableStateOf(false) }
+        val collapsed = Minimal.on && !allCells
+        if (collapsed) {
+            val cur = c.measuringTag ?: next
+            Row(Modifier.fillMaxWidth().padding(start = 40.dp).testTag("qtag_row"), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f).heightIn(min = 60.dp).clip(RoundedCornerShape(16.dp)).background(if (cur != null) G.dark else G.white).border(if (cur != null) 0.dp else 1.dp, G.line, RoundedCornerShape(16.dp))
+                    .hCombinedClickable(onLongClick = { allCells = true }) { if (cur != null) c.onTargetTap(cur) else allCells = true }
+                    .semantics { contentDescription = "지금 표적 ${cur ?: "없음"} · 길게 누르면 전체 표적" }.padding(vertical = 6.dp).testTag("qtag_now"),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    Text(cur?.let { "표적 $it" } ?: "모두 잼", style = Ty.label.copy(fontSize = 22.sp, fontWeight = FontWeight.Bold), color = if (cur != null) G.onDark else G.ink, maxLines = 1)
+                    Text("${shots.size}/${s.slots.size} · 길게 = 전체", style = Ty.small, color = if (cur != null) G.onDark else G.sub, maxLines = 1, modifier = Modifier.testTag("qtag_count"))
+                }
+            }
+        }
         val cells: @Composable (Modifier) -> Unit = { m ->
             // 0.1.12 오른손 #5: 칩 줄을 오른쪽으로 40dp(1번도 엄지 범위) · 다음 표적은 자동이라 칩은 다시 잴 때만
             Row(m.padding(start = 40.dp).testTag("qtag_row"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -345,15 +366,18 @@ private fun TargetsPanel(c: GcpController, o: kr.archsurvey.gcp.model.Obj, s: kr
                     }
                 }
                 // 0.1.12 오른손 #5: 「+」(표적 더하기)는 길게 눌러야(오터치 방지). 짧게 누르면 안내만
-                if (!locked) Box(Modifier.width(FieldIvory.minTouch).heightIn(min = 60.dp).clip(RoundedCornerShape(16.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(16.dp))
+                if (Minimal.on) Box(Modifier.width(FieldIvory.minTouch).heightIn(min = 60.dp).clip(RoundedCornerShape(16.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(16.dp))
+                    .hClickable(onClickLabel = "접기") { allCells = false }.testTag("qtag_fold"), contentAlignment = Alignment.Center) { Text("접기", style = Ty.small.copy(fontWeight = FontWeight.Bold), color = G.ink) }
+                else if (!locked) Box(Modifier.width(FieldIvory.minTouch).heightIn(min = 60.dp).clip(RoundedCornerShape(16.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(16.dp))
                     .hCombinedClickable(onLongClick = { c.openAddSlot() }) { c.ui.toast(ADD_SLOT_HINT) }.semantics { contentDescription = "표적 더하기 · 길게 누르기" }.testTag("add_slot"), contentAlignment = Alignment.Center) { GlyphIcon(Glyph.PLUS, G.ink, 24.dp) }
             }
         }
-        if (s.slots.size > 4) cells(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) else cells(Modifier.fillMaxWidth())
+        if (!collapsed) { if (s.slots.size > 4) cells(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) else cells(Modifier.fillMaxWidth()) }
         // 0.1.12 오른손 #1: 측량 단추 위 16dp 는 누를 것 없음 · 대상 + 104dp 측량(오른쪽)
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.width(88.dp).height(MEASURE_RH).clip(RoundedCornerShape(18.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(18.dp))
+            // 0.1.15 미니멀: 「대상」은 ‹ 뒤로 와 같아 ⋯ 로 · 측량 단추는 같은 오른쪽 끝
+            if (!Minimal.on) Column(Modifier.width(88.dp).height(MEASURE_RH).clip(RoundedCornerShape(18.dp)).background(G.white).border(1.dp, G.line, RoundedCornerShape(18.dp))
                 .hClickable(onClickLabel = "대상") { c.back() }.testTag("targets_obj"),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 GlyphIcon(Glyph.FOLDER, G.ink, 26.dp)
@@ -582,5 +606,13 @@ private fun ZipLine(name: String, note: String, depth: Int, color: Color = G.ink
     Row(Modifier.fillMaxWidth().padding(start = (depth * 18).dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(name, style = Ty.coord.copy(fontSize = 16.sp), color = color, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(note, style = Ty.small.copy(fontSize = 16.sp), color = G.sub, maxLines = 1)
+    }
+}
+
+/** 0.1.15 ⋯ 단추(미니멀) */
+@Composable
+fun MoreBtn(onClick: () -> Unit) {
+    Box(Modifier.size(48.dp).clip(RoundedCornerShape(24.dp)).hClickable(onClickLabel = "더보기") { onClick() }.semantics { contentDescription = "더보기 메뉴" }.testTag("more"), contentAlignment = Alignment.Center) {
+        Text("⋯", style = Ty.label.copy(fontSize = 26.sp, fontWeight = FontWeight.Bold), color = G.ink)
     }
 }
