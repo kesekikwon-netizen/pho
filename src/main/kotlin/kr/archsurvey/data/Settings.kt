@@ -61,8 +61,8 @@ class SettingsStore(private val ctx: Context) {
         return NtripConfig(
             host = host, port = sp.getInt("${k}ntrip_port", d.port),
             mountPoint = sp.getString("${k}ntrip_mount", "") ?: "",
-            username = sp.getString("${k}ntrip_user", "") ?: "",
-            password = secureGet("${k}ntrip_pw")?.takeIf { it.isNotEmpty() } ?: devPwMem[deviceId] ?: "",
+            username = kr.archsurvey.ntrip.Cred.clean(sp.getString("${k}ntrip_user", "") ?: ""),
+            password = kr.archsurvey.ntrip.Cred.clean(secureGet("${k}ntrip_pw")?.takeIf { it.isNotEmpty() } ?: devPwMem[deviceId] ?: ""),
             useV2 = sp.getBoolean("${k}ntrip_v2", false),
         ) to sp.getBoolean("${k}ntrip_on", true)
     }
@@ -70,10 +70,10 @@ class SettingsStore(private val ctx: Context) {
     fun saveNtripFor(deviceId: String, c: NtripConfig, enabled: Boolean) {
         val k = "dev_${deviceId}_"
         sp.edit().putString("${k}ntrip_host", c.host.trim()).putInt("${k}ntrip_port", c.port)
-            .putString("${k}ntrip_mount", c.mountPoint.trim()).putString("${k}ntrip_user", c.username.trim())
+            .putString("${k}ntrip_mount", c.mountPoint.trim()).putString("${k}ntrip_user", kr.archsurvey.ntrip.Cred.clean(c.username))
             .putBoolean("${k}ntrip_v2", c.useV2).putBoolean("${k}ntrip_on", enabled).apply()
-        devPwMem[deviceId] = c.password
-        securePut("${k}ntrip_pw", c.password)
+        devPwMem[deviceId] = kr.archsurvey.ntrip.Cred.clean(c.password)
+        securePut("${k}ntrip_pw", kr.archsurvey.ntrip.Cred.clean(c.password))
     }
 
     fun preChecked(deviceId: String): Boolean = sp.getBoolean("pre_ok_$deviceId", false)
@@ -251,15 +251,15 @@ class SettingsStore(private val ctx: Context) {
     /** 서버(주소)별 마지막 성공 아이디·포트·마운트. 비밀번호는 암호화 저장소에만 */
     fun hostProfile(host: String): Triple<String, Int, String>? {
         val k = host.trim().lowercase(); val u = sp.getString("hp_user_$k", null) ?: return null
-        return Triple(u, sp.getInt("hp_port_$k", 2101), sp.getString("hp_mount_$k", "") ?: "")
+        return Triple(kr.archsurvey.ntrip.Cred.clean(u), sp.getInt("hp_port_$k", 2101), sp.getString("hp_mount_$k", "") ?: "")
     }
-    fun hostPassword(host: String): String = secureGet("hp_pw_${host.trim().lowercase()}") ?: hostPwMem[host.trim().lowercase()] ?: ""
+    fun hostPassword(host: String): String = kr.archsurvey.ntrip.Cred.clean(secureGet("hp_pw_${host.trim().lowercase()}") ?: hostPwMem[host.trim().lowercase()] ?: "")
     private val hostPwMem = HashMap<String, String>()
     fun saveHostProfile(c: NtripConfig) {
         val k = c.host.trim().lowercase()
-        sp.edit().putString("hp_user_$k", c.username.trim()).putInt("hp_port_$k", c.port).putString("hp_mount_$k", c.mountPoint.trim()).apply()
-        hostPwMem[k] = c.password
-        securePut("hp_pw_$k", c.password)
+        sp.edit().putString("hp_user_$k", kr.archsurvey.ntrip.Cred.clean(c.username)).putInt("hp_port_$k", c.port).putString("hp_mount_$k", c.mountPoint.trim()).apply()
+        hostPwMem[k] = kr.archsurvey.ntrip.Cred.clean(c.password)
+        securePut("hp_pw_$k", kr.archsurvey.ntrip.Cred.clean(c.password))
     }
     var keepScreenOn: Boolean
         get() = sp.getBoolean("keep_screen", true)
@@ -319,8 +319,8 @@ class SettingsStore(private val ctx: Context) {
             host = sp.getString("ntrip_host", d.host) ?: d.host,
             port = sp.getInt("ntrip_port", d.port),
             mountPoint = sp.getString("ntrip_mount", d.mountPoint) ?: d.mountPoint,
-            username = sp.getString("ntrip_user", "") ?: "",
-            password = secureGet("ntrip_pw")?.takeIf { it.isNotEmpty() || memPassword.isEmpty() } ?: memPassword,
+            username = kr.archsurvey.ntrip.Cred.clean(sp.getString("ntrip_user", "") ?: ""),
+            password = kr.archsurvey.ntrip.Cred.clean(secureGet("ntrip_pw")?.takeIf { it.isNotEmpty() || memPassword.isEmpty() } ?: memPassword),
             useV2 = sp.getBoolean("ntrip_v2", false),
         )
     }
@@ -329,10 +329,10 @@ class SettingsStore(private val ctx: Context) {
 
     fun saveNtrip(c: NtripConfig) {
         sp.edit().putString("ntrip_host", c.host.trim()).putInt("ntrip_port", c.port)
-            .putString("ntrip_mount", c.mountPoint.trim()).putString("ntrip_user", c.username.trim())
+            .putString("ntrip_mount", c.mountPoint.trim()).putString("ntrip_user", kr.archsurvey.ntrip.Cred.clean(c.username))
             .putBoolean("ntrip_v2", c.useV2).apply()
-        memPassword = c.password
-        securePut("ntrip_pw", c.password)
+        memPassword = kr.archsurvey.ntrip.Cred.clean(c.password)
+        securePut("ntrip_pw", kr.archsurvey.ntrip.Cred.clean(c.password))
     }
 
     // —— 0.1.15 Google Drive 백업·측점 업로드 (토큰은 Google Sign-In 이 보관, 여기엔 계정·폴더 id 만)

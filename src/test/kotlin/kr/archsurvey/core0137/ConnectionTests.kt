@@ -73,7 +73,7 @@ class ConnectionTests {
         assertTrue(NtripForm(user = "u", password = "p").problems().isEmpty())
         assertTrue(NtripForm(enabled = false).problems().isEmpty())
         val c = NtripForm(host = " x.y ", port = "2101", mount = "M", user = " u ", password = " p ").toConfig()
-        assertEquals("x.y", c.host); assertEquals(2101, c.port); assertEquals("u", c.username); assertEquals(" p ", c.password)
+        assertEquals("x.y", c.host); assertEquals(2101, c.port); assertEquals("u", c.username); assertEquals("p", c.password) // 0.1.54: 앞뒤 공백·보이지 않는 문자는 뗀다(CEO 결정)
     }
 
     @Test fun defaultsAreFakeAndVrs() {

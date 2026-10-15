@@ -45,13 +45,13 @@ data class NtripForm(
         if (password.isEmpty()) add("VRS 비밀번호를 입력하세요")
     }
 
-    fun toConfig() = NtripConfig(host.trim(), port.trim().toIntOrNull() ?: 2101, mount.trim(), user.trim(), password, useV2)
+    fun toConfig() = NtripConfig(host.trim(), port.trim().toIntOrNull() ?: 2101, mount.trim(), kr.archsurvey.ntrip.Cred.clean(user), kr.archsurvey.ntrip.Cred.clean(password), useV2)
 
     /** 0.1.18 보안: 로그·예외·진단에 찍혀도 비밀번호가 나오지 않게(data class 기본 toString 은 비밀번호를 그대로 찍음) */
     override fun toString(): String = "NtripForm(host=$host, port=$port, mount=$mount, user=$user, password=${if (password.isEmpty()) "" else "***"}, useV2=$useV2, enabled=$enabled)"
 
     companion object {
-        fun from(c: NtripConfig, enabled: Boolean) = NtripForm(c.host, c.port.toString(), c.mountPoint, c.username, c.password, c.useV2, enabled)
+        fun from(c: NtripConfig, enabled: Boolean) = NtripForm(c.host, c.port.toString(), c.mountPoint, kr.archsurvey.ntrip.Cred.clean(c.username), kr.archsurvey.ntrip.Cred.clean(c.password), c.useV2, enabled)
     }
 }
 
@@ -81,11 +81,13 @@ object ErrorCards {
     fun ntripCard(ntrip: NtripStatus, host: String = ""): ErrorCard? {
         val m = ntrip.message
         val gvrs = Gvrs.isHost(host)
+        // 0.1.54: 서버 첫 응답 줄을 [ ] 로 카드 제목에 붙인다(비밀번호는 서버 응답에 없음)
+        val srv = Regex("\\[([^\\]]{1,80})]").find(m)?.groupValues?.get(1)?.let { " [$it]" } ?: ""
         return when (ntrip.state) {
             NtripState.AUTH_FAILED ->
-                if ("403" in m) ErrorCard("NT-403", "VRS 접속이 거부됐어요 (403)", "같은 아이디가 다른 폰·컨트롤러에서 접속 중일 수 있어요(한 ID는 동시에 하나만). 그쪽을 끊고 다시 시도하세요. R10·SP60을 같이 쓰면 기기마다 다른 통합 ID를 쓰세요 — 국토지리정보원 ID 하나로 통합 ID를 여러 개 만들 수 있어요. 계약(사용 기간·권한)도 확인하세요." + (if (gvrs) " G-VRS(RTS3): ${Gvrs.AUTH_HINT}하세요." else "") + " 자동 재시도는 하지 않아요.", false)
-                else if (gvrs) ErrorCard("NT-401", "VRS 아이디/비밀번호가 맞지 않아요 (401)", "G-VRS(RTS3): ${Gvrs.AUTH_HINT}하세요(대소문자 구분). 자동 재시도는 하지 않아요.", false)
-                else ErrorCard("NT-401", "VRS 아이디/비밀번호가 맞지 않아요 (401)", "통합회원 ID와 비밀번호를 다시 입력하세요(대소문자 구분). 국토지리정보원 공식 FAQ: VRS는 ‘측위보정정보 통합회원 ID’(지각변동감시시스템에서 등록), RTS1·2 비밀번호는 ngii. GNSS 데이터 통합센터 ID(이메일 형식)는 RTS1·2에서 안 돼요. 자동 재시도는 하지 않아요.", false)
+                if ("403" in m) ErrorCard("NT-403", "VRS 접속이 거부됐어요 (403)$srv", "같은 아이디가 다른 폰·컨트롤러에서 접속 중일 수 있어요(한 ID는 동시에 하나만). 그쪽을 끊고 다시 시도하세요. R10·SP60을 같이 쓰면 기기마다 다른 통합 ID를 쓰세요 — 국토지리정보원 ID 하나로 통합 ID를 여러 개 만들 수 있어요. 계약(사용 기간·권한)도 확인하세요." + (if (gvrs) " G-VRS(RTS3): ${Gvrs.AUTH_HINT}하세요." else "") + " 자동 재시도는 하지 않아요.", false)
+                else if (gvrs) ErrorCard("NT-401", "VRS 아이디/비밀번호가 맞지 않아요 (401)$srv", "G-VRS(RTS3): ${Gvrs.AUTH_HINT}하세요(대소문자 구분). 자동 재시도는 하지 않아요.", false)
+                else ErrorCard("NT-401", "VRS 아이디/비밀번호가 맞지 않아요 (401)$srv", "통합회원 ID와 비밀번호를 다시 입력하세요(대소문자 구분). 국토지리정보원 공식 FAQ: VRS는 ‘측위보정정보 통합회원 ID’(지각변동감시시스템에서 등록), RTS1·2 비밀번호는 ngii. GNSS 데이터 통합센터 ID(이메일 형식)는 RTS1·2에서 안 돼요. 자동 재시도는 하지 않아요.", false)
             NtripState.ERROR ->
                 if ("마운트" in m || "404" in m) ErrorCard("NT-404", "마운트 포인트를 찾을 수 없어요", "마운트 포인트 이름이 맞는지 확인하세요(서비스 안내문의 이름, 예: VRS-RTCM31). 서버는 응답했으니 주소·포트·계정은 맞아요.", false)
                 else ErrorCard("NT-500", "VRS 서버에 연결하지 못했어요", m.ifBlank { "서버 주소·포트·마운트 포인트와 폰의 인터넷 연결을 확인하세요." }, true)
