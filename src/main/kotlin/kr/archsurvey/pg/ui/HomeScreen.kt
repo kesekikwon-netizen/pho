@@ -43,6 +43,7 @@ fun HomeScreen(store: Store, onNew: (Session) -> Unit, onOpen: (Session) -> Unit
     var ar by remember { mutableStateOf(ArSupport.state(ctx)) }
     val sessions = remember { store.list() }
     var note by remember { mutableStateOf<String?>(null) }
+    val one = rememberOneTap(store)
     Column(Modifier.fillMaxSize().background(P.bg).safeDrawingPadding().padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Txt("사진측량", size = FieldIvory.title, bold = true, modifier = Modifier.weight(1f))
@@ -61,6 +62,7 @@ fun HomeScreen(store: Store, onNew: (Session) -> Unit, onOpen: (Session) -> Unit
             ArSupport.State.UNSUPPORTED -> Txt("이 폰은 실시간 3D 가 안 돼요 · 사진·표적·iTwin 내보내기는 돼요", color = P.float)
         }
         note?.let { Txt(it, color = P.float) }
+        one.msg?.let { Txt(it, bold = true, color = P.fix) }
         Spacer(Modifier.height(12.dp))
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (sessions.isEmpty()) item { Txt("아직 작업이 없어요", color = P.sub) }
@@ -70,6 +72,9 @@ fun HomeScreen(store: Store, onNew: (Session) -> Unit, onOpen: (Session) -> Unit
                     Txt(s.name, bold = true)
                     val tags = s.stills.flatMap { st -> st.tags.map { it.id } }.distinct().size
                     Txt("사진 ${s.stills.size}장 · 표적 ${tags}개 · ${if (s.gcps.isNotEmpty()) "좌표 ${s.gcps.size}점" else "로컬 좌표"}", size = 15.sp, color = P.sub)
+                    if (s.stills.isNotEmpty()) androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        PrimaryBtn(if (one.busy == s.name) "보내는 중…" else "iTwin으로 보내기", Modifier.width(200.dp), color = P.fix) { one.run(s.name) }
+                    }
                 }
             }
         }

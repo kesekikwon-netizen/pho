@@ -98,6 +98,9 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
     var lastDone by remember { mutableStateOf(false) }
 
     var paused by remember { mutableStateOf(false) }
+    val prefs = remember { ctx.getSharedPreferences("pg_prefs", android.content.Context.MODE_PRIVATE) }
+    var showVideo by remember { mutableStateOf(prefs.getBoolean("show_video", false)) }
+    var showThumb by remember { mutableStateOf(prefs.getBoolean("show_thumb", true)) }
     // 나가기: GL 스레드를 먼저 멈추고(onPause 는 GL 스레드가 끝날 때까지 기다림) 저장 → 세션 닫기는 다른 스레드에서(메인 스레드 멈춤 방지)
     fun leave(reason: String, then: () -> Unit) {
         if (leaving) return
@@ -183,6 +186,9 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
         if (life.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) runCatching { opened?.session?.resume() }
         onDispose { life.lifecycle.removeObserver(obs) }
     }
+    LaunchedEffect(showVideo, showThumb, renderer) { renderer?.showVideo = showVideo; renderer?.showThumb = showThumb
+        prefs.edit().putBoolean("show_video", showVideo).putBoolean("show_thumb", showThumb).apply()
+        kr.archsurvey.pg.diag.PgLog.i("view video=$showVideo thumb=$showThumb") }
     LaunchedEffect(paused) { renderer?.paused = paused; kr.archsurvey.pg.diag.PgLog.i("capture paused=$paused") }
     LaunchedEffect(autoShot) { renderer?.auto = autoShot; kr.archsurvey.pg.diag.PgLog.i("auto shot=$autoShot") }
     DisposableEffect(Unit) {
@@ -322,6 +328,10 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                 Spacer(Modifier.weight(1f))
                 // 오른손 엄지: 위 = 일시정지/계속 · 촬영 끝, 아래 = 셔터
                 Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Choice("점군", !showVideo) { showVideo = false }
+                        Choice("영상+점", showVideo) { showVideo = true }
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Choice(if (paused) "▶ 계속" else "⏸ 일시정지", paused) { paused = !paused }
                         OutlineBtn("■ 촬영 끝") { leave("finish", onResult) }
@@ -355,6 +365,12 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
         }
         engine.scale?.let { Txt("축척 ${"%.4f".format(it.s)} · ${it.source}" + (it.scatterPct?.let { p -> " · ±%.1f%%".format(p) } ?: ""), size = 14.sp, color = P.sub) }
             ?: Txt("축척 추정(검증 안 됨) · ARCore 값 그대로", size = 14.sp, color = P.sub)
+        Spacer(Modifier.height(12.dp))
+        Txt("화면", bold = true)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Choice("점군", !showVideo) { showVideo = false }; Choice("영상+점", showVideo) { showVideo = true }
+            Choice(if (showThumb) "작은 영상 켬" else "작은 영상 끔", showThumb) { showThumb = !showThumb }
+        }
         Spacer(Modifier.height(12.dp))
         Txt("실시간 3D 보기", bold = true)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

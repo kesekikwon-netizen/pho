@@ -46,6 +46,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         kr.archsurvey.pg.diag.PgLog.init(this)
         Sunlight.load(this); Minimal.load(this)
+        runCatching { kr.archsurvey.pg.export.OneTap.mode = kr.archsurvey.pg.export.OneTap.Mode.valueOf(getSharedPreferences("pg_prefs", MODE_PRIVATE).getString("mark_mode", "AUTO")!!) }
         runCatching { kr.archsurvey.pg.tag.TargetNaming.style = kr.archsurvey.pg.tag.TargetNaming.Style.valueOf(getSharedPreferences("pg_prefs", MODE_PRIVATE).getString("name_style", "TARGET")!!) }
         camOk = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
         val store = Store(this)

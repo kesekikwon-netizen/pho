@@ -34,6 +34,7 @@ class Store(private val ctx: Context) {
      * 10 이상: MediaStore.Downloads(권한 없음). 9 이하: 공용 Download 폴더에 직접(WRITE_EXTERNAL_STORAGE).
      */
     fun publish(src: File): String {
+        if (src.isFile) return publishFile(src)
         val rel = "사진측량/${src.name}"
         val files = src.walkTopDown().filter { it.isFile }.toList()
         if (Build.VERSION.SDK_INT >= 29) {
@@ -54,6 +55,23 @@ class Store(private val ctx: Context) {
             src.copyRecursively(dst, overwrite = true)
         }
         return "다운로드/$rel"
+    }
+    /** 파일 하나(zip)를 「다운로드/사진측량/」 에. 같은 이름 있으면 시스템이 (1) 붙임 */
+    private fun publishFile(f: File): String {
+        if (Build.VERSION.SDK_INT >= 29) {
+            val cr = ctx.contentResolver
+            val cv = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, f.name)
+                put(MediaStore.MediaColumns.MIME_TYPE, if (f.name.endsWith(".zip")) "application/zip" else mime(f.name))
+                put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/사진측량")
+            }
+            val uri = cr.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: throw java.io.IOException("다운로드 폴더에 만들 수 없음: ${f.name}")
+            (cr.openOutputStream(uri) ?: throw java.io.IOException("쓸 수 없음: ${f.name}")).use { o -> f.inputStream().use { it.copyTo(o) } }
+        } else {
+            @Suppress("DEPRECATION")
+            f.copyTo(File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "사진측량/${f.name}"), overwrite = true)
+        }
+        return "다운로드/사진측량/${f.name}"
     }
     private fun mime(n: String) = when (n.substringAfterLast('.').lowercase()) {
         "jpg", "jpeg" -> "image/jpeg"; "txt" -> "text/plain"; "xml" -> "text/xml"; "xmlz" -> "application/octet-stream"; else -> "application/octet-stream"

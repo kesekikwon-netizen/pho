@@ -111,54 +111,20 @@ fun ResultScreen(store: Store, name: String, onBack: () -> Unit, onShootMore: ()
             OutlineBtn("로그 공유") { runCatching { kr.archsurvey.pg.diag.PgLog.share(ctx) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("log share failed", it) } }
         }
         Spacer(Modifier.height(8.dp))
-        NameStyleRow()
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            OutlineBtn("iTwin이 표적 잡기") {
-                if (busy) return@OutlineBtn
-                busy = true
-                scope.launch {
-                    msg = withContext(Dispatchers.IO) {
-                        runCatching {
-                            val ses = engine.session; val sf = store.files
-                            if (!kr.archsurvey.pg.diag.StoragePolicy.canExport(minOf(sf.free(), ctx.cacheDir.usableSpace), sf.photoBytes(ses) * 2)) throw java.io.IOException(kr.archsurvey.pg.diag.Msg.EXPORT_SPACE)
-                            val out = File(ctx.cacheDir, "export/${name}_itwin_auto"); out.deleteRecursively()
-                            val res = ExportFolder.writeAutoTargets(ses, sf.photos(name), out)
-                            val path = store.publish(out); out.deleteRecursively()
-                            kr.archsurvey.pg.diag.PgLog.i("export(auto targets) ok published=$path photos=${res.photos} targets=${res.targets} style=${kr.archsurvey.pg.tag.TargetNaming.style}")
-                            "$path 에 저장 · 사진 ${res.photos}장 · 좌표 TXT"
-                        }.getOrElse { kr.archsurvey.pg.diag.PgLog.e("export(auto) failed", it); if (it.message == kr.archsurvey.pg.diag.Msg.EXPORT_SPACE) it.message!! else kr.archsurvey.pg.diag.Msg.EXPORT_FAIL }
-                    }
-                    busy = false
-                }
-            }
+        val one = rememberOneTap(store)
+        var adv by remember { mutableStateOf(false) }
+        OutlineBtn(if (adv) "⋯ 고급 닫기" else "⋯ 고급") { adv = !adv }
+        if (adv) {
+            NameStyleRow()
+            Spacer(Modifier.height(6.dp))
+            MarkModeRow()
         }
-        Spacer(Modifier.height(10.dp))
+        one.msg?.let { Spacer(Modifier.height(8.dp)); Txt(it, bold = true, color = P.fix) }
+        Spacer(Modifier.weight(1f))
+        // 오른손 엄지: 큰 버튼 하나
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            PrimaryBtn(if (busy) "내보내는 중…" else "iTwin 내보내기(앱 표시)", Modifier.width(240.dp), color = P.fix) {
-                if (busy) return@PrimaryBtn
-                busy = true
-                scope.launch {
-                    val r = withContext(Dispatchers.IO) {
-                        runCatching {
-                            val ses = engine.session
-                            val sf = store.files
-                            val need = sf.photoBytes(ses)
-                            if (!kr.archsurvey.pg.diag.StoragePolicy.canExport(minOf(sf.free(), ctx.cacheDir.usableSpace), need * 2)) throw java.io.IOException(kr.archsurvey.pg.diag.Msg.EXPORT_SPACE)
-                            val out = File(ctx.cacheDir, "export/${name}_itwin"); out.deleteRecursively()
-                            val res = ExportFolder.write(ses, store.photos(name), out,
-                                localTagsTxt = if (ses.gcps.isEmpty()) engine.localTagsTxt() else null,
-                                scaleTxt = engine.scale?.let { "축척 ${it.s}  (${it.source})\r\n" })
-                            if (ses.gcps.isEmpty()) File(out, "block_tiepoints.xmlz").writeBytes(BlocksExchange.xmlz(
-                                BlocksExchange.write(ses.stills, ses.gcps, BlocksExchange.Options(ses.name, null, BlocksExchange.MarkStyle.TIE_POINTS))))
-                            val path = store.publish(out)
-                            kr.archsurvey.pg.diag.PgLog.i("export ok session=$name dir=${out.path} published=$path photos=${res.photos} targets=${res.targets} coords=${res.withCoords}")
-                            out.deleteRecursively()
-                            "$path 에 저장 · 사진 ${res.photos}장 · 표적 ${res.targets.size}개"
-                        }.getOrElse { kr.archsurvey.pg.diag.PgLog.e("export failed session=$name", it); if (it.message == kr.archsurvey.pg.diag.Msg.EXPORT_SPACE) it.message!! else kr.archsurvey.pg.diag.Msg.EXPORT_FAIL }
-                    }
-                    msg = r; busy = false
-                }
+            PrimaryBtn(if (one.busy != null) "보내는 중…" else "iTwin으로 보내기", Modifier.width(280.dp).heightIn(min = 72.dp), color = P.fix) {
+                store.save(engine.session); one.run(name)
             }
         }
     }

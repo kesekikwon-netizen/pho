@@ -51,6 +51,10 @@ class ArRenderer(
     private val onShot: (Shot) -> Unit,
 ) : GLSurfaceView.Renderer {
     @Volatile var auto = true
+    /** 0.0.6: true = 영상+점, false = 점군만(어두운 바탕, 기본) */
+    @Volatile var showVideo = false
+    /** 점군 보기에서 왼쪽 위 1/5 크기 영상(겨냥용) */
+    @Volatile var showThumb = true
     /** 발열 정책: 라이브 깊이 간격(0 = 사진 때만) */
     @Volatile var depthIntervalMs = 500L
     @Volatile var shotsAllowed = true
@@ -63,7 +67,7 @@ class ArRenderer(
     private var lastFailure: String? = null
 
     private var camTex = 0
-    private var bgProg = 0; private var cloudProg = 0
+    private var bgProg = 0; private var cloudProg = 0; private var lineProg = 0
     private val quad = floatArrayOf(-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f)
     private val quadBuf = fbuf(quad); private val uvBuf = fbuf(FloatArray(8))
     private val view = FloatArray(16); private val proj = FloatArray(16); private val vp = FloatArray(16)
@@ -96,8 +100,11 @@ class ArRenderer(
             "#extension GL_OES_EGL_image_external : require\nprecision mediump float; varying vec2 v; uniform samplerExternalOES t; void main(){ gl_FragColor=texture2D(t,v); }")
         cloudProg = program(
             "uniform mat4 m; uniform float k; uniform float lo; uniform float hi; attribute vec3 p; attribute vec4 c; varying vec4 vc; void main(){ vec4 q=m*vec4(p,1.0); gl_Position=q; gl_PointSize=clamp(k/max(q.w,0.1),lo,hi); vc=c; }",
-            "precision mediump float; varying vec4 vc; void main(){ vec2 d=gl_PointCoord-vec2(0.5); if(dot(d,d)>0.25) discard; gl_FragColor=vc; }")
-        vbos.fill(0); vboCap.fill(0)
+            "precision mediump float; uniform float gain; varying vec4 vc; void main(){ vec2 d=gl_PointCoord-vec2(0.5); if(dot(d,d)>0.25) discard; gl_FragColor=vec4(min(vc.rgb*gain+vec3(0.04),vec3(1.0)),vc.a); }")
+        lineProg = program(
+            "uniform mat4 m; attribute vec3 p; attribute vec4 c; varying vec4 vc; void main(){ gl_Position=m*vec4(p,1.0); vc=c; }",
+            "precision mediump float; varying vec4 vc; void main(){ gl_FragColor=vc; }")
+        vbos.fill(0); vboCap.fill(0); frustumFor = -1
         engine.voxels.gpu.markAll(); engine.features.gpu.markAll()
         kr.archsurvey.pg.diag.PgLog.i("gl surface created es=$glVersion ${GLES20.glGetString(GLES20.GL_VERSION)} / ${GLES20.glGetString(GLES20.GL_RENDERER)} bg=$bgProg cloud=$cloudProg")
     }
@@ -119,7 +126,8 @@ class ArRenderer(
             quadBuf.position(0); uvBuf.position(0)
         }
         if (frame.timestamp == 0L) return // 카메라 첫 영상 전: 배경 그리지 않음
-        drawBackground()
+        val video = showVideo
+        if (video) drawBackground() else { GLES20.glClearColor(0.06f, 0.07f, 0.09f, 1f); GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT); GLES20.glClearColor(0.28f, 0.25f, 0.22f, 1f) }
         val newFrame = frame.timestamp != lastFrameTs; lastFrameTs = frame.timestamp
         val camera = frame.camera
         val tracking = camera.trackingState == TrackingState.TRACKING
@@ -154,10 +162,12 @@ class ArRenderer(
                 val depthDue = depthOn && (wantShot || (depthIntervalMs > 0 && now - lastDepthAt >= depthIntervalMs))
                 if (featDue || depthDue || wantShot) grab(frame, camera, featDue, depthDue, wantShot, now, pos, q)
             }
-            drawPoints()
+            if (!video) drawGuides()
+            drawPoints(video)
             val e = GLES20.glGetError()
             if (e != GLES20.GL_NO_ERROR && glErrLogged < 20) { glErrLogged++; kr.archsurvey.pg.diag.PgLog.e("GL error 0x${Integer.toHexString(e)}") }
         }
+        if (!video && showThumb) drawThumb()
         if (now - fpsAt >= 5000) { if (fpsAt > 0) logAccept(now, tracking, camera); fpsAt = now; frames = 0 }
         if (now - lastOverlayAt > 100) { lastOverlayAt = now; onOverlay(overlay(tracking, tracking && speed.slow(frame.timestamp))) }
     }
@@ -285,10 +295,58 @@ class ArRenderer(
         if (d != null) { GLES20.glBufferSubData(GLES20.GL_ARRAY_BUFFER, d.first * 28, d.count * 28, d.buf); vboCount[slot] = d.total }
     }
 
-    private fun drawPoints() {
+    /** 왼쪽 위 1/5 영상(겨냥용): 배경 셰이더를 작은 뷰포트로 */
+    private fun drawThumb() {
+        val w = viewW / 5; val h = viewH / 5
+        GLES20.glViewport(8, viewH - h - 8, w, h)
+        drawBackground()
+        GLES20.glViewport(0, 0, viewW, viewH)
+    }
+
+    // 바닥 격자 + 찍은 사진마다 카메라 사각뿔(PIX4Dcatch 처럼). 사진 수·바닥 높이가 바뀔 때만 다시 만듦
+    private var frustumFor = -1; private var floorFor = Float.NaN; private var guideBuf: FloatBuffer? = null; private var guideN = 0
+    private fun drawGuides() {
+        if (lineProg == 0) return
+        val stills = engine.session.stills; val fy = engine.floorY
+        if (stills.size != frustumFor || (fy.isFinite() && (floorFor.isNaN() || abs(fy - floorFor) > 0.05f))) {
+            frustumFor = stills.size; floorFor = fy
+            val v = ArrayList<Float>()
+            fun line(a: FloatArray, b: FloatArray, c: FloatArray) { v.addAll(a.toList()); v.addAll(c.toList()); v.addAll(b.toList()); v.addAll(c.toList()) }
+            if (fy.isFinite()) { // 1 m 격자, 카메라(첫 자세) 주변 ±8 m
+                val g = floatArrayOf(0.55f, 0.6f, 0.7f, 0.22f)
+                for (i in -8..8) { line(floatArrayOf(i.toFloat(), fy, -8f), floatArrayOf(i.toFloat(), fy, 8f), g); line(floatArrayOf(-8f, fy, i.toFloat()), floatArrayOf(8f, fy, i.toFloat()), g) }
+            }
+            val oc = floatArrayOf(1f, 0.62f, 0.15f, 0.95f)
+            for (st in stills) {
+                val p = st.pose ?: continue
+                val m = FloatArray(16); com.google.ar.core.Pose(floatArrayOf(p[0].toFloat(), p[1].toFloat(), p[2].toFloat()), floatArrayOf(p[3].toFloat(), p[4].toFloat(), p[5].toFloat(), p[6].toFloat())).toMatrix(m, 0)
+                fun w(x: Float, y: Float, z: Float) = floatArrayOf(m[0] * x + m[4] * y + m[8] * z + m[12], m[1] * x + m[5] * y + m[9] * z + m[13], m[2] * x + m[6] * y + m[10] * z + m[14])
+                val d = 0.12f; val hw = (d * st.w / 2 / st.fx).toFloat(); val hh = (d * st.h / 2 / st.fy).toFloat()
+                val o = w(0f, 0f, 0f); val a = w(-hw, hh, -d); val b = w(hw, hh, -d); val c = w(hw, -hh, -d); val e = w(-hw, -hh, -d)
+                line(o, a, oc); line(o, b, oc); line(o, c, oc); line(o, e, oc); line(a, b, oc); line(b, c, oc); line(c, e, oc); line(e, a, oc)
+            }
+            guideN = v.size / 7; guideBuf = fbuf(v.toFloatArray())
+        }
+        val b = guideBuf ?: return; if (guideN == 0) return
+        GLES20.glEnable(GLES20.GL_BLEND); GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
+        GLES20.glEnable(GLES20.GL_DEPTH_TEST); GLES20.glDepthMask(false)
+        GLES20.glUseProgram(lineProg)
+        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(lineProg, "m"), 1, false, vp, 0)
+        val p = GLES20.glGetAttribLocation(lineProg, "p"); val c = GLES20.glGetAttribLocation(lineProg, "c")
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0)
+        b.position(0); GLES20.glVertexAttribPointer(p, 3, GLES20.GL_FLOAT, false, 28, b)
+        b.position(3); GLES20.glVertexAttribPointer(c, 4, GLES20.GL_FLOAT, false, 28, b)
+        GLES20.glEnableVertexAttribArray(p); GLES20.glEnableVertexAttribArray(c)
+        GLES20.glLineWidth(3f)
+        GLES20.glDrawArrays(GLES20.GL_LINES, 0, guideN)
+        GLES20.glDisableVertexAttribArray(p); GLES20.glDisableVertexAttribArray(c)
+        b.position(0); GLES20.glDisable(GLES20.GL_BLEND); GLES20.glDepthMask(true)
+    }
+
+    private fun drawPoints(video: Boolean) {
         if (cloudProg == 0) return
-        // 깊이 점 위치를 정해 두고(5초마다), 점 그리기 전 카메라 화소를 읽음 → S3 색 비교
-        if (probeNext) { probeNext = false; pickProbe(); if (probePx >= 0) probeCam = readPx(probePx, probePy) }
+        // 깊이 점 위치를 정해 두고(5초마다), 점 그리기 전 카메라 화소를 읽음 → S3 색 비교(영상 보기에서만 의미)
+        if (probeNext) { probeNext = false; pickProbe(); if (probePx >= 0) probeCam = if (video) readPx(probePx, probePy) else intArrayOf(-1, -1, -1) }
         GLES20.glEnable(GLES20.GL_DEPTH_TEST); GLES20.glDepthMask(true)
         GLES20.glUseProgram(cloudProg)
         GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(cloudProg, "m"), 1, false, vp, 0)
@@ -296,9 +354,12 @@ class ArRenderer(
         for ((slot, g) in listOf(0 to engine.voxels.gpu, 1 to engine.features.gpu)) {
             upload(slot, g)
             if (vboCount[slot] == 0) continue
-            GLES20.glUniform1f(GLES20.glGetUniformLocation(cloudProg, "k"), viewH * (if (slot == 0) 0.006f else 0.010f))
-            GLES20.glUniform1f(GLES20.glGetUniformLocation(cloudProg, "lo"), if (slot == 0) 2f else 4f)
-            GLES20.glUniform1f(GLES20.glGetUniformLocation(cloudProg, "hi"), if (slot == 0) 10f else 14f)
+            // 어두운 바탕(점군 보기)에서는 더 크고 밝게
+            val big = if (video) 1f else 1.6f
+            GLES20.glUniform1f(GLES20.glGetUniformLocation(cloudProg, "k"), viewH * (if (slot == 0) 0.006f else 0.010f) * big)
+            GLES20.glUniform1f(GLES20.glGetUniformLocation(cloudProg, "lo"), (if (slot == 0) 2f else 4f) * big)
+            GLES20.glUniform1f(GLES20.glGetUniformLocation(cloudProg, "hi"), (if (slot == 0) 10f else 14f) * big)
+            GLES20.glUniform1f(GLES20.glGetUniformLocation(cloudProg, "gain"), if (video) 1f else 1.35f)
             GLES20.glVertexAttribPointer(p, 3, GLES20.GL_FLOAT, false, 28, 0)
             GLES20.glVertexAttribPointer(c, 4, GLES20.GL_FLOAT, false, 28, 12)
             GLES20.glEnableVertexAttribArray(p); GLES20.glEnableVertexAttribArray(c)
@@ -308,9 +369,9 @@ class ArRenderer(
         GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0)
         if (probePx >= 0 && probeWant != null) {
             val got = readPx(probePx, probePy); val w = probeWant!!.map { (it * 255).toInt() }
-            val dCam = maxOf(abs(w[0] - probeCam[0]), abs(w[1] - probeCam[1]), abs(w[2] - probeCam[2]))
+            val dCam = if (probeCam[0] < 0) -1 else maxOf(abs(w[0] - probeCam[0]), abs(w[1] - probeCam[1]), abs(w[2] - probeCam[2]))
             val dDraw = maxOf(abs(w[0] - got[0]), abs(w[1] - got[1]), abs(w[2] - got[2]))
-            kr.archsurvey.pg.diag.PgLog.d("S3 probe at=($probePx,$probePy) want=${w.joinToString(",")} cam=${probeCam.joinToString(",")} got=${got.joinToString(",")} dRGBcam=$dCam dRGBdrawn=$dDraw gl=0x${Integer.toHexString(GLES20.glGetError())}")
+            kr.archsurvey.pg.diag.PgLog.d("S3 probe video=$video at=($probePx,$probePy) want=${w.joinToString(",")} cam=${probeCam.joinToString(",")} got=${got.joinToString(",")} dRGBcam=$dCam dRGBdrawn=$dDraw gl=0x${Integer.toHexString(GLES20.glGetError())}")
             probePx = -1; probeWant = null
         }
     }

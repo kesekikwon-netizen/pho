@@ -32,7 +32,6 @@ class LiveEngine(initial: Session) {
     private var lastMeshAt = 0L
     private var dirty = false
 
-    init { exec.execute { initial.stills.forEach { addStillModel(it) }; recompute(true) } }
 
     fun post(r: () -> Unit) { if (!exec.isShutdown) exec.execute { runCatching(r).onFailure { kr.archsurvey.pg.diag.PgLog.e("live task failed", it) } } }
     fun close() { exec.shutdownNow() }
@@ -40,6 +39,8 @@ class LiveEngine(initial: Session) {
     /** 실시간 3D 보기: 색 점(기본) · 충분 색 점. (0.0.5: 높이격자 면은 없앰) */
     enum class View3D(val label: String) { POINTS("색 점"), POINTS_COV("충분 색 점") }
     @Volatile var view3d = View3D.POINTS
+    /** 바닥 높이 추정(높이칸 평균의 하위 10%) — 바닥 격자용. NaN = 아직 모름 */
+    @Volatile var floorY = Float.NaN; private set
     /** 즉시 보이는 점: ARCore 특징점(ID 로 중복 제거) */
     val features = FeatureCloud()
     /** 면을 채우는 점: 깊이 2 cm 복셀 */
@@ -135,6 +136,7 @@ class LiveEngine(initial: Session) {
         scale = s.barM?.let { ScaleSolver.fromBar(tags, it)?.first } ?: s.tagSizeM?.let { ScaleSolver.fromTagSize(tags, it) }
         kr.archsurvey.pg.diag.PgLog.d("S4 coverage pct=${progress.pct} green=${progress.greenPct} overlap=${progress.overlapPct} holes=${progress.holesPct} tags=${progress.tagsOk}/${progress.tagsTotal} photos=${progress.photos} done=${progress.done} | voxels=${voxels.size} features=${features.size} cells=${hf.cells.size}")
         if (view3d == View3D.POINTS_COV && force) recolorAll()
+        if (hf.cells.size >= 20) { val ys = hf.cells.values.filter { it.n >= 2 }.map { it.mean }.sorted(); if (ys.isNotEmpty()) floorY = ys[ys.size / 10].toFloat() }
         onChange?.invoke()
     }
 
@@ -163,4 +165,6 @@ class LiveEngine(initial: Session) {
         }
     }
 
+    // 0.0.6: init 은 모든 필드(voxels·features 등) 초기화 뒤에 — 0.0.5 에서 작업 스레드가 먼저 돌아 voxels 가 null 이던 경쟁(crash_20261015_151711) 수정
+    init { exec.execute { runCatching { initial.stills.forEach { addStillModel(it) }; recompute(true) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("live init failed", it) } } }
 }
