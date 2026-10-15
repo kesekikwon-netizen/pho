@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 자동 생성: tools/icon/gen_icon.py (원본 도형) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="2.6" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M36.0,40.0L45.0,40.0M45.0,40.0L54.0,40.0M54.0,40.0L63.0,40.0M63.0,40.0L72.0,40.0M30.7,51.3L42.3,48.3M42.3,48.3L54.0,45.3M54.0,45.3L65.7,48.3M65.7,48.3L77.3,51.3M25.3,62.7L39.7,58.2M39.7,58.2L54.0,53.7M54.0,53.7L68.3,58.2M68.3,58.2L82.7,62.7M20.0,74.0L37.0,72.0M37.0,72.0L54.0,70.0M54.0,70.0L71.0,72.0M71.0,72.0L88.0,74.0M36.0,40.0L30.7,51.3M30.7,51.3L25.3,62.7M25.3,62.7L20.0,74.0M45.0,40.0L42.3,48.3M42.3,48.3L39.7,58.2M39.7,58.2L37.0,72.0M54.0,40.0L54.0,45.3M54.0,45.3L54.0,53.7M54.0,53.7L54.0,70.0M63.0,40.0L65.7,48.3M65.7,48.3L68.3,58.2M68.3,58.2L71.0,72.0M72.0,40.0L77.3,51.3M77.3,51.3L82.7,62.7M82.7,62.7L88.0,74.0" />
+    <path android:fillColor="#FFFFFF" android:pathData="M58,28H76V46H58Z" />
+    <path android:fillColor="#141413" android:pathData="M60,30H74V44H60Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M63,33H67V37H63Z M67,37H71V41H67Z" />
+</vector>

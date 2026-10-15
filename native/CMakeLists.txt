@@ -1,0 +1,11 @@
+cmake_minimum_required(VERSION 3.18)
+project(pgapriltag C)
+set(AT ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/apriltag)
+file(GLOB COMMON ${AT}/common/*.c)
+add_library(pgapriltag SHARED pg_apriltag_jni.c ${AT}/apriltag.c ${AT}/apriltag_quad_thresh.c
+  ${AT}/tag36h11.c ${AT}/tag25h9.c ${AT}/tag16h5.c ${AT}/tagStandard41h12.c ${COMMON})
+target_include_directories(pgapriltag PRIVATE ${AT} ${AT}/common)
+target_compile_options(pgapriltag PRIVATE -O3 -std=gnu99 -Wno-unused -Wno-sign-compare -fvisibility=default)
+find_library(LOGLIB log)
+target_link_libraries(pgapriltag m ${LOGLIB})
+target_link_options(pgapriltag PRIVATE "-Wl,-z,max-page-size=16384")

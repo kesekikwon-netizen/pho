@@ -1,0 +1,27 @@
+{
+  "buildFiles": [
+    "/workspace/pg-app/native/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/workspace/tools/sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/workspace/pg-app/.cxx/RelWithDebInfo/a385i125/armeabi-v7a",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/workspace/tools/sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/workspace/pg-app/.cxx/RelWithDebInfo/a385i125/armeabi-v7a",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "pgapriltag::@6890427a1f51a3e7e1df": {
+      "artifactName": "pgapriltag",
+      "abi": "armeabi-v7a",
+      "output": "/workspace/pg-app/build/intermediates/cxx/RelWithDebInfo/a385i125/obj/armeabi-v7a/libpgapriltag.so",
+      "runtimeFiles": []
+    }
+  }
+}
