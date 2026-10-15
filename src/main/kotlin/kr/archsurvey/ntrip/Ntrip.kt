@@ -45,6 +45,19 @@ object NtripPresets {
 }
 
 sealed class NtripException(msg: String) : IOException(msg)
+/**
+ * 0.1.54: VRS 아이디·비밀번호 정리. 앞뒤 공백과 보이지 않는 문자(zero-width, NBSP, BOM, 전각 공백 등)를 뗀다.
+ * 저장·불러오기·보내기 모두 이 함수를 거친다. 가운데 문자는 건드리지 않는다.
+ */
+object Cred {
+    private fun junk(c: Char): Boolean = c.isWhitespace() || Character.isSpaceChar(c) || c == '\u200B' || c == '\u200C' ||
+        c == '\u200D' || c == '\u2060' || c == '\uFEFF' || c == '\u00AD' || c == '\u200E' || c == '\u200F' ||
+        Character.getType(c) == Character.FORMAT.toInt() || Character.isISOControl(c)
+    fun clean(s: String): String = s.trim { junk(it) }
+    /** 서버 첫 응답 줄을 화면용으로(제어문자 제거, 80자). 비밀번호는 서버 응답에 없다 */
+    fun serverLine(s: String): String = s.filter { !Character.isISOControl(it) }.trim().take(80)
+}
+
 /** 401/403: 재시도 해도 소용없음 */
 class NtripAuthException(val httpCode: Int, msg: String) : NtripException(msg)
 class NtripMountException(msg: String) : NtripException(msg)
@@ -191,7 +204,7 @@ class NtripClient(
                 sb.append("GET $path HTTP/1.0\r\nHost: ${cfg.host}\r\n")
             }
             sb.append("User-Agent: NTRIP ExcavationSurvey/0.1\r\n")
-            if (cfg.username.isNotEmpty()) sb.append("Authorization: ${basicAuth(cfg.username, cfg.password)}\r\n")
+            if (Cred.clean(cfg.username).isNotEmpty()) sb.append("Authorization: ${basicAuth(Cred.clean(cfg.username), Cred.clean(cfg.password))}\r\n")
             sb.append("Connection: close\r\n\r\n")
             return sb.toString()
         }
@@ -264,8 +277,8 @@ class NtripClient(
                 else NtripProtocolException("서버가 응답 없이 연결을 닫았어요")
             }
             when {
-                first.contains(" 401") -> throw NtripAuthException(401, "인증 실패: $first")
-                first.contains(" 403") -> throw NtripAuthException(403, "인증 실패: $first")
+                first.contains(" 401") -> throw NtripAuthException(401, "인증 실패 [${Cred.serverLine(first)}]")
+                first.contains(" 403") -> throw NtripAuthException(403, "인증 실패 (403) [${Cred.serverLine(first)}]")
                 first.startsWith("HTTP/") && !first.contains(" 200") -> throw NtripServerException(statusCode(first), "서버 응답: ${first.take(80)}")
             }
             val list = Sourcetable.parse(text)
@@ -333,10 +346,10 @@ class NtripClient(
                         if (isSourcetable) throw NtripMountException("마운트포인트 '${cfg.mountPoint}' 를 찾을 수 없어요 (소스테이블이 반환됨)")
                     }
                     status.startsWith("SOURCETABLE") -> throw NtripMountException("마운트포인트 '${cfg.mountPoint}' 를 찾을 수 없어요 (소스테이블이 반환됨)")
-                    status.contains(" 401") -> throw NtripAuthException(401, "아이디/비밀번호가 맞지 않아요 (401)")
-                    status.contains(" 403") -> throw NtripAuthException(403, "접속이 거부됐어요 (403). 같은 ID 가 다른 기기에서 쓰이는 중일 수 있어요")
+                    status.contains(" 401") -> throw NtripAuthException(401, "아이디/비밀번호가 맞지 않아요 [${Cred.serverLine(status)}]")
+                    status.contains(" 403") -> throw NtripAuthException(403, "접속이 거부됐어요 (403). 같은 ID 가 다른 기기에서 쓰이는 중일 수 있어요 [${Cred.serverLine(status)}]")
                     status.contains(" 404") -> throw NtripMountException("마운트포인트를 찾을 수 없어요 (404)")
-                    status.startsWith("ERROR", true) && status.contains("password", true) -> throw NtripAuthException(401, "아이디/비밀번호가 맞지 않아요 ($status)")
+                    status.startsWith("ERROR", true) && status.contains("password", true) -> throw NtripAuthException(401, "아이디/비밀번호가 맞지 않아요 [${Cred.serverLine(status)}]")
                     status.startsWith("HTTP/") && statusCode(status) in 400..599 -> throw NtripServerException(statusCode(status), "서버 오류 (${status.take(60)})")
                     else -> throw NtripProtocolException("예상하지 못한 응답: ${status.take(80)}")
                 }

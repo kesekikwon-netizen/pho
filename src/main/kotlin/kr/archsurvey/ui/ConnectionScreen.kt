@@ -458,14 +458,14 @@ private fun FormRow(label: String, content: @Composable BoxScope.() -> Unit) {
 }
 
 @Composable
-private fun FormInput(value: String, tag: String, placeholder: String = "", kb: KeyboardType = KeyboardType.Text, hide: Boolean = false, onChange: (String) -> Unit) {
+private fun FormInput(value: String, tag: String, placeholder: String = "", kb: KeyboardType = KeyboardType.Text, hide: Boolean = false, cred: Boolean = false, onChange: (String) -> Unit) {
     val t = T
     val shape = RoundedCornerShape(12.dp)
     Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(shape).background(t.raised).border(1.dp, t.outline.copy(alpha = 0.6f), shape).padding(horizontal = 14.dp), contentAlignment = Alignment.CenterStart) {
         androidx.compose.foundation.text.BasicTextField(
             value, onChange, singleLine = true, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag(tag),
             textStyle = Ty.coord.copy(fontSize = 16.sp, color = t.ink), cursorBrush = androidx.compose.ui.graphics.SolidColor(t.ink),
-            keyboardOptions = KeyboardOptions(keyboardType = kb),
+            keyboardOptions = if (cred) KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.None, autoCorrectEnabled = false, keyboardType = if (hide) KeyboardType.Password else KeyboardType.Ascii) else KeyboardOptions(keyboardType = kb),
             visualTransformation = if (hide) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
             decorationBox = { inner -> Box(Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.CenterStart) { if (value.isEmpty() && placeholder.isNotEmpty()) Text(placeholder, style = Ty.body, color = t.inkSub); inner() } },
         )
@@ -510,8 +510,8 @@ private fun VrsSection(cc: ConnectionController, ntrip: kr.archsurvey.engine.Ntr
             FormRow("서버 주소") { FormInput(cc.form.host, "conn_host") { cc.updateForm(cc.form.copy(host = it)) } }
             FormRow("포트") { FormInput(cc.form.port, "conn_port", kb = KeyboardType.Number) { cc.updateForm(cc.form.copy(port = it.filter { ch -> ch.isDigit() }.take(5))) } }
             FormRow("마운트포인트") { FormSelect(cc.form.mount.ifBlank { "눌러서 목록 받기" }, "conn_mount_pick") { cc.openMountPicker() } }
-            FormRow("아이디") { FormInput(cc.form.user, "conn_user", placeholder = "통합회원 ID") { cc.updateForm(cc.form.copy(user = it)) } }
-            FormRow("비밀번호") { FormInput(cc.form.password, "conn_pw", kb = KeyboardType.Password, hide = true) { cc.updateForm(cc.form.copy(password = it)) } }
+            FormRow("아이디") { FormInput(cc.form.user, "conn_user", placeholder = "통합회원 ID", cred = true) { cc.updateForm(cc.form.copy(user = it)) } }
+            FormRow("비밀번호") { FormInput(cc.form.password, "conn_pw", kb = KeyboardType.Password, hide = true, cred = true) { cc.updateForm(cc.form.copy(password = it)) } }
             ToggleLine("내 위치 보내기", if (cc.sendGga) "내 위치를 서버에 보내요 · VRS에 필요" else "꺼짐 — VRS 마운트는 보정이 오지 않을 수 있어요", cc.sendGga, "conn_gga", warn = !cc.sendGga) { cc.changeSendGga(it) }
             Box(Modifier.fillMaxWidth().height(1.dp).background(t.line.copy(alpha = 0.25f)))
             ToggleLine("자동 재접속", if (cc.autoRetry) "끊기면 알아서 다시 접속해요(인증 오류 제외)" else "꺼짐 — 끊기면 ‘다시 시도’를 눌러요", cc.autoRetry, "conn_autoretry") { cc.changeAutoRetry(it) }
@@ -626,7 +626,7 @@ internal fun Btn(label: String, modifier: Modifier = Modifier, onClick: () -> Un
 
 /** 목업의 입력 줄: 48dp, 왼쪽 작은 이름 + 오른쪽 값 */
 @Composable
-internal fun Field(label: String, value: String, tag: String, kb: KeyboardType = KeyboardType.Text, hide: Boolean = false, placeholder: String = "", onChange: (String) -> Unit) {
+internal fun Field(label: String, value: String, tag: String, kb: KeyboardType = KeyboardType.Text, hide: Boolean = false, placeholder: String = "", cred: Boolean = false, onChange: (String) -> Unit) {
     val t = T
     val shape = RoundedCornerShape(16.dp)
     Row(
@@ -637,7 +637,7 @@ internal fun Field(label: String, value: String, tag: String, kb: KeyboardType =
         androidx.compose.foundation.text.BasicTextField(
             value, onChange, singleLine = true, modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag(tag),
             textStyle = Ty.body.copy(color = t.ink), cursorBrush = androidx.compose.ui.graphics.SolidColor(t.accent),
-            keyboardOptions = KeyboardOptions(keyboardType = kb),
+            keyboardOptions = if (cred) KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.None, autoCorrectEnabled = false, keyboardType = if (hide) KeyboardType.Password else KeyboardType.Ascii) else KeyboardOptions(keyboardType = kb),
             visualTransformation = if (hide) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
             decorationBox = { inner ->
                 Box(Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.CenterStart) {
