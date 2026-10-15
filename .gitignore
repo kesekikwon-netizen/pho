@@ -6,3 +6,5 @@ keystore.properties
 native/host/
 .kotlin/
 dist/
+
+.cxx/
