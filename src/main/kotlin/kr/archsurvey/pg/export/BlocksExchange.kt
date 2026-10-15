@@ -12,7 +12,7 @@ import java.util.zip.ZipOutputStream
 
 /**
  * iTwin Capture Modeler(ContextCapture) BlocksExchange XML 2.1 — 사용 설명서 「BlocksExchange XML/XMLZ format」 그대로.
- * - 사진: Photogroup(같은 크기·초점) / Photo(Id, ImagePath 상대 경로). 자세는 넣지 않는다(iTwin 자동 AT 가 구함).
+ * - 사진: Photogroup(같은 크기·초점) / Photo(Id, ImagePath, 0.0.12 Pose = ARCore 초기 자세; iTwin AT 가 다듬음).
  * - 표적: 「Target #N」 이름(iTwin 표적·사진 기준점 앱 TXT 와 같은 이름) + 사진별 Measurement(원본 화소, 왼쪽 위 화소 「중심」 = 0,0, y 아래).
  *   AprilTag 3 화소는 왼쪽 위 화소의 「모서리」 = 0,0 이라 0.5 를 뺀다(표적 그림 1 로 시험: 검은 네모 102..901 → 중심 501.5).
  * - 좌표가 있는 표적: Position(EPSG). 없는 표적: [MarkStyle] 에 따라 Position 없는 ControlPoint 또는 이름 붙은 TiePoint.
@@ -30,6 +30,8 @@ object BlocksExchange {
         /** 이 번호들은 검사점(CheckPoint true) */
         val checkTargets: Set<Int> = emptySet(),
         val photoDir: String = "photos",
+        /** 0.0.12: 사진 id → 초기 자세(Poses.forExport) */
+        val poses: Map<Int, Poses.Pose> = emptyMap(),
     )
 
     fun write(stills: List<Still>, gcps: List<Gcp>, o: Options): String {
@@ -70,6 +72,13 @@ object BlocksExchange {
                 line(4, "<Photo>")
                 tag(5, "Id", "${s.id}")
                 tag(5, "ImagePath", "${o.photoDir}/${s.file}")
+                o.poses[s.id]?.let { p ->
+                    line(5, "<Pose>"); line(6, "<Rotation>")
+                    for (i in 0 until 3) for (j in 0 until 3) tag(7, "M_$i$j", num(p.rotation.a[3 * i + j], 9))
+                    line(6, "</Rotation>"); line(6, "<Center>")
+                    tag(7, "x", num(p.center.x, 4)); tag(7, "y", num(p.center.y, 4)); tag(7, "z", num(p.center.z, 4))
+                    line(6, "</Center>"); line(5, "</Pose>")
+                }
                 line(4, "</Photo>")
             }
             line(3, "</Photogroup>")

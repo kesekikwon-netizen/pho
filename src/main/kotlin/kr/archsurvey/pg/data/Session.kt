@@ -12,6 +12,8 @@ data class Still(
     val pose: DoubleArray?,
     val time: Long,
     val tags: List<TagDetection>,
+    /** 0.0.12 촬영 이유(manual/first/overlap_distance/overlap_angle/timer/no_pose_timer) */
+    val reason: String? = null,
 )
 
 /** GCP: 표적 번호 N(Target #N) → E, N, H */
@@ -36,7 +38,7 @@ data class Session(
             stills.forEach { s ->
                 put(JSONObject().apply {
                     put("id", s.id); put("file", s.file); put("w", s.w); put("h", s.h)
-                    put("fx", s.fx); put("fy", s.fy); put("cx", s.cx); put("cy", s.cy); put("time", s.time)
+                    put("fx", s.fx); put("fy", s.fy); put("cx", s.cx); put("cy", s.cy); put("time", s.time); s.reason?.let { put("reason", it) }
                     s.pose?.let { p -> put("pose", JSONArray().apply { p.forEach { put(it) } }) }
                     put("tags", JSONArray().apply {
                         s.tags.forEach { t ->
@@ -70,6 +72,7 @@ data class Session(
                             val t = ta.getJSONObject(k); val c = t.getJSONArray("c")
                             TagDetection(t.getInt("id"), t.optInt("ham"), t.getDouble("cx"), t.getDouble("cy"), DoubleArray(c.length()) { c.getDouble(it) })
                         },
+                        if (s.has("reason")) s.getString("reason") else null,
                     )
                 },
             )

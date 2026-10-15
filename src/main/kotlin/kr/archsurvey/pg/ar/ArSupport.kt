@@ -44,6 +44,8 @@ object ArSupport {
         val auto = s.isDepthModeSupported(Config.DepthMode.AUTOMATIC)
         // AUTOMATIC 이어도 raw 깊이·신뢰도를 함께 받을 수 있음(설계도 11). AUTOMATIC 안 되면 RAW 만
         c.depthMode = when { auto -> Config.DepthMode.AUTOMATIC; raw -> Config.DepthMode.RAW_DEPTH_ONLY; else -> Config.DepthMode.DISABLED }
+        // 0.0.12: 손떨림 보정(EIS) 끔 — 화상 휨이 내부표정을 흔듦
+        runCatching { c.imageStabilizationMode = Config.ImageStabilizationMode.OFF }
         c.focusMode = Config.FocusMode.FIXED // 초점 고정(사진측량 내부표정 일정하게)
         c.planeFindingMode = Config.PlaneFindingMode.HORIZONTAL
         c.updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
@@ -53,4 +55,16 @@ object ArSupport {
         kr.archsurvey.pg.diag.PgLog.i("arcore session open depthMode=${c.depthMode} raw=$raw auto=$auto image=${sz.width}x${sz.height} configs=${cfgs.size}")
         Opened(s, raw || auto, raw, sz.width, sz.height)
     } catch (t: Throwable) { kr.archsurvey.pg.diag.PgLog.e("arcore session open failed", t); null }
+
+    /** 0.0.12: ARCore 카메라 센서 유효 폭·높이(mm, 활성 영역). 모르면 null */
+    fun sensorSizeMm(ctx: Context, s: Session): Pair<Double, Double>? = runCatching {
+        val cm = ctx.getSystemService(Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager
+        val ch = cm.getCameraCharacteristics(s.cameraConfig.cameraId)
+        val phys = ch.get(android.hardware.camera2.CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE) ?: return@runCatching null
+        val pix = ch.get(android.hardware.camera2.CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE) ?: return@runCatching null
+        val act = ch.get(android.hardware.camera2.CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE) ?: return@runCatching null
+        val w = phys.width.toDouble() * act.width() / pix.width; val h = phys.height.toDouble() * act.height() / pix.height
+        kr.archsurvey.pg.diag.PgLog.i("sensor %.2fx%.2f mm".format(w, h))
+        w to h
+    }.getOrNull()
 }

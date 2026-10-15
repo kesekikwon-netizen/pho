@@ -23,7 +23,7 @@ class OneTapTest {
         val names = ZipFile(a.zip).use { z -> z.entries().toList().map { it.name } }
         println("zip ${a.zip.name} ${a.bytes}B: $names")
         assertEquals("A_iTwin.zip", a.zip.name)
-        assertEquals(setOf("A_iTwin/block.xmlz", "A_iTwin/iTwin_불러오기.txt", "A_iTwin/작업정보.txt", "A_iTwin/photos/IMG_0001.jpg", "A_iTwin/photos/IMG_0002.jpg"), names.toSet())
+        assertEquals(setOf("A_iTwin/block.xmlz", "A_iTwin/iTwin_불러오기.txt", "A_iTwin/작업정보.txt", "A_iTwin/photos/IMG_0001.jpg", "A_iTwin/photos/IMG_0002.jpg", "A_iTwin/poses.csv"), names.toSet())
         ZipFile(a.zip).use { z -> assertTrue(z.getInputStream(z.getEntry("A_iTwin/photos/IMG_0001.jpg")).readBytes().contentEquals(File(synth, "IMG_0001.jpg").readBytes())) }
         assertTrue("작업 폴더 정리", work.listFiles()!!.isEmpty())
     }

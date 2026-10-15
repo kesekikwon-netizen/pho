@@ -74,6 +74,10 @@ fun ResultScreen(store: Store, name: String, onBack: () -> Unit, onShootMore: ()
             Spacer(Modifier.height(8.dp))
             Txt("맞춤 오차 RMSE ${"%.1f".format(f.rmse * 100)} cm" + (f.looRmse?.let { " · 검사점 오차 ${"%.1f".format(it * 100)} cm" } ?: " · 검사점은 표적 4개부터"), bold = true,
                 color = if ((f.looRmse ?: f.rmse) < 0.05) P.fix else if ((f.looRmse ?: f.rmse) < 0.15) P.float else P.error)
+            // 0.0.12: 최대 잔차·표적별 잔차(정보만)
+            val sf = kr.archsurvey.pg.export.SiteFit.summary(f)
+            Txt(kr.archsurvey.pg.export.SiteFit.line(sf), color = P.sub)
+            sf.rows.forEach { r -> Txt(kr.archsurvey.pg.export.SiteFit.rowLine(r), size = 14.sp, color = if (r.target == sf.maxTarget && sf.maxCm >= 5) P.float else P.sub) }
             Txt("휴대폰 미리보기 값이에요. 최종 값은 iTwin 에서 나와요.", size = 14.sp, color = P.sub)
         }
         if (fit == null && s.gcps.isNotEmpty()) kr.archsurvey.pg.diag.FitCheck.check(s.gcps, engine.tagPos).second?.let { Txt(it, color = P.float) }

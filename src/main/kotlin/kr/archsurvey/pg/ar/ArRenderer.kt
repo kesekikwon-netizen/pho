@@ -34,7 +34,7 @@ data class Overlay(
 )
 
 /** 사진 한 장(원 JPG + 밝기 + 자세·내부표정) */
-class Shot(val jpeg: ByteArray, val gray: ByteArray, val w: Int, val h: Int, val pose: DoubleArray?, val fx: Double, val fy: Double, val cx: Double, val cy: Double)
+class Shot(val jpeg: ByteArray, val gray: ByteArray, val w: Int, val h: Int, val pose: DoubleArray?, val fx: Double, val fy: Double, val cx: Double, val cy: Double, val reason: String? = null)
 
 /**
  * 0.0.5 실시간 3D (설계도 11):
@@ -74,6 +74,10 @@ class ArRenderer(
 
     private var lastDepthAt = 0L; private var lastFeatAt = 0L; private var lastShotAt = 0L; private var lastOverlayAt = 0L
     private var lastShotPos: FloatArray? = null; private var lastShotQ: FloatArray? = null
+    /** 0.0.12 겹침 자동: 겹침 비율, 최근 장면 깊이(m, 깊이 표본 중앙값), 이번 사진 이유 */
+    @Volatile var overlap = kr.archsurvey.pg.live.ShotPolicy.DEFAULT_OVERLAP
+    @Volatile private var sceneDepth = 1.5
+    private var shotReason: kr.archsurvey.pg.live.ShotPolicy.Reason? = null
     private val speed = kr.archsurvey.pg.live.SpeedGate()
     private var lastFrameTs = 0L
     private var wasTracking = false
@@ -148,7 +152,14 @@ class ArRenderer(
             // 0.0.11: 거리·각도·속도 조건 없음(사용자). 자동 = 2초마다, 수동 = 언제나. 막는 것은 저장 공간뿐
             if (slow && (shotRequested || now - lastRejectLog > 1000)) { lastRejectLog = now; rejectTooFast++; kr.archsurvey.pg.diag.PgLog.i("shot ADVISE too_fast move=%.2fm/s rot=%.0fdeg/s manual=$shotRequested".format(speed.move, speed.rot)) }
             if (shotRequested && !shotsAllowed) { shotRequested = false; kr.archsurvey.pg.diag.PgLog.i("shot REJECT reason=storage") }
-            val wantShot = kr.archsurvey.pg.live.ShotPolicy.fire(shotRequested, paused, auto, shotsAllowed, now, lastShotAt)
+            val intr0 = camera.imageIntrinsics; val dims0 = intr0.imageDimensions
+            val spacing = kr.archsurvey.pg.live.ShotPolicy.spacingM(sceneDepth, intr0.focalLength[0].toDouble(), dims0[0], dims0[1], overlap)
+            val lp = lastShotPos; val lq = lastShotQ
+            val motion = if (lp != null && lq != null) kr.archsurvey.pg.live.ShotPolicy.Motion(kr.archsurvey.pg.live.ArRendererMath.dist(lp, pos), kr.archsurvey.pg.live.ArRendererMath.angDeg(lq, q))
+                else kr.archsurvey.pg.live.ShotPolicy.Motion(1e9, 0.0)
+            val reason = kr.archsurvey.pg.live.ShotPolicy.decide(shotRequested, paused, auto, shotsAllowed, now, lastShotAt, motion, spacing)
+            val wantShot = reason != null
+            if (reason != null) shotReason = reason
 
             if (newFrame && (!paused || wantShot)) {
                 val featDue = now - lastFeatAt >= 100
@@ -162,12 +173,14 @@ class ArRenderer(
         }
         else if (newFrame) {
             // 0.0.11: 추적이 끊겨도 사진은 찍는다(자세 없음 → 3D 칸에는 안 들어가고 내보내기에는 들어감)
-            val wantShot = kr.archsurvey.pg.live.ShotPolicy.fire(shotRequested, paused, auto, shotsAllowed, now, lastShotAt)
+            val reason = kr.archsurvey.pg.live.ShotPolicy.decide(shotRequested, paused, auto, shotsAllowed, now, lastShotAt, null, 0.0)
+            val wantShot = reason != null
+            if (reason != null) shotReason = reason
             if (wantShot) {
                 val manual = shotRequested
                 val img: Image? = try { frame.acquireCameraImage() } catch (_: Throwable) { null }
                 try {
-                    if (img != null && takeShot(img, camera, withPose = false)) { shotRequested = false; lastShotAt = now; kr.archsurvey.pg.diag.PgLog.i("shot ACCEPT manual=$manual tracking=false $lastFailure") }
+                    if (img != null && takeShot(img, camera, withPose = false)) { shotRequested = false; lastShotAt = now; kr.archsurvey.pg.diag.PgLog.i("shot ACCEPT manual=$manual reason=${shotReason?.code} tracking=false $lastFailure") }
                     else kr.archsurvey.pg.diag.PgLog.d("shot RETRY reason=camera_image_unavailable manual=$manual")
                 } finally { img?.close() }
             }
@@ -198,7 +211,7 @@ class ArRenderer(
             if (wantShot) {
                 val manual = shotRequested
                 // 0.0.11: 영상이 아직 없으면 수동 요청을 버리지 않고 다음 프레임에 다시
-                if (img != null && takeShot(img, camera)) { shotRequested = false; lastShotAt = now; lastShotPos = pos; lastShotQ = q; kr.archsurvey.pg.diag.PgLog.i("shot ACCEPT manual=$manual") }
+                if (img != null && takeShot(img, camera)) { shotRequested = false; lastShotAt = now; lastShotPos = pos; lastShotQ = q; kr.archsurvey.pg.diag.PgLog.i("shot ACCEPT manual=$manual reason=${shotReason?.code} depth=%.2fm".format(sceneDepth)) }
                 else kr.archsurvey.pg.diag.PgLog.d("shot RETRY reason=camera_image_unavailable manual=$manual")
             }
         } finally { img?.close() }
@@ -238,6 +251,13 @@ class ArRenderer(
                     if (cbuf != null) { x, y -> cbuf.get(y * crs + x * cps).toInt() and 0xff } else null,
                     f[0] * sx, f[1] * sy, pp[0] * sx, pp[1] * sy, poseM, grid = if (fromPhoto) 2 else 3)
                 if (o.n == 0) { depthOk++; return }
+                // 0.0.12: 장면 깊이(카메라~점 거리 중앙값) → 겹침 간격 계산용
+                run {
+                    val step = maxOf(1, o.n / 200); val ds = ArrayList<Float>(o.n / step + 1)
+                    var i = 0
+                    while (i < o.n) { val dx = o.xyz[3 * i] - poseM[12]; val dy = o.xyz[3 * i + 1] - poseM[13]; val dz = o.xyz[3 * i + 2] - poseM[14]; ds += kotlin.math.sqrt(dx * dx + dy * dy + dz * dz); i += step }
+                    if (ds.isNotEmpty()) { ds.sort(); sceneDepth = ds[ds.size / 2].toDouble() }
+                }
                 val rgb = FloatArray(o.n * 3)
                 if (img != null) { val ys = YuvSampler(img); val ix = img.width.toFloat() / w; val iy = img.height.toFloat() / h
                     for (i in 0 until o.n) ys.rgb((o.u[i] * ix).toInt(), (o.v[i] * iy).toInt(), rgb, 3 * i) }
@@ -445,7 +465,7 @@ class ArRenderer(
         val sx = w.toDouble() / dims[0]; val sy = h.toDouble() / dims[1]
         val t = camera.pose.translation; val q = camera.pose.rotationQuaternion
         onShot(Shot(bo.toByteArray(), gray, w, h, if (!withPose) null else doubleArrayOf(t[0].toDouble(), t[1].toDouble(), t[2].toDouble(), q[0].toDouble(), q[1].toDouble(), q[2].toDouble(), q[3].toDouble()),
-            f[0] * sx, f[1] * sy, pp[0] * sx, pp[1] * sy))
+            f[0] * sx, f[1] * sy, pp[0] * sx, pp[1] * sy, shotReason?.code))
         return true
     }
 

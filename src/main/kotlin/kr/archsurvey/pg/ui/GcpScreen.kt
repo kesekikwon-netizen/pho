@@ -91,6 +91,9 @@ fun GcpScreen(store: Store, name: String, onBack: () -> Unit) {
         }
         msg?.let { Txt(it, bold = true, color = P.fix) }
         warn?.let { Txt(it, bold = true, color = P.error) } // M11
+        // 0.0.12: 불러온·입력한 좌표로 맞춤 점검(정보만) — RMSE·최대 잔차
+        val fitSum = remember(ses.gcps) { kr.archsurvey.pg.export.Poses.fit(ses)?.let { kr.archsurvey.pg.export.SiteFit.summary(it) } }
+        fitSum?.let { Txt("맞춤 점검: " + kr.archsurvey.pg.export.SiteFit.line(it), size = 15.sp, bold = true, color = P.sub) }
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (rows.isEmpty()) item { Txt("사진에서 잡힌 표적이 없어요 · 파일을 불러오거나 「＋ 표적」", color = P.sub) }
             items(rows, key = { it }) { no ->

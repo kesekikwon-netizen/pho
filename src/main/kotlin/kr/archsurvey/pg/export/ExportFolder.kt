@@ -17,12 +17,19 @@ object ExportFolder {
         for (s in session.stills) File(photoSrcDir, s.file).takeIf { it.exists() }?.copyTo(File(photos, s.file), overwrite = true)
         val seen = session.stills.flatMap { s -> s.tags.map { TargetNaming.targetNo(it.id) } }.toSet()
         val withCoords = session.gcps.isNotEmpty()
-        val opts = BlocksExchange.Options(blockName = session.name, epsg = if (withCoords) session.epsg else null)
+        val fit = Poses.fit(session)
+        val poses = Poses.forExport(session)
+        val opts = BlocksExchange.Options(blockName = session.name, epsg = if (withCoords) session.epsg else null, poses = poses)
         val xml = BlocksExchange.write(session.stills, session.gcps, opts)
         File(out, "block.xmlz").writeBytes(BlocksExchange.xmlz(xml))
         if (withCoords) File(out, "기준점_EPSG${session.epsg}.txt").writeText(BlocksExchange.gcpTxt(session.gcps), Charsets.UTF_8)
+        File(out, PoseLog.FILE).writeText(PoseLog.csv(session), Charsets.UTF_8)
+        // 0.0.12: 점군(작업 폴더 cloud/ 조각, 신뢰도 0.66·2 cm). 좌표 있으면 맞춤 성공 때만 EPSG 로, 아니면 로컬
+        val jobDir = photoSrcDir.parentFile
+        val cloud = jobDir?.let { CloudFile.loadAll(it) } ?: FloatArray(0)
+        if (cloud.isNotEmpty() && (!withCoords || fit != null)) CloudFile.writePly(File(out, CloudFile.EXPORT), cloud, if (withCoords) fit?.tf else null)
         File(out, ItwinSheet.FILE).writeText(ItwinSheet.TEXT, Charsets.UTF_8)
-        File(out, "작업정보.txt").writeText(info(session, seen, scaleTxt), Charsets.UTF_8)
+        File(out, "작업정보.txt").writeText(info(session, seen, scaleTxt) + SiteFit.text(fit, poses.size, session.stills.size), Charsets.UTF_8)
         val targets = if (withCoords) session.gcps.map { it.target }.filter { it in seen }.sorted() else seen.sorted()
         return Result(out, session.stills.size, targets, withCoords)
     }

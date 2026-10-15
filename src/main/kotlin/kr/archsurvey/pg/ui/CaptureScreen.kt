@@ -95,6 +95,8 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
     var view3d by remember { mutableStateOf(LiveEngine.View3D.POINTS) }
     var keepShooting by remember { mutableStateOf(false) }
     val opened = remember { ArSupport.open(ctx) }
+    // 0.0.12: 센서 실제 크기(mm) — EXIF FocalLength·FocalPlaneResolution 용
+    val sensorMm = remember(opened) { opened?.let { ArSupport.sensorSizeMm(ctx, it.session) } }
     val save: (kr.archsurvey.pg.data.Session) -> Unit = { store.save(it) }
     var lastDone by remember { mutableStateOf(false) }
 
@@ -118,7 +120,8 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
             engine.onChange = null
             runCatching { glView?.onPause() }
             val s = opened?.session
-            engine.close()
+            engine.saveCloud(store.dir(name))
+            engine.closeAfterPending()
             Thread({ runCatching { s?.pause(); s?.close() }.onFailure { kr.archsurvey.pg.diag.PgLog.e("session close failed", it) }; kr.archsurvey.pg.diag.PgLog.i("arcore session closed") }, "pg-close").start()
         }
     }
@@ -146,7 +149,18 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                             setAttribute(ExifInterface.TAG_DATETIME_ORIGINAL, java.text.SimpleDateFormat("yyyy:MM:dd HH:mm:ss", java.util.Locale.US).format(java.util.Date()))
                             setAttribute(ExifInterface.TAG_SOFTWARE, "kr.archsurvey.pg")
                             setAttribute(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL.toString()) // 화소 그대로가 바른 방향(센서 방향)
-                            setAttribute(ExifInterface.TAG_FOCAL_LENGTH_IN_35MM_FILM, Math.round((shot.fx + shot.fy) / 2 / maxOf(shot.w, shot.h) * 36).toString())
+                            // 0.0.12: 렌즈·카메라 값 완비(초점 mm, 35mm 환산, 초점면 해상도, 1/1000초, 고유 ID)
+                            val now = System.currentTimeMillis()
+                            val sw = sensorMm?.first; val sh = sw?.let { it * shot.h / shot.w }
+                            val lv = kr.archsurvey.pg.export.ExifLens.compute(shot.fx, shot.fy, shot.w, shot.h, sw, sh, now, kr.archsurvey.pg.export.ExifLens.uniqueId(name, file, now))
+                            setAttribute(ExifInterface.TAG_DATETIME_ORIGINAL, lv.dateTime); setAttribute(ExifInterface.TAG_DATETIME, lv.dateTime)
+                            setAttribute(ExifInterface.TAG_SUBSEC_TIME_ORIGINAL, lv.subSec); setAttribute(ExifInterface.TAG_SUBSEC_TIME, lv.subSec)
+                            setAttribute(ExifInterface.TAG_IMAGE_UNIQUE_ID, lv.uniqueId)
+                            setAttribute(ExifInterface.TAG_FOCAL_LENGTH_IN_35MM_FILM, lv.focal35.toString())
+                            lv.focalMm?.let { setAttribute(ExifInterface.TAG_FOCAL_LENGTH, kr.archsurvey.pg.export.ExifLens.rational(it)) }
+                            lv.planeXRes?.let { setAttribute(ExifInterface.TAG_FOCAL_PLANE_X_RESOLUTION, kr.archsurvey.pg.export.ExifLens.rational(it)) }
+                            lv.planeYRes?.let { setAttribute(ExifInterface.TAG_FOCAL_PLANE_Y_RESOLUTION, kr.archsurvey.pg.export.ExifLens.rational(it)) }
+                            if (lv.planeXRes != null) setAttribute(ExifInterface.TAG_FOCAL_PLANE_RESOLUTION_UNIT, "3")
                             setAttribute(ExifInterface.TAG_IMAGE_WIDTH, shot.w.toString()); setAttribute(ExifInterface.TAG_IMAGE_LENGTH, shot.h.toString())
                             saveAttributes()
                         }
@@ -159,7 +173,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                     tags.filter { kr.archsurvey.pg.diag.Quality.tagPx(it) < kr.archsurvey.pg.diag.Quality.TAG_GOOD_PX }.forEach { kr.archsurvey.pg.diag.PgLog.d("tag SMALL photo=$file Target#${it.target} size=%.0fpx (goal 60)".format(kr.archsurvey.pg.diag.Quality.tagPx(it))) }
                     kr.archsurvey.pg.diag.PgLog.i("photo $file ${shot.w}x${shot.h} jpeg=${shot.jpeg.size}B tags=${tags.size} detect=%.0fms".format((System.nanoTime() - td0) / 1e6))
                     tags.forEach { t -> kr.archsurvey.pg.diag.PgLog.d("  tag photo=$file Target#${t.target} id=${t.id} ham=${t.hamming} c=(%.1f,%.1f) corners=${t.corners.joinToString(",") { "%.1f".format(it) }}".format(t.cx, t.cy)) }
-                    engine.addStill(Still(id, file, shot.w, shot.h, shot.fx, shot.fy, shot.cx, shot.cy, shot.pose, System.currentTimeMillis(), tags), save)
+                    engine.addStill(Still(id, file, shot.w, shot.h, shot.fx, shot.fy, shot.cx, shot.cy, shot.pose, System.currentTimeMillis(), tags, shot.reason), save)
                     view.post { TapHaptics.tap(view) }
                 }
             })
@@ -170,7 +184,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
         val obs = LifecycleEventObserver { _, e ->
             when (e) {
                 Lifecycle.Event.ON_RESUME -> runCatching { opened?.session?.resume(); glView?.onResume(); kr.archsurvey.pg.diag.PgLog.i("session resumed") }.onFailure { msg = if (it is com.google.ar.core.exceptions.CameraNotAvailableException) kr.archsurvey.pg.diag.Msg.CAM_BUSY else kr.archsurvey.pg.diag.Msg.AR_OPEN_FAIL; kr.archsurvey.pg.diag.PgLog.e("session resume failed", it) }
-                Lifecycle.Event.ON_PAUSE -> runCatching { glView?.onPause(); opened?.session?.pause(); kr.archsurvey.pg.diag.PgLog.i("session paused") }
+                Lifecycle.Event.ON_PAUSE -> runCatching { engine.saveCloud(store.dir(name)); glView?.onPause(); opened?.session?.pause(); kr.archsurvey.pg.diag.PgLog.i("session paused") }
                 else -> {}
             }
         }

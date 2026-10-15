@@ -35,6 +35,15 @@ class LiveEngine(initial: Session) {
 
     fun post(r: () -> Unit) { if (!exec.isShutdown) exec.execute { runCatching(r).onFailure { kr.archsurvey.pg.diag.PgLog.e("live task failed", it) } } }
     fun close() { exec.shutdownNow() }
+    /** 0.0.12: 쌓인 일을 마치고 닫기(점군 저장 뒤) */
+    fun closeAfterPending() { exec.shutdown() }
+    private val cloudPartAt = System.currentTimeMillis()
+    /** 0.0.12: 신뢰도 0.66 이상 2 cm 칸을 작업 폴더 cloud/ 에(이 촬영 화면 한 조각, 덮어씀) */
+    fun saveCloud(jobDir: java.io.File) = post {
+        val pts = voxels.export(0.66f)
+        val f = kr.archsurvey.pg.export.CloudFile.savePart(jobDir, pts, cloudPartAt)
+        kr.archsurvey.pg.diag.PgLog.i("cloud saved points=${pts.size / 6} file=${f?.name}")
+    }
 
     /** 실시간 3D 보기: 색 점(기본) · 충분 색 점. (0.0.5: 높이격자 면은 없앰) */
     enum class View3D(val label: String) { POINTS("색 점"), POINTS_COV("충분 색 점") }
