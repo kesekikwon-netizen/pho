@@ -55,87 +55,94 @@ class FeatureCloud(val cap: Int = 30_000) {
 }
 
 /**
- * 깊이 복셀(기본 2 cm): 칸마다 가중 평균 위치·색, 관측 수, 최고 신뢰도.
- * 상한을 넘으면 링 위치 근처 64칸 중 관측 수가 가장 적은 칸을 비워 재사용.
+ * 0.0.20 깊이 점(클린룸 설계, 24-pointcloud-gap.md):
+ *  - 화면용: 평균 없이 원래 점 그대로 쌓는 고정 버퍼(기본 100만 점). 가득 차면 쓰기 위치를 무작위 10~99칸씩
+ *    건너뛰며 덮어써 전체가 고르게 솎아진다(칸 크기를 키우지 않음, 성장 멈춤 없음).
+ *  - 내보내기용: 2 cm 칸마다 최근 3개 관측의 중앙값(x,y,z 각각) — 드리프트·튐에 강함. 칸 상한을 넘으면 새 칸만 안 받음(화면은 계속).
+ * 이름(DepthVoxels)·API 는 기존 호출부 호환용으로 유지.
  */
-class DepthVoxels(voxel0: Double = 0.02, val cap: Int = 400_000, val maxVoxel: Double = 0.32) {
-    /** 0.0.19 LOD: 지금 칸 크기. 칸이 다 차면 두 배로 합쳐(성기게) 넓은 범위를 계속 담는다 — 멈추거나 옛 부분을 지우지 않음 */
-    var voxel = voxel0; private set
-    var coarsenings = 0; private set
+class DepthVoxels(voxel0: Double = 0.02, val cap: Int = defaultCap(), val exportCap: Int = 400_000, seed: Long = 20L) {
+    /** 내보내기 칸 크기(고정) */
+    val voxel = voxel0
+    /** 0.0.20: 칸 키우기 없음(호환용, 항상 0) */
+    val coarsenings = 0
     val gpu = GpuSlots(cap)
-    private val keys = LongArray(cap); private val n = IntArray(cap); private val conf = FloatArray(cap)
-    private val sx = FloatArray(cap); private val sy = FloatArray(cap); private val sz = FloatArray(cap)
-    private val cr = FloatArray(cap); private val cg = FloatArray(cap); private val cb = FloatArray(cap)
-    private val index = HashMap<Long, Int>(1 shl 16)
+    private val px = FloatArray(cap); private val py = FloatArray(cap); private val pz = FloatArray(cap)
+    private val pr = FloatArray(cap); private val pg = FloatArray(cap); private val pb = FloatArray(cap); private val pc = FloatArray(cap)
+    /** 화면 버퍼에 들어 있는 점 수 */
     var size = 0; private set
-    private var ring = 0
+    /** 지금까지 받은 점(덮어쓴 것 포함) */
+    var total = 0L; private set
+    /** 덮어써서 솎은 점 수 */
     var evicted = 0L; private set
+    private var w = 0
+    private val rnd = java.util.Random(seed)
+
+    // 내보내기 중앙값 칸
+    private val index = HashMap<Long, Int>(1 shl 16)
+    private val ex = FloatArray(exportCap * 3); private val ey = FloatArray(exportCap * 3); private val ez = FloatArray(exportCap * 3)
+    private val er = FloatArray(exportCap); private val eg = FloatArray(exportCap); private val eb = FloatArray(exportCap)
+    private val en = IntArray(exportCap); private val econf = FloatArray(exportCap)
+    var exportSize = 0; private set
+    var exportDropped = 0L; private set
 
     private fun k(v: Float) = floor(v / voxel).toLong() and 0x1FFFFF
     fun key(x: Float, y: Float, z: Float): Long = (k(x) shl 42) or (k(y) shl 21) or k(z)
+    companion object {
+        /** 힙이 넉넉하면 100만 점(약 60 MB), 작은 옛 폰(minSdk 21)은 30만 점 */
+        fun defaultCap(): Int = if (Runtime.getRuntime().maxMemory() >= 384L * 1024 * 1024) 1_000_000 else 300_000
+    }
 
     fun add(x: Float, y: Float, z: Float, r: Float, g: Float, b: Float, c: Float) {
         if (!x.isFinite() || !y.isFinite() || !z.isFinite()) return
+        total++
+        val i: Int
+        if (size < cap) { i = size++; w = size % cap }
+        else { i = w; evicted++; w = (w + 10 + rnd.nextInt(90)) % cap }
+        px[i] = x; py[i] = y; pz[i] = z; pr[i] = r; pg[i] = g; pb[i] = b; pc[i] = c
+        gpu.put(i, x, y, z, r, g, b)
+        addExport(x, y, z, r, g, b, c)
+    }
+
+    private fun addExport(x: Float, y: Float, z: Float, r: Float, g: Float, b: Float, c: Float) {
         val key = key(x, y, z)
-        var i = index[key]
-        if (i == null) {
-            if (size >= cap && voxel * 2 <= maxVoxel + 1e-9) { coarsen(); add(x, y, z, r, g, b, c); return }
-            i = if (size < cap) size++ else evict()
-            index[key] = i; keys[i] = key; n[i] = 0; conf[i] = 0f
-            sx[i] = 0f; sy[i] = 0f; sz[i] = 0f; cr[i] = 0f; cg[i] = 0f; cb[i] = 0f
+        var j = index[key]
+        if (j == null) {
+            if (exportSize >= exportCap) { exportDropped++; return }
+            j = exportSize++; index[key] = j; en[j] = 0; econf[j] = 0f; er[j] = 0f; eg[j] = 0f; eb[j] = 0f
         }
-        // 신뢰도 가중 평균(최근 20회 수준 기억)
-        val w = c.coerceAtLeast(0.05f); val keep = minOf(n[i], 20).toFloat()
-        val tot = keep + w
-        sx[i] = (sx[i] * keep + x * w) / tot; sy[i] = (sy[i] * keep + y * w) / tot; sz[i] = (sz[i] * keep + z * w) / tot
-        cr[i] = (cr[i] * keep + r * w) / tot; cg[i] = (cg[i] * keep + g * w) / tot; cb[i] = (cb[i] * keep + b * w) / tot
-        n[i]++; if (c > conf[i]) conf[i] = c
-        gpu.put(i, sx[i], sy[i], sz[i], cr[i], cg[i], cb[i])
+        val s = en[j] % 3; val o = 3 * j + s
+        ex[o] = x; ey[o] = y; ez[o] = z
+        val m = minOf(en[j], 20).toFloat(); val t = m + 1f
+        er[j] = (er[j] * m + r) / t; eg[j] = (eg[j] * m + g) / t; eb[j] = (eb[j] * m + b) / t
+        en[j]++; if (c > econf[j]) econf[j] = c
     }
 
-    /** 칸 크기 두 배: 같은 큰 칸에 드는 칸들을 관측 수 가중으로 합침(제자리 압축), GPU 배열 다시 씀 */
-    fun coarsen() {
-        voxel *= 2; coarsenings++
-        index.clear(); var m = 0
-        for (i in 0 until size) {
-            val key = key(sx[i], sy[i], sz[i]); val j = index[key]
-            if (j == null) {
-                index[key] = m; keys[m] = key; n[m] = n[i]; conf[m] = conf[i]
-                sx[m] = sx[i]; sy[m] = sy[i]; sz[m] = sz[i]; cr[m] = cr[i]; cg[m] = cg[i]; cb[m] = cb[i]; m++
-            } else {
-                val a = maxOf(n[j], 1).toFloat(); val b = maxOf(n[i], 1).toFloat(); val t = a + b
-                sx[j] = (sx[j] * a + sx[i] * b) / t; sy[j] = (sy[j] * a + sy[i] * b) / t; sz[j] = (sz[j] * a + sz[i] * b) / t
-                cr[j] = (cr[j] * a + cr[i] * b) / t; cg[j] = (cg[j] * a + cg[i] * b) / t; cb[j] = (cb[j] * a + cb[i] * b) / t
-                n[j] += n[i]; if (conf[i] > conf[j]) conf[j] = conf[i]
-            }
+    private fun med(a: FloatArray, j: Int, n: Int): Float {
+        val o = 3 * j
+        return when (minOf(n, 3)) {
+            1 -> a[o]
+            2 -> (a[o] + a[o + 1]) / 2f
+            else -> { val p = a[o]; val q = a[o + 1]; val r = a[o + 2]; maxOf(minOf(p, q), minOf(maxOf(p, q), r)) }
         }
-        size = m; ring = 0
-        gpu.clear(); for (i in 0 until m) gpu.put(i, sx[i], sy[i], sz[i], cr[i], cg[i], cb[i])
-        runCatching { kr.archsurvey.pg.diag.PgLog.d("voxels LOD voxel=${voxel} size=$m") }
     }
 
-    private fun evict(): Int {
-        var best = ring; var bn = Int.MAX_VALUE
-        for (t in 0 until 64) { val j = (ring + t) % cap; if (n[j] < bn) { bn = n[j]; best = j } }
-        ring = (best + 1) % cap
-        index.remove(keys[best]); evicted++
-        return best
-    }
-
-    fun count(i: Int) = n[i]
-    fun conf(i: Int) = conf[i]
-    fun pos(i: Int) = floatArrayOf(sx[i], sy[i], sz[i])
-    /** 내보내기용: 최고 신뢰도 ≥ minConf 인 칸 (x,y,z,r,g,b) */
+    fun count(i: Int) = en[i]
+    fun conf(i: Int) = pc[i]
+    fun pos(i: Int) = floatArrayOf(px[i], py[i], pz[i])
+    /** 내보내기용: 2 cm 칸 중앙값, 최고 신뢰도 ≥ minConf (x,y,z,r,g,b) */
     fun export(minConf: Float = 0.66f): FloatArray {
-        var m = 0; for (i in 0 until size) if (conf[i] >= minConf) m++
+        var m = 0; for (j in 0 until exportSize) if (econf[j] >= minConf) m++
         val out = FloatArray(m * 6); var o = 0
-        for (i in 0 until size) if (conf[i] >= minConf) { out[o++] = sx[i]; out[o++] = sy[i]; out[o++] = sz[i]; out[o++] = cr[i]; out[o++] = cg[i]; out[o++] = cb[i] }
+        for (j in 0 until exportSize) if (econf[j] >= minConf) {
+            val n = en[j]; out[o++] = med(ex, j, n); out[o++] = med(ey, j, n); out[o++] = med(ez, j, n); out[o++] = er[j]; out[o++] = eg[j]; out[o++] = eb[j]
+        }
         return out
     }
-    /** 다시 색칠(충분 색 보기 전환) */
+    /** 다시 색칠(충분 색 보기 전환) — 화면 버퍼만 */
     fun recolor(f: (Int, FloatArray) -> FloatArray) {
         val tmp = FloatArray(3)
-        for (i in 0 until size) { tmp[0] = cr[i]; tmp[1] = cg[i]; tmp[2] = cb[i]; val c = f(i, tmp); gpu.put(i, sx[i], sy[i], sz[i], c[0], c[1], c[2]) }
+        for (i in 0 until size) { tmp[0] = pr[i]; tmp[1] = pg[i]; tmp[2] = pb[i]; val c = f(i, tmp); gpu.put(i, px[i], py[i], pz[i], c[0], c[1], c[2]) }
     }
 }
 
@@ -179,5 +186,34 @@ object DepthSampler {
             y0 += grid
         }
         return Out(xyz, cf, us, vs, k, rc, rr)
+    }
+}
+
+/**
+ * 0.0.20: 사진 한 장당 목표 점 수(기본 7000, 3000~14000). 칸을 목표의 약 2배로 잘게 나눠 칸마다 신뢰도 최고 화소를 고르고,
+ * 신뢰도 ≥ hi(0.66) 점을 먼저 담고 모자라면 ≥ lo(0.40) 점으로 채운다. 넘치면 고른 간격으로 솎는다.
+ */
+object DepthTarget {
+    const val DEFAULT = 7000; const val MIN = 3000; const val MAX = 14000
+    fun clamp(n: Int) = n.coerceIn(MIN, MAX)
+    fun grid(w: Int, h: Int, target: Int): Int = maxOf(1, kotlin.math.sqrt(w.toDouble() * h / (2.0 * target)).toInt())
+    fun sample(w: Int, h: Int, depthMm: (Int, Int) -> Int, conf255: ((Int, Int) -> Int)?, fx: Float, fy: Float, cx: Float, cy: Float,
+               pose: FloatArray, target: Int = DEFAULT, hi: Float = 0.66f, lo: Float = 0.40f, minM: Float = 0.3f, maxM: Float = 4.0f): DepthSampler.Out {
+        val t = clamp(target)
+        val all = DepthSampler.sample(w, h, depthMm, conf255, fx, fy, cx, cy, pose, grid(w, h, t), lo, minM, maxM)
+        val hiIdx = ArrayList<Int>(); val loIdx = ArrayList<Int>()
+        for (i in 0 until all.n) if (all.conf[i] >= hi) hiIdx += i else loIdx += i
+        val pick = ArrayList<Int>(t)
+        thin(hiIdx, t, pick); if (pick.size < t) thin(loIdx, t - pick.size, pick)
+        val n = pick.size
+        val xyz = FloatArray(n * 3); val cf = FloatArray(n); val us = IntArray(n); val vs = IntArray(n)
+        for ((k, i) in pick.withIndex()) { xyz[3 * k] = all.xyz[3 * i]; xyz[3 * k + 1] = all.xyz[3 * i + 1]; xyz[3 * k + 2] = all.xyz[3 * i + 2]; cf[k] = all.conf[i]; us[k] = all.u[i]; vs[k] = all.v[i] }
+        return DepthSampler.Out(xyz, cf, us, vs, n, all.rejectedConf, all.rejectedRange)
+    }
+    private fun thin(src: List<Int>, want: Int, out: MutableList<Int>) {
+        if (want <= 0 || src.isEmpty()) return
+        if (src.size <= want) { out.addAll(src); return }
+        val step = src.size.toDouble() / want
+        for (k in 0 until want) out += src[(k * step).toInt()]
     }
 }

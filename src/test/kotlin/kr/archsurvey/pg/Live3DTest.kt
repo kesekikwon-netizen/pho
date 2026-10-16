@@ -35,16 +35,16 @@ class Live3DTest {
         assertTrue(o2.xyz[0] > 0.3f)
     }
 
-    @Test fun s2_voxels_2cm_dedupe_exportConfidence_eviction() {
-        val v = DepthVoxels(0.02, cap = 100)
-        repeat(10) { v.add(0.001f * it, 0f, 0f, 1f, 0f, 0f, 0.5f) } // 한 칸
-        assertEquals(1, v.size); assertEquals(10, v.count(0))
+    @Test fun s2_display_raw_export_2cm_median() {
+        val v = DepthVoxels(0.02, cap = 100, exportCap = 100)
+        repeat(10) { v.add(0.001f * it, 0f, 0f, 1f, 0f, 0f, 0.5f) } // 화면: 10점 그대로, 내보내기: 한 칸
+        assertEquals(10, v.size); assertEquals(10, v.count(0))
         v.add(0.5f, 0f, 0f, 0f, 1f, 0f, 0.9f)
-        assertEquals(6, v.export(0.4f).size / 1 / 1 - 6) // 두 점 × 6
-        assertEquals(1, v.export(0.66f).size / 6)        // 0.66 이상은 하나
+        assertEquals(2, v.export(0.4f).size / 6)
+        assertEquals(1, v.export(0.66f).size / 6)
         for (i in 0 until 500) v.add(1f + i * 0.03f, 0f, 0f, 0f, 0f, 1f, 0.5f)
-        assertTrue(v.size <= 100); assertTrue(v.coarsenings >= 1)
-        val s0 = v.size; v.add(Float.NaN, 0f, 0f, 1f, 1f, 1f, 1f); assertEquals(s0, v.size)
+        assertEquals(100, v.size); assertEquals(0, v.coarsenings)
+        val s0 = v.total; v.add(Float.NaN, 0f, 0f, 1f, 1f, 1f, 1f); assertEquals(s0, v.total)
     }
 
     @Test fun s2_featureCloud_dedupe_by_id_and_lru_eviction() {

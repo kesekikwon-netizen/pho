@@ -61,6 +61,9 @@ class ArRenderer(
     @Volatile var showThumb = true
     /** 발열 정책: 라이브 깊이 간격(0 = 사진 때만) */
     @Volatile var depthIntervalMs = 500L
+    /** 0.0.20: 사진 한 장당 깊이 점 목표(3000~14000, 기본 7000) */
+    @Volatile var depthPointsPerPhoto = kr.archsurvey.pg.live.DepthTarget.DEFAULT
+        set(v) { field = kr.archsurvey.pg.live.DepthTarget.clamp(v) }
     @Volatile var shotsAllowed = true
     @Volatile var paused = false
     @Volatile private var shotRequested = false
@@ -202,7 +205,7 @@ class ArRenderer(
 
             if (newFrame && (!paused || wantShot)) {
                 val featDue = now - lastFeatAt >= 100
-                val depthDue = depthOn && (wantShot || (depthIntervalMs > 0 && now - lastDepthAt >= depthIntervalMs))
+                val depthDue = depthOn && (wantShot || (depthIntervalMs > 0 && now - lastDepthAt >= LiveDepthPolicy.timerMs(depthIntervalMs)))
                 if (featDue || depthDue || wantShot) grab(frame, camera, featDue, depthDue, wantShot, now, pos, q)
             }
             if (!video) drawGuides()
@@ -286,9 +289,10 @@ class ArRenderer(
                 val cpl = conf?.planes?.get(0); val cbuf = cpl?.buffer; val crs = cpl?.rowStride ?: 0; val cps = cpl?.pixelStride ?: 1
                 val dims = intr.imageDimensions; val f = intr.focalLength; val pp = intr.principalPoint
                 val sx = w.toFloat() / dims[0]; val sy = h.toFloat() / dims[1]
-                val o = kr.archsurvey.pg.live.DepthSampler.sample(w, h, { x, y -> buf.getShort(y * rs + x * ps).toInt() and 0xffff },
+                // 0.0.20: 사진 때 목표 점 수(0.66 먼저, 0.40 채움), 사이 프레임은 드물게·적게
+                val o = kr.archsurvey.pg.live.DepthTarget.sample(w, h, { x, y -> buf.getShort(y * rs + x * ps).toInt() and 0xffff },
                     if (cbuf != null) { x, y -> cbuf.get(y * crs + x * cps).toInt() and 0xff } else null,
-                    f[0] * sx, f[1] * sy, pp[0] * sx, pp[1] * sy, poseM, grid = if (fromPhoto) 2 else 3)
+                    f[0] * sx, f[1] * sy, pp[0] * sx, pp[1] * sy, poseM, target = LiveDepthPolicy.target(fromPhoto, depthPointsPerPhoto))
                 if (o.n == 0) { depthOk++; return }
                 // 0.0.12: 장면 깊이(카메라~점 거리 중앙값) → 겹침 간격 계산용
                 run {
@@ -563,4 +567,11 @@ class ArRenderer(
             return p
         }
     }
+}
+
+/** 0.0.20: 실시간 깊이 정책 — 점은 주로 사진 순간에. 사진 사이 타이머는 최소 3 s, 점 수는 사진 때의 1/4(최소 3000 미만 허용 안 함 → 3000) */
+object LiveDepthPolicy {
+    const val MIN_TIMER_MS = 3000L
+    fun timerMs(requested: Long): Long = maxOf(MIN_TIMER_MS, requested)
+    fun target(fromPhoto: Boolean, perPhoto: Int): Int = if (fromPhoto) kr.archsurvey.pg.live.DepthTarget.clamp(perPhoto) else kr.archsurvey.pg.live.DepthTarget.MIN
 }

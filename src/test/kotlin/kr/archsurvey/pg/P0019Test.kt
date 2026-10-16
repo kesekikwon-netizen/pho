@@ -21,17 +21,15 @@ class P0019Test {
         assertTrue(ThermalPolicy.of(4).message!!.contains("촬영은 계속"))
     }
 
-    @Test fun voxelsCoarsenInsteadOfFreezing() {
-        val v = DepthVoxels(0.02, cap = 1000)
-        // 40 m 길이를 2 cm 간격으로 걸어감 = 2000 칸 > 상한
+    @Test fun depthBufferNeverFreezesAndKeepsWholeArea() {
+        // 0.0.20: 칸 키우기 대신 무작위 솎기 — 처음과 끝 구역이 모두 남고 계속 자람
+        val v = DepthVoxels(0.02, cap = 1000, exportCap = 1000)
         for (i in 0 until 2000) v.add(i * 0.02f, 0f, 0f, 1f, 1f, 1f, 0.9f)
-        assertTrue(v.size <= 1000); assertTrue(v.coarsenings >= 1); assertEquals(0L, v.evicted)
-        // 시작과 끝 둘 다 남아 있음(옛 부분을 지우지 않음)
+        assertEquals(1000, v.size); assertEquals(0, v.coarsenings); assertEquals(1000L, v.evicted)
         val xs = (0 until v.gpu.size).map { v.gpu.data[it * 7] }
-        assertTrue(xs.min() < 0.1f); assertTrue(xs.max() > 39.8f)
-        // 계속 자람: 새 구역 추가 시 범위가 늘어남
+        assertTrue(xs.min() < 1f); assertTrue(xs.max() > 39f)
         for (i in 0 until 500) v.add(40f + i * 0.02f, 0f, 0f, 1f, 1f, 1f, 0.9f)
-        assertTrue((0 until v.gpu.size).maxOf { v.gpu.data[it * 7] } > 49.5f)
+        assertTrue((0 until v.gpu.size).maxOf { v.gpu.data[it * 7] } > 49f)
     }
 
     @Test fun r10ConfigNotSentOnEveryConnect() {
