@@ -37,9 +37,17 @@ class R10AutoOptions(
     val extended: Boolean = false,
 ) {
     companion object {
-        /** Engine 이 쓰는 선택: R10 만 자동설정. SP60 경로는 그대로 */
-        fun forProfile(profile: DeviceProfile, store: R10PortStore): R10AutoOptions? =
-            if (profile.id == DeviceProfiles.R10_ID) R10AutoOptions(store, extended = true) else null
+        /**
+         * 2026-10-16 사용자 결정: 연결할 때마다 R10 설정(64h 출력 명령)을 바꾸지 않는다. 수신기가 내보내는 그대로 쓴다.
+         * 설정 보내기는 사용자가 따로 한 번 고를 때만([requestOnce] → 다음 연결 한 번). SP60 경로는 그대로.
+         */
+        @Volatile var optInOnce: Boolean = false; private set
+        fun requestOnce() { optInOnce = true }
+        fun forProfile(profile: DeviceProfile, store: R10PortStore): R10AutoOptions? {
+            if (profile.id != DeviceProfiles.R10_ID || !optInOnce) return null
+            optInOnce = false
+            return R10AutoOptions(store, extended = true)
+        }
     }
 }
 
