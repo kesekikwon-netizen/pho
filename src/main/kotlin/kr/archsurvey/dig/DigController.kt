@@ -444,6 +444,7 @@ class DigController(private val c: SurveyController) {
             ntripEnabled = enabled && nt != null, ntripReceiving = nt?.state == kr.archsurvey.ntrip.NtripState.RECEIVING,
             ntripRetrying = nt?.state == kr.archsurvey.ntrip.NtripState.RECONNECTING || nt?.state == kr.archsurvey.ntrip.NtripState.CONNECTING,
             rtcmAgeSec = nt?.rtcmAgeMs(ntripNowMs)?.let { it / 1000.0 }, correctionAgeSec = g.correctionAgeSec, satellites = g.satellites,
+            floatForSec = c.fixTimer.floatSeconds(c.gnssNowMs()),
         ))
     }
 

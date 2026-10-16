@@ -91,7 +91,8 @@ class AndroidConnectionPlatform(private val app: App) : ConnectionPlatform {
         app.settings.ntripSendGga = sendGga; app.settings.ntripAutoRetry = autoRetry
         app.engine.setNtripOptions(sendGga, autoRetry)
     }
-    override fun diagnostics(): String = diagnosticsFrom(kr.archsurvey.diag.CrashLog.read())
+    override fun diagnostics(): String = diagnosticsFrom(kr.archsurvey.diag.CrashLog.read()) +
+        kr.archsurvey.diag.FixTimeLog.read().lines().filter { it.isNotBlank() }.takeLast(10).let { if (it.isEmpty()) "" else "\n=== 마운트별 Float→Fixed(최근 10)\n" + it.joinToString("\n") }
     override fun retryNtrip() = app.engine.retryNtripNow()
     override var autoConnect: Boolean
         get() = app.settings.autoConnect

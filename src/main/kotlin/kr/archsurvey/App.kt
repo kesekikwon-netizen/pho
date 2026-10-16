@@ -19,6 +19,8 @@ class App : Application() {
         kr.archsurvey.diag.CrashLog.install(filesDir, ver)
         kr.archsurvey.ui.BgImages.cacheDir = cacheDir // 0.1.58 B2
         kr.archsurvey.diag.CrashLog.mirror = runCatching { getExternalFilesDir(null)?.let { java.io.File(it, "logs/crash-log.txt") } }.getOrNull()
+        // 0.1.60 AK1: 마운트별 Float→Fixed 시간(adb pull 로도 볼 수 있게 외부 앱 폴더에도)
+        kr.archsurvey.diag.FixTimeLog.files = listOfNotNull(java.io.File(filesDir, "fix-times.txt"), runCatching { getExternalFilesDir(null)?.let { java.io.File(it, "logs/fix-times.txt") } }.getOrNull())
         // V월드: Pref 비어 있으면 내장 키를 secure 에 심어 업데이트·UI 에서 "키 없음"처럼 보이지 않게
         runCatching { settings.ensureBuiltinMapKey() }
     }

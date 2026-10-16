@@ -470,6 +470,9 @@ class SurveyController(
     }
     /** 마지막 GGA 이후 지난 초. 없으면 null (상태 띠가 1초마다 다시 부른다) */
     fun nowMs(): Long = clock()
+    /** 0.1.60 AK1: 마운트별 Float→Fixed 시간 */
+    val fixTimer = kr.archsurvey.diag.FixTimer()
+    fun gnssNowMs(): Long = source.clockMs()
     fun ggaAgeSec(): Long? = gv.ggaAtMs.takeIf { it > 0L }?.let { ((source.clockMs() - it) / 1000).coerceAtLeast(0) }
     var phase by mutableStateOf(Phase.IDLE)
     var progress by mutableFloatStateOf(0f)
@@ -596,6 +599,11 @@ class SurveyController(
                 // 0.1.30 T26: 끊김·재연결(받는 중이 아님)이면 꼬리를 비운다
                 val live = l.state == kr.archsurvey.device.LinkState.STREAMING || l.state == kr.archsurvey.device.LinkState.STALE
                 if (!live && trail.isNotEmpty()) clearTrail()
+                runCatching {
+                    val mount = connection?.form?.takeIf { it.enabled }?.mount.orEmpty()
+                    fixTimer.update(nowMs, live, shown && gga?.hasPosition == true, gga?.quality == FixQuality.RTK_FIXED, mount)
+                        ?.let { kr.archsurvey.diag.FixTimeLog.record(clock(), it) }
+                }
                 if (shown && gga != null && gga.hasPosition && g.lastGgaAtMs != lastGgaStamp) {
                     lastGgaStamp = g.lastGgaAtMs
                     if (anchorOnFirstFix && !anchored) anchorTo(gga.lat!!, gga.lon!!)

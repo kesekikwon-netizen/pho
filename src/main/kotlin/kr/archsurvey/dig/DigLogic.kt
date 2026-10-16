@@ -284,6 +284,7 @@ data class CauseInput(
     val noReceiver: Boolean = false, val fixed: Boolean = false, val floatOrWorse: Boolean = false,
     val ntripEnabled: Boolean = false, val ntripReceiving: Boolean = false, val ntripRetrying: Boolean = false,
     val rtcmAgeSec: Double? = null, val correctionAgeSec: Double? = null, val satellites: Int = 0, val rtcmStalled: Boolean = false,
+    /** 0.1.60: Fixed 아닌 위치가 이어진 초 */ val floatForSec: Double? = null,
 )
 
 /** X12: 고정이 안 되는 이유를 사람 말 한 줄로 */
@@ -293,6 +294,9 @@ object CauseLine {
     const val STALLED = "보정이 수신기로 전달되지 않아요 · 수신기 블루투스 입력을 확인하세요"
     const val SKY = "위성이 가려져요 · 나무·벽에서 조금 떨어져 보세요"
     const val WAIT_FIX = "고정을 기다리는 중이에요 · 폴을 세우고 잠시 기다리세요"
+    /** 0.1.60 AK1: 보정은 잘 오는데 Float이 이만큼(초) 이어지면 서버 쪽 안내. 막지 않는다 */
+    const val SERVER_HINT_AFTER_SEC = 180.0
+    const val SERVER_HINT = "보정은 들어오는데 Fixed가 안 되면 서버 쪽 문제일 수도 있어요. 다른 마운트로 바꿔 보세요(SP60: RTS1 VRS-RTCM31; RTS1 RTK-RTCM32는 확인용이라 성과용 아님). 국토지리정보원 RTS 문의 031-210-2648."
     fun of(i: CauseInput): String? {
         if (i.noReceiver) return NO_RECEIVER
         if (i.fixed || !i.floatOrWorse) return null
@@ -305,6 +309,7 @@ object CauseLine {
         val cage = i.correctionAgeSec
         if (!i.ntripEnabled && cage != null && cage > 5.0) return "보정이 ${cage.toInt()}초 늦게 와요 · 인터넷 신호를 확인하세요"
         if (i.satellites in 1..11) return SKY
+        if (i.ntripEnabled && (i.floatForSec ?: 0.0) >= SERVER_HINT_AFTER_SEC) return SERVER_HINT
         return WAIT_FIX
     }
 }
