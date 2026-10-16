@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
@@ -89,7 +90,8 @@ class MainActivity : ComponentActivity() {
                             androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(12.dp))
                             kr.archsurvey.pg.ui.OutlineBtn("처음으로") { route = "home" }
                         }
-                        else if (store.load(name).arcore && ArSupport.state(this@MainActivity) == ArSupport.State.OK)
+                        // 0.0.18: 작업 파일 읽기(사진 수백 장 · 저널 · 사진 폴더 훑기)는 화면에 들어올 때 한 번만. 예전엔 다시 그릴 때마다(약 10초) 메인 스레드에서 다시 읽어 촬영 중 버벅임·메모리 소모
+                        else if (remember(route) { runCatching { store.load(name).arcore }.getOrDefault(true) && ArSupport.state(this@MainActivity) == ArSupport.State.OK })
                             CaptureScreen(store, name, onBack = { route = "home" }, onResult = { route = "res:$name" }, onGcp = { gcpBack = "cap:$name"; route = "gcp:$name" },
                                 onFallback = { runCatching { store.save(store.load(name).copy(arcore = false)) }; route = "home"; route = "cap:$name" })
                         else FallbackScreen(store, name, onBack = { route = "home" }, onResult = { route = "res:$name" })
