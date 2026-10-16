@@ -94,7 +94,11 @@ class R10Unbonded0141Test {
 
     @Test fun engineUsesExtendedOnlyForR10() {
         val st = object : R10PortStore { override fun port(): Int? = null; override fun save(port: Int) {} }
+        // 기본: 연결마다 R10 설정을 보내지 않음(사용자 결정 2026-10-16)
+        assertNull(R10AutoOptions.forProfile(DeviceProfiles.R10, st))
+        R10AutoOptions.requestOnce()
         assertTrue(R10AutoOptions.forProfile(DeviceProfiles.R10, st)!!.extended)
+        assertNull("한 번만", R10AutoOptions.forProfile(DeviceProfiles.R10, st))
         assertNull(R10AutoOptions.forProfile(DeviceProfiles.SP60, st))
     }
 

@@ -108,6 +108,7 @@ class TrimbleDcolPacket0133Tests {
 
     @Test fun engineEnablesAutoConfigOnlyForR10() {
         val st = object : R10PortStore { override fun port(): Int? = null; override fun save(port: Int) {} }
+        assertNull("기본은 보내지 않음", R10AutoOptions.forProfile(DeviceProfiles.R10, st)); R10AutoOptions.requestOnce()
         assertNotNull(R10AutoOptions.forProfile(DeviceProfiles.R10, st))
         assertNull("SP60 경로는 그대로", R10AutoOptions.forProfile(DeviceProfiles.SP60, st))
         assertTrue("SP60 문자열 명령 후보 그대로", NmeaActivation.candidates(DeviceProfiles.SP60).isNotEmpty())
