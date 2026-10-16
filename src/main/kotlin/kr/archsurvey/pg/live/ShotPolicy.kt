@@ -18,6 +18,8 @@ object ShotPolicy {
     const val STILL_TURN_DEG = 2.0
     /** 처리 대기 사진이 이만큼이면 자동만 다음 프레임으로 미룸(메모리 보호, 장수 제한 아님) */
     const val AUTO_BACKLOG = 3
+    /** 0.0.20: 자동 촬영만 최소 간격(현장 초당 12장). 수동은 제한 없음, 장수 제한 없음 */
+    const val AUTO_MIN_GAP_MS = 300L
 
     enum class Reason(val code: String) { MANUAL("manual"), FIRST("first"), OVERLAP_DISTANCE("overlap_distance"), OVERLAP_ANGLE("overlap_angle"), TIMER("timer"), NO_POSE_TIMER("no_pose_timer") }
 
@@ -42,6 +44,7 @@ object ShotPolicy {
         if (paused || !auto) return null
         if (backlog >= AUTO_BACKLOG) return null
         if (lastShotAt == 0L) return Reason.FIRST
+        if (now - lastShotAt < AUTO_MIN_GAP_MS) return null
         val due = now - lastShotAt >= AUTO_INTERVAL_MS
         if (motion == null) return if (due) Reason.NO_POSE_TIMER else null
         if (motion.moveM >= spacing) return Reason.OVERLAP_DISTANCE

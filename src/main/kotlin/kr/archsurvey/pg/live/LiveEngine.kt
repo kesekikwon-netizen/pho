@@ -126,8 +126,14 @@ class LiveEngine(initial: Session) {
         addStillModel(s)
         val now = System.currentTimeMillis()
         if (now - lastSaveAt >= saveEveryMs) { lastSaveAt = now; save(session) }
-        recompute(true)
+        // 0.0.20: 사진마다 전체 다시 계산하면(실기 285장/2분) 작업 줄이 밀려 사진 목록·점군이 멈춘 듯 보이고
+        // 나가기 기다림(30 s)이 끝나 목록 72장만 저장됐다. 몰린 사진은 한 번만 다시 계산
+        dirty = true
+        if (recomputeQueued.compareAndSet(false, true)) post { recomputeQueued.set(false); recompute(true) }
     }
+    private val recomputeQueued = java.util.concurrent.atomic.AtomicBoolean(false)
+    /** 시험용: 지금까지 다시 계산한 횟수 */
+    @Volatile var recomputes = 0; private set
 
     /** 마지막 사진 되돌리기(파일은 지우지 않고 목록에서만 빼서 내보내기에서 제외) */
     fun undo(save: (Session) -> Unit) = post {
@@ -144,7 +150,7 @@ class LiveEngine(initial: Session) {
 
     private fun recompute(force: Boolean) {
         if (!force && !dirty) return
-        dirty = false; lastMeshAt = System.currentTimeMillis()
+        dirty = false; lastMeshAt = System.currentTimeMillis(); recomputes++
         val s = session
         val need = if (s.gcps.size >= 3) 3 else 0
         progress = Gates.progress(cov, tags, s.stills.size, need)

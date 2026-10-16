@@ -46,9 +46,9 @@ class P0012Test {
     }
     @Test fun overlap_distance_and_angle_fire_immediately() {
         assertEquals(Reason.FIRST, ShotPolicy.decide(false, false, true, true, 5, 0, null, sp))
-        assertEquals(Reason.OVERLAP_DISTANCE, ShotPolicy.decide(false, false, true, true, 1100, 1000, Motion(0.1, 0.0), sp))
-        assertEquals(Reason.OVERLAP_ANGLE, ShotPolicy.decide(false, false, true, true, 1100, 1000, Motion(0.0, 21.0), sp))
-        assertNull(ShotPolicy.decide(false, false, true, true, 1100, 1000, Motion(0.05, 5.0), sp))
+        assertEquals(Reason.OVERLAP_DISTANCE, ShotPolicy.decide(false, false, true, true, 1300, 1000, Motion(0.1, 0.0), sp))
+        assertEquals(Reason.OVERLAP_ANGLE, ShotPolicy.decide(false, false, true, true, 1300, 1000, Motion(0.0, 21.0), sp))
+        assertNull(ShotPolicy.decide(false, false, true, true, 1300, 1000, Motion(0.05, 5.0), sp))
     }
     @Test fun timer_is_fallback_and_skips_only_stationary() {
         assertEquals(Reason.TIMER, ShotPolicy.decide(false, false, true, true, 4000, 1000, Motion(0.03, 0.0), sp))

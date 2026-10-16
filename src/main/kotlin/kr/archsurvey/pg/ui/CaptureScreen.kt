@@ -124,9 +124,13 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
         runCatching { glView?.onPause() }
         Thread({
             val ok = saver.drain { n -> view.post { savingLeft = n } }
-            engine.noteNextId(ids.peek()); engine.idle()
+            engine.noteNextId(ids.peek())
+            // 0.0.20: 다 끝날 때까지(예전엔 30 s 뒤 그냥 저장 → 목록 누락, 다음 열 때 저널로 되살림)
+            var idleOk = false; var waits = 0
+            while (!idleOk && waits < 10) { idleOk = engine.idle(); waits++ }
+            if (!idleOk) kr.archsurvey.pg.diag.PgLog.e("live queue not idle after ${waits * 30}s")
             runCatching { store.save(engine.session) }.onFailure { kr.archsurvey.pg.diag.PgLog.e("save on leave failed", it) }
-            kr.archsurvey.pg.diag.PgLog.i("capture drained ok=$ok photos=${engine.session.stills.size}")
+            kr.archsurvey.pg.diag.PgLog.i("capture drained ok=$ok idle=$idleOk photos=${engine.session.stills.size}")
             view.post { savingLeft = 0; then() }
         }, "pg-leave").start()
     }
@@ -168,7 +172,12 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                         kr.archsurvey.pg.diag.PgLog.i("shot ADVISE quality=${q.reason} sharp=%.1f mean=${q.mean} clipped=%.2f".format(q.sharpness, q.clipped))
                         view.post { policyMsg = q.message }
                     }
-                    val gnss = kr.archsurvey.pg.r10.R10Hub.tagIfAny()
+                    val gnss0 = kr.archsurvey.pg.r10.GeoTag.forPhoto(kr.archsurvey.pg.r10.R10Hub.tagIfAny())
+                    val gnss = gnss0.tag
+                    if (gnss0.stale) { // 0.0.20: 막지 않고 안내만, 이 사진은 R10 위치 없음
+                        kr.archsurvey.pg.diag.PgLog.w("r10 stale photo=$file -> no R10 position")
+                        view.post { policyMsg = "R10 위치 끊김 — 이 사진은 R10 좌표 없이 저장해요" }
+                    }
                     if (gnss != null) kr.archsurvey.pg.diag.PgLog.i("r10 photo=$file q=${gnss.quality} fix=${gnss.fixed} lat=%.9f lon=%.9f alt=${gnss.altMsl} sH=${gnss.sigmaH} age=${gnss.ageMs}".format(gnss.lat, gnss.lon))
                     val td0 = System.nanoTime()
                     // P0.1 #5: 저장 사진은 원 해상도 검출(4 MP 이하 decimate 1, 넘으면 2), 오류 비트 0, 35 px 미만 버림

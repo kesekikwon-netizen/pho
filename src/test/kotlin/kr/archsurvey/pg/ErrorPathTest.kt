@@ -132,7 +132,7 @@ class ErrorPathTest {
         // ARCore 없는 사진(자세 없음) + NaN 점
         e.addStill(Still(1, "a.jpg", 100, 100, 80.0, 80.0, 50.0, 50.0, null, 0L, emptyList())) { }
         e.addDepth(floatArrayOf(Float.NaN, 0f, 0f, 0f, Float.POSITIVE_INFINITY, 0f), null, floatArrayOf(1f, 1f), 2, false); settle(e)
-        assertNull(e.fit); assertEquals(1, e.progress.photos)
+        assertTrue(e.idle()); assertNull(e.fit); assertEquals(1, e.progress.photos)
         e.close()
         // 칸 상한(메모리)
         val hf = HeightField(0.05, maxCells = 1000)

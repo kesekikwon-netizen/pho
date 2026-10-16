@@ -22,6 +22,11 @@ data class GnssTag(
 
 object GeoTag {
     const val FRESH_MS = 2_000L
+    /** 0.0.20: 이보다 오래된 R10 위치는 사진에 찍지 않음(현장 GGA 멈춤 23~47 s 동안 같은 좌표가 찍힘) */
+    const val STALE_MS = 3_000L
+    /** 사진에 붙일 R10 태그. 오래됐으면 null(= R10 위치 없음), stale=true 로 안내만 */
+    class ForPhoto(val tag: GnssTag?, val stale: Boolean)
+    fun forPhoto(t: GnssTag?): ForPhoto = if (t != null && t.ageMs > STALE_MS) ForPhoto(null, true) else ForPhoto(t, false)
 
     fun from(snap: GnssSnapshot, link: LinkState, nowMs: Long): GnssTag? {
         if (link == LinkState.IDLE) return null
