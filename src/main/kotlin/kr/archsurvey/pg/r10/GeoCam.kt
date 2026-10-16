@@ -54,7 +54,8 @@ object GeoCam {
     data class Cam(val e: Double, val n: Double, val h: Double?, val lat: Double, val lon: Double, val headingKnown: Boolean,
                    val tier: Tier = Tier.XYZ, val rmse: Double? = null, val lagMs: Int = 0, val yawDeg: Double? = null, val speed: Double? = null,
                    /** 0.0.15 사진별 카메라 방향(도): Yaw = 보는 방향 방위(북 0, 동 90; 맞춤 없으면 null), Pitch = 위(+), Roll = 시계(+) */
-                   val camYaw: Double? = null, val camPitch: Double? = null, val camRoll: Double? = null, val arSid: String? = null, val sigmaZ: Double? = null)
+                   val camYaw: Double? = null, val camPitch: Double? = null, val camRoll: Double? = null, val arSid: String? = null, val sigmaZ: Double? = null,
+                   /** 0.0.17 h 의 기준(MSL/ELLIPSOID) */ val hRef: String = "MSL")
     data class Fit(val tier: Tier, val n: Int, val used: Int, val rmse: Double?, val maxRes: Double?, val lagMs: Int, val yaw: Double?, val t: V3?, val pathM: Double, val reason: String)
     data class Result(val epsg: Int, val headingRad: Double?, val cams: Map<Int, Cam>, val fit: Fit? = null, val fits: Map<String, Fit> = emptyMap())
 
@@ -163,9 +164,19 @@ object GeoCam {
             val ep = if (fromStills) epochs.filter { e -> stills.any { it.time == e.tMs } } else if (track.isEmpty()) emptyList() else epochs.filter { it.tMs in (track.first().tMs - 1000)..(track.last().tMs + 1000) }
             if (ep.none { it.fixed }) continue
             val f = fit(ep, track, s, epsg, fromStills); fits[sid] = f
-            if (f.tier == Tier.NONE || f.tier == Tier.ANT) continue
+            // 0.0.17 구간 맞춤(설계 19 §5): 세션 전체가 XYZ 가 아니고 길면 약 70 m(20 m 겹침) 구간마다 따로 맞춘다. 구간마다 같은 관문(FIX·σ≤2cm·20개·3 m·직선 금지·3σ)
+            val segs = if (f.tier == Tier.XYZ) emptyList() else segments(ep, epsg).mapNotNull { (a, b) ->
+                val sf = fit(ep.filter { it.tMs in a..b }, track, s, epsg, fromStills)
+                if (rank(sf.tier) > rank(f.tier)) Triple(a, b, sf) else null
+            }
+            segs.forEachIndexed { k, (_, _, sf) -> fits["$sid#${k + 1}"] = sf.copy(reason = sf.reason + " · 구간 ${k + 1}") }
+            if ((f.tier == Tier.NONE || f.tier == Tier.ANT) && segs.isEmpty()) continue
             for (st in stills) {
                 val pose = st.pose ?: continue
+                // 사진 시각을 포함하는 구간 중 RMSE 가 가장 작은 것, 없으면 세션 전체 맞춤
+                val tt = if (fromStills) st.time else (st.tMs ?: st.time)
+                val f = segs.filter { tt in it.first..it.second }.minByOrNull { it.third.rmse ?: 9.0 }?.third ?: f
+                if (f.tier == Tier.NONE || f.tier == Tier.ANT) continue
                 val c = apply(f.yaw!!, f.t!!, V3(pose[0], pose[1], pose[2]))
                 var h: Double? = c.z
                 if (f.tier == Tier.XY) { // 높이는 R10(사진 순간 FIX) − 레버암 수직
@@ -189,6 +200,27 @@ object GeoCam {
         }
         val main = fits.values.filter { it.tier == Tier.XYZ || it.tier == Tier.XY }.maxByOrNull { it.used } ?: fits.values.maxByOrNull { it.n }
         return Result(epsg, main?.yaw?.takeIf { main.tier == Tier.XYZ || main.tier == Tier.XY }, out, main, fits)
+    }
+
+    const val SEG_M = 70.0; const val SEG_OVERLAP_M = 20.0
+    fun rank(t: Tier) = when (t) { Tier.XYZ -> 3; Tier.XY -> 2; Tier.ANT -> 1; Tier.NONE -> 0 }
+
+    /** 0.0.17 FIX 표본의 누적 수평 경로로 [SEG_M] 길이·[SEG_OVERLAP_M] 겹침 구간(시각 범위). 경로가 SEG_M 이하면 없음 */
+    fun segments(ep: List<Epoch>, epsg: Int): List<Pair<Long, Long>> {
+        val g = ep.filter { it.fixed && (it.sigmaH ?: 1.0) <= MAX_SIGMA && it.altMsl != null }.sortedBy { it.tMs }
+        if (g.size < MIN_N) return emptyList()
+        val cum = DoubleArray(g.size); var prev = en(g[0].lat, g[0].lon, epsg)
+        for (i in 1 until g.size) { val c = en(g[i].lat, g[i].lon, epsg); cum[i] = cum[i - 1] + sqrt((c.first - prev.first).let { it * it } + (c.second - prev.second).let { it * it }); prev = c }
+        val total = cum.last(); if (total <= SEG_M) return emptyList()
+        val out = ArrayList<Pair<Long, Long>>(); var start = 0.0
+        while (true) {
+            val end = minOf(start + SEG_M, total)
+            val a = cum.indexOfFirst { it >= start }; val b = cum.indexOfLast { it <= end }
+            if (a in 0..b) out += g[a].tMs to g[b].tMs
+            if (end >= total) break
+            start += SEG_M - SEG_OVERLAP_M
+        }
+        return out
     }
 
     /** E,N → 위경도(가까운 R10 점에서 작은 이동, 두 번 반복) */

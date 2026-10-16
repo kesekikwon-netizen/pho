@@ -55,6 +55,15 @@ fun R10Sheet(onClose: () -> Unit) {
             cm("오른쪽(+) / 왼쪽(−)", lever.right) { lever = lever.copy(right = it); R10Prefs.setLever(ctx, lever) }
             var apc by remember { mutableStateOf(R10Prefs.apc(ctx)) }
             cm("R10 위상중심 상수(받침 → APC, 따로)", apc) { apc = it; R10Prefs.setApc(ctx, it) }
+            var href by remember { mutableStateOf(R10Prefs.heightRef(ctx)) }
+            Txt("사진 높이 기준(내보내기)", size = 15.sp, color = P.sub)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (v in listOf(kr.archsurvey.pg.data.HeightRef.MSL, kr.archsurvey.pg.data.HeightRef.ELLIPSOID)) {
+                    val lab = if (v == kr.archsurvey.pg.data.HeightRef.MSL) "정표고(MSL)" else "타원체고"
+                    if (href == v) PrimaryBtn(lab, Modifier.weight(1f)) {} else OutlineBtn(lab, Modifier.weight(1f)) { href = v; R10Prefs.setHeightRef(ctx, v) }
+                }
+            }
+            Txt(kr.archsurvey.pg.data.HeightRef.label(href) + " · 다음 촬영부터 작업에 저장", size = 13.sp, color = P.sub)
             Txt("표적 재기 · 폴 높이(m)", size = 15.sp, color = P.sub)
             num("폴 높이", pole) { if (it > 0) { pole = it; R10Prefs.setPole(ctx, it) } }
             OutlineBtn("닫기", Modifier.fillMaxWidth()) { onClose() }

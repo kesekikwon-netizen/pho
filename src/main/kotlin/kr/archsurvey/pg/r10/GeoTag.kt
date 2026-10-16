@@ -14,6 +14,8 @@ data class GnssTag(
     val lat: Double, val lon: Double, val altMsl: Double?,
     val quality: String, val fixed: Boolean,
     val sigmaH: Double?, val sigmaU: Double?, val ageMs: Long, val sats: Int,
+    /** 0.0.17 GGA 지오이드고(N, m). 타원체고 = altMsl + N */
+    val geoidSep: Double? = null,
 ) {
     fun toArray(): List<Any?> = listOf(lat, lon, altMsl, quality, fixed, sigmaH, sigmaU, ageMs, sats)
 }
@@ -29,7 +31,7 @@ object GeoTag {
         val gst = snap.freshGst(nowMs)
         val fresh = age <= FRESH_MS && (link == LinkState.STREAMING || link == LinkState.CONNECTED_NO_DATA)
         return GnssTag(lat, lon, g.altitudeMsl, g.quality.name, fresh && g.quality == FixQuality.RTK_FIXED,
-            gst?.sigmaHoriz, gst?.sigmaAlt, age, g.satellites)
+            gst?.sigmaHoriz, gst?.sigmaAlt, age, g.satellites, g.geoidSeparation)
     }
 
     /** 좌표가 없는 작업에서 R10 만 쓸 때: 경도로 한국 TM 원점(EPSG 5185~5188) */

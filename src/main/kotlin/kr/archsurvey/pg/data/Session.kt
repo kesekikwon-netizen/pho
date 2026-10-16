@@ -45,9 +45,11 @@ data class Session(
     val apcM: Double = 0.0,
     /** 0.0.16 다음 사진 번호(늘기만 함, 지운 번호도 다시 안 씀) */
     val nextPhotoId: Int = 1,
+    /** 0.0.17 내보내기 높이 기준: MSL(정표고, R10 GGA 그대로) 또는 ELLIPSOID(타원체고 = MSL + 지오이드고) */
+    val heightRef: String = HeightRef.MSL,
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
-        put("v", 1); put("name", name); put("lever", JSONArray().put(lever.up).put(lever.fwd).put(lever.right)); put("sensorDeg", sensorDeg); put("apcM", apcM); put("nextPhotoId", nextPhotoId); put("created", created); put("epsg", epsg); put("arcore", arcore)
+        put("v", 1); put("name", name); put("lever", JSONArray().put(lever.up).put(lever.fwd).put(lever.right)); put("sensorDeg", sensorDeg); put("apcM", apcM); put("nextPhotoId", nextPhotoId); put("heightRef", heightRef); put("created", created); put("epsg", epsg); put("arcore", arcore)
         tagSizeM?.let { put("tagSizeM", it) }; barM?.let { put("barM", it) }
         put("gcps", JSONArray().apply { gcps.forEach { g -> put(JSONObject().put("t", g.target).put("e", g.e).put("n", g.n).put("h", g.h).apply { g.sdH?.let { put("sdH", it) }; g.sdU?.let { put("sdU", it) }; g.sigH?.let { put("sigH", it) }; g.sigU?.let { put("sigU", it) }; g.epochs?.let { put("ep", it) } }) } })
         put("stills", JSONArray().apply {
@@ -56,7 +58,7 @@ data class Session(
                     put("id", s.id); put("file", s.file); put("w", s.w); put("h", s.h)
                     put("fx", s.fx); put("fy", s.fy); put("cx", s.cx); put("cy", s.cy); put("time", s.time); s.reason?.let { put("reason", it) }; s.speed?.let { put("speed", it) }; s.tMs?.let { put("tMs", it) }; s.arSid?.let { put("arSid", it) }
                     s.gnss?.let { g -> put("gnss", JSONObject().put("lat", g.lat).put("lon", g.lon).put("alt", g.altMsl ?: JSONObject.NULL).put("q", g.quality).put("fix", g.fixed)
-                        .put("sh", g.sigmaH ?: JSONObject.NULL).put("su", g.sigmaU ?: JSONObject.NULL).put("age", g.ageMs).put("sats", g.sats)) }
+                        .put("sh", g.sigmaH ?: JSONObject.NULL).put("su", g.sigmaU ?: JSONObject.NULL).put("age", g.ageMs).put("sats", g.sats).apply { g.geoidSep?.let { put("N", it) } }) }
                     s.pose?.let { p -> put("pose", JSONArray().apply { p.forEach { put(it) } }) }
                     put("tags", JSONArray().apply {
                         s.tags.forEach { t ->
@@ -79,6 +81,7 @@ data class Session(
                 sensorDeg = o.optInt("sensorDeg", 90),
                 apcM = o.optDouble("apcM", 0.0),
                 nextPhotoId = o.optInt("nextPhotoId", 1),
+                heightRef = HeightRef.norm(o.optString("heightRef", HeightRef.MSL)),
                 tagSizeM = if (o.has("tagSizeM")) o.getDouble("tagSizeM") else null,
                 barM = if (o.has("barM")) o.getDouble("barM") else null,
                 gcps = (0 until gs.length()).map { gs.getJSONObject(it).let { g -> Gcp(g.getInt("t"), g.getDouble("e"), g.getDouble("n"), g.getDouble("h"),
@@ -97,7 +100,7 @@ data class Session(
                         },
                         if (s.has("reason")) s.getString("reason") else null,
                         s.optJSONObject("gnss")?.let { g -> kr.archsurvey.pg.r10.GnssTag(g.getDouble("lat"), g.getDouble("lon"), if (g.isNull("alt")) null else g.getDouble("alt"), g.optString("q"), g.optBoolean("fix"),
-                            if (g.isNull("sh")) null else g.optDouble("sh"), if (g.isNull("su")) null else g.optDouble("su"), g.optLong("age"), g.optInt("sats")) },
+                            if (g.isNull("sh")) null else g.optDouble("sh"), if (g.isNull("su")) null else g.optDouble("su"), g.optLong("age"), g.optInt("sats"), if (g.has("N") && !g.isNull("N")) g.getDouble("N") else null) },
                         if (s.has("speed")) s.getDouble("speed") else null,
                         if (s.has("tMs")) s.getLong("tMs") else null,
                         if (s.has("arSid")) s.getString("arSid") else null,
@@ -165,3 +168,10 @@ object GcpTxt {
 }
 
 private fun JSONObject.optD(k: String): Double? = if (has(k) && !isNull(k)) getDouble(k) else null
+
+/** 0.0.17 높이 기준 선택 */
+object HeightRef {
+    const val MSL = "MSL"; const val ELLIPSOID = "ELLIPSOID"
+    fun norm(v: String?) = if (v == ELLIPSOID) ELLIPSOID else MSL
+    fun label(v: String) = if (v == ELLIPSOID) "타원체고(GRS80/WGS84, MSL + 지오이드고)" else "정표고(MSL, 수신기 지오이드)"
+}

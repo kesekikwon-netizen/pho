@@ -88,7 +88,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
     val saver = remember { kr.archsurvey.pg.data.PhotoSaver(2) }
     var savingLeft by remember { mutableStateOf(0) }
     // 0.0.14: R10 레버암·센서 방향을 작업에 적어 둠(R10 없으면 기본 0 그대로)
-    val engine = remember { LiveEngine(loaded.session.copy(lever = kr.archsurvey.pg.r10.R10Prefs.lever(ctx), apcM = kr.archsurvey.pg.r10.R10Prefs.apc(ctx), sensorDeg = runCatching { kr.archsurvey.pg.r10.Sensor.backDeg(ctx) }.getOrDefault(90))) }
+    val engine = remember { LiveEngine(loaded.session.copy(lever = kr.archsurvey.pg.r10.R10Prefs.lever(ctx), apcM = kr.archsurvey.pg.r10.R10Prefs.apc(ctx), heightRef = kr.archsurvey.pg.r10.R10Prefs.heightRef(ctx), sensorDeg = runCatching { kr.archsurvey.pg.r10.Sensor.backDeg(ctx) }.getOrDefault(90))) }
     var glView by remember { mutableStateOf<GLSurfaceView?>(null) }
     var tick by remember { mutableIntStateOf(0) }
     var overlay by remember { mutableStateOf<Overlay?>(null) }

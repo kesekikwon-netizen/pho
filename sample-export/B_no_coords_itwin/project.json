@@ -1,0 +1,41 @@
+{
+  "app": "kr.archsurvey.pg",
+  "r10": {
+    "camTiers": {},
+    "note": "사진 위치는 GPS 보조값. 절대 좌표는 기준점(Target #N)이 정함",
+    "leverM": [
+      0,
+      0,
+      0
+    ],
+    "apcM": 0,
+    "fits": []
+  },
+  "images": {
+    "reasons": {"manual": 16},
+    "count": 16,
+    "r10Fixed": 0,
+    "withPose": 16,
+    "withR10": 0
+  },
+  "crs": {
+    "epsg": 5187,
+    "heightApplied": {},
+    "height": "MSL"
+  },
+  "created": 0,
+  "format": "archsurvey.pg.project/1",
+  "name": "synth_B_no_coords",
+  "targets": {
+    "gcpLooRmseM": null,
+    "gcpFitRmseM": null,
+    "posesUsed": 16,
+    "seen": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "withCoords": []
+  }
+}

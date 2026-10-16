@@ -24,8 +24,8 @@ object ExportFolder {
         // 0.0.14: R10 — 저장 때 AR↔EPSG 맞춤(원시 R10·AR 궤적 파일이 있으면 그것으로, 없으면 사진마다 붙은 값)
         val sesDir = photoSrcDir.parentFile
         val rawR10 = sesDir?.let { File(it, kr.archsurvey.pg.r10.RawLogs.R10) }; val rawAr = sesDir?.let { File(it, kr.archsurvey.pg.r10.RawLogs.AR) }
-        val geo = kr.archsurvey.pg.r10.GeoCam.compute(session,
-            rawR10?.let { kr.archsurvey.pg.r10.RawLogs.readR10(it) } ?: emptyList(), rawAr?.let { kr.archsurvey.pg.r10.RawLogs.readAr(it) } ?: emptyList())
+        val geo = withHeightRef(session, kr.archsurvey.pg.r10.GeoCam.compute(session,
+            rawR10?.let { kr.archsurvey.pg.r10.RawLogs.readR10(it) } ?: emptyList(), rawAr?.let { kr.archsurvey.pg.r10.RawLogs.readAr(it) } ?: emptyList()))
         // 원시 기록은 늘 같이 내보냄(맞춤이 없어도)
         for (f in listOfNotNull(rawR10, rawAr)) if (f.isFile) runCatching { f.copyTo(File(out, f.name), overwrite = true) }
         // 내보낸 사진 EXIF GPS = 맞춤된 카메라 위치(맞춤 없으면 촬영 때 넣은 원시값 그대로)
@@ -45,8 +45,22 @@ object ExportFolder {
         if (cloud.isNotEmpty() && (!withCoords || fit != null)) CloudFile.writePly(File(out, CloudFile.EXPORT), cloud, if (withCoords) fit?.tf else null)
         File(out, ItwinSheet.FILE).writeText(ItwinSheet.TEXT, Charsets.UTF_8)
         File(out, "작업정보.txt").writeText(info(session, seen, scaleTxt) + SiteFit.text(fit, poses.size, session.stills.size) + r10Text(session, geo), Charsets.UTF_8)
+        runCatching { File(out, ProjectJson.FILE).writeText(ProjectJson.build(session, geo, seen, poses.size, fit?.rmse, fit?.looRmse).toString(2), Charsets.UTF_8) }
         val targets = if (withCoords) session.gcps.map { it.target }.filter { it in seen }.sorted() else seen.sorted()
         return Result(out, session.stills.size, targets, withCoords)
+    }
+
+    /** 0.0.17 높이 기준: ELLIPSOID 면 사진마다 그 사진(없으면 가장 가까운 시각) GGA 지오이드고를 더한다. 지오이드고가 없으면 MSL 그대로 두고 hRef=MSL 로 표시 */
+    fun withHeightRef(s: Session, g: kr.archsurvey.pg.r10.GeoCam.Result): kr.archsurvey.pg.r10.GeoCam.Result {
+        if (s.heightRef != kr.archsurvey.pg.data.HeightRef.ELLIPSOID) return g
+        val withN = s.stills.filter { it.gnss?.geoidSep != null }
+        if (withN.isEmpty()) return g
+        val cams = g.cams.mapValues { (id, c) ->
+            val st = s.stills.firstOrNull { it.id == id }
+            val n = st?.gnss?.geoidSep ?: st?.let { x -> withN.minByOrNull { kotlin.math.abs(it.time - x.time) }?.gnss?.geoidSep }
+            if (c.h == null || n == null) c else c.copy(h = c.h + n, hRef = kr.archsurvey.pg.data.HeightRef.ELLIPSOID)
+        }
+        return g.copy(cams = cams)
     }
 
     fun r10Text(s: Session, g: kr.archsurvey.pg.r10.GeoCam.Result): String {

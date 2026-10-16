@@ -17,6 +17,9 @@ object R10Prefs {
         val m = db["TRIMBLE_R10"]!!
         kr.archsurvey.core.AntennaRecord.of(m, kr.archsurvey.core.AntennaConfig(0.0, m.defaultRefPoint))!!.apcHeightM
     }.getOrDefault(0.0)
+    /** 0.0.17 내보내기 높이 기준(MSL/ELLIPSOID) */
+    fun heightRef(c: Context): String = kr.archsurvey.pg.data.HeightRef.norm(p(c).getString("heightRef", null))
+    fun setHeightRef(c: Context, v: String) = p(c).edit().putString("heightRef", kr.archsurvey.pg.data.HeightRef.norm(v)).apply()
     fun epochs(c: Context): Int = p(c).getInt("epochs", 10).coerceIn(1, 100)
 }
 
