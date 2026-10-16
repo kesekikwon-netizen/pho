@@ -50,7 +50,7 @@ class P01Test {
 
     @Test fun thermal_headroom_nan_safe() {
         assertEquals(0, ThermalPolicy.combine(0, Float.NaN)); assertEquals(1, ThermalPolicy.combine(1, -1f))
-        assertEquals(2, ThermalPolicy.combine(0, 0.9f)); assertEquals(3, ThermalPolicy.combine(1, 0.97f)); assertEquals(4, ThermalPolicy.combine(4, 0.5f))
+        assertEquals(2, ThermalPolicy.combine(0, 0.9f)); assertEquals(2, ThermalPolicy.combine(1, 0.97f)); assertEquals(4, ThermalPolicy.combine(4, 0.5f))
     }
 
     @Test fun name_fixed_target_and_parse() {

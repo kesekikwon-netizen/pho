@@ -58,7 +58,10 @@ class FeatureCloud(val cap: Int = 30_000) {
  * 깊이 복셀(기본 2 cm): 칸마다 가중 평균 위치·색, 관측 수, 최고 신뢰도.
  * 상한을 넘으면 링 위치 근처 64칸 중 관측 수가 가장 적은 칸을 비워 재사용.
  */
-class DepthVoxels(val voxel: Double = 0.02, val cap: Int = 400_000) {
+class DepthVoxels(voxel0: Double = 0.02, val cap: Int = 400_000, val maxVoxel: Double = 0.32) {
+    /** 0.0.19 LOD: 지금 칸 크기. 칸이 다 차면 두 배로 합쳐(성기게) 넓은 범위를 계속 담는다 — 멈추거나 옛 부분을 지우지 않음 */
+    var voxel = voxel0; private set
+    var coarsenings = 0; private set
     val gpu = GpuSlots(cap)
     private val keys = LongArray(cap); private val n = IntArray(cap); private val conf = FloatArray(cap)
     private val sx = FloatArray(cap); private val sy = FloatArray(cap); private val sz = FloatArray(cap)
@@ -76,6 +79,7 @@ class DepthVoxels(val voxel: Double = 0.02, val cap: Int = 400_000) {
         val key = key(x, y, z)
         var i = index[key]
         if (i == null) {
+            if (size >= cap && voxel * 2 <= maxVoxel + 1e-9) { coarsen(); add(x, y, z, r, g, b, c); return }
             i = if (size < cap) size++ else evict()
             index[key] = i; keys[i] = key; n[i] = 0; conf[i] = 0f
             sx[i] = 0f; sy[i] = 0f; sz[i] = 0f; cr[i] = 0f; cg[i] = 0f; cb[i] = 0f
@@ -87,6 +91,27 @@ class DepthVoxels(val voxel: Double = 0.02, val cap: Int = 400_000) {
         cr[i] = (cr[i] * keep + r * w) / tot; cg[i] = (cg[i] * keep + g * w) / tot; cb[i] = (cb[i] * keep + b * w) / tot
         n[i]++; if (c > conf[i]) conf[i] = c
         gpu.put(i, sx[i], sy[i], sz[i], cr[i], cg[i], cb[i])
+    }
+
+    /** 칸 크기 두 배: 같은 큰 칸에 드는 칸들을 관측 수 가중으로 합침(제자리 압축), GPU 배열 다시 씀 */
+    fun coarsen() {
+        voxel *= 2; coarsenings++
+        index.clear(); var m = 0
+        for (i in 0 until size) {
+            val key = key(sx[i], sy[i], sz[i]); val j = index[key]
+            if (j == null) {
+                index[key] = m; keys[m] = key; n[m] = n[i]; conf[m] = conf[i]
+                sx[m] = sx[i]; sy[m] = sy[i]; sz[m] = sz[i]; cr[m] = cr[i]; cg[m] = cg[i]; cb[m] = cb[i]; m++
+            } else {
+                val a = maxOf(n[j], 1).toFloat(); val b = maxOf(n[i], 1).toFloat(); val t = a + b
+                sx[j] = (sx[j] * a + sx[i] * b) / t; sy[j] = (sy[j] * a + sy[i] * b) / t; sz[j] = (sz[j] * a + sz[i] * b) / t
+                cr[j] = (cr[j] * a + cr[i] * b) / t; cg[j] = (cg[j] * a + cg[i] * b) / t; cb[j] = (cb[j] * a + cb[i] * b) / t
+                n[j] += n[i]; if (conf[i] > conf[j]) conf[j] = conf[i]
+            }
+        }
+        size = m; ring = 0
+        gpu.clear(); for (i in 0 until m) gpu.put(i, sx[i], sy[i], sz[i], cr[i], cg[i], cb[i])
+        runCatching { kr.archsurvey.pg.diag.PgLog.d("voxels LOD voxel=${voxel} size=$m") }
     }
 
     private fun evict(): Int {

@@ -43,8 +43,8 @@ class ErrorPathTest {
     @Test fun thermal_throttles_then_stops() {
         assertEquals(350L, ThermalPolicy.of(0).depthMs); assertTrue(ThermalPolicy.of(1).autoShot)
         assertEquals(700L, ThermalPolicy.of(2).depthMs)
-        ThermalPolicy.of(3).let { assertFalse(it.autoShot); assertEquals(1500L, it.depthMs); assertNotNull(it.message) }
-        ThermalPolicy.of(6).let { assertEquals(0L, it.depthMs); assertFalse(it.autoShot); assertNotNull(it.message) }
+        ThermalPolicy.of(3).let { assertTrue(it.autoShot); assertEquals(1000L, it.depthMs); assertNotNull(it.message) }
+        ThermalPolicy.of(6).let { assertEquals(2000L, it.depthMs); assertTrue(it.autoShot); assertNotNull(it.message) }
     }
 
     @Test fun fitCheck_lt3_unseen_collinear_ok() {

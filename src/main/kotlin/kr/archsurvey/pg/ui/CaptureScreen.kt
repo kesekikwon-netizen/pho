@@ -263,7 +263,7 @@ fun CaptureScreen(store: Store, name: String, onBack: () -> Unit, onResult: () -
                 val hot = st >= 3
                 if (hot != hotNow) { kr.archsurvey.pg.diag.PgLog.i("S9 thermal stage=$st thumbOff=$hot"); hotNow = hot }
                 renderer?.showThumb = showThumb && !hot
-                if (hot) policyMsg = "폰이 뜨거워요 · 잠깐 쉬었다 찍어요"
+                // 0.0.19: 문구는 ThermalPolicy 하나로(멈춘다는 말 없음)
             }
             val free = store.files.free()
             val okSpace = kr.archsurvey.pg.diag.StoragePolicy.canShoot(free)

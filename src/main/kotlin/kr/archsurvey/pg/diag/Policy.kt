@@ -39,13 +39,16 @@ data class Thermal(val depthMs: Long, val meshMs: Long, val autoShot: Boolean, v
 object ThermalPolicy {
     /** P0.1 #6: 열 여유(getThermalHeadroom, 1.0 = 조절 시작) 를 단계로 합침. NaN·음수(미지원)는 무시 */
     fun combine(status: Int, headroom: Float): Int {
+        // 0.0.19: 열 여유는 예측값일 뿐(실기: 상태 0~2, 피부 39 °C 인데 0.95~0.97 → 예전엔 3 「뜨거워요」로 올림).
+        // OS 기준(0.9 = MODERATE)까지만 반영하고 SEVERE 이상은 OS 가 직접 알릴 때만
         if (headroom.isNaN() || headroom < 0f) return status
-        val h = when { headroom >= 1.0f -> 3; headroom >= 0.95f -> 3; headroom >= 0.85f -> 2; else -> 0 }
+        val h = if (headroom >= 0.9f) 2 else 0
         return maxOf(status, h)
     }
+    /** 0.0.19: 사진·점군은 멈추지 않음. 뜨거우면 갱신 간격만 늘리고 안내 */
     fun of(status: Int): Thermal = when {
-        status >= 4 -> Thermal(0, 3000, false, "폰이 너무 뜨거워요 · 잠시 쉬었다 찍어 주세요")
-        status == 3 -> Thermal(1500, 2000, false, "폰이 뜨거워요 · 잠시 식히는 중")
+        status >= 4 -> Thermal(2000, 3000, true, "폰이 매우 뜨거워요 · 그늘에서 잠시 쉬면 좋아요(촬영은 계속돼요)")
+        status == 3 -> Thermal(1000, 2000, true, "폰이 뜨거워요 · 3D 갱신을 조금 늦췄어요(촬영은 계속돼요)")
         status == 2 -> Thermal(700, 1000, true, null)
         else -> Thermal(350, 500, true, null)
     }

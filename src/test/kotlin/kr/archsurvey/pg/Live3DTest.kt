@@ -43,8 +43,8 @@ class Live3DTest {
         assertEquals(6, v.export(0.4f).size / 1 / 1 - 6) // 두 점 × 6
         assertEquals(1, v.export(0.66f).size / 6)        // 0.66 이상은 하나
         for (i in 0 until 500) v.add(1f + i * 0.03f, 0f, 0f, 0f, 0f, 1f, 0.5f)
-        assertEquals(100, v.size); assertTrue(v.evicted >= 400)
-        v.add(Float.NaN, 0f, 0f, 1f, 1f, 1f, 1f); assertEquals(100, v.size)
+        assertTrue(v.size <= 100); assertTrue(v.coarsenings >= 1)
+        val s0 = v.size; v.add(Float.NaN, 0f, 0f, 1f, 1f, 1f, 1f); assertEquals(s0, v.size)
     }
 
     @Test fun s2_featureCloud_dedupe_by_id_and_lru_eviction() {
