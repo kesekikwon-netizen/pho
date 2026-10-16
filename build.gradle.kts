@@ -21,8 +21,8 @@ android {
         applicationId = "kr.archsurvey.field"
         minSdk = 21
         targetSdk = 35
-        versionCode = 61
-        versionName = "0.1.60"
+        versionCode = 62
+        versionName = "0.1.61"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         buildConfigField("boolean", "USE_MAPLIBRE", project.hasProperty("withMapLibre").toString()) // 옵트인 MapLibre 지도(기본 false)
     }

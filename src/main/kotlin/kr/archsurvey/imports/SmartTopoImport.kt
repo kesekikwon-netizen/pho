@@ -55,6 +55,54 @@ object SmartTopoImport {
         return out
     }
 
+    /** 0.1.61: 항목 하나 최대 크기(사진이 섞인 큰 zip 에서 DBF/CSV 만 읽고, 비정상 항목으로 메모리가 넘치지 않게) */
+    const val MAX_ENTRY_BYTES = 64L * 1024 * 1024
+
+    /** 0.1.61: 한국 주변 위경도만 믿는다(0·빈칸·뒤바뀐 값은 버리고 CSV N/E 로) */
+    fun plausibleLatLon(lat: Double?, lon: Double?) = lat != null && lon != null && lat in 32.0..40.0 && lon in 123.0..133.0
+
+    /** 0.1.61: 글자 인코딩 — BOM 이나 올바른 UTF-8 이면 UTF-8, 아니면 cp949 */
+    fun decodeText(b: ByteArray): String {
+        if (b.size >= 3 && b[0] == 0xEF.toByte() && b[1] == 0xBB.toByte() && b[2] == 0xBF.toByte()) return String(b, 3, b.size - 3, Charsets.UTF_8)
+        val dec = Charsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+        return runCatching { dec.decode(java.nio.ByteBuffer.wrap(b)).toString() }.getOrElse { String(b, CP949) }
+    }
+
+    /** 0.1.61: 따옴표로 묶인 칸(쉼표 포함) 처리 */
+    fun splitCsv(line: String): List<String> {
+        val out = ArrayList<String>(); val sb = StringBuilder(); var q = false; var i = 0
+        while (i < line.length) {
+            val ch = line[i]
+            when {
+                q && ch == '"' && i + 1 < line.length && line[i + 1] == '"' -> { sb.append('"'); i++ }
+                ch == '"' -> q = !q
+                ch == ',' && !q -> { out += sb.toString().trim(); sb.setLength(0) }
+                else -> sb.append(ch)
+            }
+            i++
+        }
+        out += sb.toString().trim(); return out
+    }
+
+    /** 0.1.61: TM → 위경도(앞 계산을 뉴턴 반복으로 되돌림, 1 mm 이내) */
+    fun inverse(n: Double, e: Double, zone: KoreanTmZone): Pair<Double, Double>? {
+        var lat = 38.0
+        var lon = when (zone) { KoreanTmZone.WEST -> 125.0; KoreanTmZone.CENTRAL -> 127.0; KoreanTmZone.EAST -> 129.0; else -> 131.0 }
+        repeat(30) {
+            val p = TmProjection.forward(lat, lon, zone)
+            val dn = n - p.northing; val de = e - p.easting
+            if (Math.abs(dn) < 1e-4 && Math.abs(de) < 1e-4) return lat to lon
+            val h = 1e-6
+            val pl = TmProjection.forward(lat + h, lon, zone); val po = TmProjection.forward(lat, lon + h, zone)
+            val a = (pl.northing - p.northing) / h; val b = (po.northing - p.northing) / h
+            val c = (pl.easting - p.easting) / h; val d = (po.easting - p.easting) / h
+            val det = a * d - b * c; if (det == 0.0) return null
+            lat += (d * dn - b * de) / det; lon += (-c * dn + a * de) / det
+            if (lat.isNaN() || lon.isNaN()) return null
+        }
+        return null
+    }
+
     private fun d(s: String?) = s?.trim()?.takeIf { it.isNotEmpty() }?.toDoubleOrNull()
 
     fun parseTime(s: String?): Long? {
@@ -79,7 +127,7 @@ object SmartTopoImport {
 
     /** `_Data.csv`: 첫 줄 머리, 「이름,N,E,Z,코드」 */
     fun fromCsv(text: String): List<StPoint> = text.removePrefix("\uFEFF").lines().drop(1).mapNotNull { line ->
-        val c = line.split(',').map { it.trim() }
+        val c = splitCsv(line)
         if (c.size < 4 || c[0].isEmpty()) return@mapNotNull null
         val n = d(c[1]); val e = d(c[2]); if (n == null || e == null) return@mapNotNull null
         StPoint(name = c[0], code = c.getOrElse(4) { "" }, n = n, e = e, z = d(c[3]))
@@ -94,16 +142,24 @@ object SmartTopoImport {
     }
 
     /** 압축(zip) 안의 DBF·CSV 찾기. 측설목록(StakeOutList)은 뺀다 */
-    fun readZip(bytes: ByteArray): Pair<List<StPoint>, List<StPoint>> {
+    fun readZip(bytes: ByteArray): Pair<List<StPoint>, List<StPoint>> = readZip(ByteArrayInputStream(bytes))
+
+    /** 0.1.61: 스트림으로 읽음(zip 전체를 메모리에 올리지 않음). 필요한 항목만, 항목당 [MAX_ENTRY_BYTES] 까지 */
+    fun readZip(input: java.io.InputStream): Pair<List<StPoint>, List<StPoint>> {
         val dbf = ArrayList<StPoint>(); val csv = ArrayList<StPoint>()
-        ZipInputStream(ByteArrayInputStream(bytes), CP949).use { z ->
+        fun ZipInputStream.readCapped(): ByteArray {
+            val o = java.io.ByteArrayOutputStream(); val buf = ByteArray(65536); var tot = 0L
+            while (true) { val k = read(buf); if (k < 0) break; tot += k; if (tot > MAX_ENTRY_BYTES) throw java.io.IOException("항목이 너무 커요"); o.write(buf, 0, k) }
+            return o.toByteArray()
+        }
+        ZipInputStream(input, CP949).use { z ->
             while (true) {
                 val e = z.nextEntry ?: break
                 val nm = e.name.substringAfterLast('/')
                 if (e.isDirectory || nm.contains("StakeOut", ignoreCase = true)) continue
                 when {
-                    nm.endsWith("_point.dbf", true) -> dbf += fromDbf(readDbf(z.readBytes()))
-                    nm.endsWith("_Data.csv", true) -> csv += fromCsv(String(z.readBytes(), CP949))
+                    nm.endsWith("_point.dbf", true) -> dbf += fromDbf(readDbf(z.readCapped()))
+                    nm.endsWith("_Data.csv", true) -> csv += fromCsv(decodeText(z.readCapped()))
                 }
             }
         }
@@ -118,18 +174,22 @@ object SmartTopoImport {
         for (p in points) {
             if (p.deleted) { del++; continue }
             if (!seen.add(p.name.lowercase(Locale.ROOT))) { dup++; continue }
-            val tm = if (p.lat != null && p.lon != null) TmProjection.forward(p.lat, p.lon, zone) else null
+            val llOk = plausibleLatLon(p.lat, p.lon)
+            val tm = if (llOk) TmProjection.forward(p.lat!!, p.lon!!, zone) else null
             val n = tm?.northing ?: p.n; val e = tm?.easting ?: p.e
             if (n == null || e == null) { noPos++; continue }
             if (tm != null && p.n != null && p.e != null) {
                 val dd = Math.hypot(tm.northing - p.n, tm.easting - p.e); maxDiff = maxOf(maxDiff ?: 0.0, dd)
             }
-            val sep = if (p.lat != null && p.lon != null) Egm96Korea.undulation(p.lat, p.lon) else null
-            val msl = p.z ?: if (p.ellH != null && sep != null) p.ellH - sep else null
+            // 0.1.61: CSV 만 있는 점은 위경도 0,0 이 아니라 N/E 를 지금 작업 좌표계로 보고 되돌려 계산
+            val ll = if (llOk) p.lat!! to p.lon!! else inverse(n, e, zone)?.takeIf { plausibleLatLon(it.first, it.second) }
+            if (ll == null) { noPos++; continue }
+            val sep = Egm96Korea.undulation(ll.first, ll.second)
+            val msl = p.z ?: if (p.ellH != null && llOk && sep != null) p.ellH - sep else null
             val memo = listOf(p.code.takeIf { it.isNotBlank() && it != "없음" }, p.memo.takeIf { it.isNotBlank() }).filterNotNull().joinToString(" · ")
             out += PointEntity(
                 project = project, pointId = p.name, positionType = "", memo = memo,
-                lat = p.lat ?: 0.0, lon = p.lon ?: 0.0, ellipsoidalHeight = null, altitudeMsl = null, geoidSeparation = sep,
+                lat = ll.first, lon = ll.second, ellipsoidalHeight = null, altitudeMsl = null, geoidSeparation = sep,
                 northing = n, easting = e, crsEpsg = zone.epsg, fixQuality = 0, allEpochsFixed = false,
                 satellites = p.satellites ?: 0, hdop = null, sigmaE = null, sigmaN = null, sigmaH = p.sigmaH, sigmaU = p.sigmaV,
                 correctionAgeSec = null, baseStationId = null, epochs = p.epochs ?: 0,

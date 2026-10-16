@@ -21,16 +21,17 @@ class AndroidSmartTopoImport(private val ctx: Context, private val docs: DocBrid
     suspend fun pickAndImport(zone: KoreanTmZone): String? {
         val uris = suspendCancellableCoroutine<List<Uri>> { k -> docs.openMany { k.resume(it) } }
         if (uris.isEmpty()) return null
-        return withContext(Dispatchers.IO) {
+        return withContext(Dispatchers.IO) { runCatching {
             val dbf = ArrayList<SmartTopoImport.StPoint>(); val csv = ArrayList<SmartTopoImport.StPoint>()
             for (u in uris) {
                 val n = nameOf(u)
-                val bytes = ctx.contentResolver.openInputStream(u)?.use { it.readBytes() } ?: continue
+                // 0.1.61: zip 은 스트림으로(큰 zip 메모리 초과 방지), dbf/csv 만 통째로(크기 상한)
+                fun small(): ByteArray? = ctx.contentResolver.openInputStream(u)?.use { s -> val b = s.readNBytesCompat(SmartTopoImport.MAX_ENTRY_BYTES + 1); if (b.size > SmartTopoImport.MAX_ENTRY_BYTES) throw java.io.IOException("파일이 너무 커요") else b }
                 when {
                     n.contains("StakeOut", true) -> {}
-                    n.endsWith(".zip", true) -> SmartTopoImport.readZip(bytes).let { (d, c) -> dbf += d; csv += c }
-                    n.endsWith(".dbf", true) -> dbf += SmartTopoImport.fromDbf(SmartTopoImport.readDbf(bytes))
-                    n.endsWith(".csv", true) -> csv += SmartTopoImport.fromCsv(String(bytes, SmartTopoImport.CP949))
+                    n.endsWith(".zip", true) -> ctx.contentResolver.openInputStream(u)?.use { SmartTopoImport.readZip(it) }?.let { (d, c) -> dbf += d; csv += c }
+                    n.endsWith(".dbf", true) -> small()?.let { dbf += SmartTopoImport.fromDbf(SmartTopoImport.readDbf(it)) }
+                    n.endsWith(".csv", true) -> small()?.let { csv += SmartTopoImport.fromCsv(SmartTopoImport.decodeText(it)) }
                 }
             }
             val all = SmartTopoImport.merge(dbf, csv)
@@ -47,6 +48,12 @@ class AndroidSmartTopoImport(private val ctx: Context, private val docs: DocBrid
                 if (r.skippedNoPosition > 0) append(" · 좌표 없음 ${r.skippedNoPosition}개")
                 r.maxNeDiffM?.let { if (it > 0.05) append(" · SmartTopo 좌표계와 최대 ${"%.2f".format(it)} m 차이(위경도로 다시 계산)") }
             }
-        }
+        }.getOrElse { kr.archsurvey.diag.CrashLog.record("SmartTopo 가져오기", it); "SmartTopo 파일을 읽지 못했어요 (손상됐거나 너무 커요) · 오류 기록을 확인하세요" } }
     }
+}
+
+private fun java.io.InputStream.readNBytesCompat(max: Long): ByteArray {
+    val o = java.io.ByteArrayOutputStream(); val buf = ByteArray(65536); var tot = 0L
+    while (tot < max) { val k = read(buf, 0, minOf(buf.size.toLong(), max - tot).toInt()); if (k < 0) break; o.write(buf, 0, k); tot += k }
+    return o.toByteArray()
 }
